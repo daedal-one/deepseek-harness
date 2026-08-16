@@ -1,4 +1,4 @@
-import { readFile, readdir, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { join } from 'node:path'
@@ -45,6 +45,10 @@ const headlessOverlayPath = fileURLToPath(new URL('./fixtures/headless-profile.p
 const headlessSessionExpected = join(goldensDir, 'headless-profile', 'session.expected.jsonl')
 const headlessReasoningExpected = join(goldensDir, 'headless-profile', 'reasoning.stderr.expected.txt')
 const headlessFailureExpected = join(goldensDir, 'headless-profile', 'stderr.expected.txt')
+const daedalOverlayPath = fileURLToPath(new URL('./fixtures/daedal-profile.cordis.yml', import.meta.url))
+const daedalPresetPath = fileURLToPath(new URL('./fixtures/daedal-preset.cordis.yml', import.meta.url))
+const daedalSessionExpected = join(goldensDir, 'daedal-profile', 'session.expected.jsonl')
+const cliMockLlmPluginPath = fileURLToPath(new URL('../../../../../../packages/test-support/loader-smoke/tests/fixtures/cli-mock-llm.ts', import.meta.url))
 const refreshing = process.env.DSH_SNAPSHOT === 'refresh'
 
 interface JsonObject {
@@ -162,18 +166,18 @@ function normalizeHeadlessStream(rawStdout: string, cwd: string): string {
   return normalizeStdout(`${normalizedRecords.map(record => JSON.stringify(record)).join('\n')}\n`, context)
 }
 
-/** Zero durable goal timestamps inside both metadata records and rendered XML JSON. */
-function normalizeGoalTimestamps(value: unknown): unknown {
+/** Zero nondeterministic domain timestamps inside records and rendered JSON strings. */
+function normalizeDurableTimestamps(value: unknown): unknown {
   if (typeof value === 'string') {
-    return value.replace(/("(?:createdAt|updatedAt|clearedAt)":)\d+/g, '$10')
+    return value.replace(/("(?:createdAt|updatedAt|clearedAt|lastAccessedAt)":)\d+/g, '$10')
   }
-  if (Array.isArray(value)) return value.map(normalizeGoalTimestamps)
+  if (Array.isArray(value)) return value.map(normalizeDurableTimestamps)
   if (value !== null && typeof value === 'object') {
     return Object.fromEntries(Object.entries(value).map(([key, item]) => [
       key,
-      ['createdAt', 'updatedAt', 'clearedAt'].includes(key) && typeof item === 'number'
+      ['createdAt', 'updatedAt', 'clearedAt', 'lastAccessedAt'].includes(key) && typeof item === 'number'
         ? 0
-        : normalizeGoalTimestamps(item),
+        : normalizeDurableTimestamps(item),
     ]))
   }
   return value
@@ -182,7 +186,7 @@ function normalizeGoalTimestamps(value: unknown): unknown {
 /** Normalize the stream's durable goal timestamps after the shared scrubbers. */
 function normalizeGoalStream(rawStdout: string, cwd: string): string {
   return parseJsonl(normalizeHeadlessStream(rawStdout, cwd))
-    .map(record => JSON.stringify(normalizeGoalTimestamps(record)))
+    .map(record => JSON.stringify(normalizeDurableTimestamps(record)))
     .join('\n') + '\n'
 }
 
@@ -214,6 +218,27 @@ async function persistedLogs(cwd: string, root: string = join(cwd, '.sessions'))
     const content = await readPersistedLog(join(root, file))
     return { content, header: parseJsonl(content)[0] ?? {} }
   }))
+}
+
+/** Install the keyless product-CLI adapter into the temporary headless profile. */
+async function prepareCliMockFixture(cwd: string): Promise<void> {
+  const fixtureDir = join(cwd, '.dsh', 'profiles', 'headless', 'snapshot-fixtures')
+  await mkdir(fixtureDir, { recursive: true })
+  await Promise.all([
+    copyFile(cliMockLlmPluginPath, join(fixtureDir, 'cli-mock-llm.ts')),
+    writeFile(join(fixtureDir, 'package.json'), '{"type":"module"}\n'),
+  ])
+}
+
+/** Install the keyless mock adapter and a complete local Daedal preset. */
+async function prepareDaedalFixture(cwd: string): Promise<void> {
+  await prepareCliMockFixture(cwd)
+  const presetDir = join(cwd, '.dsh', '.agent-presets', 'daedal')
+  await mkdir(presetDir, { recursive: true })
+  await Promise.all([
+    copyFile(daedalPresetPath, join(presetDir, 'agent.cordis.yml')),
+    writeFile(join(presetDir, 'preset.yml'), 'name: Daedal snapshot\ndescription: Keyless assembled acceptance preset.\n'),
+  ])
 }
 
 describe('headless stream-json snapshots', () => {
@@ -249,6 +274,41 @@ describe('headless stream-json snapshots', () => {
     expect(result.stdout).toBe('CLI tool round trip complete: CLI_TOOL_ROUND_TRIP\n')
     if (refreshing) await writeFile(headlessReasoningExpected, result.stderr)
     expect(result.stderr).toBe(await readFile(headlessReasoningExpected, 'utf8'))
+  }, LOADER_SMOKE_TEST_TIMEOUT_MS)
+
+  it('runs the assembled Daedal policy, output guard, and durable memory path', async () => {
+    const task = 'Exercise the assembled Daedal acceptance path.'
+    const result = await runLoaderSmoke({
+      label: 'Daedal assembled profile snapshot',
+      tempDirPrefix: 'headless-snapshot-daedal-',
+      binScript: dshBinScript,
+      configPath: daedalOverlayPath,
+      binArgs: ['--profile', 'headless', '--patch', daedalOverlayPath, task],
+      tsconfigPath,
+      env: {
+        DSH_CLI_DAEDAL: '1',
+        DSH_PERMISSION_MODE: 'danger-full-access',
+        DSH_TELEMETRY_DISABLED: '1',
+        NODE_OPTIONS: [process.env.NODE_OPTIONS, '--disable-warning=ExperimentalWarning'].filter(Boolean).join(' '),
+      },
+      prepare: prepareDaedalFixture,
+      inspect: async (cwd) => {
+        const logs = await persistedLogs(cwd, join(cwd, '.dsh', 'sessions'))
+        expect(logs).toHaveLength(1)
+        const actual = logs[0]
+        if (actual === undefined) throw new Error('the Daedal snapshot did not persist its session')
+        const context = contextFromLogs([actual.content])
+        const session = normalizeSessionSnapshot(actual.content, context)
+        if (refreshing) await writeFile(daedalSessionExpected, session)
+        expect(session).toBe(await readFile(daedalSessionExpected, 'utf8'))
+        expect(session).toContain('"agentPreset":"daedal"')
+        expect(session).toContain('"type":"tool-policy/decision"')
+        expect(session).toContain('The assembled Daedal profile completed its guarded shell round trip.')
+      },
+    })
+
+    expect(result.stdout).toBe('Daedal assembled profile completed after a guarded shell call and durable memory proposal.\n')
+    expect(result.stderr).toBe('')
   }, LOADER_SMOKE_TEST_TIMEOUT_MS)
 
   it('prints a terminal model failure through the product headless profile command', async () => {

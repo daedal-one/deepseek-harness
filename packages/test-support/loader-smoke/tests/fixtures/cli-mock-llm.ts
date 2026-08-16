@@ -52,11 +52,28 @@ class CliMockAdapter extends LlmAdapter {
       return
     }
 
+    if (process.env.DSH_CLI_DAEDAL === '1' && toolResult.toolCallId === CallId('cli-smoke-call')) {
+      const args = JSON.stringify({
+        scope: 'project',
+        statement: 'The assembled Daedal profile completed its guarded shell round trip.',
+        evidence: ['snapshot:cli-smoke-call'],
+        trust: 0.9,
+      })
+      yield { type: 'block-start', index: 0, blockType: 'tool-call' }
+      yield { type: 'tool-call-delta', index: 0, id: CallId('cli-memory-call'), name: 'memory_propose', argumentsDelta: args }
+      yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: CallId('cli-memory-call'), name: 'memory_propose', arguments: args } }
+      yield { type: 'usage', usage: { inputTokens: 13, outputTokens: 4 } }
+      yield { type: 'finish', reason: { kind: 'tool-calls' } }
+      return
+    }
+
     const toolText = toolResult.content
       .filter(block => block.type === 'text')
       .map(block => block.text)
       .join('')
-    const reply = `CLI tool round trip complete: ${toolText.trim()}`
+    const reply = process.env.DSH_CLI_DAEDAL === '1'
+      ? 'Daedal assembled profile completed after a guarded shell call and durable memory proposal.'
+      : `CLI tool round trip complete: ${toolText.trim()}`
     yield { type: 'block-start', index: 0, blockType: 'text' }
     yield { type: 'text-delta', index: 0, text: reply }
     yield { type: 'block-end', index: 0, block: { type: 'text', text: reply } }
@@ -70,7 +87,7 @@ export const inject = ['llm']
 
 /** Register the keyless `cli-mock` adapter. */
 export function apply(ctx: Context): void {
-  ctx.llm.registerAdapter(['cli-mock'], new CliMockAdapter())
+  ctx.llm.registerAdapter(['cli-mock', 'cli-mock-secondary'], new CliMockAdapter())
   ctx.on('agent/request', async ({ step }, next) => {
     const config = await next()
     return step === 2 ? { ...config, reasoningEffort: OFF } : config
