@@ -31,6 +31,7 @@ import {
 import {
   InvalidPresetIdError, PresetExistsError, PresetMountError,
   PresetNotWritableError, resolveSessionPreset,
+  resolveAgentComposition,
   SETTINGS_NAMESPACE as AGENT_PRESET_SETTINGS_NAMESPACE, UnknownPresetError,
 } from '@deepseek-ai/dsh-agent-presets'
 import type { PresetBearingSession } from '@deepseek-ai/dsh-agent-presets'
@@ -1228,23 +1229,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
     agentPreset?: string
     setup: (agentCtx: Context) => Promise<void>
   }> {
-    const presets = ctx.get('agentPresets')
-    if (presets === undefined) {
-      return {
-        setup: (agentCtx: Context) => {
-          installSelection(agentCtx)
-          return Promise.resolve()
-        },
-      }
-    }
-    const resolvedId = (await presets.resolve(presetId)).id
-    return {
-      agentPreset: resolvedId,
-      setup: async (agentCtx: Context) => {
-        installSelection(agentCtx)
-        await presets.mount(agentCtx, resolvedId)
-      },
-    }
+    return resolveAgentComposition(ctx, presetId, installSelection)
   }
 
   const hasSubagentOwner = (

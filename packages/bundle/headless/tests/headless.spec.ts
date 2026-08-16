@@ -16,6 +16,8 @@ afterEach(() => { Object.assign(internals, originalInternals) })
 interface Script {
   before?(session: Session): void
   afterPrompt(session: Session, message: UserMessage): Promise<void> | void
+  created?(options: CreateAgentOptions): void
+  preset?: { id: string; mount(agentCtx: Context): Promise<void> | void }
 }
 
 function appendTurn(
@@ -58,6 +60,7 @@ async function bench(script: Script): Promise<{
   await ctx.plugin(AgentDefaultModelConfig, { provider: 'test-provider', model: 'test-model' })
   ctx.agents.setFactory({
     async createAgent(ownerCtx: Context, options: CreateAgentOptions): Promise<AgentHandle> {
+      script.created?.(options)
       const session = ctx.sessions.create(options.sessionId, {
         ...options.meta === undefined ? {} : { meta: options.meta },
       })
@@ -89,6 +92,12 @@ async function bench(script: Script): Promise<{
     },
     resume: () => Promise.reject(new Error('not used')),
   })
+  if (script.preset !== undefined) {
+    ctx.provide('agentPresets', {
+      resolve: async () => ({ id: script.preset!.id }),
+      mount: (agentCtx: Context) => script.preset!.mount(agentCtx),
+    } as never)
+  }
   return {
     ctx,
     run: async () => {
@@ -108,6 +117,28 @@ async function bench(script: Script): Promise<{
 }
 
 describe('headless runner', () => {
+  it('persists and mounts the roster default before publishing the Agent', async () => {
+    let headerPreset: string | undefined
+    let mounted = false
+    const test = await bench({
+      preset: {
+        id: 'daedal',
+        mount(agentCtx) {
+          mounted = agentCtx.agent !== undefined
+        },
+      },
+      created(options) {
+        headerPreset = options.meta?.agentPreset
+      },
+      afterPrompt(session, message) { appendTurn(session, 1, message, 'preset answer', true) },
+    })
+
+    expect(await test.run()).toMatchObject({ code: 0, out: 'preset answer\n' })
+    expect(headerPreset).toBe('daedal')
+    expect(mounted).toBe(true)
+    await test.ctx.fiber.dispose()
+  })
+
   it('aggregates the final text across the complete idle-to-idle interval and flushes before exit', async () => {
     const test = await bench({
       before(session) {
