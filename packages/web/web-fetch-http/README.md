@@ -144,3 +144,7 @@ These limits define when the provider is unsafe or a poor fit. They are current 
 None.
 
 </details>
+
+## Fork destination policy
+
+Web fetch refuses proxy routes because the proxy resolves destination hostnames independently of the validated public address set. Direct requests pin public addresses and validate every redirect.
