@@ -136,18 +136,28 @@ function validateClientHalvesDeclared(): string[] {
  */
 function validatePresetPlaneSeparation(): string[] {
   const problems: string[] = []
-  // The shipped Web surface is two bundle patch layers over an empty root.
+  // Every shipped preset-aware surface applies the shared base and agent-plane
+  // layers. Web is the widest surface patch, so its active rows are the
+  // conservative host set against which every shipped preset is checked.
   const hostFile = 'packages/bundle/base/cordis.patch.yml'
-  const overlayFile = 'packages/bundle/web-app/cordis.patch.yml'
+  const overlayFiles = [
+    'packages/bundle/agent-plane/cordis.patch.yml',
+    'packages/bundle/web-app/cordis.patch.yml',
+  ]
   const hostRows = rowIds(hostFile)
-  const overlay = loadEntries(overlayFile)
   const disabled = new Set<string>()
-  for (const entry of overlay) {
-    if (!isRecord(entry)) continue
-    if (entry.disabled === true && typeof entry.id === 'string') disabled.add(entry.id)
+  for (const overlayFile of overlayFiles) {
+    for (const entry of loadEntries(overlayFile)) {
+      if (!isRecord(entry) || typeof entry.id !== 'string') continue
+      if (entry.disabled === true) disabled.add(entry.id)
+      if (entry.disabled === false) disabled.delete(entry.id)
+    }
   }
-  // The overlay's own inserts are host-plane too; its disables take them back out.
-  const active = new Set([...hostRows, ...rowIds(overlayFile)].filter(id => !disabled.has(id)))
+  // Overlay inserts are host-plane too; later explicit enables restore a row.
+  const active = new Set([
+    ...hostRows,
+    ...overlayFiles.flatMap(file => [...rowIds(file)]),
+  ].filter(id => !disabled.has(id)))
   for (const file of globSync('packages/preset/agent-presets/presets/*/agent.cordis.yml', { cwd: root })) {
     for (const id of rowIds(file)) {
       if (!active.has(id)) continue

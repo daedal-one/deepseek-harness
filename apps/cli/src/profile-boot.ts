@@ -367,7 +367,17 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
         if (ctx.get('timer') === undefined) {
           await ctx.loader.create({ name: '@deepseek-ai/cordis-plugin-timer' })
         }
-        await ctx.loader.create({ name: '@deepseek-ai/cordis-plugin-hmr', config: { root: [] } })
+        await ctx.loader.create({
+          name: '@deepseek-ai/cordis-plugin-hmr',
+          config: {
+            root: [],
+            // This fallback owns two exact configuration paths, not source
+            // modules. Polling keeps those live on hosts whose per-process
+            // file-descriptor limit is too small for Chokidar's native
+            // directory watcher fan-out.
+            usePolling: true,
+          },
+        })
       }
       await watchUserPatches(ctx, {
         binName: NAME,

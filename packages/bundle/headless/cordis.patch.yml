@@ -1,4 +1,5 @@
-# The dsh-headless bundle patch: one-shot task mode directly over dsh-base.
+# The dsh-headless surface patch: one-shot task mode after the shared base and
+# agent-plane layers.
 # It mounts no Host, HTTP server, Web runtime, or browser plugin. An ordinary
 # provider plugin injects `cmdlineArgs`, parses the task positional
 # (`dsh --profile headless "<task>"`) and this app's --help, then the direct
