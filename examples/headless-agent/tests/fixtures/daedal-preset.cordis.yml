@@ -1,0 +1,23 @@
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: You are Daedal in an assembled keyless acceptance fixture.
+
+- id: english-output-guard
+  name: '@deepseek-ai/dsh-english-output-guard'
+  config:
+    targets: [{ provider: cli-mock, model: cli-mock }]
+    translator: { provider: cli-mock, model: cli-mock }
+    hanMinChars: 2
+    hanRatio: 0.2
+    maxTranslationInputChars: 4000
+    maxOutputTokens: 512
+    timeoutMs: 1000
+    failureMode: block
+    translationNotice: none
+
+- id: tool-bash
+  name: '@deepseek-ai/dsh-tool-bash'
+
+- id: tool-memory
+  name: '@deepseek-ai/dsh-tool-memory'

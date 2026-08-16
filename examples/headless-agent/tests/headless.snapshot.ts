@@ -57,6 +57,9 @@ const deepseekDefaultsConfigPath = fileURLToPath(new URL('./fixtures/deepseek-de
 const headlessOverlayPath = fileURLToPath(new URL('./fixtures/headless-profile.cordis.yml', import.meta.url))
 const headlessSessionExpected = join(snapshotsDir, 'headless-profile', 'session.expected.jsonl')
 const headlessFailureExpected = join(snapshotsDir, 'headless-profile', 'stderr.expected.txt')
+const daedalOverlayPath = fileURLToPath(new URL('./fixtures/daedal-profile.cordis.yml', import.meta.url))
+const daedalPresetPath = fileURLToPath(new URL('./fixtures/daedal-preset.cordis.yml', import.meta.url))
+const daedalSessionExpected = join(snapshotsDir, 'daedal-profile', 'session.expected.jsonl')
 const cliMockLlmPluginPath = fileURLToPath(new URL('./fixtures/cli-mock-llm.ts', import.meta.url))
 const refreshing = process.env.DSH_SNAPSHOT === 'refresh'
 
@@ -154,18 +157,18 @@ function normalizeHeadlessStream(rawStdout: string, cwd: string): string {
   return normalizeStdout(`${normalizedRecords.map(record => JSON.stringify(record)).join('\n')}\n`, context)
 }
 
-/** Zero durable goal timestamps inside both metadata records and rendered XML JSON. */
-function normalizeGoalTimestamps(value: unknown): unknown {
+/** Zero nondeterministic domain timestamps inside records and rendered JSON strings. */
+function normalizeDurableTimestamps(value: unknown): unknown {
   if (typeof value === 'string') {
-    return value.replace(/("(?:createdAt|updatedAt|clearedAt)":)\d+/g, '$10')
+    return value.replace(/("(?:createdAt|updatedAt|clearedAt|lastAccessedAt)":)\d+/g, '$10')
   }
-  if (Array.isArray(value)) return value.map(normalizeGoalTimestamps)
+  if (Array.isArray(value)) return value.map(normalizeDurableTimestamps)
   if (value !== null && typeof value === 'object') {
     return Object.fromEntries(Object.entries(value).map(([key, item]) => [
       key,
-      ['createdAt', 'updatedAt', 'clearedAt'].includes(key) && typeof item === 'number'
+      ['createdAt', 'updatedAt', 'clearedAt', 'lastAccessedAt'].includes(key) && typeof item === 'number'
         ? 0
-        : normalizeGoalTimestamps(item),
+        : normalizeDurableTimestamps(item),
     ]))
   }
   return value
@@ -174,7 +177,7 @@ function normalizeGoalTimestamps(value: unknown): unknown {
 /** Normalize the stream's durable goal timestamps after the shared scrubbers. */
 function normalizeGoalStream(rawStdout: string, cwd: string): string {
   return parseJsonl(normalizeHeadlessStream(rawStdout, cwd))
-    .map(record => JSON.stringify(normalizeGoalTimestamps(record)))
+    .map(record => JSON.stringify(normalizeDurableTimestamps(record)))
     .join('\n') + '\n'
 }
 
@@ -218,6 +221,17 @@ async function prepareCliMockFixture(cwd: string): Promise<void> {
   ])
 }
 
+/** Install the keyless mock adapter and a complete local Daedal preset. */
+async function prepareDaedalFixture(cwd: string): Promise<void> {
+  await prepareCliMockFixture(cwd)
+  const presetDir = join(cwd, '.dsh', '.agent-presets', 'daedal')
+  await mkdir(presetDir, { recursive: true })
+  await Promise.all([
+    copyFile(daedalPresetPath, join(presetDir, 'agent.cordis.yml')),
+    writeFile(join(presetDir, 'preset.yml'), 'name: Daedal snapshot\ndescription: Keyless assembled acceptance preset.\n'),
+  ])
+}
+
 describe('headless stream-json snapshots', () => {
   it('runs one task through the product headless profile command', async () => {
     const task = 'Prove the product headless profile path with one real tool round trip.'
@@ -240,7 +254,9 @@ describe('headless stream-json snapshots', () => {
         const actual = logs[0]
         if (actual === undefined) throw new Error('the headless profile did not persist its session')
         const context = contextFromLogs([actual.content])
-        const session = scrubRequestHeaders(normalizeSessionLog(actual.content, context))
+        const session = parseJsonl(scrubRequestHeaders(normalizeSessionLog(actual.content, context)))
+          .map(record => JSON.stringify(normalizeDurableTimestamps(record)))
+          .join('\n') + '\n'
         if (refreshing) await writeFile(headlessSessionExpected, session)
         expect(session).toBe(await readFile(headlessSessionExpected, 'utf8'))
         expect(session).toContain(task)
@@ -249,6 +265,43 @@ describe('headless stream-json snapshots', () => {
     })
 
     expect(result.stdout).toBe('CLI tool round trip complete: CLI_TOOL_ROUND_TRIP\n')
+    expect(result.stderr).toBe('')
+  }, LOADER_SMOKE_TEST_TIMEOUT_MS)
+
+  it('runs the assembled Daedal policy, output guard, and durable memory path', async () => {
+    const task = 'Exercise the assembled Daedal acceptance path.'
+    const result = await runLoaderSmoke({
+      label: 'Daedal assembled profile snapshot',
+      tempDirPrefix: 'headless-snapshot-daedal-',
+      binScript: dshBinScript,
+      configPath: daedalOverlayPath,
+      binArgs: ['--profile', 'headless', '--patch', daedalOverlayPath, task],
+      tsconfigPath,
+      env: {
+        DSH_CLI_DAEDAL: '1',
+        DSH_PERMISSION_MODE: 'danger-full-access',
+        DSH_TELEMETRY_DISABLED: '1',
+        NODE_OPTIONS: [process.env.NODE_OPTIONS, '--disable-warning=ExperimentalWarning'].filter(Boolean).join(' '),
+      },
+      prepare: prepareDaedalFixture,
+      inspect: async (cwd) => {
+        const logs = await persistedLogs(cwd, join(cwd, '.dsh', 'sessions'))
+        expect(logs).toHaveLength(1)
+        const actual = logs[0]
+        if (actual === undefined) throw new Error('the Daedal snapshot did not persist its session')
+        const context = contextFromLogs([actual.content])
+        const session = parseJsonl(scrubRequestHeaders(normalizeSessionLog(actual.content, context)))
+          .map(record => JSON.stringify(normalizeDurableTimestamps(record)))
+          .join('\n') + '\n'
+        if (refreshing) await writeFile(daedalSessionExpected, session)
+        expect(session).toBe(await readFile(daedalSessionExpected, 'utf8'))
+        expect(session).toContain('"agentPreset":"daedal"')
+        expect(session).toContain('"type":"tool-policy/decision"')
+        expect(session).toContain('The assembled Daedal profile completed its guarded shell round trip.')
+      },
+    })
+
+    expect(result.stdout).toBe('Daedal assembled profile completed after a guarded shell call and durable memory proposal.\n')
     expect(result.stderr).toBe('')
   }, LOADER_SMOKE_TEST_TIMEOUT_MS)
 
