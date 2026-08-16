@@ -496,6 +496,46 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 来源：[`packages/llm/llm-retry/src/types.ts:11`](../packages/llm/llm-retry/src/types.ts)
 
+### `memory/*`
+
+<a id="memoryextraction-request--log-only"></a>
+
+#### `memory/extraction-request` — log-only
+
+```ts persistence-catalog
+/** Exact durable pre-dispatch record for one post-turn memory extraction. */
+'memory/extraction-request': {
+  turn: number
+  sourceEventSeqs: number[]
+  route: { provider: string; model: string }
+  system: string
+  messages: Message[]
+  maxTokens: number
+}
+```
+
+来源：[`packages/memory/memory-extractor-llm/src/types.ts:6`](../packages/memory/memory-extractor-llm/src/types.ts)
+
+<a id="memoryextraction-result--log-only"></a>
+
+#### `memory/extraction-result` — log-only
+
+```ts persistence-catalog
+/** Exact assembled auxiliary response and bounded extraction settlement. */
+'memory/extraction-result': {
+  turn: number
+  blocks: ContentBlock[]
+  finish: FinishReason
+  usage?: TokenUsage
+  proposedIds: string[]
+  failure?: { code: 'aborted' | 'invalid-output' | 'provider-error' | 'queue-full' | 'timeout' }
+}
+```
+
+类型：[ContentBlock](subsystems/core.md) · [TokenUsage](subsystems/llm-streaming.md)
+
+来源：[`packages/memory/memory-extractor-llm/src/types.ts:15`](../packages/memory/memory-extractor-llm/src/types.ts)
+
 ### `permission/*`
 
 <a id="permissionpreset--log-only"></a>
@@ -706,7 +746,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'subagent/descriptor': SubagentDescriptorData
 ```
 
-来源：[`packages/subagent/subagent/src/descriptor.ts:37`](../packages/subagent/subagent/src/descriptor.ts)
+来源：[`packages/subagent/subagent/src/descriptor.ts:38`](../packages/subagent/subagent/src/descriptor.ts)
 
 ### `todo/*`
 
@@ -816,6 +856,30 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 ```
 
 来源：[`packages/core/session/src/types.ts:291`](../packages/core/session/src/types.ts)
+
+### `tool-policy/*`
+
+<a id="tool-policyclassifier-request--log-only"></a>
+
+#### `tool-policy/classifier-request` — log-only
+
+```ts persistence-catalog
+/** Exact bounded auxiliary classifier request recorded before LLM dispatch. */
+'tool-policy/classifier-request': ToolPolicyClassifierRequestEventData
+```
+
+来源：[`packages/guard/tool-policy/src/types.ts:36`](../packages/guard/tool-policy/src/types.ts)
+
+<a id="tool-policydecision--log-only"></a>
+
+#### `tool-policy/decision` — log-only
+
+```ts persistence-catalog
+/** Provider or effective authorization decision; raw arguments remain in `tool/call`. */
+'tool-policy/decision': ToolPolicyDecisionEventData
+```
+
+来源：[`packages/guard/tool-policy/src/types.ts:38`](../packages/guard/tool-policy/src/types.ts)
 
 ### `tool-workflow/*`
 

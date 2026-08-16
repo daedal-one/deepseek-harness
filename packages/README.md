@@ -33,12 +33,14 @@ Groups hold `packages/<group>/<pkg>/`; names stay `@deepseek-ai/dsh-<pkg>`. **Gr
 | [`jobs/`](jobs/README.md) | Generic background-job runtime and model-facing `job_*` control tools | Product — stable API |
 | [`workflow/`](workflow/README.md) | Workflow seam, worker-thread engine, and model-facing `workflow`/`ralph` tools | Product — stable API |
 | [`web/`](web/README.md) | Web capability family: seam, search/fetch provider impls, and the model-facing web tools | Product — stable API |
+| [`mcp/`](mcp/README.md) | External Model Context Protocol tool bridges | Product — stable API |
+| [`memory/`](memory/README.md) | Durable reviewed-memory seam, SQLite provider, extraction, and scoped Consumers | Product — stable API |
 | [`attachment/`](attachment/README.md) | Durable attachment identity, validation, local content-addressed storage | Product — stable API |
 | [`spill/`](spill/README.md) | Spill capability family: storage seam, local impl, tool-result spill policy | Product — stable API |
 | [`todo/`](todo/README.md) | The model-facing `todo_write` tool | Product — stable API |
 | [`plan/`](plan/README.md) | Plan collaboration state with a direct entry command and reviewed exit | Product — stable API |
 | [`preset/`](preset/README.md) | Per-session agent composition from preset `cordis.yml` files | Product — stable API |
-| [`guard/`](guard/README.md) | Loop-hygiene guards: advisory repeat-call reminders + the `tools/execute` deadline enforcer | Product — stable API |
+| [`guard/`](guard/README.md) | Loop hygiene, tool authorization policy, and audited model-output guards | Product — stable API |
 | [`bundle/`](bundle/README.md) | Installable `dsh --profile` patch layers | Product — stable API |
 | [`extensions/`](extensions/README.md) | Agent runtime self-modification: live plugin/service inspection and model-written plugin mount/unmount ([design](../.agents/notes/implemented/feature/2026-07-08-self-referential-cordis-toolset.md)) | Product — stable API |
 | [`hooks/`](hooks/README.md) | Hook bridges + the shared Claude Code / Codex wire-protocol library | Product — stable API |

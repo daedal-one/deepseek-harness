@@ -33,12 +33,14 @@ npm scope 为 `@deepseek-ai/dsh-*`；Cordis `Service` 子类和函数插件通�
 | [`jobs/`](jobs/README.md) | 通用后台任务运行时和面向模型的 `job_*` 控制工具 | 产品：稳定 API |
 | [`workflow/`](workflow/README.md) | 工作流 seam、worker 线程引擎和面向模型的 `workflow`/`ralph` 工具 | 产品：稳定 API |
 | [`web/`](web/README.md) | Web 能力系列：seam、搜索／获取提供方实现和面向模型的 Web 工具 | 产品：稳定 API |
+| [`mcp/`](mcp/README.md) | 外部 Model Context Protocol 工具桥接 | 产品：稳定 API |
+| [`memory/`](memory/README.md) | 持久化评审记忆 seam、SQLite 提供方、提取器和限定 scope 的 Consumer | 产品：稳定 API |
 | [`attachment/`](attachment/README.md) | 持久附件标识、校验、本地内容寻址存储 | 产品：稳定 API |
 | [`spill/`](spill/README.md) | spill 能力系列：存储 seam、本地实现、工具结果 spill 策略 | 产品：稳定 API |
 | [`todo/`](todo/README.md) | 面向模型的 `todo_write` 工具 | 产品：稳定 API |
 | [`plan/`](plan/README.md) | Plan 协作状态，提供直接进入命令与经评审的退出 | 产品：稳定 API |
 | [`preset/`](preset/README.md) | 由 preset `cordis.yml` 按会话组装 agent | 产品：稳定 API |
-| [`guard/`](guard/README.md) | 循环卫生守卫：建议性重复调用提醒 + `tools/execute` 截止时间强制执行器 | 产品：稳定 API |
+| [`guard/`](guard/README.md) | 循环卫生、工具授权策略与可审计模型输出 guard | 产品：稳定 API |
 | [`bundle/`](bundle/README.md) | 可安装的 `dsh --profile` 补丁层 | 产品：稳定 API |
 | [`extensions/`](extensions/README.md) | agent 运行时自修改：实时插件／服务检查和模型所写插件挂载／卸载（[设计](../.agents/notes/implemented/feature/2026-07-08-self-referential-cordis-toolset.md)） | 产品：稳定 API |
 | [`hooks/`](hooks/README.md) | 钩子桥接 + 共享的 Claude Code／Codex 线协议库 | 产品：稳定 API |

@@ -85,6 +85,17 @@ flowchart LR
   pkg_tool_skill["tool-skill"]
   pkg_tool_subagent["tool-subagent"]
   pkg_tool_todo["tool-todo"]
+  pkg_tool_policy["tool-policy"]
+  svc_toolPolicy["ctx.toolPolicy<br/>Provider-routed tool authorization policy"]
+  pkg_tool_policy_shell["tool-policy-shell"]
+  pkg_tool_policy_mcp["tool-policy-mcp"]
+  pkg_tool_policy_enforcer["tool-policy-enforcer"]
+  pkg_memory["memory"]
+  svc_memory["ctx.memory<br/>Durable reviewed-memory seam"]
+  pkg_memory_sqlite["memory-sqlite"]
+  pkg_memory_extractor_llm["memory-extractor-llm"]
+  pkg_tool_memory["tool-memory"]
+  pkg_tool_memory_reviewer["tool-memory-reviewer"]
   pkg_user_questions["user-questions"]
   svc_userQuestions["ctx.userQuestions<br/>Human question/answer seam"]
   pkg_plan_mode["plan-mode"]
@@ -235,6 +246,8 @@ flowchart LR
   pkg_llm_replay --> svc_llm
   pkg_lsp --> svc_lsp
   pkg_lsp_local --> svc_lsp
+  pkg_memory --> svc_memory
+  pkg_memory_sqlite --> svc_memory
   pkg_message_feedback --> svc_messageFeedback
   pkg_modules --> svc_clientModules
   pkg_permission_presets --> svc_permissionPresets
@@ -284,6 +297,9 @@ flowchart LR
   pkg_terminal --> svc_terminals
   pkg_terminal_bash --> svc_terminals
   pkg_token_meter --> svc_tokenMeter
+  pkg_tool_policy --> svc_toolPolicy
+  pkg_tool_policy_mcp --> svc_toolPolicy
+  pkg_tool_policy_shell --> svc_toolPolicy
   pkg_tools --> svc_tools
   pkg_typert_registry --> svc_typert
   pkg_user_questions --> svc_userQuestions
@@ -330,6 +346,9 @@ flowchart LR
   svc_llm --> pkg_agent_loop
   svc_llm --> pkg_compaction_basic
   svc_lsp --> pkg_tool_lsp
+  svc_memory --> pkg_memory_extractor_llm
+  svc_memory --> pkg_tool_memory
+  svc_memory --> pkg_tool_memory_reviewer
   svc_sandbox --> pkg_bash_sandbox
   svc_sandbox --> pkg_terminal_bash
   svc_sandboxPolicy --> pkg_bash_sandbox
@@ -387,6 +406,7 @@ flowchart LR
   svc_systemPrompt --> pkg_tools
   svc_terminals --> pkg_tool_terminal
   svc_tokenMeter --> pkg_compaction_basic
+  svc_toolPolicy --> pkg_tool_policy_enforcer
   svc_toolResultPruner --> pkg_compaction_basic
   svc_tools --> pkg_agent_loop
   svc_tools --> pkg_tool_ask_user
@@ -434,6 +454,8 @@ flowchart LR
 | `ctx.sessionTitle` | `seam` | [`session-title`](../packages/session/session-title) | [`session-title-first-prompt-llm`](../packages/session/session-title-first-prompt-llm), [`session-title-all-prompts-llm`](../packages/session/session-title-all-prompts-llm) | - | - | 负责确定性回退、最新标题折叠区，以及唯一的可选异步提供方注册。 |
 | `ctx.systemPrompt` | `core` | [`system-prompt`](../packages/core/system-prompt) | - | [`agent-loop`](../packages/core/agent-loop), [`tools`](../packages/core/tools), [`tool-fs`](../packages/fs/tool-fs), [`tool-terminal`](../packages/terminal/tool-terminal), [`tool-web`](../packages/web/tool-web) | - | 为每个步骤收集提示词各部分和面向模型的工具 schema。 |
 | `ctx.tools` | `core` | [`tools`](../packages/core/tools) | - | [`agent-loop`](../packages/core/agent-loop), [`tool-ask-user`](../packages/interaction/tool-ask-user), [`tool-bash`](../packages/shell/tool-bash), [`tool-cordis`](../packages/extensions/tool-cordis), [`tool-fs`](../packages/fs/tool-fs), [`tool-terminal`](../packages/terminal/tool-terminal), [`tool-skill`](../packages/skill/tool-skill), [`tool-subagent`](../packages/subagent/tool-subagent), [`tool-todo`](../packages/todo/tool-todo), [`tool-web`](../packages/web/tool-web) | - | 注册能力，负责 Code Mode 传输，并让调用依次经过策略前处理、单调守卫、环绕分派、策略后处理和最终结果观测。 |
+| `ctx.toolPolicy` | `seam` | [`tool-policy`](../packages/guard/tool-policy) | [`tool-policy-shell`](../packages/guard/tool-policy-shell), [`tool-policy-mcp`](../packages/guard/tool-policy-mcp) | [`tool-policy-enforcer`](../packages/guard/tool-policy-enforcer) | - | 命名提供方对确切的工具执行进行授权；重叠的判定会保守合并，随后 Consumer 继续执行、拒绝调用或进入延迟审批。 |
+| `ctx.memory` | `seam` | [`memory`](../packages/memory/memory) | [`memory-sqlite`](../packages/memory/memory-sqlite) | [`memory-extractor-llm`](../packages/memory/memory-extractor-llm), [`tool-memory`](../packages/memory/tool-memory), [`tool-memory-reviewer`](../packages/memory/tool-memory-reviewer) | - | SQLite 提供方拥有分作用域的持久记录及生命周期转换；轮次后提取器创建项目提案，普通工具负责查询和提议，principal 作用域的评审工具负责列出并裁决待处理记录。 |
 | `ctx.userQuestions` | `seam` | [`user-questions`](../packages/interaction/user-questions) | - | [`tool-ask-user`](../packages/interaction/tool-ask-user) | - | UI 前端提供当前生效的人工回答提供方；tool-ask-user 在提供方无关的 ask() promise 上暂停工具调用。 |
 | `ctx.planMode` | `core` | [`plan-mode`](../packages/plan/plan-mode) | - | - | - | 折叠已记录的计划／模式状态，在轮次边界刷新用户选择，渲染由部署方拥有的指导信息，注册 /plan，并在状态转换期间保持计划退出 schema 稳定。 |
 | `ctx.agentPresets` | `core` | [`agent-presets`](../packages/preset/agent-presets) | - | - | - | 在受信任根目录与用户创作根目录上发现 preset 目录，并在创建期把一份 preset cordis.yml 挂载到 agent 作用域之下，拒绝始终未激活或向根服务 realm 发布服务的行。 |

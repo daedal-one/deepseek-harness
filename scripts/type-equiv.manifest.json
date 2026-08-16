@@ -1311,6 +1311,86 @@
       "source": "packages/subagent/subagent/src/types.ts"
     },
     {
+      "doc": "docs/subsystems/memory.md",
+      "symbol": "MemoryId",
+      "source": "packages/memory/memory/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/memory.md",
+      "symbol": "MemoryScope",
+      "source": "packages/memory/memory/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/memory.md",
+      "symbol": "MemoryEvidence",
+      "source": "packages/memory/memory/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/memory.md",
+      "symbol": "MemoryTrust",
+      "source": "packages/memory/memory/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/memory.md",
+      "symbol": "MemoryValidity",
+      "source": "packages/memory/memory/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/memory.md",
+      "symbol": "MemoryStatus",
+      "source": "packages/memory/memory/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/memory.md",
+      "symbol": "MemoryRecord",
+      "source": "packages/memory/memory/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/memory.md",
+      "symbol": "MemoryRef",
+      "source": "packages/memory/memory/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/memory.md",
+      "symbol": "MemoryProposal",
+      "source": "packages/memory/memory/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/memory.md",
+      "symbol": "MemoryQuery",
+      "source": "packages/memory/memory/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/memory.md",
+      "symbol": "MemoryQueryResult",
+      "source": "packages/memory/memory/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/memory.md",
+      "symbol": "MemoryChallenge",
+      "source": "packages/memory/memory/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/memory.md",
+      "symbol": "MemoryReview",
+      "source": "packages/memory/memory/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/memory.md",
+      "symbol": "MemorySupersession",
+      "source": "packages/memory/memory/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/memory.md",
+      "symbol": "MemoryCheckpoint",
+      "source": "packages/memory/memory/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/memory.md",
+      "symbol": "MemoryProvider",
+      "source": "packages/memory/memory/src/types.ts"
+    },
+    {
       "doc": "docs/subsystems/web.md",
       "symbol": "WebSearchRequest",
       "source": "packages/web/web/src/types.ts"
@@ -1924,6 +2004,36 @@
       "doc": "docs/subsystems/feedback.md",
       "symbol": "MessageFeedbackDeleteResult",
       "source": "packages/feedback/message-feedback/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/tool-policy.md",
+      "symbol": "ToolPolicyDecision",
+      "source": "packages/guard/tool-policy/src/index.ts"
+    },
+    {
+      "doc": "docs/subsystems/tool-policy.md",
+      "symbol": "ToolPolicyProviderId",
+      "source": "packages/guard/tool-policy/src/index.ts"
+    },
+    {
+      "doc": "docs/subsystems/tool-policy.md",
+      "symbol": "ToolPolicyOpinion",
+      "source": "packages/guard/tool-policy/src/index.ts"
+    },
+    {
+      "doc": "docs/subsystems/tool-policy.md",
+      "symbol": "ToolPolicyVerdict",
+      "source": "packages/guard/tool-policy/src/index.ts"
+    },
+    {
+      "doc": "docs/subsystems/tool-policy.md",
+      "symbol": "ToolPolicyRequest",
+      "source": "packages/guard/tool-policy/src/index.ts"
+    },
+    {
+      "doc": "docs/subsystems/tool-policy.md",
+      "symbol": "ToolPolicyProvider",
+      "source": "packages/guard/tool-policy/src/index.ts"
     }
   ]
 }
