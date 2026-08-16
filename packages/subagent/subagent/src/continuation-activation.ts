@@ -84,6 +84,7 @@ export interface Activation {
 
 /** Inputs shared by fresh and resumed Activation materialization. */
 export interface MaterializeInputs {
+  principalSetup?: (childCtx: Context) => import('@deepseek-ai/dsh-agent').AgentSetupCommit | undefined
   childId: SessionId
   provider: string
   parent: Agent
@@ -576,14 +577,16 @@ export class ContinuableActivationRegistry {
   ): Promise<Activation> {
     const { childId, provider, parent, create } = inputs
     inputs.signal.throwIfAborted()
-    const setup = (childCtx: Context, child: Agent): void => {
+    const setup = (childCtx: Context, child: Agent): import('@deepseek-ai/dsh-agent').AgentSetupCommit | void => {
       // Only fresh creation appends the descriptor and delegated policy after
       // the inherited marker; a cold resume replays those persisted events.
       if (create !== undefined) {
         child.session.append('subagent/descriptor', create.descriptor)
         appendDelegatedPolicyOverrides(child.session, create.delegatedPolicies)
       }
+      const principalSetup = inputs.principalSetup?.(childCtx)
       applyChildComposition(childCtx, parent, inputs.composition)
+      return principalSetup
     }
     const observer = this.observeActivation(provider, childId, parent)
     const handle: AgentHandle = create === undefined

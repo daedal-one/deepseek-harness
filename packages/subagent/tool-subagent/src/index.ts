@@ -22,8 +22,9 @@ import {
   assertSubagentMaxDepth,
   parentAgentOptionsForDelegation,
   settleRun,
+  SubagentPrincipal,
 } from '@deepseek-ai/dsh-subagent'
-import type { SubagentProvider, SubagentResult, SubagentRun } from '@deepseek-ai/dsh-subagent'
+import type { SubagentProvider, SubagentResult, SubagentRun, SubagentResultWarning } from '@deepseek-ai/dsh-subagent'
 import type { JobOutcome } from '@deepseek-ai/dsh-jobs'
 import {
   assertAllowedModelSelection,
@@ -100,6 +101,19 @@ export interface Config {
    * budget belongs to the child runtime or its own deployment.
    */
   maxDepth?: number | 'provider-managed'
+  /**
+   * Optional role-specific result policy. The named validator must be
+   * registered on `ctx.subagents` before a call starts; warnings are attached
+   * to the returned result without replacing the child's output.
+   */
+  resultValidation?: {
+    /** Registered validator name. */
+    validator: string
+    /** Validator-owned role contract for this tool instance. */
+    role: string
+  }
+  /** Config-owned durable authorization principal assigned to this child. */
+  principal?: string
 }
 
 export const Config: z<Config> = z.object({
@@ -127,6 +141,11 @@ export const Config: z<Config> = z.object({
     deny: z.array(z.string()).default(undefined as unknown as string[]),
   }).default(undefined as unknown as { allow: string[]; deny: string[] }),
   maxDepth: z.union([z.natural().max(Number.MAX_SAFE_INTEGER), z.const('provider-managed' as const)]).default(3),
+  resultValidation: z.object({
+    validator: z.string().required(),
+    role: z.string().required(),
+  }).default(undefined as unknown as { validator: string; role: string }),
+  principal: z.string().min(1),
 })
 
 /** Render text blocks from the canonical JSON block array without trusting arbitrary values. */
@@ -137,19 +156,6 @@ function outputValueText(values: JsonValue[]): string {
       && value.type === 'text' && typeof value.text === 'string')
     .map(value => value.text)
     .join('')
-}
-
-/** Settle pending startup without rejecting the task producer contract. */
-async function settleStart(start: Promise<SubagentRun>, signal: AbortSignal): Promise<JobOutcome> {
-  try {
-    return await settleRun(await start)
-  } catch (error: unknown) {
-    // Product providers aggregate startup and rollback failures. Cancellation
-    // must not turn a failed cleanup into a cleanly killed Job.
-    return signal.aborted && !(error instanceof AggregateError)
-      ? { status: 'killed' }
-      : { status: 'failed', detail: String(error) }
-  }
 }
 
 /** A non-`completed` stop reason means the child did not finish cleanly. */
@@ -198,15 +204,63 @@ type ForegroundToolResult = {
   readonly kind: 'foreground'
   readonly runId: SubagentRun['id']
   readonly output: JsonValue[]
+  readonly warnings?: SubagentResultWarning[]
+}
+
+type ValidateResult = (
+  run: SubagentRun,
+  result: SubagentResult,
+) => Promise<readonly SubagentResultWarning[]>
+
+/** Stable model-facing rendering of structured validation warnings. */
+function validationWarningText(warnings: readonly SubagentResultWarning[]): string {
+  return warnings
+    .map(warning => `[subagent-result:${warning.code}] ${warning.message}`)
+    .join('\n')
+}
+
+/** Append warnings for text-only background-task consumers. */
+function resultWithRenderedWarnings(
+  result: SubagentResult,
+  warnings: readonly SubagentResultWarning[],
+): SubagentResult {
+  if (warnings.length === 0) return result
+  return {
+    ...result,
+    output: [
+      ...result.output,
+      { type: 'text', text: `\n\n${validationWarningText(warnings)}` },
+    ],
+  }
+}
+
+/** Apply one optional validator without letting provider failure discard output. */
+async function validateResult(
+  validate: ValidateResult | undefined,
+  run: SubagentRun,
+  result: SubagentResult,
+): Promise<readonly SubagentResultWarning[]> {
+  if (validate === undefined || result.stopReason !== 'completed') return []
+  try {
+    return await validate(run, result)
+  } catch {
+    return [{
+      code: 'validator-failed',
+      message: 'The configured result validator failed; treat this subagent output as unverified.',
+    }]
+  }
 }
 
 /**
  * Collect and release one foreground run without letting disposal replace an
  * independent result failure.
  */
-async function settleForegroundRun(run: SubagentRun): Promise<ForegroundToolResult> {
+async function settleForegroundRun(
+  run: SubagentRun,
+  validate?: ValidateResult,
+): Promise<ForegroundToolResult> {
   const [execution] = await Promise.allSettled([
-    run.result.then((result): ForegroundToolResult => {
+    run.result.then(async (result): Promise<ForegroundToolResult> => {
       const error = stopReasonError(result)
       if (error !== undefined) {
         // The registry converts this throw to isError; partial output is not
@@ -219,6 +273,7 @@ async function settleForegroundRun(run: SubagentRun): Promise<ForegroundToolResu
         // Content blocks already cross durable JSON boundaries elsewhere;
         // the registry performs the authoritative lossless snapshot here.
         output: result.output as unknown as JsonValue[],
+        ...((warnings => warnings.length === 0 ? {} : { warnings: [...warnings] })(await validateResult(validate, run, result))),
       }
     }),
   ])
@@ -234,6 +289,31 @@ async function settleForegroundRun(run: SubagentRun): Promise<ForegroundToolResu
   }
   if (disposal.status === 'rejected') throw disposal.reason
   return execution.value
+}
+
+/** Settle one background run after attaching validation warnings to its text outcome. */
+async function settleValidatedStart(
+  start: Promise<SubagentRun>,
+  signal: AbortSignal,
+  validate?: ValidateResult,
+): Promise<JobOutcome> {
+  try {
+    const run = await start
+    const wrapped: SubagentRun = {
+      id: run.id,
+      localAgent: run.localAgent,
+      result: run.result.then(async result => resultWithRenderedWarnings(
+        result,
+        await validateResult(validate, run, result),
+      )),
+      dispose: () => run.dispose(),
+    }
+    return await settleRun(wrapped)
+  } catch (error: unknown) {
+    return signal.aborted && !(error instanceof AggregateError)
+      ? { status: 'killed' }
+      : { status: 'failed', detail: String(error) }
+  }
 }
 
 /**
@@ -452,6 +532,18 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
                   kind: { type: 'string', required: true, const: 'foreground' },
                   runId: { type: 'string', required: true },
                   output: { type: 'array', required: true, items: { type: 'json' } },
+                warnings: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    additionalProperties: false,
+                    properties: {
+                      code: { type: 'string', required: true },
+                      message: { type: 'string', required: true },
+                      details: { type: 'json' },
+                    },
+                  },
+                },
                 },
               },
             ],
@@ -462,7 +554,9 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
               ? `started background subagent job ${value.jobId}`
               : value.kind === 'continuable'
                 ? `started subagent ${value.subagentId}`
-                : outputValueText(value.output),
+                : value.warnings === undefined
+                  ? outputValueText(value.output)
+                  : `${outputValueText(value.output)}\n\n${validationWarningText(value.warnings)}`,
           }],
         },
         // Children never mutate the parent session; the one parent-owned write
@@ -474,6 +568,25 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
             // Non-agent callers provide no parent for delegation ownership.
             throw new Error('subagent tool requires a calling agent (exec.agent was undefined)')
           }
+
+        const resultValidation = config.resultValidation
+        const validation = resultValidation === undefined
+          ? undefined
+          : runtimeCtx.subagents.getResultValidator(resultValidation.validator)
+        if (resultValidation !== undefined && validation === undefined) {
+          throw new Error(
+            `subagent result validator "${resultValidation.validator}" is unavailable`,
+          )
+        }
+        const validate: ValidateResult | undefined = resultValidation === undefined || validation === undefined
+          ? undefined
+          : (run, result) => validation.validate({
+            role: resultValidation.role,
+            label: args.description,
+            parent,
+            run,
+            result,
+          })
 
           const modelRequest = args as DelegationModelRequest
           const parentOptions = parentAgentOptionsForDelegation(parent)
@@ -516,6 +629,7 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
             label: args.description,
             prompt: [{ type: 'text', text: args.prompt }] as ContentBlock[],
             parent,
+            ...config.principal === undefined ? {} : { principal: SubagentPrincipal(config.principal) },
             ...requestedChildAgentOptions !== undefined ? { agentOptions: requestedChildAgentOptions } : {},
             ...config.persona !== undefined ? { persona: config.persona } : {},
             ...config.toolFilter !== undefined ? { toolFilter: config.toolFilter } : {},
@@ -552,7 +666,7 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
                   cancel: (reason?: string) => {
                     controller.abort(reason ?? 'background subagent task killed')
                   },
-                  done: settleStart(start, controller.signal),
+                  done: settleValidatedStart(start, controller.signal, validate),
                   // No readOutput: the child session owns intermediate detail.
                 }
               },
@@ -564,7 +678,7 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
             ...request,
             signal: exec.signal,
           })
-          return settleForegroundRun(run)
+          return settleForegroundRun(run, validate)
         },
       }))
       mounted = { subagentProvider, disposeTool }

@@ -1,3 +1,6 @@
+import SubagentActivationSetupRegistry from './activation-setup-registry.ts'
+import type { SubagentChildSetupContribution } from './activation-setup-registry.ts'
+import type { SubagentPrincipal } from './descriptor.ts'
 /**
  * Service Definition for the subagent capability seam (`ctx.subagents`): a named-provider registry plus a
  * capability-validating asynchronous start API. Providers establish a
@@ -77,6 +80,7 @@ import { subagentIdentityProjectionDefinition, subagentTimingProjectionDefinitio
 import { establishCatalogChild, subagentCatalogProjectionDefinition } from './catalog.ts'
 import { deliverSubagentPrompt } from './internal.ts'
 
+export type { SubagentChildSetupContribution } from './activation-setup-registry.ts'
 export type {} from './catalog.ts'
 export * from './out-of-process.ts'
 export { AssistantOutputFold, finalAssistantOutput } from './assistant-output.ts'
@@ -100,6 +104,7 @@ export type {
 export {
   foldSubagentDescriptor,
   snapshotSubagentDescriptor,
+  SubagentPrincipal,
   SUBAGENT_DESCRIPTOR_VERSION,
 } from './descriptor.ts'
 export type {
@@ -129,6 +134,11 @@ export type * from './control-types.ts'
 export type { SubagentDescendantListEntry } from './list-children.ts'
 export type { SubagentRunEndInfo, SubagentRunInfo } from './types.ts'
 export type { SubagentIdentityProjection, SubagentTimingProjection } from './projection-types.ts'
+export type {
+  SubagentResultValidator,
+  SubagentResultValidationRequest,
+  SubagentResultWarning,
+} from './result-validation.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -187,7 +197,9 @@ interface BrowserPromptSource {
 /** Named provider registry with one-shot runs, durable discovery, and continuable-child operations. */
 export class SubagentRuntime extends TypertRemoteService {
   private providers = new Map<string, SubagentProvider>()
+  private resultValidators = new Map<string, SubagentResultValidator>()
   private continuations: SubagentContinuationManager | undefined
+  private readonly principalSetupRegistries = new Map<SubagentPrincipal, SubagentActivationSetupRegistry>()
   /**
    * The contained lifecycle-edge publisher. Built here because scoped dispatch
    * keys its carrier by this exact service instance, whose own context filter
@@ -202,6 +214,7 @@ export class SubagentRuntime extends TypertRemoteService {
       const manager = new SubagentContinuationManager(childCtx, {
         prepareContinuable: (name, request) => this.prepareContinuable(name, request),
         observeActivation: (provider, childId, parent) => this.observeActivation(provider, childId, parent),
+        applyPrincipalSetup: (agentCtx, principal) => this.applyPrincipalSetup(agentCtx, principal),
       })
       this.continuations = manager
       childCtx.effect(() => () => {
@@ -542,6 +555,54 @@ export class SubagentRuntime extends TypertRemoteService {
   }
 
   /**
+   * Register one named completed-result validator. A tool opts into it by name;
+   * other delegation tools remain unaffected.
+   * @param validator - deployment policy to register.
+   * @returns disposer for the exact registration.
+   */
+  registerResultValidator(validator: SubagentResultValidator): () => void {
+    // oxlint-disable-next-line typescript/no-misused-promises -- synchronous cleanup; direct return preserves disposer identity
+    return this.ctx.effect(function* (this: SubagentRuntime) {
+      if (this.resultValidators.has(validator.name)) {
+        throw new Error(`a subagent result validator named "${validator.name}" is already registered`)
+      }
+      this.resultValidators.set(validator.name, validator)
+      yield () => {
+        if (this.resultValidators.get(validator.name) === validator) {
+          this.resultValidators.delete(validator.name)
+        }
+      }
+    }.bind(this), 'subagents.registerResultValidator()')
+  }
+
+  /**
+   * Resolve one validator selected by a delegation consumer.
+   * @param name - configured validator name.
+   * @returns the current validator, or undefined while no provider owns that name.
+   */
+  getResultValidator(name: string): SubagentResultValidator | undefined {
+    return this.resultValidators.get(name)
+  }
+
+  /**
+   * Validate one completed result through the selected deployment policy.
+   * @param name - configured validator name.
+   * @param request - completed result and delegation context.
+   * @returns structured warnings in provider order.
+   * @throws when the named validator is unavailable or its provider rejects.
+   */
+  validateResult(
+    name: string,
+    request: SubagentResultValidationRequest,
+  ): Promise<readonly SubagentResultWarning[]> {
+    const validator = this.resultValidators.get(name)
+    if (validator === undefined) {
+      throw new Error(`no subagent result validator registered for "${name}"`)
+    }
+    return validator.validate(request)
+  }
+
+  /**
    * Establish a published child on the named provider. Capability and semantic
    * checks run before delegation. Provider ownership lasts until its promise
    * fulfills; a rejection therefore has no run for the caller to dispose and
@@ -562,8 +623,14 @@ export class SubagentRuntime extends TypertRemoteService {
       mode: 'one-shot',
       provider: name,
       ...request.label !== undefined ? { label: request.label } : {},
+      ...request.principal !== undefined ? { principal: request.principal } : {},
     })
-    const resolved: ResolvedSubagentStartRequest = { ...request, descriptor }
+    const resolved: ResolvedSubagentStartRequest = {
+      ...request, descriptor,
+      ...request.principal === undefined ? {} : {
+        principalSetup: (childCtx: Context) => this.applyPrincipalSetup(childCtx, request.principal),
+      },
+    }
     const run = await provider.start(resolved)
     const child = run.localAgent?.session
     if (child !== undefined) {
@@ -615,6 +682,46 @@ export class SubagentRuntime extends TypertRemoteService {
   }
 
   /** Resolve the optional continuable-subagent manager or fail loud. */
+  /**
+   * Register a child-scoped capability visible only to delegated agents carrying
+   * one config-owned principal. The principal is copied into the durable child
+   * descriptor, so a continuable child receives the same capability after a
+   * cold resume. Removing the registration immediately revokes every live
+   * installation created from it.
+   * @param principal - trusted deployment principal selected by Consumer configuration.
+   * @param contribution - synchronous child-scope installer.
+   * @returns the exact Cordis effect disposer.
+   */
+  registerPrincipalSetup(
+    principal: SubagentPrincipal,
+    contribution: SubagentChildSetupContribution,
+  ): () => void {
+    let registry = this.principalSetupRegistries.get(principal)
+    if (registry === undefined) {
+      registry = new SubagentActivationSetupRegistry()
+      this.principalSetupRegistries.set(principal, registry)
+    }
+    // oxlint-disable-next-line typescript/no-misused-promises -- synchronous cleanup; direct return preserves disposer identity
+    return this.ctx.effect(
+      () => registry.register(contribution),
+      'subagents.registerPrincipalSetup()',
+    )
+  }
+
+  /**
+   * Compose the capability set assigned to a trusted child principal.
+   * @param childCtx - unpublished delegated Agent scope.
+   * @param principal - config-owned principal copied from the delegation request.
+   * @returns the publication commit, or `undefined` for an ordinary child.
+   */
+  applyPrincipalSetup(
+    childCtx: Context,
+    principal: SubagentPrincipal | undefined,
+  ): import('@deepseek-ai/dsh-agent').AgentSetupCommit | undefined {
+    if (principal === undefined) return undefined
+    return this.principalSetupRegistries.get(principal)?.apply(childCtx)
+  }
+
   private requireContinuations(): SubagentContinuationManager {
     if (this.continuations === undefined) {
       throw new SubagentError(
@@ -645,6 +752,7 @@ export class SubagentRuntime extends TypertRemoteService {
       { when: request.maxDepth !== undefined, cap: 'depthLimit' },
       { when: request.toolFilter !== undefined, cap: 'toolFilter' },
       { when: request.persona !== undefined, cap: 'persona' },
+      { when: request.principal !== undefined, cap: 'principal' },
     ]
     for (const { when, cap } of needs) {
       if (when && !provider.capabilities[cap]) {
