@@ -16,6 +16,7 @@ MCP 客户端桥接插件：连接外部 [Model Context Protocol](https://modelc
     transport: stdio
     command: npx
     args: ['-y', '@modelcontextprotocol/server-github']
+    includeTools: [get_issue, create_issue]
     env:
       GITHUB_TOKEN: !!js process.env.GITHUB_TOKEN
 
@@ -43,7 +44,13 @@ MCP 客户端桥接插件：连接外部 [Model Context Protocol](https://modelc
 | `cwd` | stdio | 否 | 子进程工作目录 |
 | `url` | http | 是 | MCP 服务器 URL |
 | `headers` | http | 否 | 额外标头（例如认证 token） |
+| `includeTools` | 两者 | 否 | 要发布的精确 MCP 原始工具名；配置名称缺失会使同步失败 |
+| `removeArguments` | 两者 | 否 | 从每个选定工具的 schema 和请求中移除的参数名 |
+| `bindSessionArguments` | 两者 | 否 | 从 schema 中移除并填入执行 Agent 会话 id 的字符串参数名 |
+| `urlHostBindings` | 两者 | 否 | 逐工具指定源 URL 参数，并把其 hostname 填入隐藏的提供者域名限制参数 |
+| `clientLifetime` | 两者 | 否 | `plugin` 共享执行客户端；`agent` 为每个存活 Agent 创建并释放隔离客户端（默认 `plugin`） |
 | `toolCallTimeoutMs` | 两者 | 否 | 每次 `callTool` 调用的超时（默认 60000） |
+| `processGraceMs` | stdio | 否 | 受管进程树从 TERM 到 KILL 的宽限时间，单位毫秒（默认 2000） |
 | `failOnStartupError` | 两者 | 否 | 初始连接或工具同步失败时拒绝插件激活（默认 `false`） |
 | `reconnect.enabled` | 两者 | 否 | 连接丢失后自动重新连接（默认 `true`） |
 | `reconnect.initialDelayMs` | 两者 | 否 | 首次重连延迟（毫秒）；每次连续失败尝试翻倍（默认 500） |
@@ -55,13 +62,17 @@ MCP 客户端桥接插件：连接外部 [Model Context Protocol](https://modelc
 每个 MCP 工具都有两个名称：通过 `tools/call` 在协议上传送的原始 MCP 名称，以及公开名称 `mcp__<serverName>__<rawName>`，后者注册到 `ctx.tools`。公开名称会规范化为 DeepSeek 函数名称约定（64 个字符、`[A-Za-z0-9_-]`）；如果替换或截断改变名称，就会追加 `(serverName, rawName)` 的确定性 12 位十六进制 hash，确保不同工具绝不会折叠为同一个名称。名称是 `(serverName, rawName)` 的纯函数：连接顺序、重新同步和其他服务器永远不会重命名工具。
 
 - 发布相同原始名称（例如 `search`）的两个服务器会在各自 namespace 下共存。
-- 存活实例中的重复 `serverName` 会使后加载的插件实例失败。
+- 同一存活组合 scope 内的重复 `serverName` 会使后加载的插件实例失败。独立预设 scope 可以复用相同 namespace，且不会共享注册。
 - 服务器在工具列表中两次列出同一工具名称时，该列表会作为无效工具列表被拒绝。
 - 外部注册抢占该服务器 namespace 时，会回滚整个世代（绝不保留部分集合），并明确报错。
 
 ## 行为
 
-- 连接时：插件激活会等待 `listTools()`，并在组合开始首个轮次前通过 `ctx.tools.register()` 以公开名称注册每个工具。初始连接、发现或注册失败始终会记录日志；`failOnStartupError` 为 true 时拒绝激活，否则插件仍会激活但不注册工具。
+- 连接时：插件激活会等待 `listTools()`，并在组合开始首个轮次前通过 `ctx.tools.register()` 以公开名称注册 `includeTools` 配置的精确子集。省略该字段时，为兼容性保留服务器完整列表。发现中缺少配置名称会使同步失败。初始连接、发现或注册失败始终会记录日志；`failOnStartupError` 为 true 时拒绝激活，否则插件仍会激活但不注册工具。
+- 投影会在注册前从 schema 中移除部署所有的参数。`removeArguments` 还会从协议请求中省略这些参数；`bindSessionArguments` 注入执行 Agent 的持久会话 id。每个配置的投影参数必须存在于每个选定工具中，因此提供者 schema 变化会在同步时明确失败。
+- `urlHostBindings` 条目会从一个选定工具的字符串或字符串数组 URL 参数中派生唯一 hostname，并注入已由 `removeArguments` 隐藏的目标参数。浏览器提供者因此可以在建立会话的导航调用中接收不受模型控制的域名限制。
+- stdio 服务器通过 `ctx.subprocess` 解析并运行；进程树终止、凭据形环境变量清理和 teardown 静止都使用 harness 子进程实现。显式 `env` 条目仍是对环境清理的有意例外。
+- `clientLifetime: agent` 把发现客户端保留在插件 scope，但通过属于精确存活 Agent 的惰性连接客户端执行调用。Agent 释放时会关闭该客户端；冷恢复会获得新客户端。
 - 监听 `notifications/tools/list_changed` → 重新同步；获取阶段失败时保留上一世代的注册，注册冲突则会回滚本次尝试的世代，并且不保留该服务器的任何工具。
 - 工具执行：`client.callTool({ name: rawName, arguments }, { signal })`，支持超时 + 中止；公开名称绝不会发给服务器。
 - 规范成功值是 `{ content: JsonValue[], structuredContent? }`；完整的 JSON MCP 块会保留给编程调用方。受支持且已声明的 `outputSchema` 会验证 `structuredContent`；不受支持的 schema 词汇会回退为不受约束的 `JsonValue`。
@@ -75,6 +86,7 @@ MCP 客户端桥接插件：连接外部 [Model Context Protocol](https://modelc
 | 服务 | 用途 |
 |---|---|
 | `ctx.tools` | 注册／注销 MCP 工具 |
+| `ctx.subprocess` | 解析并管理 stdio MCP 服务器进程树 |
 
 ## 模型体验
 
@@ -82,7 +94,7 @@ MCP 客户端桥接插件：连接外部 [Model Context Protocol](https://modelc
 
 #### 模型看到的内容
 
-初始发现成功后，每个已声明的 MCP 工具都会显示为名为 `mcp__<serverName>__<rawName>`（或其确定性规范化形式）的原生工具，并携带服务器提供的描述和输入 schema。成功的重新同步——包括自动重连后的同步——会替换整个世代；对插件执行 dispose（资源释放）或重连预算耗尽会移除该世代。
+初始发现成功后，每个选定的 MCP 工具都会显示为名为 `mcp__<serverName>__<rawName>`（或其确定性规范化形式）的原生工具，并携带服务器提供的描述和投影后的输入 schema。成功的重新同步——包括自动重连后的同步——会替换整个世代；对插件执行 dispose（资源释放）或重连预算耗尽会移除该世代。
 
 #### Token 影响
 
@@ -110,6 +122,8 @@ MCP 客户端桥接插件：连接外部 [Model Context Protocol](https://modelc
 
 - **只桥接 MCP 的工具能力**：资源和提示词没有 harness 消费接口，暂缓实现。
 - **启动超时继承自 MCP SDK**：DSH 尚未公开连接／发现超时。每次 initialize 请求或分页 `tools/list` 请求都使用 SDK 默认的 60 秒，因此在初始同步完成期间，无响应的 server 或 cursor chain 可能同时延迟激活与 teardown。
+- **投影在选定工具间保持一致**：每个配置的移除或会话绑定参数必须存在于所有选定 schema。不同工具需要不同控制时，部署必须使用独立服务器实例，或等待未来的逐工具投影。
+- **URL-host 绑定只覆盖配置的导航调用**：它不检查提供者内部的重定向或脚本。提供者必须在会话中强制执行注入的域名限制；仅靠策略检查无法把后续 socket 固定到已检查的 DNS 记录。
 - **重连在传输关闭时触发**：崩溃的 stdio 子进程会触发重连；Streamable HTTP 失败通过每次请求以及 SDK 传输自身的 SSE（Server-Sent Events）流恢复机制暴露，因此不可达的 HTTP 服务器会按调用重试，而非由 supervisor 重新 spawn。
 - **Native 非文本渲染有损**：图片、音频与资源载荷在模型上下文中会变成占位符，即使执行局部的规范值保留了其 JSON 块。更丰富的 Native 多媒体投影暂缓实现。
 - **不强制执行不受支持的 MCP 输出 schema**：已声明 schema 使用 harness 子集之外的词汇时，`structuredContent` 会回退到 `JsonValue`。

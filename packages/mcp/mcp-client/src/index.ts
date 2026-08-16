@@ -6,9 +6,9 @@
  *
  * Namespace plugin (named exports, no default export). Lifecycle is
  * effect-scoped: disposal disconnects from the server, unregisters all tools,
- * and releases the `serverName` namespace reservation. HMR hot-swaps by
- * disposing the old instance and creating a new one; identical `serverName`
- * reproduces identical public tool names.
+ * and releases the `serverName` namespace reservation inside this composition
+ * scope. HMR hot-swaps by disposing the old instance and creating a new one;
+ * identical `serverName` reproduces identical public tool names.
  *
  * @module @deepseek-ai/dsh-mcp-client
  */
@@ -16,12 +16,15 @@
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
+import { scopeOf } from '@deepseek-ai/dsh-scope'
 import { RECONNECT_DEFAULTS, resolveReconnectPolicy, startConnection } from './connection.ts'
 import type { ReconnectConfig } from './connection.ts'
+import type { UrlHostBinding } from './tools.ts'
 // Side-effect type import: declaration-merges `ctx.tools` onto Context.
 import type {} from '@deepseek-ai/dsh-tools'
 
 export type { McpResult } from './tools.ts'
+export type { UrlHostBinding } from './tools.ts'
 export type { ReconnectConfig, ResolvedReconnectPolicy } from './connection.ts'
 
 /** Cordis plugin name used by loader diagnostics. */
@@ -37,17 +40,33 @@ const DEFAULT_TOOL_CALL_TIMEOUT_MS = 60_000
 const SERVER_NAME_PATTERN = /^[A-Za-z0-9_-]{1,32}$/
 
 /**
- * Live `serverName` reservations per app, keyed off `ctx.root` (multiple apps
- * in one process — tests — must not see each other's names). A duplicate
- * namespace is a configuration error surfaced at plugin load, never silent
- * shadowing.
+ * Live `serverName` reservations per composition scope. Separate standing
+ * preset generations may publish the same reviewed public namespace into
+ * their own scoped tool layers; duplicates inside one scope fail at load.
  */
-const activeServerNames = new WeakMap<Context, Set<string>>()
+const activeServerNames = new WeakMap<object, Set<string>>()
+
+/** Connection ownership for model tool calls. */
+export type ClientLifetime = 'plugin' | 'agent'
+
+/** MCP discovery and argument projection shared by both transports. */
+export interface ToolProjectionConfig {
+  /** Exact raw MCP tool names to publish; omission publishes the complete server list. */
+  includeTools?: string[]
+  /** Raw argument names removed from every published input schema. */
+  removeArguments?: string[]
+  /** Raw string arguments removed from schemas and bound to the executing Agent session id. */
+  bindSessionArguments?: string[]
+  /** Exact tools whose hidden provider domain argument is derived from a model URL argument. */
+  urlHostBindings?: UrlHostBinding[]
+  /** Reuse one MCP client or create one isolated client per executing Agent. */
+  clientLifetime: ClientLifetime
+}
 
 // ---- Config ----
 
 /** Config for connecting to an MCP server via a spawned child process over stdio. */
-export interface StdioConfig {
+export interface StdioConfig extends ToolProjectionConfig {
   /** Selects child-process stdio transport. */
   transport: 'stdio'
   /**
@@ -66,6 +85,8 @@ export interface StdioConfig {
   cwd: string
   /** Per-tool-call timeout in milliseconds. */
   toolCallTimeoutMs: number
+  /** Managed process-tree TERM-to-KILL grace in milliseconds. */
+  processGraceMs: number
   /** Fail plugin activation when the initial connection or tool synchronization fails. */
   failOnStartupError: boolean
   /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
@@ -73,7 +94,7 @@ export interface StdioConfig {
 }
 
 /** Config for connecting to an MCP server over Streamable HTTP (SSE). */
-export interface StreamableHttpConfig {
+export interface StreamableHttpConfig extends ToolProjectionConfig {
   /** Selects Streamable HTTP transport. */
   transport: 'streamable-http'
   /**
@@ -112,18 +133,37 @@ export const Config = z.union([
     args: z.array(String).default([]),
     env: z.dict(String).default({}),
     cwd: z.string().default(''),
-    toolCallTimeoutMs: z.number().default(DEFAULT_TOOL_CALL_TIMEOUT_MS),
+    toolCallTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(DEFAULT_TOOL_CALL_TIMEOUT_MS),
+    processGraceMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(2_000),
     failOnStartupError: z.boolean().default(false),
     reconnect: Reconnect,
+    includeTools: z.array(String).default(undefined as unknown as string[]),
+    removeArguments: z.array(String).default(undefined as unknown as string[]),
+    bindSessionArguments: z.array(String).default(undefined as unknown as string[]),
+    urlHostBindings: z.array(z.object({
+      tool: z.string().required(),
+      sourceArgument: z.string().required(),
+      targetArgument: z.string().required(),
+    })).default(undefined as unknown as UrlHostBinding[]),
+    clientLifetime: z.union(['plugin', 'agent'] as const).default('plugin'),
   }),
   z.object({
     transport: z.const('streamable-http'),
     serverName: z.string().required().pattern(SERVER_NAME_PATTERN),
     url: z.string().required(),
     headers: z.dict(String).default({}),
-    toolCallTimeoutMs: z.number().default(DEFAULT_TOOL_CALL_TIMEOUT_MS),
+    toolCallTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(DEFAULT_TOOL_CALL_TIMEOUT_MS),
     failOnStartupError: z.boolean().default(false),
     reconnect: Reconnect,
+    includeTools: z.array(String).default(undefined as unknown as string[]),
+    removeArguments: z.array(String).default(undefined as unknown as string[]),
+    bindSessionArguments: z.array(String).default(undefined as unknown as string[]),
+    urlHostBindings: z.array(z.object({
+      tool: z.string().required(),
+      sourceArgument: z.string().required(),
+      targetArgument: z.string().required(),
+    })).default(undefined as unknown as UrlHostBinding[]),
+    clientLifetime: z.union(['plugin', 'agent'] as const).default('plugin'),
   }),
 ]) as unknown as z<Config>
 
@@ -142,14 +182,16 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   // construction that bypassed Schemastery) rejects THIS instance before any
   // effect registers.
   const reconnect = resolveReconnectPolicy(config.reconnect, `mcp-client(${config.serverName}): reconnect`)
+  validateProjection(config)
 
   // Reserve the namespace next: a duplicate `serverName` fails THIS instance
   // at load with an actionable error and leaves the earlier instance intact.
   ctx.effect(() => {
-    let names = activeServerNames.get(ctx.root)
+    const namespace = scopeOf(ctx) ?? ctx.root
+    let names = activeServerNames.get(namespace)
     if (!names) {
       names = new Set()
-      activeServerNames.set(ctx.root, names)
+      activeServerNames.set(namespace, names)
     }
     if (names.has(config.serverName)) {
       throw new Error(
@@ -177,5 +219,53 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   const outcome = await connection.ready
   if (outcome.error !== undefined && config.failOnStartupError) {
     throw new Error(`mcp-client(${config.serverName}): initial connection or tool synchronization failed`, { cause: outcome.error })
+  }
+}
+
+/** Reject ambiguous or ineffective projection configuration before connecting. */
+function validateProjection(config: Config): void {
+  if (!Number.isFinite(config.toolCallTimeoutMs) || config.toolCallTimeoutMs < 1 || config.toolCallTimeoutMs > MAX_TIMER_DELAY_MS) {
+    throw new Error(`mcp-client(${config.serverName}): toolCallTimeoutMs must be a positive finite number no greater than ${MAX_TIMER_DELAY_MS}`)
+  }
+  if (config.transport === 'stdio' && (!Number.isFinite(config.processGraceMs) || config.processGraceMs < 1 || config.processGraceMs > MAX_TIMER_DELAY_MS)) {
+    throw new Error(`mcp-client(${config.serverName}): processGraceMs must be a positive finite number no greater than ${MAX_TIMER_DELAY_MS}`)
+  }
+  const lists = [
+    ['includeTools', config.includeTools],
+    ['removeArguments', config.removeArguments],
+    ['bindSessionArguments', config.bindSessionArguments],
+  ] as const
+  for (const [field, values] of lists) {
+    if (values === undefined) continue
+    if (values.length === 0) throw new Error(`mcp-client(${config.serverName}): ${field} must not be empty when present`)
+    if (values.some(value => value.trim().length === 0)) {
+      throw new Error(`mcp-client(${config.serverName}): ${field} entries must be non-empty`)
+    }
+    if (new Set(values).size !== values.length) {
+      throw new Error(`mcp-client(${config.serverName}): ${field} entries must be unique`)
+    }
+  }
+  const removed = new Set(config.removeArguments)
+  const overlap = config.bindSessionArguments?.find(argument => removed.has(argument))
+  if (overlap !== undefined) {
+    throw new Error(`mcp-client(${config.serverName}): argument ${JSON.stringify(overlap)} cannot be removed and session-bound`)
+  }
+  const bindings = config.urlHostBindings ?? []
+  const bindingKeys = bindings.map(binding => `${binding.tool}\0${binding.targetArgument}`)
+  if (bindings.some(binding => binding.tool.trim().length === 0
+    || binding.sourceArgument.trim().length === 0
+    || binding.targetArgument.trim().length === 0
+    || binding.sourceArgument === binding.targetArgument)) {
+    throw new Error(`mcp-client(${config.serverName}): URL-host bindings require non-empty, distinct tool/source/target names`)
+  }
+  if (new Set(bindingKeys).size !== bindingKeys.length) {
+    throw new Error(`mcp-client(${config.serverName}): URL-host binding targets must be unique per tool`)
+  }
+  const invalidBinding = bindings.find(binding => !removed.has(binding.targetArgument)
+    || config.bindSessionArguments?.includes(binding.sourceArgument) === true
+    || removed.has(binding.sourceArgument)
+    || (config.includeTools !== undefined && !config.includeTools.includes(binding.tool)))
+  if (invalidBinding !== undefined) {
+    throw new Error(`mcp-client(${config.serverName}): URL-host binding ${JSON.stringify(invalidBinding.tool)} must target a removed argument on an included tool without hiding its source`)
   }
 }

@@ -23,6 +23,7 @@ import { createTransport } from './transport.ts'
 import { syncTools } from './tools.ts'
 import type { ToolBridgeOptions, ToolDisposers } from './tools.ts'
 import type { Config } from './index.ts'
+import AgentMcpClientPool from './agent-client-pool.ts'
 
 /** Automatic reconnect policy for one MCP server connection. */
 export interface ReconnectConfig {
@@ -44,10 +45,11 @@ export const RECONNECT_DEFAULTS: Required<ReconnectConfig> = Object.freeze({
   maxAttempts: 10,
 })
 
-// The SDK's stdio transport owns two two-second termination grace periods.
-// Keep one additional second for the process-close event that proves the old
-// generation is gone; timing out fails closed instead of overlapping children.
-const GENERATION_CLOSE_TIMEOUT_MS = 5_000
+/** Bound the close signal after the configured process-tree grace elapses. */
+function generationCloseTimeoutMs(config: Config): number {
+  if (config.transport !== 'stdio') return 5_000
+  return Math.min(MAX_TIMER_DELAY_MS, config.processGraceMs + 1_000)
+}
 
 /** Fully resolved reconnect policy captured at plugin load. */
 export type ResolvedReconnectPolicy = Readonly<Required<ReconnectConfig>>
@@ -122,10 +124,19 @@ export interface ConnectionHandle {
  */
 export function startConnection(ctx: Context, config: Config, policy: ResolvedReconnectPolicy): ConnectionHandle {
   const label = `mcp-client(${config.serverName})`
+  const closeTimeoutMs = generationCloseTimeoutMs(config)
+  const agentPool = config.clientLifetime === 'agent' ? new AgentMcpClientPool(ctx, config) : undefined
   const opts: ToolBridgeOptions = {
     registrationFailure: 'contain',
     serverName: config.serverName,
     toolCallTimeoutMs: config.toolCallTimeoutMs,
+    ...config.includeTools === undefined ? {} : { includeTools: new Set(config.includeTools) },
+    ...config.removeArguments === undefined ? {} : { removeArguments: new Set(config.removeArguments) },
+    ...config.bindSessionArguments === undefined
+      ? {}
+      : { bindSessionArguments: new Set(config.bindSessionArguments) },
+    ...config.urlHostBindings === undefined ? {} : { urlHostBindings: config.urlHostBindings },
+    ...agentPool === undefined ? {} : { executionClient: exec => agentPool.clientFor(exec) },
   }
   // The initial sync uses 'throw' when failOnStartupError is configured, so
   // a registration conflict propagates to the startup-await path. Re-syncs
@@ -180,7 +191,7 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
   /** Wait for the transport-owned close signal without letting a broken transport wedge teardown forever. */
   function waitForClose(closed: Promise<void>): Promise<boolean> {
     return new Promise((resolve) => {
-      const timeout = setTimeout(() => { resolve(false) }, GENERATION_CLOSE_TIMEOUT_MS)
+      const timeout = setTimeout(() => { resolve(false) }, closeTimeoutMs)
       timeout.unref()
       void closed.then(() => {
         clearTimeout(timeout)
@@ -269,7 +280,7 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
       },
     )
     try {
-      await generation.connect(createTransport(config))
+      await generation.connect(createTransport(ctx, config))
       if (hasClosed()) {
         attemptSettled = true
         generationDown(generation)
@@ -288,7 +299,7 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
       if (!quiesced) {
         client = undefined
         clientClosed = undefined
-        ctx.logger.error(`${label}: failed generation did not close within ${GENERATION_CLOSE_TIMEOUT_MS}ms — reconnect stopped to avoid overlapping server processes; reload the plugin or restart the Host to retry`)
+        ctx.logger.error(`${label}: failed generation did not close within ${closeTimeoutMs}ms — reconnect stopped to avoid overlapping server processes; reload the plugin or restart the Host to retry`)
         return
       }
       generationDown(generation)
@@ -337,7 +348,7 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
       if (current !== undefined) {
         try { await current.close() } catch { /* transport already gone */ }
         if (currentClosed !== undefined && !await waitForClose(currentClosed)) {
-          ctx.logger.error(`${label}: generation did not close within ${GENERATION_CLOSE_TIMEOUT_MS}ms during disposal — server shutdown may be incomplete`)
+          ctx.logger.error(`${label}: generation did not close within ${closeTimeoutMs}ms during disposal — server shutdown may be incomplete`)
         }
       }
       // Quiesce, don't just request it: the in-flight attempt enqueues its
@@ -346,6 +357,7 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
       await syncChain
       for (const dispose of disposers.values()) dispose()
       disposers = new Map()
+      await agentPool?.dispose()
     },
   }
 }

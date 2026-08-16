@@ -6,6 +6,9 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
+import { CallId } from '@deepseek-ai/dsh-llm'
+import { createScope } from '@deepseek-ai/dsh-scope'
+import type { Scope } from '@deepseek-ai/dsh-scope'
 import type { Config } from '@deepseek-ai/dsh-mcp-client'
 
 // ---- Mock MCP SDK ----
@@ -44,8 +47,8 @@ vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
   Client: MockClient,
 }))
 
-vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({
-  StdioClientTransport: vi.fn(),
+vi.mock('@deepseek-ai/dsh-mcp-client/src/transport.ts', () => ({
+  createTransport: vi.fn(() => ({})),
 }))
 
 vi.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
@@ -82,6 +85,8 @@ const stdioConfig: Config = {
   env: {},
   cwd: '',
   toolCallTimeoutMs: 60_000,
+  processGraceMs: 2_000,
+  clientLifetime: 'plugin',
   failOnStartupError: false,
 }
 
@@ -238,6 +243,23 @@ describe('apply (plugin lifecycle)', () => {
     expect(other.tools.get('mcp__srv__remote')).toBeDefined()
   })
 
+  it('allows the same server namespace in independent standing composition scopes', async () => {
+    const firstKey = {}
+    const secondKey = {}
+    let first!: Scope
+    let second!: Scope
+    await ctx.plugin(Object.assign((inner: Context) => {
+      first = createScope(inner, firstKey)
+      second = createScope(inner, secondKey)
+    }, { inject: ['tools'] }))
+
+    await Promise.all([apply(first.ctx, stdioConfig), apply(second.ctx, stdioConfig)])
+    expect(ctx.tools.schemas(firstKey).map(schema => schema.name)).toContain('mcp__srv__remote')
+    expect(ctx.tools.schemas(secondKey).map(schema => schema.name)).toContain('mcp__srv__remote')
+
+    await Promise.all([first.dispose(), second.dispose()])
+  })
+
   it('logs error and registers no tools when connect fails; dispose closes the client', async () => {
     mockConnect.mockRejectedValue(new Error('connection refused'))
 
@@ -392,6 +414,7 @@ describe('apply (plugin lifecycle)', () => {
       url: 'http://localhost:3000/mcp',
       headers: { Authorization: 'Bearer x' },
       toolCallTimeoutMs: 30_000,
+      clientLifetime: 'plugin',
       failOnStartupError: false,
     }
 
@@ -399,5 +422,25 @@ describe('apply (plugin lifecycle)', () => {
 
     expect(mockConnect).toHaveBeenCalled()
     expect(ctx.tools.get('mcp__web__remote')).toBeDefined()
+  })
+
+  it('creates and releases an isolated MCP client with each executing Agent scope', async () => {
+    await apply(ctx, { ...stdioConfig, clientLifetime: 'agent' })
+    expect(mockConnect).toHaveBeenCalledTimes(1)
+    const owner = ctx.plugin(function agentOwner() {})
+    const agent = { ctx: owner.ctx, session: { id: 'agent-session' } }
+
+    await ctx.tools.execute({
+      signal: new AbortController().signal,
+      callId: CallId('agent-call'),
+      name: 'mcp__srv__remote',
+      arguments: {},
+      agent,
+    } as never)
+    expect(mockConnect).toHaveBeenCalledTimes(2)
+    expect(mockClose).not.toHaveBeenCalled()
+
+    await owner.dispose()
+    expect(mockClose).toHaveBeenCalledTimes(1)
   })
 })
