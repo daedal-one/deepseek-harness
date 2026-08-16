@@ -24,6 +24,7 @@
 import { snapshotJsonValue } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ToolRestriction } from '@deepseek-ai/dsh-tools'
+import type { Branded } from '@deepseek-ai/dsh-brand'
 
 declare module '@deepseek-ai/dsh-session/types' {
   interface SessionEventMap {
@@ -44,7 +45,20 @@ declare module '@deepseek-ai/dsh-session/types' {
  * Supporting another composition input is a deliberate version change, never
  * an implicit extra field.
  */
-export const SUBAGENT_DESCRIPTOR_VERSION = 2
+export const SUBAGENT_DESCRIPTOR_VERSION = 3
+
+/** Trusted deployment principal assigned to a delegated child. */
+export type SubagentPrincipal = Branded<'SubagentPrincipal'>
+
+/**
+ * Brand a config-owned principal for durable child authorization.
+ * @param value - non-empty identifier supplied by plugin configuration.
+ * @returns the same identifier with its cross-boundary principal brand.
+ */
+export function SubagentPrincipal(value: string): SubagentPrincipal {
+  if (value.trim() === '') throw new Error('subagent principal must not be empty')
+  return value as SubagentPrincipal
+}
 
 /** Fields shared by every supported `subagent/descriptor` payload. */
 interface SubagentDescriptorBase {
@@ -54,6 +68,8 @@ interface SubagentDescriptorBase {
   readonly mode: 'one-shot' | 'continuable'
   /** The `ctx.subagents` provider name that established the child. */
   readonly provider: string
+  /** Config-owned authorization principal; absent for ordinary children. */
+  readonly principal?: SubagentPrincipal
 }
 
 /** A session-backed subagent that cannot be cold-resumed after its run. */
@@ -93,6 +109,8 @@ interface SubagentDescriptorInputBase {
   readonly mode: 'one-shot' | 'continuable'
   /** The `ctx.subagents` provider name that will establish the child. */
   readonly provider: string
+  /** Config-owned authorization principal to persist for this child. */
+  readonly principal?: SubagentPrincipal
 }
 
 /** Input for a one-shot child's durable identity. */
@@ -127,6 +145,7 @@ const DESCRIPTOR_BASE_KEYS = [
   'mode',
   'provider',
   'label',
+  'principal',
 ] as const
 const ONE_SHOT_DESCRIPTOR_KEYS = new Set(DESCRIPTOR_BASE_KEYS)
 const CONTINUABLE_DESCRIPTOR_KEYS = new Set([
@@ -216,12 +235,15 @@ function parseSubagentDescriptor(value: unknown): SubagentDescriptorData | undef
   if (typeof provider !== 'string') {
     throw new Error('persisted subagent descriptor provider must be a string')
   }
+  const principalValue = optionalString(value, 'principal')
+  const principal = principalValue === undefined ? undefined : SubagentPrincipal(principalValue)
   if (mode === 'one-shot') {
     const label = optionalString(value, 'label')
     return {
       version: SUBAGENT_DESCRIPTOR_VERSION,
       mode,
       provider,
+      ...principal !== undefined ? { principal } : {},
       ...label !== undefined ? { label } : {},
     }
   }
@@ -239,6 +261,7 @@ function parseSubagentDescriptor(value: unknown): SubagentDescriptorData | undef
     version: SUBAGENT_DESCRIPTOR_VERSION,
     mode,
     provider,
+    ...principal !== undefined ? { principal } : {},
     label,
     ...agentProvider !== undefined ? { agentProvider } : {},
     ...agentModel !== undefined ? { agentModel } : {},
@@ -274,12 +297,14 @@ export function snapshotSubagentDescriptor(input: SubagentDescriptorInput): Suba
       version: SUBAGENT_DESCRIPTOR_VERSION,
       mode: input.mode,
       provider: input.provider,
+      ...input.principal !== undefined ? { principal: input.principal } : {},
       ...input.label !== undefined ? { label: input.label } : {},
     }
     : {
       version: SUBAGENT_DESCRIPTOR_VERSION,
       mode: input.mode,
       provider: input.provider,
+      ...input.principal !== undefined ? { principal: input.principal } : {},
       label: input.label,
       ...input.agentProvider !== undefined ? { agentProvider: input.agentProvider } : {},
       ...input.agentModel !== undefined ? { agentModel: input.agentModel } : {},

@@ -23,11 +23,14 @@ import { SubagentError } from './error.ts'
  * @param childCtx - the child's unpublished scoped context.
  * @returns the disposer revoking this installation.
  */
-export type ContinuableSetupContribution = (childCtx: Context) => () => void
+export type SubagentChildSetupContribution = (childCtx: Context) => () => void
+
+/** Backwards-compatible name for setup composed into every continuable child. */
+export type ContinuableSetupContribution = SubagentChildSetupContribution
 
 /** One contribution's live registration. */
 interface Registration {
-  readonly contribution: ContinuableSetupContribution
+  readonly contribution: SubagentChildSetupContribution
   removed: boolean
   readonly installations: Set<Installation>
 }
@@ -69,7 +72,7 @@ export class SubagentActivationSetupRegistry {
    * @returns an idempotent registration undo.
    * @throws after attempting every installation when any disposer fails.
    */
-  register(contribution: ContinuableSetupContribution): () => void {
+  register(contribution: SubagentChildSetupContribution): () => void {
     const registration: Registration = { contribution, removed: false, installations: new Set() }
     this.registrations.add(registration)
     return () => {

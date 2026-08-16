@@ -78,7 +78,7 @@ async function settleSubagent(
   const result = Promise.withResolvers<SubagentResult>()
   const disposeProvider = ctx.subagents.registerProvider({
     name: info.provider,
-    capabilities: { outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+    capabilities: { outputSchema: false, depthLimit: false, toolFilter: false, persona: false, principal: false },
     inheritsParentContext: false,
     async start() {
       return {
@@ -497,7 +497,7 @@ describe('HarnessSdkJsonRpcServer', () => {
       let currentLocalAgent = oldChild.agent
       const disposeProvider = ctx.subagents.registerProvider({
         name: 'reused',
-        capabilities: { outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+        capabilities: { outputSchema: false, depthLimit: false, toolFilter: false, persona: false, principal: false },
         inheritsParentContext: false,
         start() {
           const result = results[starts]
@@ -592,7 +592,7 @@ describe('HarnessSdkJsonRpcServer', () => {
       const remoteResult = Promise.withResolvers<SubagentResult>()
       const unregisterLocal = ctx.subagents.registerProvider({
         name: 'reused-provider',
-        capabilities: { outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+        capabilities: { outputSchema: false, depthLimit: false, toolFilter: false, persona: false, principal: false },
         inheritsParentContext: false,
         start: () => Promise.resolve({
           id: SessionId('provider-reuse-child'),
@@ -610,7 +610,7 @@ describe('HarnessSdkJsonRpcServer', () => {
 
       const unregisterRemote = ctx.subagents.registerProvider({
         name: 'reused-provider',
-        capabilities: { outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+        capabilities: { outputSchema: false, depthLimit: false, toolFilter: false, persona: false, principal: false },
         inheritsParentContext: false,
         start: () => Promise.resolve({
           id: SessionId('provider-reuse-child'),
@@ -690,7 +690,7 @@ describe('HarnessSdkJsonRpcServer', () => {
       const missedStartResult = Promise.withResolvers<SubagentResult>()
       const disposeMissedStartProvider = ctx.subagents.registerProvider({
         name: 'fork',
-        capabilities: { outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+        capabilities: { outputSchema: false, depthLimit: false, toolFilter: false, persona: false, principal: false },
         inheritsParentContext: true,
         start: () => Promise.resolve({
           id: SessionId('fallback-child-session'),

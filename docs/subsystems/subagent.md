@@ -29,6 +29,8 @@ interface SubagentCapabilities {
   readonly depthLimit: boolean
   readonly toolFilter: boolean
   readonly persona: boolean
+  /** Whether an in-process child can receive principal-scoped setup. */
+  readonly principal: boolean
 }
 ```
 
@@ -47,6 +49,11 @@ The tool layer builds this request from the model input and its own config; the 
 interface SubagentStartRequest {
   /** Optional short display label persisted with a session-backed child. */
   readonly label?: string
+  /**
+   * Trusted deployment principal assigned by the delegation Consumer. It is
+   * persisted for local children and is never accepted from model arguments.
+   */
+  readonly principal?: SubagentPrincipal
   /** Content delivered as the child's user message. */
   readonly prompt: ContentBlock[]
   /**
@@ -108,8 +115,15 @@ The caller-facing request does not carry catalog format details or continuation 
 interface ResolvedSubagentStartRequest extends SubagentStartRequest {
   /** Detached descriptor a session-backed provider persists in the child log. */
   readonly descriptor: SubagentDescriptorData
+  /**
+   * Service-owned setup for a trusted principal. Present only after capability
+   * validation and consumed by an in-process provider during unpublished setup.
+   */
+  readonly principalSetup?: (childCtx: Context) => AgentSetupCommit | void
 }
 ```
+
+A principal is deployment authority, not a role label. A delegation Consumer selects it from configuration; the service persists it in descriptor version 3 and installs its registered child-scoped capabilities before validating the child's tool filter. Ordinary children and the root Agent have no principal. Named result validators are a second registry on `ctx.subagents`: an opted-in delegation Consumer calls one after the child settles and receives structured warnings without changing the child's durable output. See the [trusted-principals Agent Note](../../.agents/notes/implemented/feature/2026-08-16-trusted-subagent-principals-and-results.md).
 
 ## Continuable children and activations
 
@@ -551,6 +565,26 @@ async reportFrom( child: Agent, content: ContentBlock[], options: SubagentReport
 registerContinuableSetup(contribution: ContinuableSetupContribution): () => void
 
 /**
+ * Register a child-scoped capability visible only to delegated agents carrying
+ * one config-owned principal. The principal is copied into the durable child
+ * descriptor, so a continuable child receives the same capability after a
+ * cold resume. Removing the registration immediately revokes every live
+ * installation created from it.
+ * @param principal - trusted deployment principal selected by Consumer configuration.
+ * @param contribution - synchronous child-scope installer.
+ * @returns the exact Cordis effect disposer.
+ */
+registerPrincipalSetup( principal: SubagentPrincipal, contribution: SubagentChildSetupContribution, ): () => void
+
+/**
+ * Compose the capability set assigned to a trusted child principal.
+ * @param childCtx - unpublished delegated Agent scope.
+ * @param principal - config-owned principal copied from the delegation request.
+ * @returns the publication commit, or `undefined` for an ordinary child.
+ */
+applyPrincipalSetup( childCtx: Context, principal: SubagentPrincipal | undefined, ): import('@deepseek-ai/dsh-agent').AgentSetupCommit | undefined
+
+/**
  * Close continuable admission below exact live parent Agents, stop only their
  * visible descendant Activations synchronously, then await admitted scoped
  * materializations and release those forests child-first. The scoped cutoff
@@ -632,6 +666,30 @@ getProvider(name: string): SubagentProvider | undefined
 list(): string[]
 
 /**
+ * Register one named completed-result validator. A tool opts into it by name;
+ * other delegation tools remain unaffected.
+ * @param validator - deployment policy to register.
+ * @returns disposer for the exact registration.
+ */
+registerResultValidator(validator: SubagentResultValidator): () => void
+
+/**
+ * Resolve one validator selected by a delegation consumer.
+ * @param name - configured validator name.
+ * @returns the current validator, or undefined while no provider owns that name.
+ */
+getResultValidator(name: string): SubagentResultValidator | undefined
+
+/**
+ * Validate one completed result through the selected deployment policy.
+ * @param name - configured validator name.
+ * @param request - completed result and delegation context.
+ * @returns structured warnings in provider order.
+ * @throws when the named validator is unavailable or its provider rejects.
+ */
+validateResult( name: string, request: SubagentResultValidationRequest, ): Promise<readonly SubagentResultWarning[]>
+
+/**
  * Establish a published child on the named provider. Capability and semantic
  * checks run before delegation. Provider ownership lasts until its promise
  * fulfills; a rejection therefore has no run for the caller to dispose and
@@ -646,7 +704,7 @@ async start(name: string, request: SubagentStartRequest): Promise<SubagentRun>
 
 Types: [Agent](core.md) · [ContentBlock](llm-streaming.md) · [MessageId](llm-streaming.md) · [SessionId](core.md)
 
-Source: [`packages/subagent/subagent/src/index.ts:171`](../../packages/subagent/subagent/src/index.ts)
+Source: [`packages/subagent/subagent/src/index.ts:189`](../../packages/subagent/subagent/src/index.ts)
 
 <a id="subagent-events"></a>
 
@@ -672,7 +730,7 @@ A published child settled. Scope-filtered dispatch uses the same delegating pare
 
 Types: [Scoped](scope.md)
 
-Source: [`packages/subagent/subagent/src/index.ts:166`](../../packages/subagent/subagent/src/index.ts)
+Source: [`packages/subagent/subagent/src/index.ts:184`](../../packages/subagent/subagent/src/index.ts)
 
 <a id="subagentprovider-added--emit"></a>
 
@@ -689,7 +747,7 @@ A provider became resolvable in the registry.
 'subagent/provider-added'(provider: SubagentProvider): void
 ```
 
-Source: [`packages/subagent/subagent/src/index.ts:140`](../../packages/subagent/subagent/src/index.ts)
+Source: [`packages/subagent/subagent/src/index.ts:158`](../../packages/subagent/subagent/src/index.ts)
 
 <a id="subagentprovider-removed--emit"></a>
 
@@ -706,7 +764,7 @@ A provider left the registry. Accepted runs remain holder-owned.
 'subagent/provider-removed'(name: string): void
 ```
 
-Source: [`packages/subagent/subagent/src/index.ts:146`](../../packages/subagent/subagent/src/index.ts)
+Source: [`packages/subagent/subagent/src/index.ts:164`](../../packages/subagent/subagent/src/index.ts)
 
 <a id="subagentstart--emit"></a>
 
@@ -730,5 +788,5 @@ A provider established a published child. For in-process providers, `ctx.agents.
 
 Types: [Scoped](scope.md)
 
-Source: [`packages/subagent/subagent/src/index.ts:157`](../../packages/subagent/subagent/src/index.ts)
+Source: [`packages/subagent/subagent/src/index.ts:175`](../../packages/subagent/subagent/src/index.ts)
 <!-- END GENERATED cordis-surface -->

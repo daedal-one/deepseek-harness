@@ -37,7 +37,7 @@ import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
 import type { ToolRestriction } from '@deepseek-ai/dsh-tools'
 import { foldSubagentDescriptor, snapshotSubagentDescriptor } from './descriptor.ts'
-import type { SubagentDescriptorData } from './descriptor.ts'
+import type { SubagentDescriptorData, SubagentPrincipal } from './descriptor.ts'
 import {
   appendDelegatedPolicyOverrides,
   applyChildComposition,
@@ -181,6 +181,16 @@ interface ContinuationHost {
    * @returns the observer whose edges this epoch publishes.
    */
   observeActivation(provider: string, childId: SessionId, parent: Agent): ActivationObserver
+  /**
+   * Compose capabilities assigned to the child's trusted deployment principal.
+   * @param childCtx - unpublished delegated Agent scope.
+   * @param principal - durable config-owned principal, if one was assigned.
+   * @returns the optional publication commit for principal-scoped setup.
+   */
+  applyPrincipalSetup(
+    childCtx: Context,
+    principal: SubagentPrincipal | undefined,
+  ): AgentSetupCommit | undefined
 }
 
 /**
@@ -256,7 +266,11 @@ interface MaterializeInputs {
     delegatedPolicies: DelegatedPolicyOverrides
   }
   agentOptions: AgentOptions
-  composition: { persona?: string | undefined; toolFilter?: ToolRestriction | undefined }
+  composition: {
+    persona?: string | undefined
+    toolFilter?: ToolRestriction | undefined
+    principal?: SubagentPrincipal | undefined
+  }
   signal: AbortSignal
 }
 
@@ -416,6 +430,7 @@ export class SubagentContinuationManager {
       mode: 'continuable',
       provider: spec.provider,
       label: spec.label,
+      ...request.principal !== undefined ? { principal: request.principal } : {},
       ...agentProvider !== undefined ? { agentProvider } : {},
       ...agentModel !== undefined ? { agentModel } : {},
       ...request.persona !== undefined ? { persona: request.persona } : {},
@@ -442,7 +457,11 @@ export class SubagentContinuationManager {
         parent,
         create: { seed, meta: childSessionMeta(parent, childDepth, lineageSeedLength), delegatedPolicies },
         agentOptions: resolveChildAgentOptions(parent, request.agentOptions, childDepth),
-        composition: { persona: request.persona, toolFilter: request.toolFilter },
+        composition: {
+          persona: request.persona,
+          toolFilter: request.toolFilter,
+          principal: request.principal,
+        },
         signal: spec.signal,
       })
       return this.submitMaterialized(
@@ -920,7 +939,11 @@ export class SubagentContinuationManager {
           ...descriptor.agentProvider !== undefined ? { provider: descriptor.agentProvider } : {},
           ...descriptor.agentModel !== undefined ? { model: descriptor.agentModel } : {},
         },
-        composition: { persona: descriptor.persona, toolFilter: descriptor.toolFilter },
+        composition: {
+          persona: descriptor.persona,
+          toolFilter: descriptor.toolFilter,
+          principal: descriptor.principal,
+        },
         signal: options.signal,
       })
     } catch (error: unknown) {
@@ -1000,8 +1023,17 @@ export class SubagentContinuationManager {
       if (create !== undefined) {
         appendDelegatedPolicyOverrides((childCtx.agent as Agent).session, create.delegatedPolicies)
       }
+      const commonSetup = this.setupRegistry.apply(childCtx)
+      const principalSetup = this.host.applyPrincipalSetup(childCtx, inputs.composition.principal)
+      // Child capability contributions must exist before composition validates
+      // an allow-only tool restriction against the child's scoped registry.
       applyChildComposition(childCtx, parent, inputs.composition)
-      return this.setupRegistry.apply(childCtx)
+      return {
+        commit: () => {
+          commonSetup.commit()
+          principalSetup?.commit()
+        },
+      }
     }
     const observer = this.host.observeActivation(provider, childId, parent)
     // Agent creation owns rollback before handle transfer. A rejection leaves

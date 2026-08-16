@@ -17,6 +17,7 @@ This family lets an agent delegate work to child agents. Multiple named provider
 | [`tool-subagent/`](tool-subagent/README.md) | Exposes delegation to the model | registers on `ctx.tools` |
 | [`tool-subagent-control/`](tool-subagent-control/README.md) | Exposes child messaging and listing to the model | registers on `ctx.tools` |
 | [`tool-subagent-report/`](tool-subagent-report/README.md) | Provides the child-to-parent report channel | registers in child scopes |
+| [`subagent-result-status-block/`](subagent-result-status-block/README.md) | Validates imported role completion protocols without discarding output | registers on `ctx.subagents` |
 
 See the decisions for the [capability family](../../.agents/notes/implemented/feature/2026-06-21-subagent-capability-seam.md), [continuable children](../../.agents/notes/implemented/feature/2026-07-21-continuable-background-subagents.md), and [control tools](../../.agents/notes/implemented/simplification/2026-07-26-merge-subagent-control-service.md).
 

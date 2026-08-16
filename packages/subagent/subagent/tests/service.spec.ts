@@ -7,6 +7,7 @@ import { carrierKeyOf } from '@deepseek-ai/dsh-scope'
 import SubagentRuntime, {
   foldSubagentDescriptor,
   snapshotSubagentDescriptor,
+  SubagentPrincipal,
   SUBAGENT_DESCRIPTOR_VERSION,
   SubagentError,
   assertSubagentMaxDepth,
@@ -24,8 +25,8 @@ function fakeParent(id = 'parent-1'): Agent {
   return { id: SessionId(id) } as unknown as Agent
 }
 
-const ALL_CAPS: SubagentCapabilities = { outputSchema: true, depthLimit: true, toolFilter: true, persona: true }
-const NO_CAPS: SubagentCapabilities = { outputSchema: false, depthLimit: false, toolFilter: false, persona: false }
+const ALL_CAPS: SubagentCapabilities = { outputSchema: true, depthLimit: true, toolFilter: true, persona: true, principal: true }
+const NO_CAPS: SubagentCapabilities = { outputSchema: false, depthLimit: false, toolFilter: false, persona: false, principal: false }
 
 function baseRequest(overrides: Partial<SubagentStartRequest> = {}): SubagentStartRequest {
   return {
@@ -165,6 +166,7 @@ describe('SubagentRuntime', () => {
     ['depthLimit', { maxDepth: 1 }],
     ['toolFilter', { toolFilter: { deny: ['bash'] } }],
     ['persona', { persona: 'reviewer' }],
+    ['principal', { principal: SubagentPrincipal('memory-reviewer') }],
   ] as const)('rejects unsupported %s before provider startup', async (_capability, override) => {
     const { subagents } = await service()
     const provider = new StubProvider('weak', NO_CAPS)
@@ -340,6 +342,11 @@ describe('subagent descriptors', () => {
       provider: 'spawn',
       label: 'child work',
     })).toEqual({ ...minimal, label: 'child work' })
+    expect(snapshotSubagentDescriptor({
+      mode: 'one-shot',
+      provider: 'spawn',
+      principal: SubagentPrincipal('memory-reviewer'),
+    })).toEqual({ ...minimal, principal: 'memory-reviewer' })
     const complete = {
       version: SUBAGENT_DESCRIPTOR_VERSION,
       mode: 'continuable' as const,
@@ -387,6 +394,7 @@ describe('subagent descriptors', () => {
       label: 'bad',
       toolFilter: { deny: [Symbol('not-json')] as unknown as string[] },
     })).toThrow('not losslessly JSON-serializable')
+    expect(() => SubagentPrincipal('')).toThrow('must not be empty')
   })
 
   it.each([
@@ -410,6 +418,18 @@ describe('subagent descriptors', () => {
       provider: 'spawn',
       label: 7,
     }, 'label must be a string'],
+    ['invalid principal', {
+      version: SUBAGENT_DESCRIPTOR_VERSION,
+      mode: 'one-shot',
+      provider: 'spawn',
+      principal: 7,
+    }, 'principal must be a string'],
+    ['empty principal', {
+      version: SUBAGENT_DESCRIPTOR_VERSION,
+      mode: 'one-shot',
+      provider: 'spawn',
+      principal: '',
+    }, 'principal must not be empty'],
     ['unknown payload field', {
       version: SUBAGENT_DESCRIPTOR_VERSION,
       mode: 'continuable',

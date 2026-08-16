@@ -9,12 +9,13 @@
  * @module @deepseek-ai/dsh-subagent/types
  */
 
-import type { Agent, AgentOptions } from '@deepseek-ai/dsh-agent'
+import type { Context } from '@deepseek-ai/cordis'
+import type { Agent, AgentOptions, AgentSetupCommit } from '@deepseek-ai/dsh-agent'
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 import type { ObjectJsonSchema, ToolRestriction } from '@deepseek-ai/dsh-tools'
-import type { SubagentDescriptorData } from './descriptor.ts'
+import type { SubagentDescriptorData, SubagentPrincipal } from './descriptor.ts'
 
 /** Identifies one accepted subagent run across its lifecycle event pair. */
 export type SubagentRunId = Branded<'SubagentRunId'>
@@ -88,6 +89,8 @@ export interface SubagentCapabilities {
   readonly depthLimit: boolean
   readonly toolFilter: boolean
   readonly persona: boolean
+  /** Whether an in-process child can receive principal-scoped setup. */
+  readonly principal: boolean
 }
 
 /**
@@ -100,6 +103,11 @@ export interface SubagentCapabilities {
 export interface SubagentStartRequest {
   /** Optional short display label persisted with a session-backed child. */
   readonly label?: string
+  /**
+   * Trusted deployment principal assigned by the delegation Consumer. It is
+   * persisted for local children and is never accepted from model arguments.
+   */
+  readonly principal?: SubagentPrincipal
   /** Content delivered as the child's user message. */
   readonly prompt: ContentBlock[]
   /**
@@ -155,6 +163,11 @@ export interface SubagentStartRequest {
 export interface ResolvedSubagentStartRequest extends SubagentStartRequest {
   /** Detached descriptor a session-backed provider persists in the child log. */
   readonly descriptor: SubagentDescriptorData
+  /**
+   * Service-owned setup for a trusted principal. Present only after capability
+   * validation and consumed by an in-process provider during unpublished setup.
+   */
+  readonly principalSetup?: (childCtx: Context) => AgentSetupCommit | void
 }
 
 /**

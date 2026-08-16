@@ -17,6 +17,7 @@
 | [`tool-subagent/`](tool-subagent/README.md) | 向模型公开委派操作 | 注册到 `ctx.tools` |
 | [`tool-subagent-control/`](tool-subagent-control/README.md) | 向模型公开子级消息发送和列举操作 | 注册到 `ctx.tools` |
 | [`tool-subagent-report/`](tool-subagent-report/README.md) | 提供从子级到父级的报告通道 | 注册到子级作用域 |
+| [`subagent-result-status-block/`](subagent-result-status-block/README.md) | 在不丢弃输出的前提下验证导入角色的完成协议 | 注册到 `ctx.subagents` |
 
 参见有关[能力家族](../../.agents/notes/implemented/feature/2026-06-21-subagent-capability-seam.md)、[可继续执行的子级](../../.agents/notes/implemented/feature/2026-07-21-continuable-background-subagents.md)和[控制工具](../../.agents/notes/implemented/simplification/2026-07-26-merge-subagent-control-service.md)的决策。
 

@@ -14,7 +14,7 @@
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import { foldConsumedWork } from '@deepseek-ai/dsh-agent'
-import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
+import type { Agent, AgentHandle, AgentSetupCommit } from '@deepseek-ai/dsh-agent'
 import { SessionId, type SessionEvent, type TurnEndReason } from '@deepseek-ai/dsh-session'
 import { createUserMessage, type ContentBlock } from '@deepseek-ai/dsh-llm'
 import {
@@ -117,8 +117,9 @@ export async function startInProcessRun(
   const inherited = captureDelegatedPolicyOverrides(parent)
 
   let structured: StructuredAttachment | undefined
-  const setup = (childCtx: Context): void => {
+  const setup = (childCtx: Context): AgentSetupCommit | void => {
     appendDelegatedPolicyOverrides((childCtx.agent as Agent).session, inherited)
+    const principalSetup = request.principalSetup?.(childCtx)
     applyChildComposition(childCtx, parent, {
       persona: request.persona,
       toolFilter: request.toolFilter,
@@ -127,6 +128,7 @@ export async function startInProcessRun(
       structured = attachStructuredRuntime(childCtx, request.outputSchema)
     }
     attachDescriptorAppend(childCtx, request.descriptor)
+    return principalSetup
   }
 
   const handle = await parent.ctx.agents.create({

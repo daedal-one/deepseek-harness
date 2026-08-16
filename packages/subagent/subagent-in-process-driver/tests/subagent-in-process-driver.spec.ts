@@ -9,7 +9,10 @@ import InvariantRegistry from '@deepseek-ai/dsh-invariants'
 import * as SessionInvariant from '@deepseek-ai/dsh-session/invariant'
 import * as AgentInvariant from '@deepseek-ai/dsh-agent/invariant'
 import * as AgentLoopInvariant from '@deepseek-ai/dsh-agent-loop/invariant'
-import SubagentRuntime, { snapshotSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
+import SubagentRuntime, {
+  snapshotSubagentDescriptor,
+  SubagentPrincipal,
+} from '@deepseek-ai/dsh-subagent'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
 import { maxTokensResponse, MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { startInProcessRun } from '../src/index.ts'
@@ -65,6 +68,43 @@ describe('startInProcessRun', () => {
     await run.dispose()
     await run.dispose()
     expect(ctx.agents.get(run.id)).toBeUndefined()
+  })
+
+  it('installs and releases only the capability set for the trusted child principal', async () => {
+    const { ctx, parent } = await setup([
+      textResponse('review complete'),
+      textResponse('ordinary complete'),
+    ])
+    const reviewer = SubagentPrincipal('memory-reviewer')
+    const installed: SessionId[] = []
+    const released: SessionId[] = []
+    ctx.subagents.registerPrincipalSetup(reviewer, (childCtx) => {
+      const childId = childCtx.agent!.id
+      installed.push(childId)
+      return () => released.push(childId)
+    })
+
+    const run = await startInProcessRun({
+      ...request(parent),
+      principal: reviewer,
+      principalSetup: childCtx => ctx.subagents.applyPrincipalSetup(childCtx, reviewer),
+      descriptor: snapshotSubagentDescriptor({
+        mode: 'one-shot',
+        provider: 'test',
+        label: 'child task',
+        principal: reviewer,
+      }),
+    }, {})
+    expect(installed).toEqual([run.id])
+    await expect(run.result).resolves.toMatchObject({ stopReason: 'completed' })
+    expect(released).toEqual([])
+    await run.dispose()
+    expect(released).toEqual([run.id])
+
+    const ordinary = await startInProcessRun(request(parent), {})
+    await expect(ordinary.result).resolves.toMatchObject({ stopReason: 'completed' })
+    await ordinary.dispose()
+    expect(installed).toHaveLength(1)
   })
 
   it('uses explicit child model selectors when the parent has none and preserves its cwd', async () => {

@@ -30,7 +30,7 @@ await ctx.plugin(SubagentRuntime)
 let selectedStarts = 0
 ctx.subagents.registerProvider({
   name: 'built-selected',
-  capabilities: { outputSchema: true, depthLimit: false, toolFilter: false, persona: false },
+  capabilities: { outputSchema: true, depthLimit: false, toolFilter: false, persona: false, principal: false },
   inheritsParentContext: false,
   async start() {
     selectedStarts += 1

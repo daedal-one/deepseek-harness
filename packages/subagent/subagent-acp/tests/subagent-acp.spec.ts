@@ -863,7 +863,7 @@ describe('dsh-subagent-acp', () => {
   it('advertises no start-time capabilities (out-of-process child)', async () => {
     const ctx = await setup()
     const provider = ctx.subagents.getProvider('acp')!
-    expect(provider.capabilities).toEqual({ outputSchema: false, depthLimit: false, toolFilter: false, persona: false })
+    expect(provider.capabilities).toEqual({ outputSchema: false, depthLimit: false, toolFilter: false, persona: false, principal: false })
   })
 
   it('unregisters the provider when its fiber is disposed (HMR safety)', async () => {
