@@ -24,6 +24,8 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { ToolCallId, LlmAdapter, LlmRuntime } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
+import { LocalSubprocessRuntime } from '@deepseek-ai/dsh-subprocess-local'
+import { ToolCallId as CallId } from '@deepseek-ai/dsh-llm'
 import { apply } from '@deepseek-ai/dsh-mcp-client/src/index.ts'
 import { publicToolName } from '@deepseek-ai/dsh-mcp-client/src/tools.ts'
 import type { Config } from '@deepseek-ai/dsh-mcp-client'
@@ -42,6 +44,7 @@ async function mountRegistry(): Promise<Context> {
   const ctx = new Context()
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(LocalSubprocessRuntime)
   return ctx
 }
 
@@ -105,6 +108,8 @@ describe('fixture server — controlled scenarios', () => {
     env: {},
     cwd: packageDir,
     toolCallTimeoutMs: 15_000,
+    processGraceMs: 2_000,
+    clientLifetime: 'plugin',
     failOnStartupError: false,
   }
 
@@ -204,6 +209,8 @@ describe('fixture server — duplicate serverName', () => {
       env: {},
       cwd: packageDir,
       toolCallTimeoutMs: 15_000,
+      processGraceMs: 2_000,
+      clientLifetime: 'plugin',
       failOnStartupError: false,
     }
     await apply(ctx, config)
@@ -226,6 +233,8 @@ describe('fixture server — disposal', () => {
       env: {},
       cwd: packageDir,
       toolCallTimeoutMs: 15_000,
+      processGraceMs: 2_000,
+      clientLifetime: 'plugin',
       failOnStartupError: false,
     })
 
@@ -249,6 +258,8 @@ describe('fixture server — crash recovery', () => {
       env: {},
       cwd: packageDir,
       toolCallTimeoutMs: 15_000,
+      processGraceMs: 2_000,
+      clientLifetime: 'plugin',
       failOnStartupError: false,
       reconnect,
     }
@@ -333,6 +344,8 @@ describe('server-everything — official test server', () => {
     env: {},
     cwd: '',
     toolCallTimeoutMs: 30_000,
+    processGraceMs: 2_000,
+    clientLifetime: 'plugin',
     failOnStartupError: false,
   }
 
@@ -402,6 +415,8 @@ describe('server-filesystem — real filesystem operations', () => {
       env: {},
       cwd: '',
       toolCallTimeoutMs: 30_000,
+      processGraceMs: 2_000,
+      clientLifetime: 'plugin',
       failOnStartupError: false,
     }
     await apply(ctx, config)
@@ -519,6 +534,7 @@ describe('streamable-http — in-process MCP server', () => {
       url: baseUrl,
       headers: { Authorization: 'Bearer e2e-test-token' },
       toolCallTimeoutMs: 15_000,
+      clientLifetime: 'plugin',
       failOnStartupError: false,
     }
     await apply(ctx, config)

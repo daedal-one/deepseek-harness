@@ -48,8 +48,8 @@ vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
   Client: MockClient,
 }))
 
-vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({
-  StdioClientTransport: vi.fn(),
+vi.mock('@deepseek-ai/dsh-mcp-client/src/transport.ts', () => ({
+  createTransport: vi.fn(() => ({})),
 }))
 
 vi.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
@@ -101,6 +101,8 @@ function stdioConfig(reconnect?: Config['reconnect']): Config {
     env: {},
     cwd: '',
     toolCallTimeoutMs: 60_000,
+    processGraceMs: 2_000,
+    clientLifetime: 'plugin',
     failOnStartupError: false,
     ...reconnect === undefined ? {} : { reconnect },
   }

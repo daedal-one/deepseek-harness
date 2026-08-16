@@ -204,6 +204,79 @@ describe('syncTools', () => {
     expect(ctx.tools.get('add')).toBeUndefined()
   })
 
+  it('publishes only the exact configured raw tools and fails when one is absent', async () => {
+    const client = createMockClient([
+      { name: 'reviewed', inputSchema: { type: 'object', properties: {} } },
+      { name: 'admin_delete', inputSchema: { type: 'object', properties: {} } },
+    ])
+    const opts = { ...defaultOpts, includeTools: new Set(['reviewed']) }
+    await syncTools(client as never, ctx, opts, new Map())
+    expect(ctx.tools.get('mcp__srv__reviewed')).toBeDefined()
+    expect(ctx.tools.get('mcp__srv__admin_delete')).toBeUndefined()
+
+    await expect(syncTools(client as never, ctx, {
+      ...defaultOpts,
+      includeTools: new Set(['missing']),
+    }, new Map())).rejects.toThrow(/configured tools were not advertised: "missing"/)
+  })
+
+  it('hides deployment arguments, binds the Agent session, and routes execution to its client', async () => {
+    const catalog = createMockClient([{
+      name: 'open',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          url: { type: 'string' },
+          extraArgs: { type: 'array' },
+          session: { type: 'string' },
+          allowedDomains: { type: 'array' },
+        },
+      },
+    }])
+    const execution = createMockClient([])
+    await syncTools(catalog as never, ctx, {
+      ...defaultOpts,
+      removeArguments: new Set(['extraArgs', 'allowedDomains']),
+      bindSessionArguments: new Set(['session']),
+      urlHostBindings: [{ tool: 'open', sourceArgument: 'url', targetArgument: 'allowedDomains' }],
+      executionClient: async () => execution as never,
+    }, new Map())
+
+    expect(ctx.tools.get('mcp__srv__open')?.parameters).toEqual({
+      type: 'object',
+      properties: { url: { type: 'string' } },
+    })
+    await ctx.tools.execute({
+      signal: testToolSignal,
+      callId: CallId('bound'),
+      name: 'mcp__srv__open',
+      arguments: { url: 'https://example.com/path', extraArgs: ['--unsafe'], session: 'attacker' },
+      agent: { session: { id: 'agent-session' } },
+    } as never)
+    expect(execution.callTool).toHaveBeenCalledWith(
+      { name: 'open', arguments: {
+        url: 'https://example.com/path',
+        session: 'agent-session',
+        allowedDomains: ['example.com'],
+      } },
+      undefined,
+      expect.anything(),
+    )
+    expect(catalog.callTool).not.toHaveBeenCalled()
+  })
+
+  it('fails synchronization when a URL-host binding names absent schema arguments', async () => {
+    const client = createMockClient([{
+      name: 'open',
+      inputSchema: { type: 'object', properties: { url: { type: 'string' } } },
+    }])
+    await expect(syncTools(client as never, ctx, {
+      ...defaultOpts,
+      removeArguments: new Set(['allowedDomains']),
+      urlHostBindings: [{ tool: 'open', sourceArgument: 'url', targetArgument: 'allowedDomains' }],
+    }, new Map())).rejects.toThrow(/URL-host binding arguments are absent/)
+  })
+
   it('lets two servers publish the same raw name side by side', async () => {
     const clientA = createMockClient([{ name: 'search', inputSchema: { type: 'object' } }])
     const clientB = createMockClient([{ name: 'search', inputSchema: { type: 'object' } }])
@@ -1172,9 +1245,11 @@ describe('createTransport', () => {
       env: {},
       cwd: '/tmp',
       toolCallTimeoutMs: 60_000,
+      processGraceMs: 2_000,
+      clientLifetime: 'plugin',
       failOnStartupError: false,
     }
-    const transport = createTransport(config)
+    const transport = createTransport({ get: () => ({}) } as never, config)
     expect(transport).toBeDefined()
     expect(transport).toHaveProperty('start')
     expect(transport).toHaveProperty('close')
@@ -1187,9 +1262,10 @@ describe('createTransport', () => {
       url: 'http://localhost:3000/mcp',
       headers: {},
       toolCallTimeoutMs: 60_000,
+      clientLifetime: 'plugin',
       failOnStartupError: false,
     }
-    const transport = createTransport(config)
+    const transport = createTransport({ get: () => ({}) } as never, config)
     expect(transport).toBeDefined()
     expect(transport).toHaveProperty('start')
     expect(transport).toHaveProperty('close')
@@ -1202,9 +1278,10 @@ describe('createTransport', () => {
       url: 'http://localhost:3000/mcp',
       headers: { Authorization: 'Bearer token' },
       toolCallTimeoutMs: 60_000,
+      clientLifetime: 'plugin',
       failOnStartupError: false,
     }
-    const transport = createTransport(config)
+    const transport = createTransport({ get: () => ({}) } as never, config)
     expect(transport).toBeDefined()
     expect(transport).toHaveProperty('start')
     expect(transport).toHaveProperty('close')
@@ -1226,11 +1303,13 @@ describe('createTransport', () => {
         env: { EXTRA: 'injected' },
         cwd: '',
         toolCallTimeoutMs: 60_000,
+        processGraceMs: 2_000,
+        clientLifetime: 'plugin',
         failOnStartupError: false,
       }
       // StdioClientTransport keeps its env private; the observable contract is
       // that createTransport(config) returns a transport without throwing.
-      const transport = createTransport(config)
+      const transport = createTransport({ get: () => ({}) } as never, config)
       expect(transport).toBeDefined()
     } finally {
       delete process.env.SAFE_VAR
@@ -1252,9 +1331,11 @@ describe('createTransport', () => {
       env: { CUSTOM: 'value' },
       cwd: '',
       toolCallTimeoutMs: 60_000,
+      processGraceMs: 2_000,
+      clientLifetime: 'plugin',
       failOnStartupError: false,
     }
-    const transport = createTransport(config)
+    const transport = createTransport({ get: () => ({}) } as never, config)
     expect(transport).toBeDefined()
   })
 })

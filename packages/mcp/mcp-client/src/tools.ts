@@ -32,6 +32,26 @@ export interface ToolBridgeOptions {
   registrationFailure: 'contain' | 'throw'
   serverName: string
   toolCallTimeoutMs: number
+  /** Exact raw MCP names admitted from discovery. */
+  includeTools?: ReadonlySet<string>
+  /** Server arguments hidden from the model and omitted on calls. */
+  removeArguments?: ReadonlySet<string>
+  /** Server arguments hidden from the model and bound to the executing Agent session. */
+  bindSessionArguments?: ReadonlySet<string>
+  /** Per-tool provider-native hostname restrictions derived from URL arguments. */
+  urlHostBindings?: readonly UrlHostBinding[]
+  /** Resolve the client that owns one execution; omission uses the catalog client. */
+  executionClient?: (exec: ToolExecution) => Promise<Client>
+}
+
+/** Derive one hidden provider hostname argument from a model-visible URL argument. */
+export interface UrlHostBinding {
+  /** Raw MCP tool whose arguments participate in this binding. */
+  readonly tool: string
+  /** Model-visible string or string-array URL argument used as the hostname source. */
+  readonly sourceArgument: string
+  /** Hidden provider argument populated with the unique validated hostnames. */
+  readonly targetArgument: string
 }
 
 /** State for one sync generation: the current set of disposers keyed by public name. */
@@ -95,6 +115,76 @@ function callToolUncached(
   )
 }
 
+/** Copy one server schema while removing deployment-owned arguments. */
+function projectedInputSchema(
+  rawName: string,
+  schema: Record<string, unknown>,
+  opts: ToolBridgeOptions,
+): Record<string, unknown> {
+  const hidden = new Set([
+    ...(opts.removeArguments ?? []),
+    ...(opts.bindSessionArguments ?? []),
+  ])
+  if (hidden.size === 0) return schema
+  const properties = typeof schema.properties === 'object' && schema.properties !== null && !Array.isArray(schema.properties)
+    ? { ...schema.properties as Record<string, unknown> }
+    : {}
+  for (const binding of opts.urlHostBindings ?? []) {
+    if (binding.tool !== rawName) continue
+    if (!Object.hasOwn(properties, binding.sourceArgument) || !Object.hasOwn(properties, binding.targetArgument)) {
+      throw new Error(
+        `mcp-client(${opts.serverName}): URL-host binding arguments are absent from tool ${JSON.stringify(rawName)}`,
+      )
+    }
+  }
+  for (const argument of hidden) {
+    if (!Object.hasOwn(properties, argument)) {
+      throw new Error(
+        `mcp-client(${opts.serverName}): configured argument ${JSON.stringify(argument)} is absent from tool ${JSON.stringify(rawName)}`,
+      )
+    }
+  }
+  const projectedProperties = Object.fromEntries(
+    Object.entries(properties).filter(([argument]) => !hidden.has(argument)),
+  )
+  const required = Array.isArray(schema.required)
+    ? schema.required.filter(value => typeof value !== 'string' || !hidden.has(value))
+    : undefined
+  return {
+    ...schema,
+    properties: projectedProperties,
+    ...required === undefined ? {} : { required },
+  }
+}
+
+/** Parse model URLs and inject unique hostnames into provider-owned arguments. */
+function applyUrlHostBindings(
+  rawName: string,
+  args: Record<string, unknown>,
+  wireArguments: Record<string, unknown>,
+  opts: ToolBridgeOptions,
+): void {
+  for (const binding of opts.urlHostBindings ?? []) {
+    if (binding.tool !== rawName) continue
+    const source = args[binding.sourceArgument]
+    if (source === undefined) continue
+    const values = typeof source === 'string'
+      ? [source]
+      : Array.isArray(source) && source.length > 0 && source.every(value => typeof value === 'string')
+        ? source
+        : undefined
+    if (values === undefined) {
+      throw new Error(`Tool "${rawName}" requires a URL string or non-empty URL array in "${binding.sourceArgument}"`)
+    }
+    const hosts = values.map((value) => {
+      try { return new URL(value).hostname } catch (error: unknown) {
+        throw new Error(`Tool "${rawName}" received an invalid URL in "${binding.sourceArgument}"`, { cause: error })
+      }
+    })
+    wireArguments[binding.targetArgument] = [...new Set(hosts)]
+  }
+}
+
 /**
  * Derive the model-facing public name for one MCP tool.
  *
@@ -150,23 +240,26 @@ export async function syncTools(
   // Phase 1: fetch and build the next generation without touching the registry.
   const definitions = new Map<string, ToolDefinition>()
   const seenCursors = new Set<string>()
+  const seenRawNames = new Set<string>()
   let cursor: string | undefined
   do {
     const response = await listToolsUncached(client, cursor)
     for (const tool of response.tools) {
-      const publicName = publicToolName(opts.serverName, tool.name)
-      if (definitions.has(publicName)) {
+      if (seenRawNames.has(tool.name)) {
         throw new Error(
           `mcp-client(${opts.serverName}): server listed tool "${tool.name}" more than once — invalid tool list`,
         )
       }
+      seenRawNames.add(tool.name)
+      if (opts.includeTools !== undefined && !opts.includeTools.has(tool.name)) continue
+      const publicName = publicToolName(opts.serverName, tool.name)
       definitions.set(publicName, createDefinition(
         client,
         ctx,
         publicName,
         tool.name,
         tool.description ?? '',
-        tool.inputSchema,
+        projectedInputSchema(tool.name, tool.inputSchema, opts),
         supportedOutputSchema(tool.outputSchema),
         tool.execution?.taskSupport === 'required',
         opts,
@@ -182,6 +275,14 @@ export async function syncTools(
       seenCursors.add(cursor)
     }
   } while (cursor)
+  if (opts.includeTools !== undefined) {
+    const missing = [...opts.includeTools].filter(rawName => !seenRawNames.has(rawName))
+    if (missing.length > 0) {
+      throw new Error(
+        `mcp-client(${opts.serverName}): configured tools were not advertised: ${missing.map(value => JSON.stringify(value)).join(', ')}`,
+      )
+    }
+  }
 
   // Phase 2: swap generations.
   for (const dispose of previous.values()) dispose()
@@ -327,7 +428,24 @@ function createExecutor(
     // string/number/null). Fallback to {} lets the MCP server produce a
     // specific "missing required param" error the model can learn from.
     const argsObj = (typeof args === 'object' && args !== null ? args : {}) as Record<string, unknown>
-    const result = await callToolUncached(client, rawName, argsObj, exec, opts)
+    const hidden = new Set([
+      ...(opts.removeArguments ?? []),
+      ...(opts.bindSessionArguments ?? []),
+    ])
+    const wireArguments: Record<string, unknown> = Object.fromEntries(
+      Object.entries(argsObj).filter(([argument]) => !hidden.has(argument)),
+    )
+    if (opts.bindSessionArguments !== undefined) {
+      if (exec.agent === undefined) {
+        throw new Error(`Tool "${rawName}" requires an Agent session for its deployment-owned arguments`)
+      }
+      for (const argument of opts.bindSessionArguments) {
+        wireArguments[argument] = String(exec.agent.session.id)
+      }
+    }
+    applyUrlHostBindings(rawName, argsObj, wireArguments, opts)
+    const executionClient = opts.executionClient === undefined ? client : await opts.executionClient(exec)
+    const result = await callToolUncached(executionClient, rawName, wireArguments, exec, opts)
 
     // The SDK may return a legacy `toolResult` shape; normalize to content array.
     if (!Array.isArray(result.content)) {

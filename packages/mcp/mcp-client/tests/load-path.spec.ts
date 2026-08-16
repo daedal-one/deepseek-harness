@@ -26,4 +26,18 @@ describe('dsh-mcp-client real-load-path guard', () => {
     expect(typeof unwrapped.apply).toBe('function')
     expect(unwrapped.Config).toBeDefined()
   })
+
+  it('preserves omitted projection lists through loader schema normalization', () => {
+    const parsed = mcpClient.Config({
+      transport: 'streamable-http',
+      serverName: 'docs',
+      url: 'https://example.com/mcp',
+    } as never)
+
+    expect(parsed.includeTools).toBeUndefined()
+    expect(parsed.removeArguments).toBeUndefined()
+    expect(parsed.bindSessionArguments).toBeUndefined()
+    expect(parsed.urlHostBindings).toBeUndefined()
+    expect(parsed.clientLifetime).toBe('plugin')
+  })
 })
