@@ -32,7 +32,7 @@ import PlanModeController from '@deepseek-ai/dsh-plan-mode'
 import WebRuntime from '@deepseek-ai/dsh-web'
 import * as WebSearchExa from '@deepseek-ai/dsh-web-search-exa'
 import * as WebFetchLocal from '@deepseek-ai/dsh-web-fetch-http'
-import SubagentRuntime from '@deepseek-ai/dsh-subagent'
+import SubagentRuntime, { SubagentPrincipal } from '@deepseek-ai/dsh-subagent'
 import type { SubagentProvider } from '@deepseek-ai/dsh-subagent'
 import * as ToolSubagentControl from '@deepseek-ai/dsh-tool-subagent-control'
 import * as ToolSubagentListAgents from '@deepseek-ai/dsh-tool-subagent-control/list-agents'
@@ -56,6 +56,9 @@ import * as ToolGoal from '@deepseek-ai/dsh-tool-goal'
 import * as ToolSchedule from '@deepseek-ai/dsh-schedule'
 import Lsp from '@deepseek-ai/dsh-lsp'
 import * as ToolLsp from '@deepseek-ai/dsh-tool-lsp'
+import MemoryRuntime from '@deepseek-ai/dsh-memory'
+import * as ToolMemory from '@deepseek-ai/dsh-tool-memory'
+import * as ToolMemoryReviewer from '@deepseek-ai/dsh-tool-memory-reviewer'
 import * as ToolSkill from '@deepseek-ai/dsh-tool-skill'
 import * as ToolSessionQuery from '@deepseek-ai/dsh-tool-session-query'
 import * as ToolTasks from '@deepseek-ai/dsh-tool-jobs'
@@ -97,6 +100,14 @@ class CatalogAttachmentStore extends AttachmentStore {
 const root = resolve(import.meta.dirname, '..')
 const OUT = 'docs/tool-catalog.md'
 
+/** `tool-*` capability/policy packages that intentionally register no model tool schemas. */
+const TOOL_CATALOG_EXCLUSIONS: ReadonlySet<string> = new Set([
+  'tool-policy',
+  'tool-policy-enforcer',
+  'tool-policy-mcp',
+  'tool-policy-shell',
+])
+
 /**
  * Register the descriptor needed to mount schema-producing consumers. Declares
  * the full capability set of the shipped in-process providers so consumers
@@ -106,7 +117,7 @@ const OUT = 'docs/tool-catalog.md'
 function registerCatalogSubagentProvider(ctx: Context, name: string): void {
   const provider: SubagentProvider = {
     name,
-    capabilities: { agentOptions: true, outputSchema: true, depthLimit: true, toolFilter: true, persona: true },
+    capabilities: { agentOptions: true, outputSchema: true, depthLimit: true, toolFilter: true, persona: true, principal: true },
     inheritsParentContext: false,
     start: () => Promise.reject(new Error('tool-catalog provider cannot start a child')),
     // Declared so consumers configured for continuable background mode mount.
@@ -422,6 +433,39 @@ const TOOL_PACKAGES: ToolPackage[] = [
       'The lsp tool keeps provider selection and language-server subprocesses behind ctx.lsp, so its model-visible schema stays stable across providers. Requires a registered provider (e.g. `@deepseek-ai/dsh-lsp-stdio`) at runtime; without one, a query returns the structured `LSP_UNAVAILABLE` error rather than changing the schema.',
   },
   {
+    pkg: '@deepseek-ai/dsh-tool-memory',
+    dir: 'tool-memory',
+    source: 'packages/memory/tool-memory/src/index.ts',
+    requires: ['ctx.tools', 'ctx.memory', 'ctx.systemPrompt', 'a calling Agent for project scope and global mutation approval'],
+    writes: ['tool/call', 'durable memory mutations through ctx.memory', 'tool/result'],
+    async mount(ctx) {
+      await ctx.plugin(MemoryRuntime)
+      await ctx.plugin(ToolMemory)
+    },
+    note:
+      'Project scope comes from the calling session workspace. Global proposal, challenge, and checkpoint calls proceed only after an allowed-once approval.',
+  },
+  {
+    pkg: '@deepseek-ai/dsh-tool-memory-reviewer',
+    dir: 'tool-memory-reviewer',
+    source: 'packages/memory/tool-memory-reviewer/src/index.ts',
+    requires: ['ctx.tools', 'ctx.memory', 'ctx.subagents', 'ctx.systemPrompt', 'a child with the configured durable reviewer principal'],
+    writes: ['tool/call', 'durable memory review mutations through ctx.memory', 'tool/result'],
+    async mount(ctx) {
+      await ctx.plugin(MemoryRuntime)
+      await ctx.plugin(SubagentRuntime)
+      await ctx.plugin(ToolMemoryReviewer, { reviewerPrincipal: 'memory-reviewer' })
+      await mountCatalogChildScope(ctx, (childCtx) => {
+        const setup = ctx.subagents.applyPrincipalSetup(childCtx, SubagentPrincipal('memory-reviewer'))
+        if (setup === undefined) throw new Error('gen-tool-catalog: memory reviewer principal setup is missing')
+        setup.commit()
+      })
+    },
+    scope: ctx => catalogChildScopes.get(ctx) as Agent,
+    note:
+      'The four schemas exist only in children carrying the config-selected memory-reviewer principal. Each execution rechecks the durable descriptor; global review, supersession, and deletion additionally require allowed-once approval.',
+  },
+  {
     pkg: '@deepseek-ai/dsh-tool-ralph',
     dir: 'tool-ralph',
     source: 'packages/workflow/tool-ralph/src/index.ts',
@@ -633,7 +677,7 @@ export type ToolCatalog = CatalogPackage[]
 export function assertManifestComplete(packages: ToolPackage[] = TOOL_PACKAGES, scanRoot: string = root): void {
   const onDisk = globSync('packages/*/tool-*', { cwd: scanRoot }).map(p => basename(p)).sort()
   const listed = new Set(packages.map(p => p.dir))
-  const missing = onDisk.filter(dir => !listed.has(dir))
+  const missing = onDisk.filter(dir => !listed.has(dir) && !TOOL_CATALOG_EXCLUSIONS.has(dir))
   if (missing.length > 0) {
     throw new Error(
       `gen-tool-catalog: ${missing.length} tool package(s) not in the boot manifest: ${missing.join(', ')}. `

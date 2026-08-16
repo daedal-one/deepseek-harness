@@ -35,6 +35,8 @@
 | `@deepseek-ai/dsh-tool-goal` | `create_goal`、`get_goal`、`update_goal` | `ctx.tools`、`ctx.agents`、`ctx.goals`、`ctx.systemPrompt`、`a calling Agent in an authorized open turn` | `tool/call`、`goal/change for mutations`、`tool/result` | - | create、edit、pause 和 resume 要求直接来自人类的根权限；complete 和 blocked 也接受确切的当前 Goal Round。blocked 的默认下限是 3 个获准的 Round。 |
 | `@deepseek-ai/dsh-schedule` | `schedule_create`、`schedule_delete`、`schedule_list` | `ctx.tools`、`ctx.sessions`、Session 持久化、未来创建的 live 根 Agent | `tool/call`、`schedule/change create or delete`、`tool/result` | - | 仅在选择启用的 Schedule 插件加载后创建的 live 根 Agent scope 内注册。版本 1 接受 after_seconds、显式绝对 at 和有界固定速率 every_seconds，并披露 session-local 交付；管理读取与变更必须通过共享的 Session 持久化 barrier。 |
 | `@deepseek-ai/dsh-tool-lsp` | `lsp` | `ctx.tools`、`ctx.lsp`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，因此其模型可见 schema 在更换提供方时保持稳定。运行时要求已注册提供方，例如 `@deepseek-ai/dsh-lsp-stdio`；如果没有提供方，查询会返回结构化 `LSP_UNAVAILABLE` 错误，而不会改变 schema。 |
+| `@deepseek-ai/dsh-tool-memory` | `memory_challenge`、`memory_checkpoint`、`memory_get`、`memory_propose`、`memory_query` | `ctx.tools`、`ctx.memory`、`ctx.systemPrompt`、`a calling Agent for project scope and global mutation approval` | `tool/call`、`durable memory mutations through ctx.memory`、`tool/result` | - | 项目作用域来自调用会话的工作区。全局提议、质疑和检查点调用仅在获得一次性允许后继续。 |
+| `@deepseek-ai/dsh-tool-memory-reviewer` | `memory_delete`、`memory_list_pending`、`memory_review`、`memory_supersede` | `ctx.tools`、`ctx.memory`、`ctx.subagents`、`ctx.systemPrompt`、`a child with the configured durable reviewer principal` | `tool/call`、`durable memory review mutations through ctx.memory`、`tool/result` | - | 这四个 schema 仅存在于携带配置所选 memory-reviewer principal 的子 Agent 中。每次执行都会重新检查持久 descriptor；全局评审、替换和删除还需要一次性允许。 |
 | `@deepseek-ai/dsh-tool-ralph` | `ralph` | `ctx.tools`、`ctx.workflowEngine`、`ctx.subagents`、`ctx.systemPrompt`、`a calling Agent (exec.agent parents every fresh round)` | `tool/call`、`tool/result`、`workflow and child session events during execution` | - | 固定的前台工作流会在每个 Round 启动一个全新的结构化子级；模型只能选择不可变目标和可选的 Round 上限。 |
 | `@deepseek-ai/dsh-tool-skill` | `skill` | `ctx.tools`、`ctx.agents`、`ctx.skills` | `tool/call`、`tool/result`、`user/message replacement catalogs via agent.inject()` | - | - |
 | `@deepseek-ai/dsh-tool-session-query` | `session_event_read`、`session_event_search`、`session_event_trace`、`session_search`、`session_trace` | `ctx.tools`、`ctx.systemPrompt`、`ctx.sessionQuery`、`a calling Agent for workspace authority` | `tool/call`、`tool/result` | - | 这 5 个只读工具会隐藏提供方游标，并根据不可变的调用 agent 会话为每个结果授权。该包需要选择启用；需要强制截止时间或限制行内输出的组合还会挂载通用超时或 spill 策略。 |
@@ -1290,6 +1292,372 @@ create、edit、pause 和 resume 要求直接来自人类的根权限；complete
 来源：[`packages/lsp/tool-lsp/src/index.ts`](../packages/lsp/tool-lsp/src/index.ts)
 
 lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，因此其模型可见 schema 在更换提供方时保持稳定。运行时要求已注册提供方，例如 `@deepseek-ai/dsh-lsp-stdio`；如果没有提供方，查询会返回结构化 `LSP_UNAVAILABLE` 错误，而不会改变 schema。
+
+<a id="deepseek-aidsh-tool-memory"></a>
+
+## `@deepseek-ai/dsh-tool-memory`
+
+### `memory_challenge`
+
+以相反证据质疑一个确切的记忆修订版本。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "revision": {
+      "type": "number"
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "project",
+        "global"
+      ]
+    },
+    "reason": {
+      "type": "string"
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "id",
+    "revision",
+    "scope",
+    "reason"
+  ]
+}
+```
+
+来源： [`packages/memory/tool-memory/src/index.ts`](../packages/memory/tool-memory/src/index.ts)
+
+### `memory_checkpoint`
+
+记录当前任务使用过的确切记忆修订版本。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "scope": {
+      "type": "string",
+      "enum": [
+        "project",
+        "global"
+      ]
+    },
+    "memories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "revision"
+        ]
+      }
+    }
+  },
+  "required": [
+    "scope",
+    "memories"
+  ]
+}
+```
+
+来源： [`packages/memory/tool-memory/src/index.ts`](../packages/memory/tool-memory/src/index.ts)
+
+### `memory_get`
+
+在一个作用域内按确切 id 读取一条持久记忆。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "scope": {
+      "type": "string",
+      "enum": [
+        "project",
+        "global"
+      ]
+    },
+    "id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "scope",
+    "id"
+  ]
+}
+```
+
+来源： [`packages/memory/tool-memory/src/index.ts`](../packages/memory/tool-memory/src/index.ts)
+
+### `memory_propose`
+
+提出一条有证据支持的持久记忆。该提案在评审通过前不会生效。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "scope": {
+      "type": "string",
+      "enum": [
+        "project",
+        "global"
+      ]
+    },
+    "statement": {
+      "type": "string"
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "trust": {
+      "type": "number"
+    },
+    "valid_until": {
+      "type": "number"
+    },
+    "contradicts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "scope",
+    "statement",
+    "evidence",
+    "trust"
+  ]
+}
+```
+
+来源： [`packages/memory/tool-memory/src/index.ts`](../packages/memory/tool-memory/src/index.ts)
+
+### `memory_query`
+
+仅在一个作用域内搜索已评审的持久记忆。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "scope": {
+      "type": "string",
+      "enum": [
+        "project",
+        "global"
+      ]
+    },
+    "text": {
+      "type": "string"
+    },
+    "limit": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "scope",
+    "text"
+  ]
+}
+```
+
+来源： [`packages/memory/tool-memory/src/index.ts`](../packages/memory/tool-memory/src/index.ts)
+
+项目作用域来自调用会话的工作区。全局提议、质疑和检查点调用仅在获得一次性允许后继续。
+
+<a id="deepseek-aidsh-tool-memory-reviewer"></a>
+
+## `@deepseek-ai/dsh-tool-memory-reviewer`
+
+### `memory_delete`
+
+永久删除一个确切的记忆修订版本。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "scope": {
+      "type": "string",
+      "enum": [
+        "project",
+        "global"
+      ]
+    },
+    "id": {
+      "type": "string"
+    },
+    "revision": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "scope",
+    "id",
+    "revision"
+  ]
+}
+```
+
+来源： [`packages/memory/tool-memory-reviewer/src/index.ts`](../packages/memory/tool-memory-reviewer/src/index.ts)
+
+### `memory_list_pending`
+
+仅在一个作用域内列出等待评审者处理的提议或受质疑记忆。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "scope": {
+      "type": "string",
+      "enum": [
+        "project",
+        "global"
+      ]
+    },
+    "text": {
+      "type": "string"
+    },
+    "limit": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "scope"
+  ]
+}
+```
+
+来源： [`packages/memory/tool-memory-reviewer/src/index.ts`](../packages/memory/tool-memory-reviewer/src/index.ts)
+
+### `memory_review`
+
+接受或拒绝一个确切的提议或受质疑记忆修订版本。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "scope": {
+      "type": "string",
+      "enum": [
+        "project",
+        "global"
+      ]
+    },
+    "id": {
+      "type": "string"
+    },
+    "revision": {
+      "type": "number"
+    },
+    "decision": {
+      "type": "string",
+      "enum": [
+        "accept",
+        "reject"
+      ]
+    },
+    "trust": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "scope",
+    "id",
+    "revision",
+    "decision"
+  ]
+}
+```
+
+来源： [`packages/memory/tool-memory-reviewer/src/index.ts`](../packages/memory/tool-memory-reviewer/src/index.ts)
+
+### `memory_supersede`
+
+在同一作用域内，以已评审的后继记录原子替换一条确切的生效或受质疑记忆。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "scope": {
+      "type": "string",
+      "enum": [
+        "project",
+        "global"
+      ]
+    },
+    "id": {
+      "type": "string"
+    },
+    "revision": {
+      "type": "number"
+    },
+    "statement": {
+      "type": "string"
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "trust": {
+      "type": "number"
+    },
+    "valid_until": {
+      "type": "number"
+    },
+    "contradicts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "scope",
+    "id",
+    "revision",
+    "statement",
+    "evidence",
+    "trust"
+  ]
+}
+```
+
+来源： [`packages/memory/tool-memory-reviewer/src/index.ts`](../packages/memory/tool-memory-reviewer/src/index.ts)
+
+这四个 schema 仅存在于携带配置所选 memory-reviewer principal 的子 Agent 中。每次执行都会重新检查持久 descriptor；全局评审、替换和删除还需要一次性允许。
 
 <a id="deepseek-aidsh-tool-ralph"></a>
 

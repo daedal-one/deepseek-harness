@@ -31,6 +31,8 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-goal` | `create_goal`, `get_goal`, `update_goal` | `ctx.tools`, `ctx.agents`, `ctx.goals`, `ctx.systemPrompt`, `a calling Agent in an authorized open turn` | `tool/call`, `goal/change for mutations`, `tool/result` | - | create, edit, pause, and resume require direct-human root authority; complete and blocked also accept the exact current goal round. The default blocked lower bound is three admitted rounds. |
 | `@deepseek-ai/dsh-schedule` | `schedule_create`, `schedule_delete`, `schedule_list` | `ctx.tools`, `ctx.sessions`, `Session persistence`, `a future live root Agent` | `tool/call`, `schedule/change create or delete`, `tool/result` | - | Registered only inside live root Agent scopes created after the opt-in Schedule plugin loads. Version 1 accepts after_seconds, explicit absolute at, and bounded fixed-rate every_seconds, and discloses session-local delivery; management reads and mutations require the shared Session persistence barrier. |
 | `@deepseek-ai/dsh-tool-lsp` | `lsp` | `ctx.tools`, `ctx.lsp`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | The lsp tool keeps provider selection and language-server subprocesses behind ctx.lsp, so its model-visible schema stays stable across providers. Requires a registered provider (e.g. `@deepseek-ai/dsh-lsp-stdio`) at runtime; without one, a query returns the structured `LSP_UNAVAILABLE` error rather than changing the schema. |
+| `@deepseek-ai/dsh-tool-memory` | `memory_challenge`, `memory_checkpoint`, `memory_get`, `memory_propose`, `memory_query` | `ctx.tools`, `ctx.memory`, `ctx.systemPrompt`, `a calling Agent for project scope and global mutation approval` | `tool/call`, `durable memory mutations through ctx.memory`, `tool/result` | - | Project scope comes from the calling session workspace. Global proposal, challenge, and checkpoint calls proceed only after an allowed-once approval. |
+| `@deepseek-ai/dsh-tool-memory-reviewer` | `memory_delete`, `memory_list_pending`, `memory_review`, `memory_supersede` | `ctx.tools`, `ctx.memory`, `ctx.subagents`, `ctx.systemPrompt`, `a child with the configured durable reviewer principal` | `tool/call`, `durable memory review mutations through ctx.memory`, `tool/result` | - | The four schemas exist only in children carrying the config-selected memory-reviewer principal. Each execution rechecks the durable descriptor; global review, supersession, and deletion additionally require allowed-once approval. |
 | `@deepseek-ai/dsh-tool-ralph` | `ralph` | `ctx.tools`, `ctx.workflowEngine`, `ctx.subagents`, `ctx.systemPrompt`, `a calling Agent (exec.agent parents every fresh round)` | `tool/call`, `tool/result`, `workflow and child session events during execution` | - | A fixed foreground workflow starts one fresh structured child per round; the model selects only the immutable objective and an optional round cap. |
 | `@deepseek-ai/dsh-tool-skill` | `skill` | `ctx.tools`, `ctx.agents`, `ctx.skills` | `tool/call`, `tool/result`, `user/message replacement catalogs via agent.inject()` | - | - |
 | `@deepseek-ai/dsh-tool-session-query` | `session_event_read`, `session_event_search`, `session_event_trace`, `session_search`, `session_trace` | `ctx.tools`, `ctx.systemPrompt`, `ctx.sessionQuery`, `a calling Agent for workspace authority` | `tool/call`, `tool/result` | - | The five read-only tools hide provider cursors and authorize every result from the immutable calling agent session. The package is opt-in; compositions that need enforced deadlines or bounded inline output also mount the generic timeout or spill policies. |
@@ -1284,6 +1286,372 @@ Query a language server for precise code navigation. operation is one of goToDef
 Source: [`packages/lsp/tool-lsp/src/index.ts`](../packages/lsp/tool-lsp/src/index.ts)
 
 The lsp tool keeps provider selection and language-server subprocesses behind ctx.lsp, so its model-visible schema stays stable across providers. Requires a registered provider (e.g. `@deepseek-ai/dsh-lsp-stdio`) at runtime; without one, a query returns the structured `LSP_UNAVAILABLE` error rather than changing the schema.
+
+<a id="deepseek-aidsh-tool-memory"></a>
+
+## `@deepseek-ai/dsh-tool-memory`
+
+### `memory_challenge`
+
+Challenge one exact memory revision with contrary evidence.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "revision": {
+      "type": "number"
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "project",
+        "global"
+      ]
+    },
+    "reason": {
+      "type": "string"
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "id",
+    "revision",
+    "scope",
+    "reason"
+  ]
+}
+```
+
+Source: [`packages/memory/tool-memory/src/index.ts`](../packages/memory/tool-memory/src/index.ts)
+
+### `memory_checkpoint`
+
+Record that exact memory revisions were used in the current task.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "scope": {
+      "type": "string",
+      "enum": [
+        "project",
+        "global"
+      ]
+    },
+    "memories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "revision"
+        ]
+      }
+    }
+  },
+  "required": [
+    "scope",
+    "memories"
+  ]
+}
+```
+
+Source: [`packages/memory/tool-memory/src/index.ts`](../packages/memory/tool-memory/src/index.ts)
+
+### `memory_get`
+
+Read one durable memory by exact id inside one scope.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "scope": {
+      "type": "string",
+      "enum": [
+        "project",
+        "global"
+      ]
+    },
+    "id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "scope",
+    "id"
+  ]
+}
+```
+
+Source: [`packages/memory/tool-memory/src/index.ts`](../packages/memory/tool-memory/src/index.ts)
+
+### `memory_propose`
+
+Propose an evidence-backed durable memory. The proposal is not active until reviewed.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "scope": {
+      "type": "string",
+      "enum": [
+        "project",
+        "global"
+      ]
+    },
+    "statement": {
+      "type": "string"
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "trust": {
+      "type": "number"
+    },
+    "valid_until": {
+      "type": "number"
+    },
+    "contradicts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "scope",
+    "statement",
+    "evidence",
+    "trust"
+  ]
+}
+```
+
+Source: [`packages/memory/tool-memory/src/index.ts`](../packages/memory/tool-memory/src/index.ts)
+
+### `memory_query`
+
+Search reviewed durable memory in exactly one scope.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "scope": {
+      "type": "string",
+      "enum": [
+        "project",
+        "global"
+      ]
+    },
+    "text": {
+      "type": "string"
+    },
+    "limit": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "scope",
+    "text"
+  ]
+}
+```
+
+Source: [`packages/memory/tool-memory/src/index.ts`](../packages/memory/tool-memory/src/index.ts)
+
+Project scope comes from the calling session workspace. Global proposal, challenge, and checkpoint calls proceed only after an allowed-once approval.
+
+<a id="deepseek-aidsh-tool-memory-reviewer"></a>
+
+## `@deepseek-ai/dsh-tool-memory-reviewer`
+
+### `memory_delete`
+
+Permanently delete one exact memory revision.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "scope": {
+      "type": "string",
+      "enum": [
+        "project",
+        "global"
+      ]
+    },
+    "id": {
+      "type": "string"
+    },
+    "revision": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "scope",
+    "id",
+    "revision"
+  ]
+}
+```
+
+Source: [`packages/memory/tool-memory-reviewer/src/index.ts`](../packages/memory/tool-memory-reviewer/src/index.ts)
+
+### `memory_list_pending`
+
+List proposed and challenged memories awaiting reviewer action in exactly one scope.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "scope": {
+      "type": "string",
+      "enum": [
+        "project",
+        "global"
+      ]
+    },
+    "text": {
+      "type": "string"
+    },
+    "limit": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "scope"
+  ]
+}
+```
+
+Source: [`packages/memory/tool-memory-reviewer/src/index.ts`](../packages/memory/tool-memory-reviewer/src/index.ts)
+
+### `memory_review`
+
+Accept or reject one exact proposed or challenged memory revision.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "scope": {
+      "type": "string",
+      "enum": [
+        "project",
+        "global"
+      ]
+    },
+    "id": {
+      "type": "string"
+    },
+    "revision": {
+      "type": "number"
+    },
+    "decision": {
+      "type": "string",
+      "enum": [
+        "accept",
+        "reject"
+      ]
+    },
+    "trust": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "scope",
+    "id",
+    "revision",
+    "decision"
+  ]
+}
+```
+
+Source: [`packages/memory/tool-memory-reviewer/src/index.ts`](../packages/memory/tool-memory-reviewer/src/index.ts)
+
+### `memory_supersede`
+
+Atomically replace one exact active or challenged memory with a reviewed successor in the same scope.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "scope": {
+      "type": "string",
+      "enum": [
+        "project",
+        "global"
+      ]
+    },
+    "id": {
+      "type": "string"
+    },
+    "revision": {
+      "type": "number"
+    },
+    "statement": {
+      "type": "string"
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "trust": {
+      "type": "number"
+    },
+    "valid_until": {
+      "type": "number"
+    },
+    "contradicts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "scope",
+    "id",
+    "revision",
+    "statement",
+    "evidence",
+    "trust"
+  ]
+}
+```
+
+Source: [`packages/memory/tool-memory-reviewer/src/index.ts`](../packages/memory/tool-memory-reviewer/src/index.ts)
+
+The four schemas exist only in children carrying the config-selected memory-reviewer principal. Each execution rechecks the durable descriptor; global review, supersession, and deletion additionally require allowed-once approval.
 
 <a id="deepseek-aidsh-tool-ralph"></a>
 
