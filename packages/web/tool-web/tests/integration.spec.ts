@@ -18,6 +18,7 @@ import * as WebFetchLocal from '@deepseek-ai/dsh-web-fetch-http'
 import * as WebSearchExa from '@deepseek-ai/dsh-web-search-exa'
 import * as ToolWeb from '@deepseek-ai/dsh-tool-web'
 import * as TimeoutPolicy from '@deepseek-ai/dsh-tool-call-timeout-policy'
+import { installHttpFetchTestTransport } from '../../web-fetch-http/src/provider.ts'
 
 const testToolSignal = new AbortController().signal
 
@@ -28,12 +29,22 @@ let base: string
 let handler: Handler
 let ctx: Context
 let fiber: Awaited<ReturnType<Context['plugin']>>
+let restoreFetchTransport: (() => void) | undefined
 
 beforeEach(async () => {
   handler = (_req, res) => { res.writeHead(200, { 'content-type': 'text/html' }); res.end('<h1>Hello</h1><p>World</p>') }
   server = createServer((req, res) => { handler(req, res) })
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
-  base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+  base = `http://fixture.test:${(server.address() as AddressInfo).port}`
+  restoreFetchTransport = installHttpFetchTestTransport({
+    createDispatcher: () => ({ close: () => Promise.resolve() }) as never,
+    fetch: async (url, init) => {
+      const localUrl = new URL(url)
+      localUrl.hostname = '127.0.0.1'
+      const { dispatcher: _dispatcher, ...fetchInit } = init
+      return await globalThis.fetch(localUrl, fetchInit)
+    },
+  })
 
   ctx = new Context()
   await ctx.plugin(SystemPrompt)
@@ -51,6 +62,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await fiber.dispose()
+  restoreFetchTransport?.()
   vi.unstubAllGlobals()
   await new Promise<void>(resolve => server.close(() => { resolve() }))
 })
@@ -128,7 +140,7 @@ describe('tool-call timeout returns TOOL_TIMEOUT (deadline wins over a slow fetc
     openSockets = []
     slowServer = createServer((_req, res) => { openSockets.push(res) })
     await new Promise<void>(resolve => slowServer.listen(0, '127.0.0.1', resolve))
-    slowBase = `http://127.0.0.1:${(slowServer.address() as AddressInfo).port}`
+    slowBase = `http://fixture.test:${(slowServer.address() as AddressInfo).port}`
 
     tctx = new Context()
     await tctx.plugin(SystemPrompt)

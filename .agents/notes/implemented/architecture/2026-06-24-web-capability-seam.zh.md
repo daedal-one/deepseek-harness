@@ -68,7 +68,7 @@ flowchart LR
 
 `@deepseek-ai/dsh-web` 仅依赖 Cordis 和底层 harness 支持。它声明 `ctx.web`、提供方接口、请求/结果类型、提供方可用性约定和错误码。它不导入工具、agent（智能体）、会话、LLM 或提供方包。
 
-提供方包仅依赖 `dsh-web` 和 Cordis。它们拥有凭证、端点、协议格式映射、解析和 `WebError` 转换，使用平台 `fetch`。每个提供方注入共享服务并注册后端；只有 `dsh-web` 拥有 `ctx.web` 键。提供方私有的协议形状不会产生对 `ctx.llm` 或 Cordis HTTP 服务的依赖。
+提供方包依赖 `dsh-web`、Cordis，以及其实现所需的传输依赖。它们拥有凭证、端点、协议格式映射、解析和 `WebError` 转换。每个提供方注入共享服务并注册后端；只有 `dsh-web` 拥有 `ctx.web` 键。提供方私有的协议形状不会产生对 `ctx.llm` 或 Cordis HTTP 服务的依赖。
 
 `@deepseek-ai/dsh-tool-web` 依赖 `@deepseek-ai/dsh-web`、`@deepseek-ai/dsh-tools`、`@deepseek-ai/dsh-system-prompt` 和 Cordis。它从不导入具体的提供方包。
 
@@ -199,7 +199,7 @@ Exa 搜索将提供方扁平 `results[]` 的每一项映射为 `WebSearchSource`
 
 ## Fetch 请求与结果 schema
 
-`web_fetch` 的实现是一个匿名公开 HTTP(S) fetch 提供方 `http`。它从具体 URL 获取字节，应用下述基本传输卫生措施（仅 http/https、拒绝 URL 中的凭证、字节/时间上限、跨源重定向阻断），解码文本内容，并仅返回最小的模型可用结果：最终 URL、状态码、正文和截断标志。它不携带浏览器 cookie、编辑器凭证、git 凭证、内部认证令牌，也不隐式访问私有服务。（完整的 SSRF/私有网络阻断推迟——见[推迟工作](#deferred-work)。）
+`web_fetch` 的实现是一个匿名公开 HTTP(S) fetch 提供方 `http`。它从具体 URL 获取字节，仅接受全局可路由的单播目标，应用下述传输控制，解码文本内容，并仅返回最小的模型可用结果：最终 URL、状态码、正文和截断标志。它不携带浏览器 cookie、编辑器凭证、git 凭证、内部认证令牌，也不隐式访问私有服务。
 
 seam 请求比 OpenCode 的面向模型工具更小：
 
@@ -235,12 +235,15 @@ export type WebFetchBody =
 fetch 提供方的资源控制：
 
 - 仅接受 `http:` 和 `https:` URL；拒绝 URL 中的凭证。
+- IP 字面量在传输前分类。主机名在 Undici `Agent` 连接器的 lookup 内解析；lookup 把所有 A 和 AAAA 答案作为一个整体逐一验证，再把完全相同的已接受记录交给 socket 操作，从而消除先解析后 fetch 的 rebinding 窗口。IPv4 映射 IPv6 地址继承其内嵌 IPv4 地址的分类。
+- 仅接受全局可路由的单播地址。未指定、回环、私有或唯一本地、链路本地、多播、文档、保留、广播、运营商级 NAT、基准测试及其他非公开范围以 `WEB_BLOCKED_URL` 失败；混合公开与非公开地址的 DNS 答案会拒绝整次连接。
+- Dispatcher 使用非持久连接，因此每个请求（包括允许的重定向落地请求）都会重复 lookup 验证；重连采用同一策略。原始 URL 主机名继续作为 HTTP `Host` 与 TLS SNI 的权威值。
 - 强制执行最大 URL 长度、响应字节上限、解码正文字符上限、超时和重定向跳数上限。
 - Abort 信号传播到网络获取和高开销解码。
 - 仅自动跟随同源重定向；跨源重定向以 `WEB_REDIRECT_BLOCKED` 失败，要求一次新的工具调用，从而触发新的提供方/权限决策。（Claude Code 的 WebFetch 使用同样的模型——它不自动跟随跨主机重定向，而是将重定向目标返回给模型以发起新调用。）
 - 请求携带显式的产品 User-Agent，而非静默伪装浏览器。
 
-SSRF/私有网络防护（阻断私有、回环、链路本地、多播及其他非公开目的地，通过先 DNS 解析再验证 IP 来防御 rebinding，并在重定向的每一跳重新验证）**推迟**——见[推迟工作](#deferred-work)。在其落地之前，`web_fetch` 是一个 SSRF 原语，不得在能触达敏感内部网络目标的部署中启用。
+提供方为每次 fetch 操作创建一个 dispatcher，并在最终正文被消费或取消之后以及每条失败路径上等待 dispatcher 关闭。Undici 包装的策略 `WebError` 会沿 cause 链恢复，使被阻断的目标保持为 `WEB_BLOCKED_URL`；普通 DNS 与传输故障保持为 `WEB_PROVIDER_ERROR`，策略诊断不会泄露被拒绝的地址记录。
 
 ## 工具消费方行为
 
@@ -308,6 +311,10 @@ SSRF/私有网络防护（阻断私有、回环、链路本地、多播及其他
 
 在 seam 层面否决。`prompt` 将 fetch 变成 LLM 摘要，并将公开 web 获取耦合到模型提供方。harness seam 应当确定性地获取和解码；`dsh-tool-web` 日后可以将摘要作为展示模式提供，而无需让 `ctx.web` 依赖 `ctx.llm`。
 
+### 在全局 fetch 之前解析并验证
+
+否决，因为全局 fetch 在打开 socket 时会再次解析主机名，变化后的 DNS 答案可能绕过已验证集合。维护中的 Undici dispatcher 改为在 `connect.lookup` 内验证，并把同一批记录直接交给连接器。所调研的参考实现均未提供这种 IP 级强制：OpenCode 在 fetch 前检查主机名前缀，Claude Code 依赖集中式主机名黑名单与「私有 URL 会失败」的模型引导，因此 harness 自行拥有完整地址策略。
+
 ## 后果
 
 **搜索 schema 刻意精简。** Exa 和 Perplexity 都暴露了有用的提供方特有控制；只有当某个控制能以提供方无关的方式定义、且工具注册和提供方执行都能诚实遵守时，才会添加。
@@ -318,7 +325,7 @@ SSRF/私有网络防护（阻断私有、回环、链路本地、多播及其他
 
 **提供方状态可能在启动后变化。** 一个工具可能在步骤开始时组装的请求中可见，但在执行前失去其提供方。执行路径重新解析并以结构化错误失败。
 
-**Fetch 是网络边界，不仅仅是只读工具。** `web_fetch` 能触达敏感网络目标或通过 URL 外泄数据。仅交付基本传输卫生措施（仅 http/https、拒绝凭证、字节/时间上限、跨源重定向阻断）；SSRF/私有网络阻断推迟（见[推迟工作](#deferred-work)），因此在其落地之前，`web_fetch` 不得在能触达内部目标的环境中启用。
+**Fetch 是网络边界，不仅仅是只读工具。** 即使字面量和解析出的非公开目标在连接时被阻断，`web_fetch` 仍能通过公开 URL 外泄数据。因此权限策略必须管控 agent 是否可调用该工具；目标验证不是授权。
 
 **大量 web 内容可能损害上下文质量。** 提供方强制执行字节/字符上限并报告 `truncated`；`tool-web` 格式化有界的模型输出，附带清晰的继续或后续引导。
 
@@ -326,7 +333,6 @@ SSRF/私有网络防护（阻断私有、回环、链路本地、多播及其他
 
 ## 推迟工作
 
-- `web_fetch` 的 SSRF/私有网络防护：阻断私有、回环、链路本地、多播及其他非公开目的地，使 `web_fetch` 不再是 SSRF 原语。正确实现不仅仅是 URL 字符串检查——需要先 DNS 解析再连接到已验证的 IP（防御 DNS rebinding/TOCTOU）、跨重定向的每跳重新验证，以及 IPv6 边缘处理（私有范围、IPv4 映射地址）。所调研的参考实现均未做 IP 级阻断（OpenCode 做前缀检查后直接 fetch；Claude Code 依赖集中式主机名黑名单加「私有 URL 会失败」的提示词），因此没有可复制的实现，且这是 harness 唯一的 SSRF 防线——值得一次专门的设计/spike。在其落地之前，`web_fetch` 只能在无法触达敏感内部目标的部署中启用。
 - `pdf` `WebFetchBody` 类别：`http` 提供方将可文本提取的 PDF 解码（尽力而为、有上限、`truncated`）为 `{ kind: 'pdf'; content; pageCount? }` 分支，`tool-web` 渲染它。这是 fetch 而非 `web_extract`——PDF 获取是具体的 HTTP 200 加确定性的本地解码，不是提供方侧对非 HTTP 资源的提取。添加它是跨 `dsh-web`（声明分支）、提供方（解码 + 将「二进制拒绝」收窄为「拒绝二进制，但可文本提取的 PDF 除外」；需要 OCR 的扫描/图片 PDF 不在范围内）和 `tool-web`（渲染）的协调变更。封闭的 `WebFetchBody` 联合类型使消费方在新分支被处理之前编译失败。
 - 提供方支撑的提取作为独立的 `web_extract` 能力，而非静默扩展 `web_fetch`。
 - 权限策略集成：权限系统现已存在（[沙箱与审批](../feature/2026-07-06-sandbox.md)、[web 权限预设](../feature/2026-07-23-web-permission-and-approval.md)），但只捆绑了沙箱模式与审批策略；web 权限策略仍未集成。

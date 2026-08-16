@@ -1,7 +1,7 @@
 /**
  * URL validation and content-type classification for the local HTTP(S) fetch
- * provider — the pure, network-free half. The provider's `fetch()` composes
- * these with transport (redirect following, byte caps, decoding).
+ * provider — the pure, network-free URL and content half. The provider's
+ * `fetch()` composes these with connect-time address policy and transport.
  *
  * @module @deepseek-ai/dsh-web-fetch-http/policy
  */
@@ -14,8 +14,8 @@ export type FetchableKind = 'html' | 'text'
 /**
  * Validate a request URL against the basic transport hygiene the provider
  * enforces before any network access: http(s) only, no embedded credentials,
- * bounded length. Returns the parsed `URL`. Throws {@link WebError} otherwise.
- * (SSRF / private-network blocking is deferred — see the package Agent Note.)
+ * bounded length. Returns the parsed `URL`. Literal address policy runs in the
+ * provider immediately before transport.
  *
  * @param input - the raw URL string from the fetch request.
  * @param maxUrlLength - inclusive upper bound on `input`'s length.

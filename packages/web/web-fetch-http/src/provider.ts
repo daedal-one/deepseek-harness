@@ -1,16 +1,16 @@
 /**
- * Safe HTTP(S) retrieval for `ctx.web`: validates URLs, follows only same-origin redirects,
- * enforces time and size limits, classifies and decodes text, and leaves presentation to
- * `@deepseek-ai/dsh-tool-web`. Requests carry no browser cookies or ambient credentials.
- *
- * Private-network and SSRF protection is not implemented; do not enable this provider where
- * it can reach sensitive internal targets.
+ * Safe HTTP(S) retrieval for `ctx.web`: validates URLs and connect-time DNS results,
+ * follows only same-origin redirects, enforces time and size limits, classifies and
+ * decodes text, and leaves presentation to `@deepseek-ai/dsh-tool-web`. Requests carry
+ * no browser cookies or ambient credentials.
  * @module @deepseek-ai/dsh-web-fetch-http/provider
  */
 
 import { WebError } from '@deepseek-ai/dsh-web'
 import type { WebFetchBody, WebFetchProvider, WebFetchRequest, WebFetchResult } from '@deepseek-ai/dsh-web'
 import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
+import { Agent, fetch as undiciFetch, type Dispatcher } from 'undici'
+import { assertPublicLiteral, createValidatedLookup } from './network-policy.ts'
 import { classifyContentType, decoderForCharset, isSameOrigin, parseCharset, validateFetchUrl } from './policy.ts'
 
 /** Resolved provider limits (the plugin's schemastery Config supplies defaults). */
@@ -32,6 +32,54 @@ export interface HttpFetchLimits {
 /** Stable id this provider registers under. */
 export const LOCAL_FETCH_PROVIDER_ID = 'http'
 
+interface FetchInit {
+  readonly method: 'GET'
+  readonly redirect: 'manual'
+  readonly headers: Readonly<Record<string, string>>
+  readonly signal: AbortSignal
+  readonly dispatcher: Dispatcher
+}
+type FetchTransport = (url: URL, init: FetchInit) => Promise<Response>
+type DispatcherFactory = () => Dispatcher
+
+/** Source-only transport override used by deterministic provider tests. */
+interface HttpFetchTestTransport {
+  /** Create an observable dispatcher for one fetch operation. */
+  readonly createDispatcher: DispatcherFactory
+  /** Perform the test request without changing production destination policy. */
+  readonly fetch: FetchTransport
+}
+
+let testTransport: HttpFetchTestTransport | undefined
+
+/**
+ * Install a source-only transport for deterministic tests, including local HTTP
+ * fixtures. Production package exports do not expose this helper or a policy bypass.
+ *
+ * @param transport - The test dispatcher and fetch implementation.
+ * @returns A disposer that removes the override.
+ */
+export function installHttpFetchTestTransport(transport: HttpFetchTestTransport): () => void {
+  testTransport = transport
+  return () => {
+    if (testTransport === transport) testTransport = undefined
+  }
+}
+
+const productionFetch: FetchTransport = async (url, init) => await undiciFetch(url, init) as Response
+
+function productionDispatcher(): Dispatcher {
+  return new Agent({
+    // A redirect request opens a fresh connection and therefore repeats the
+    // validated lookup instead of inheriting a DNS result across requests.
+    pipelining: 0,
+    connect: {
+      lookup: createValidatedLookup(),
+      autoSelectFamily: true,
+    },
+  })
+}
+
 /** The anonymous public HTTP(S) fetch provider. */
 export class HttpFetchProvider implements WebFetchProvider {
   readonly id = LOCAL_FETCH_PROVIDER_ID
@@ -46,19 +94,29 @@ export class HttpFetchProvider implements WebFetchProvider {
   async fetch(request: WebFetchRequest, signal?: AbortSignal): Promise<WebFetchResult> {
     if (signal?.aborted) throw new WebError('web fetch aborted', 'WEB_ABORTED')
 
-    // One signal stops both the request and body read. The deadline's TimeoutReason later
-    // distinguishes this provider's timeout from caller or outer-deadline cancellation.
-    using d = deadline(signal, this.limits.timeoutMs, 'WEB_FETCH_TIMEOUT')
-    return await this.followAndRead(request.url, d.signal)
+    const dispatcher = (testTransport?.createDispatcher ?? productionDispatcher)()
+    try {
+      // One signal stops both the request and body read. The deadline's TimeoutReason later
+      // distinguishes this provider's timeout from caller or outer-deadline cancellation.
+      using d = deadline(signal, this.limits.timeoutMs, 'WEB_FETCH_TIMEOUT')
+      return await this.followAndRead(request.url, d.signal, dispatcher, testTransport?.fetch ?? productionFetch)
+    } finally {
+      await dispatcher.close()
+    }
   }
 
   /** Follow same-origin redirects up to the hop cap, then read the final response. */
-  private async followAndRead(initialUrl: string, signal: AbortSignal): Promise<WebFetchResult> {
+  private async followAndRead(
+    initialUrl: string,
+    signal: AbortSignal,
+    dispatcher: Dispatcher,
+    transport: FetchTransport,
+  ): Promise<WebFetchResult> {
     let currentUrl = validateFetchUrl(initialUrl, this.limits.maxUrlLength)
     let redirectsFollowed = 0
 
     for (;;) {
-      const response = await this.requestOnce(currentUrl, signal)
+      const response = await this.requestOnce(currentUrl, signal, dispatcher, transport)
 
       if (isRedirectStatus(response.status)) {
         // Enforce the redirect budget before resolving or validating the next hop.
@@ -100,13 +158,15 @@ export class HttpFetchProvider implements WebFetchProvider {
     }
   }
 
-  private async requestOnce(url: URL, signal: AbortSignal): Promise<Response> {
+  private async requestOnce(url: URL, signal: AbortSignal, dispatcher: Dispatcher, transport: FetchTransport): Promise<Response> {
     try {
-      return await fetch(url, {
+      assertPublicLiteral(url.hostname)
+      return await transport(url, {
         method: 'GET',
         redirect: 'manual',
         headers: { 'user-agent': this.limits.userAgent, 'accept': 'text/html,application/xhtml+xml,text/*;q=0.9,application/json;q=0.8' },
         signal,
+        dispatcher,
       })
     } catch (error: unknown) {
       throw translateAbortOrNetwork(error, signal)
@@ -236,5 +296,19 @@ function translateAbortOrNetwork(error: unknown, signal: AbortSignal): WebError 
   const timeout = timeoutOf(signal, 'WEB_FETCH_TIMEOUT')
   if (timeout !== undefined) return new WebError('web fetch timed out', 'WEB_FETCH_TIMEOUT', { cause: timeout })
   if (signal.aborted) return new WebError('web fetch aborted', 'WEB_ABORTED', { cause: error })
+  const policyError = findWebError(error)
+  if (policyError?.code === 'WEB_BLOCKED_URL') return policyError
   return new WebError(`web fetch failed: ${String(error)}`, 'WEB_PROVIDER_ERROR', { cause: error })
+}
+
+/** Recover a package-owned policy error that Undici wrapped in transport causes. */
+function findWebError(error: unknown): WebError | undefined {
+  const seen = new Set<unknown>()
+  let current = error
+  while (current !== null && typeof current === 'object' && !seen.has(current)) {
+    if (current instanceof WebError) return current
+    seen.add(current)
+    current = 'cause' in current ? current.cause : undefined
+  }
+  return undefined
 }

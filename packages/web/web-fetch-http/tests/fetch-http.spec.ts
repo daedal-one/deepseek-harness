@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
-import { AddressInfo } from 'node:net'
+import { AddressInfo, type LookupFunction } from 'node:net'
 import { Context } from '@deepseek-ai/cordis'
-import WebRuntime from '@deepseek-ai/dsh-web'
+import WebRuntime, { WebError } from '@deepseek-ai/dsh-web'
+import type { Dispatcher } from 'undici'
 import { HttpFetchProvider, LOCAL_FETCH_PROVIDER_ID } from '@deepseek-ai/dsh-web-fetch-http'
 import type { HttpFetchLimits } from '@deepseek-ai/dsh-web-fetch-http'
 import * as fetchPlugin from '@deepseek-ai/dsh-web-fetch-http'
+import { assertPublicAddress, assertPublicLiteral, createValidatedLookup, type ResolveAll } from '../src/network-policy.ts'
+import { installHttpFetchTestTransport } from '../src/provider.ts'
 import { classifyContentType, decoderForCharset, isSameOrigin, parseCharset, validateFetchUrl } from '../src/policy.ts'
 
 const limits: HttpFetchLimits = {
@@ -22,18 +25,36 @@ type Handler = (req: IncomingMessage, res: ServerResponse) => void
 let server: Server
 let base: string
 let handler: Handler
+let restoreTransport: (() => void) | undefined
+let dispatchers: Array<{ closed: boolean }> = []
 
 beforeEach(async () => {
   handler = (_req, res) => { res.writeHead(200, { 'content-type': 'text/plain' }); res.end('default') }
   server = createServer((req, res) => { handler(req, res) })
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
   const { port } = server.address() as AddressInfo
-  base = `http://127.0.0.1:${port}`
+  base = `http://fixture.test:${port}`
+  dispatchers = []
+  restoreTransport = installHttpFetchTestTransport({
+    createDispatcher: () => {
+      const state = { closed: false }
+      dispatchers.push(state)
+      return { close: async () => { state.closed = true } } as Dispatcher
+    },
+    fetch: async (url, init) => {
+      const localUrl = new URL(url)
+      localUrl.hostname = '127.0.0.1'
+      const { dispatcher: _dispatcher, ...fetchInit } = init
+      return await globalThis.fetch(localUrl, fetchInit)
+    },
+  })
 })
 
 afterEach(async () => {
+  restoreTransport?.()
   vi.unstubAllGlobals()
   await new Promise<void>(resolve => server.close(() => { resolve() }))
+  expect(dispatchers.every(dispatcher => dispatcher.closed)).toBe(true)
 })
 
 function provider(overrides: Partial<HttpFetchLimits> = {}): HttpFetchProvider {
@@ -75,6 +96,111 @@ describe('policy helpers', () => {
     expect(decoderForCharset(undefined).encoding).toBe('utf-8')
     expect(decoderForCharset('iso-8859-1').encoding).toBe('windows-1252')
     expect(() => decoderForCharset('not-a-charset')).toThrow(expect.objectContaining({ code: 'WEB_UNSUPPORTED_CONTENT_TYPE' }))
+  })
+})
+
+type LookupResult = { error: NodeJS.ErrnoException | null; address: string | import('node:dns').LookupAddress[]; family?: number }
+
+function runLookup(lookup: LookupFunction, hostname = 'destination.test'): Promise<LookupResult> {
+  return new Promise((resolve) => {
+    lookup(hostname, { all: true }, (error, address, family) => {
+      resolve({ error, address, ...family === undefined ? {} : { family } })
+    })
+  })
+}
+
+function resolver(records: import('node:dns').LookupAddress[]): ResolveAll {
+  return (_hostname, _options, callback) => { callback(null, records) }
+}
+
+describe('connect-time network policy', () => {
+  it.each([
+    '8.8.8.8',
+    '1.1.1.1',
+    '2001:4860:4860::8888',
+    '2606:4700:4700::1111',
+    '::ffff:8.8.8.8',
+  ])('accepts globally routable unicast %s', (address) => {
+    expect(() => { assertPublicAddress(address) }).not.toThrow()
+  })
+
+  it.each([
+    ['IPv4 unspecified', '0.0.0.0'],
+    ['IPv4 loopback', '127.0.0.1'],
+    ['IPv4 private 10/8', '10.0.0.1'],
+    ['IPv4 private 172.16/12', '172.16.0.1'],
+    ['IPv4 private 192.168/16', '192.168.0.1'],
+    ['IPv4 link-local', '169.254.1.1'],
+    ['IPv4 multicast', '224.0.0.1'],
+    ['IPv4 documentation', '192.0.2.1'],
+    ['IPv4 benchmark', '198.18.0.1'],
+    ['IPv4 broadcast', '255.255.255.255'],
+    ['IPv4 carrier-grade NAT', '100.64.0.1'],
+    ['IPv6 unspecified', '::'],
+    ['IPv6 loopback', '::1'],
+    ['IPv6 unique-local', 'fd00::1'],
+    ['IPv6 link-local', 'fe80::1'],
+    ['IPv6 multicast', 'ff02::1'],
+    ['IPv6 documentation', '2001:db8::1'],
+    ['IPv6 documentation 3fff::/20', '3fff::1'],
+    ['IPv6 protocol assignment', '2001:20::1'],
+    ['IPv4-mapped loopback', '::ffff:127.0.0.1'],
+    ['IPv4-mapped private', '::ffff:10.0.0.1'],
+    ['IPv4-mapped carrier-grade NAT', '::ffff:100.64.0.1'],
+    ['IPv4-mapped documentation', '::ffff:192.0.2.1'],
+  ])('blocks %s (%s)', (_kind, address) => {
+    expect(() => { assertPublicAddress(address) }).toThrow(expect.objectContaining({ code: 'WEB_BLOCKED_URL' }))
+  })
+
+  it('validates bracketed IPv6 literals and ignores hostnames', () => {
+    expect(() => { assertPublicLiteral('[::1]') }).toThrow(expect.objectContaining({ code: 'WEB_BLOCKED_URL' }))
+    expect(() => { assertPublicLiteral('example.com') }).not.toThrow()
+  })
+
+  it('passes every public resolver record to the connector unchanged', async () => {
+    const records = [
+      { address: '8.8.8.8', family: 4 },
+      { address: '2001:4860:4860::8888', family: 6 },
+    ]
+    const result = await runLookup(createValidatedLookup(resolver(records)))
+    expect(result.error).toBeNull()
+    expect(result.address).toBe(records)
+  })
+
+  it('rejects a mixed public and private answer without returning either record', async () => {
+    const result = await runLookup(createValidatedLookup(resolver([
+      { address: '8.8.8.8', family: 4 },
+      { address: '10.0.0.1', family: 4 },
+    ])))
+    expect(result.error).toEqual(expect.objectContaining({ code: 'WEB_BLOCKED_URL' }))
+    expect(result.address).toBe('')
+    expect(result.error?.message).not.toContain('10.0.0.1')
+  })
+
+  it('fails when resolution returns no addresses', async () => {
+    const result = await runLookup(createValidatedLookup(resolver([])))
+    expect(result.error).toEqual(expect.objectContaining({ code: 'ENOTFOUND' }))
+  })
+
+  it('preserves ordinary resolver errors', async () => {
+    const expected = Object.assign(new Error('resolver offline'), { code: 'EAI_AGAIN' })
+    const resolveAll: ResolveAll = (_hostname, _options, callback) => { callback(expected, []) }
+    const result = await runLookup(createValidatedLookup(resolveAll))
+    expect(result.error).toBe(expected)
+  })
+
+  it('revalidates a changing resolver and blocks its later private answer', async () => {
+    let call = 0
+    const resolveAll: ResolveAll = (_hostname, _options, callback) => {
+      call++
+      callback(null, call === 1
+        ? [{ address: '8.8.8.8', family: 4 }]
+        : [{ address: '127.0.0.1', family: 4 }])
+    }
+    const lookup = createValidatedLookup(resolveAll)
+    await expect(runLookup(lookup)).resolves.toMatchObject({ error: null })
+    const second = await runLookup(lookup)
+    expect(second.error).toEqual(expect.objectContaining({ code: 'WEB_BLOCKED_URL' }))
   })
 })
 
@@ -320,9 +446,24 @@ describe('HttpFetchProvider invalid URLs and abort', () => {
   })
 
   it('maps a connection failure to WEB_PROVIDER_ERROR', async () => {
-    // Port 1 on loopback is not listening: a real connection failure (not abort).
-    await expect(provider().fetch({ url: 'http://127.0.0.1:1/' }))
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('connection refused') }))
+    await expect(provider().fetch({ url: 'http://failure.test/' }))
       .rejects.toThrow(expect.objectContaining({ code: 'WEB_PROVIDER_ERROR' }))
+  })
+
+  it('recovers a lookup policy error through transport cause wrappers', async () => {
+    const blocked = new WebError('destination is not public', 'WEB_BLOCKED_URL')
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('fetch failed', { cause: new Error('connect failed', { cause: blocked }) }) }))
+    await expect(provider().fetch({ url: 'http://wrapped.test/' }))
+      .rejects.toBe(blocked)
+  })
+
+  it('blocks a private literal before making a transport request', async () => {
+    const transport = vi.fn()
+    vi.stubGlobal('fetch', transport)
+    await expect(provider().fetch({ url: 'http://127.0.0.1/' }))
+      .rejects.toThrow(expect.objectContaining({ code: 'WEB_BLOCKED_URL' }))
+    expect(transport).not.toHaveBeenCalled()
   })
 
 })
@@ -345,7 +486,7 @@ describe('HttpFetchProvider body cancellation on error paths', () => {
   it('cancels the body when a cross-origin redirect is blocked', async () => {
     const { response, cancelled } = fakeResponse({ status: 302, headers: {}, location: 'https://elsewhere.test/' })
     vi.stubGlobal('fetch', vi.fn(async () => response))
-    await expect(provider().fetch({ url: 'http://127.0.0.1:9/' }))
+    await expect(provider().fetch({ url: 'http://fixture.test/' }))
       .rejects.toThrow(expect.objectContaining({ code: 'WEB_REDIRECT_BLOCKED' }))
     expect(cancelled()).toBe(true)
   })
@@ -353,7 +494,7 @@ describe('HttpFetchProvider body cancellation on error paths', () => {
   it('cancels the body when an unsupported charset is rejected', async () => {
     const { response, cancelled } = fakeResponse({ status: 200, headers: { 'content-type': 'text/plain; charset=not-a-charset' } })
     vi.stubGlobal('fetch', vi.fn(async () => response))
-    await expect(provider().fetch({ url: 'http://127.0.0.1:9/' }))
+    await expect(provider().fetch({ url: 'http://fixture.test/' }))
       .rejects.toThrow(expect.objectContaining({ code: 'WEB_UNSUPPORTED_CONTENT_TYPE' }))
     expect(cancelled()).toBe(true)
   })
@@ -361,9 +502,31 @@ describe('HttpFetchProvider body cancellation on error paths', () => {
   it('cancels the body when a redirect has no Location header', async () => {
     const { response, cancelled } = fakeResponse({ status: 302, headers: {} })
     vi.stubGlobal('fetch', vi.fn(async () => response))
-    await expect(provider().fetch({ url: 'http://127.0.0.1:9/' }))
+    await expect(provider().fetch({ url: 'http://fixture.test/' }))
       .rejects.toThrow(expect.objectContaining({ code: 'WEB_PROVIDER_ERROR' }))
     expect(cancelled()).toBe(true)
+  })
+})
+
+describe('dispatcher lifecycle', () => {
+  it('does not resolve until dispatcher shutdown reaches quiescence', async () => {
+    restoreTransport?.()
+    let releaseClose: (() => void) | undefined
+    const closeGate = new Promise<void>((resolve) => { releaseClose = resolve })
+    restoreTransport = installHttpFetchTestTransport({
+      createDispatcher: () => {
+        const state = { closed: false }
+        dispatchers.push(state)
+        return { close: async () => { await closeGate; state.closed = true } } as Dispatcher
+      },
+      fetch: async () => new Response('ok', { headers: { 'content-type': 'text/plain' } }),
+    })
+    let settled = false
+    const result = provider().fetch({ url: 'http://fixture.test/' }).then((value) => { settled = true; return value })
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    releaseClose?.()
+    await expect(result).resolves.toMatchObject({ statusCode: 200 })
   })
 })
 
