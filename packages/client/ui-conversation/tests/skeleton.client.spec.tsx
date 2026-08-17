@@ -28,6 +28,7 @@ import type {
   ComposerBarOwnerProps,
 } from '../src/client/contract/slots.ts'
 import type { ViewTab } from '../src/client/contract/views.ts'
+import { TEST_BRANDING } from './branding-fixture.client.ts'
 
 /** Machine-backed wiring over a sink spy. */
 function fakeWiring() {
@@ -242,6 +243,7 @@ function mount(
     useWorkspaces: bindSnapshotSelector(workspaces),
     useProjection: (() => undefined),
     useComposerBlock: select => select(options.composerBlock),
+    useBranding: select => select(TEST_BRANDING.getSnapshot()),
     useInput,
     inputActions,
     renderSlot,
@@ -259,7 +261,7 @@ function mount(
 
 describe('Hero chrome', () => {
   it('renders the English preview badge through the hero locale seat', () => {
-    const view = render(<HeroShell t={makeTranslate(en, commonEn)} />)
+    const view = render(<HeroShell t={makeTranslate(en, commonEn)} branding={TEST_BRANDING.getSnapshot()} />)
     expect(view.getByText('Into the Unknown')).toBeTruthy()
     expect(view.getByText('Preview')).toBeTruthy()
   })

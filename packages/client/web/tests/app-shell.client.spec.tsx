@@ -25,6 +25,11 @@ async function bench() {
   ctx.provide('sessions', new TestSessions(stabilize, ctx))
   ctx.provide('workspaces', new TestWorkspaces(stabilize))
   ctx.provide('layout', { openDetails: vi.fn(), closeDetails: vi.fn() })
+  const branding = Object.freeze({ name: 'the harness', revision: 0 })
+  ctx.provide('branding', {
+    getSnapshot: () => branding,
+    subscribe: () => () => {},
+  } as never)
   const fiber = ctx.plugin({ inject: [...AppShell.inject], apply: AppShell.apply })
   await fiber.await()
   return { ctx, slots, fiber }

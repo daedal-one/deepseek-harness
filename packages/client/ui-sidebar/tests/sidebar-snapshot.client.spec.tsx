@@ -29,6 +29,11 @@ afterEach(cleanup)
 async function bench(options: { locale?: 'en' } = {}) {
   const runtime = await SlotTestRuntime.create()
   runtime.provide('layout', { toggleSidebar: vi.fn() })
+  const branding = Object.freeze({ name: 'the harness', revision: 0 })
+  runtime.provide('branding', {
+    getSnapshot: () => branding,
+    subscribe: () => () => {},
+  })
   const locale = new LocaleRuntime(runtime.ctx)
   if (options.locale === 'en') locale.setLocale('en')
   runtime.provide('locale', locale)

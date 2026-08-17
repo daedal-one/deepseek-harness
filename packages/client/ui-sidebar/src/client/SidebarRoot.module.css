@@ -122,6 +122,16 @@
   background: transparent;
   color: inherit;
   cursor: pointer;
+  gap: 8px;
+}
+
+.brandName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 600;
 }
 
 .iconButton {
@@ -159,7 +169,7 @@
   display: inline;
 }
 
-.collapsed .toggle:hover .railFish {
+.collapsed .toggle:hover .railLogo {
   display: none;
 }
 

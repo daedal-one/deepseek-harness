@@ -177,6 +177,10 @@
     - id: locale
       name: '@deepseek-ai/dsh-client-locale'
 
+    # Durable user-controlled product identity for application and browser chrome.
+    - id: ui-branding
+      name: '@deepseek-ai/dsh-client-ui-branding'
+
     - id: ui-layout
       name: '@deepseek-ai/dsh-client-ui-layout'
 

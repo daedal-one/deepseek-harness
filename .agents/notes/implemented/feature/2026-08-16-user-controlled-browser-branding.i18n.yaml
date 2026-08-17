@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-16-user-controlled-browser-branding.md
+2026-08-16-user-controlled-browser-branding.md: 7f672b0b1e43b0db89e39220cf271e25bb93d8e4
+2026-08-16-user-controlled-browser-branding.zh.md: 4de6e4bae36d9566c6c43819b0703b5772c7864c

@@ -66,3 +66,22 @@ describe('FishLogo', () => {
     expect(container.innerHTML).not.toContain('M0 0L23.16')
   })
 })
+
+describe('BrandLogo', () => {
+  it('uses the built-in fish when no uploaded logo exists', () => {
+    const { container } = render(<primitives.BrandLogo name="the harness" />)
+    expect(container.querySelector('svg')).not.toBeNull()
+    expect(container.querySelector('img')).toBeNull()
+  })
+
+  it('renders an uploaded logo inside the requested square', () => {
+    const logo = 'data:image/png;base64,YQ=='
+    const { container } = render(<primitives.BrandLogo name="Studio" logo={logo} size={32} className="mark" />)
+    const image = container.querySelector('img')!
+    expect(image.src).toBe(logo)
+    expect(image.alt).toBe('Studio logo')
+    expect(image.width).toBe(32)
+    expect(image.height).toBe(32)
+    expect(image.classList.contains('mark')).toBe(true)
+  })
+})

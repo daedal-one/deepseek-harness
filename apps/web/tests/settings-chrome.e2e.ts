@@ -3,7 +3,7 @@
 // real theme gesture — click 深色 and the whole cascade runs: ThemeRuntime preference -> Host settings
 // -> theme/change -> ui-layout's presenter -> body attribute -> alias token +
 // browser theme-color metadata)
-// the Language row and busy-state Enter preference (both Host-backed), plus
+// the Branding, Language, and busy-state Enter preferences (all Host-backed), plus
 // Permission as the persisted default for subsequently created sessions.
 // Zero model calls: everything is pure client + persistence state on a blank
 // frame, so there is no fixture and a stray stream would fail loud on the
@@ -177,6 +177,83 @@ describe('web e2e: settings modal and General preferences', () => {
     await page.keyboard.press('Escape')
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
+
+  it('applies and persists the product name and logo across browser and Host chrome', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-settings-branding'))
+    expect(scaffold.ctx.settings.describe().find(row => row.ns === 'ui-branding')).toMatchObject({
+      value: { name: 'the harness' },
+      revision: 0,
+    })
+    await page.getByRole('button', { name: '设置', exact: true }).click()
+    const dialog = page.getByRole('dialog', { name: '设置' })
+    await dialog.waitFor({ timeout: 10_000 })
+    const name = dialog.getByRole('textbox', { name: '产品名称' })
+    await name.fill('Studio Harness')
+    const nameWrite = page.waitForResponse('**/api/settings.mutate')
+    await dialog.getByRole('button', { name: '保存名称' }).click()
+    const nameWriteEnvelope = await (await nameWrite).json() as {
+      result: { ok: true } | { ok: false; error: unknown }
+    }
+    if (!nameWriteEnvelope.result.ok) {
+      throw new Error(`branding name write failed: ${JSON.stringify(nameWriteEnvelope.result.error)}`)
+    }
+    await expect.poll(() => page.title(), { timeout: 5_000 }).toBe('Studio Harness')
+    await page.getByText('Studio Harness', { exact: true }).first().waitFor({ timeout: 5_000 })
+    await expect.poll(async () => readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8'), { timeout: 5_000 })
+      .toMatch(/ui-branding:\n\s+name: Studio Harness/)
+
+    // A real image selection reaches the same durable setting used by the
+    // browser favicon and Host-served install metadata.
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+      'base64',
+    )
+    await dialog.locator('input[type="file"]').setInputFiles({
+      name: 'logo.png', mimeType: 'image/png', buffer: png,
+    })
+    await page.locator('img[alt="Studio Harness logo"]').first().waitFor({ timeout: 5_000 })
+    await expect.poll(() => page.locator('link[rel="icon"]').getAttribute('href'), { timeout: 5_000 })
+      .toMatch(/^data:image\/png;base64,/)
+    await expect.poll(async () => await page.evaluate(async () => {
+      const manifest = await fetch('/manifest.webmanifest').then(response => response.text())
+      const logo = await fetch('/branding/logo')
+      return {
+        manifest,
+        logoType: logo.headers.get('content-type'),
+        logoBytes: (await logo.arrayBuffer()).byteLength,
+      }
+    }), { timeout: 5_000 }).toEqual({
+      manifest: JSON.stringify({
+        id: '/',
+        name: 'Studio Harness',
+        short_name: 'Studio Harness',
+        start_url: '/',
+        scope: '/',
+        display: 'fullscreen',
+        icons: [{ src: '/branding/logo', sizes: 'any', type: 'image/png', purpose: 'any' }],
+      }),
+      logoType: 'image/png',
+      logoBytes: png.byteLength,
+    })
+
+    await page.keyboard.press('Escape')
+    const warningStart = tripwire.warnings.length
+    await page.reload({ waitUntil: 'load' })
+    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    acknowledgeReloadConnectionLoss(tripwire, warningStart)
+    expect(await page.title()).toBe('Studio Harness')
+    await page.locator('img[alt="Studio Harness logo"]').first().waitFor({ timeout: 5_000 })
+
+    await page.getByRole('button', { name: '设置', exact: true }).click()
+    const restored = page.getByRole('dialog', { name: '设置' })
+    await restored.getByRole('button', { name: '使用默认标志' }).click()
+    await restored.getByRole('button', { name: '使用默认名称' }).click()
+    await expect.poll(() => page.title(), { timeout: 5_000 }).toBe('the harness')
+    await expect.poll(() => page.locator('link[rel="icon"]').getAttribute('href'), { timeout: 5_000 })
+      .toBe('/favicon.svg')
+    await page.keyboard.press('Escape')
+    expect(tripwire.pageErrors).toEqual([])
+  }, 90_000)
 
   it('uses the persisted dark preference while plugins are still loading', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-settings-boot-theme'))

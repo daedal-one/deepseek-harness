@@ -9,6 +9,7 @@ import type { ReactNode } from 'react'
 import type { Context } from '@deepseek-ai/cordis'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-web-react'
 import { DocumentTitle } from './DocumentTitle.tsx'
+import type {} from '@deepseek-ai/dsh-client-ui-branding/client'
 // Type-only: pulls the runtime's SlotMap declaration merge (the 'root' key) into this program.
 import type {} from '@deepseek-ai/dsh-client-runtime/client'
 
@@ -27,13 +28,17 @@ export function buildRenderApp(deps: AssemblyDeps): () => ReactNode {
   const { ctx } = deps
   const sessions = ctx.get('sessions')
   if (sessions === undefined) throw new Error('shell assembly: sessions service unavailable')
+  const branding = ctx.get('branding')
+  if (branding === undefined) throw new Error('shell assembly: branding service unavailable')
   const useSessions = bindSnapshotSelector(sessions.list)
+  const useBranding = bindSnapshotSelector(branding)
   const SessionDocumentTitle = (): ReactNode => {
     const title = useSessions((state) => {
       const id = state.current
       return id === undefined ? undefined : state.byId[id]?.title
     })
-    return <DocumentTitle {...title === undefined ? {} : { title }} />
+    const productTitle = useBranding(snapshot => snapshot.name)
+    return <DocumentTitle productTitle={productTitle} {...title === undefined ? {} : { title }} />
   }
   return () => (
     <>

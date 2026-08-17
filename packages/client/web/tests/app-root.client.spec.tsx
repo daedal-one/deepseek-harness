@@ -7,10 +7,11 @@
  * gate semantics. Stores are the kernel-own signals production boot uses
  * (shell self-sufficiency: the loading page depends on no plugin package).
  */
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { act, cleanup, render } from '@testing-library/react'
 
 afterEach(cleanup)
+beforeEach(() => { document.title = 'the harness' })
 import { AppRoot } from '@deepseek-ai/dsh-client-web/src/AppRoot.tsx'
 import { createLoaderStatusStore, createSignal } from '@deepseek-ai/dsh-client-web/src/loader-status.ts'
 
@@ -33,7 +34,7 @@ function mount() {
 describe('AppRoot', () => {
   it('shows the loading page and never calls renderApp before settled', () => {
     const { queryByTestId, counts, getByText } = mount()
-    expect(getByText('HARNESS')).toBeTruthy()
+    expect(getByText('the harness')).toBeTruthy()
     expect(queryByTestId('real-ui')).toBeNull()
     expect(counts()).toBe(0)
   })
@@ -70,7 +71,7 @@ describe('AppRoot', () => {
     const { settled, getByTestId, queryByText, counts } = mount()
     act(() => { settled.set(true) })
     expect(getByTestId('real-ui')).toBeTruthy()
-    expect(queryByText('HARNESS')).toBeNull()
+    expect(queryByText('the harness')).toBeNull()
     expect(counts()).toBe(1)
   })
 })

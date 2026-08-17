@@ -22,6 +22,11 @@ afterEach(async () => {
 
 async function bench() {
   runtime = await SlotTestRuntime.create()
+  const branding = Object.freeze({ name: 'the harness', revision: 0 })
+  runtime.provide('branding', {
+    getSnapshot: () => branding,
+    subscribe: () => () => {},
+  })
   await runtime.root.declare({}, () => <div data-testid="frame" />)
   return { runtime, renderApp: buildRenderApp({ ctx: runtime.ctx }) }
 }
@@ -38,28 +43,28 @@ describe('buildRenderApp', () => {
   })
 
   it('projects the current session durable title and falls back to the product title', async () => {
-    document.title = 'Product'
+    document.title = 'static shell title'
     const b = await bench()
     render(<>{b.renderApp()}</>)
     // No current session: the product title stands.
-    expect(document.title).toBe('Product')
+    expect(document.title).toBe('the harness')
     await b.runtime.sessions.add({ id: 's1', summary: { title: 'First' } })
-    expect(document.title).toBe('First — Product')
+    expect(document.title).toBe('First — the harness')
     await b.runtime.sessions.setCurrent(undefined)
-    expect(document.title).toBe('Product')
+    expect(document.title).toBe('the harness')
     // A session without a durable title keeps the product title.
     await b.runtime.sessions.add({ id: 's2' })
-    expect(document.title).toBe('Product')
+    expect(document.title).toBe('the harness')
   })
 
   it('a current id without a list row falls back (selection/list arbitration transient)', async () => {
-    document.title = 'Product'
+    document.title = 'static shell title'
     const b = await bench()
     await b.runtime.sessions.add({ id: 's1', summary: { title: 'First' } })
     render(<>{b.renderApp()}</>)
-    expect(document.title).toBe('First — Product')
+    expect(document.title).toBe('First — the harness')
     b.runtime.sessions.list.update((draft) => { draft.current = 'ghost' as SessionId })
     await b.runtime.flush()
-    expect(document.title).toBe('Product')
+    expect(document.title).toBe('the harness')
   })
 })

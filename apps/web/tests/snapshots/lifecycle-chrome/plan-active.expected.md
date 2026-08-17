@@ -1,4 +1,4 @@
-- button "New session"
+- button "New session": the harness
 - button "Collapse sidebar":
   - img
 - button "New session":

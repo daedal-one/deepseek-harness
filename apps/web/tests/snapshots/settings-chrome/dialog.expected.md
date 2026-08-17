@@ -21,7 +21,16 @@
   - button "标准模式":
     - text: 标准模式
     - img
-  - text: 权限 选择新会话的默认权限模式
+  - text: 品牌 产品名称
+  - textbox "产品名称":
+    - /placeholder: 输入产品名称
+    - text: the harness
+  - button "保存名称" [disabled]
+  - button "使用默认名称" [disabled]
+  - text: 产品标志
+  - button "上传标志"
+  - button "使用默认标志" [disabled]
+  - text: 支持 PNG、JPEG、WebP、GIF 或 AVIF，最大 512 KiB。 权限 选择新会话的默认权限模式
   - button "Workspace Write":
     - text: Workspace Write
     - img
