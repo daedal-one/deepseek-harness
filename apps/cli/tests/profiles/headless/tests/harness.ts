@@ -8,7 +8,7 @@ import * as BashEnvPlugin from '@deepseek-ai/dsh-shell-env'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import * as ToolBash from '@deepseek-ai/dsh-tool-bash'
 import * as ToolTodo from '@deepseek-ai/dsh-tool-todo'
-import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek'
+import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
 import TokenMeter from '@deepseek-ai/dsh-token-meter'
 import ToolResultPruner from '@deepseek-ai/dsh-compaction-tool-result-pruner'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
@@ -18,7 +18,7 @@ import type { BasicCompactionConfig } from '@deepseek-ai/dsh-compaction-basic'
 
 /**
  * Shared harness for the headless-agent e2e suites: the full plugin stack
- * with the real DeepSeek adapter and the real bash + todo_write tools. Lives
+ * with the real OpenRouter adapter and the real bash + todo_write tools. Lives
  * outside the *.e2e.ts pattern so importing it never re-registers another
  * file's tests.
  */
@@ -33,6 +33,11 @@ export const TODO_SYSTEM_PROMPT = 'You are a coding agent. For multi-step work, 
   + 'mark every task being actively worked on in_progress (several at once when '
   + 'work runs in parallel, at least one while work remains), and mark a task '
   + 'completed as soon as it is done.'
+
+/** OpenRouter route exercised by the real-model suites. */
+export const E2E_PROVIDER = 'openrouter'
+/** Dated Nitro route exercised by the real-model suites. */
+export const E2E_MODEL = 'deepseek/deepseek-v4-flash-0731:nitro'
 
 /** Options for {@link codingHarness}. */
 export interface CodingHarnessOptions {
@@ -49,7 +54,7 @@ export interface CodingHarnessOptions {
    * compaction plugin (the default suites run without it).
    */
   compact?: BasicCompactionConfig
-  /** Test-only context capacity advertised for `deepseek-v4-flash`. */
+  /** Test-only context capacity advertised for the Nitro route. */
   modelContextWindow?: number
 }
 
@@ -59,8 +64,20 @@ export async function codingHarness(workdir: string, options: CodingHarnessOptio
     systemPrompt: { personaPrefix: options.personaPrefix ?? '' },
   })
   await ctx.plugin(AgentLoop, { agents: [] })
-  await ctx.plugin(LlmDeepSeek, options.modelContextWindow === undefined ? {} : {
-    models: [{ id: 'deepseek-v4-flash', contextWindow: options.modelContextWindow }],
+  await ctx.plugin(LlmPiAi, {
+    providers: {
+      [E2E_PROVIDER]: {
+        apiKeyEnv: 'OPENROUTER_API_KEY',
+        modelAliases: {
+          [E2E_MODEL]: {
+            catalogModel: 'deepseek/deepseek-v4-flash',
+            ...(options.modelContextWindow === undefined
+              ? {}
+              : { contextWindow: options.modelContextWindow }),
+          },
+        },
+      },
+    },
   })
   await ctx.plugin(LocalSubprocessRuntime)
   await ctx.plugin(BashEnvPlugin)

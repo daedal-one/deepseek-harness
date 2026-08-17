@@ -2,7 +2,7 @@
  * Models settings section: the provider rows joined from the configurable
  * directory, settings namespaces, and credential states, with one editor
  * card at a time. Rows expose only confirmed API-key state through accessible
- * solid configured or missing dots. A whole-section provider without a
+ * text badges. A whole-section provider without a
  * configured key renders as its open setup card instead of a row, but only in
  * the first-run posture — no provider on the page can serve requests yet — and
  * only until the user closes that card; the add flow is a card carrying the
@@ -130,17 +130,19 @@ export async function removeProviderProfile(
 }
 
 /**
- * Whether a whole-section provider still needs its first key: an unconfigured
+ * Whether a configured provider still needs its first key: an unconfigured
  * credential opens the setup card instead of showing a row. This is the
  * first-run posture alone — a user who can already reach some provider gets an
- * ordinary row with the missing-key dot, since nothing here is blocking them.
+ * ordinary row with the missing-key badge, since nothing here is blocking them.
  * @param row - the joined provider row.
  * @param anyUsable - whether any joined row can already serve requests.
  * @returns whether to render the setup card.
  */
 export function needsSetup(row: ProviderRow, anyUsable: boolean): boolean {
   if (anyUsable) return false
-  if (row.entry.settingsPath.length > 0) return false
+  if (row.entry.provider !== 'openrouter'
+    || row.entry.settingsNs !== 'llm-pi-ai'
+    || row.entry.settingsPath.join('/') !== 'providers/openrouter') return false
   return row.credential?.configured !== true
 }
 
@@ -367,21 +369,15 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                     : null}
                   {credentialConfigured
                     ? (
-                      <span
-                        className={`${styles['credentialDot']} ${styles['credentialDotConfigured']}`}
-                        role="img"
-                        aria-label={t('credentialConfigured')}
-                        title={t('credentialConfigured')}
-                      />
+                      <span className={styles['credentialConfigured']}>
+                        {t('credentialConfigured')}
+                      </span>
                     )
                     : credentialMissing
                       ? (
-                        <span
-                          className={`${styles['credentialDot']} ${styles['credentialDotMissing']}`}
-                          role="img"
-                          aria-label={t('credentialMissing')}
-                          title={t('credentialMissing')}
-                        />
+                        <span className={styles['credentialMissing']}>
+                          {t('credentialMissing')}
+                        </span>
                       )
                       : null}
                 </span>

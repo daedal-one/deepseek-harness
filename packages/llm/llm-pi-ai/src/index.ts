@@ -77,6 +77,7 @@ export { Config } from './config.ts'
 export type {
   PiAiCompatProfile,
   PiAiModality,
+  PiAiModelAlias,
   PiAiModelOverride,
   PiAiModelProfile,
   PiAiProviderProfile,
@@ -227,7 +228,7 @@ export function apply(ctx: Context, config: Config): void {
     const entries = directoryEntries(profiles())
     if (deepEqualJson(entries, directoryFacts)) return
     // Atomic replace, never dispose-then-register: a route another adapter
-    // family already declares (a profile keyed `deepseek-official`) would
+    // family already declares (a profile keyed `custom-openai`) would
     // otherwise leave this plugin's whole directory withdrawn and the Models
     // page empty. The candidate set is validated first, so a collision keeps
     // the previous entries serving and only costs a diagnostic.

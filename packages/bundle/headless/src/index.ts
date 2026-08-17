@@ -29,7 +29,7 @@ import type {} from '@deepseek-ai/dsh-cmdline'
 export const name = 'headless-runner'
 
 /** Core services required before the one-shot turn can start. */
-export const inject = ['agentDefaultModel', 'agents', 'sessions']
+export const inject = ['agentModels', 'agents', 'sessions']
 
 /** Plugin config: the task resolved from this app's injected provider service. */
 export interface Config {
@@ -172,7 +172,7 @@ async function run(ctx: Context, task: string, io: HeadlessIo): Promise<void> {
   // creating an Agent so its scoped tools and adapters are not half-composed.
   await ctx.get('loader')?.await()
   const agents = ctx.get('agents')
-  const defaultModel = ctx.get('agentDefaultModel')
+  const defaultModel = ctx.get('agentModels')
   const sessions = ctx.get('sessions')
   // Early process shutdown can dispose the tree while settlement is pending.
   if (agents === undefined || defaultModel === undefined || sessions === undefined) return
@@ -188,7 +188,11 @@ async function run(ctx: Context, task: string, io: HeadlessIo): Promise<void> {
       cwd: process.cwd(),
       ...composition.agentPreset === undefined ? {} : { agentPreset: composition.agentPreset },
     },
-    agentOptions: { provider: selection.provider, model: selection.model },
+    agentOptions: {
+      provider: selection.provider,
+      model: selection.model,
+      ...selection.reasoningEffort === undefined ? {} : { reasoningEffort: selection.reasoningEffort },
+    },
     setup: composition.setup,
   })
   await agent.whenIdle()

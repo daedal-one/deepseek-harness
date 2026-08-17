@@ -326,7 +326,7 @@ export default defineConfig({
         'packages/client/ui-workspace/src/client/index.ts',
         'packages/test-support/client-runtime/src/translate.ts',
         'packages/client/ui-primitives/src/JsonTree.tsx',
-        'packages/client/ui-settings-models/src/client/DeepSeekOnboardingDialog.tsx',
+        'packages/client/ui-settings-models/src/client/OpenRouterOnboardingDialog.tsx',
         'packages/client/ui-settings-models/src/client/welcome-store.ts',
         'packages/extensions/*/src/**/*.ts',
         'packages/extensions/*/src/**/*.tsx',

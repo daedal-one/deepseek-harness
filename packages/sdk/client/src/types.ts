@@ -56,9 +56,9 @@ export interface HarnessClientOptions {
 export interface DeepSeekHarnessOptions extends HarnessClientOptions {
   /** Workspace cwd recorded on every SDK-created session (default: the process cwd, else `process.cwd()`). */
   cwd?: string
-  /** Provider route for SDK-created agents (default `deepseek-official`). */
+  /** Provider route for SDK-created agents (default `openrouter`). */
   provider?: string
-  /** Model for SDK-created agents (default `deepseek-v4-flash`). */
+  /** Model for SDK-created agents (default `deepseek/deepseek-v4-flash-0731:nitro`). */
   model?: string
   /** Adapter-owned reasoning effort for the selected provider/model route. */
   reasoningEffort?: ReasoningEffortId

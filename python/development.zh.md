@@ -38,7 +38,7 @@ uv run --project python/sdk python scripts/smoke-python-runtime.py \
 
 可信拉取请求与 master 推送还会在各自选定的原生目标上运行 `--scenario sdk-live --installed-wheel`。该场景面向 `https://api.deepseek.com` 执行两个使用工具的轮次：立即检查已创建文件，将其内容替换为仅宿主知道的随机挑战值，并要求第二轮将变更后的内容复制到全新的回执文件，且不修改源文件。两个轮次都必须完成、返回精确的哨兵答案并由模型请求调用工具；文件通过外部逐字节比较验证。仓库密钥缺失时失败，而不是自行 skip。Fork 与 Dependabot 拉取请求会运行完整的 keyless 安装后 wheel 路径，但不会获得密钥。
 
-交互式冒烟测试需要环境变量或仓库根目录 `.env` 中存在 `DEEPSEEK_API_KEY`：
+交互式冒烟测试需要环境变量或仓库根目录 `.env` 中存在 `OPENROUTER_API_KEY`：
 
 ```python
 from deepseek_harness import DeepSeekHarness

@@ -128,5 +128,5 @@ Every product feature maps to a listener on a documented extension point — the
 | UI (GUI; CLI emits JSONL) | listen to `agent/assistant-stream` for live chunks and `session/event` for durable settlements, boundaries, and tool activity; input → `followup()` |
 | Web Client Chat business node | register a `ConversationNodeDefinition` and `conversation.chat.node` keyed renderer |
 | SessionTelemetryBackend / replayable trace | `session/event` → JSONL; replay = `sessions.create(id, { seed })` |
-| Model adapters | `LlmAdapter` subclass via `registerAdapter` (`dsh-llm-deepseek`, `dsh-llm-pi-ai`) |
+| Model adapters | `LlmAdapter` subclass via `registerAdapter` (`dsh-llm-pi-ai` is the shipped implementation) |
 | Plugin hot-reload | every registration is a `ctx.effect` → vendored HMR just works |

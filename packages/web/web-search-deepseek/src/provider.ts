@@ -28,9 +28,8 @@ export const DEEPSEEK_PROVIDER_ID = 'deepseek-official'
 
 /**
  * Default endpoint: DeepSeek's Anthropic-compatible API, `/v1` included
- * (`/messages` is appended). This is NOT the chat-completions base
- * (`https://api.deepseek.com`) `@deepseek-ai/dsh-llm-deepseek` uses, so this
- * provider does NOT reuse `$DEEPSEEK_BASE_URL` — only the API key is shared.
+ * (`/messages` is appended). Conversation-model routing is independent; only
+ * the DeepSeek API-key credential can be shared with this search provider.
  */
 export const DEEPSEEK_DEFAULT_BASE_URL = 'https://api.deepseek.com/anthropic/v1'
 

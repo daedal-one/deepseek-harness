@@ -34,6 +34,7 @@ import {
 } from './catalog.ts'
 import type {
   PiAiCompatProfile,
+  PiAiModelAlias,
   PiAiModality,
   PiAiModelOverride,
   PiAiModelProfile,
@@ -80,6 +81,7 @@ export const DEFAULT_INPUT: readonly PiAiModality[] = ['text']
 
 export type {
   PiAiCompatProfile,
+  PiAiModelAlias,
   PiAiModality,
   PiAiModelOverride,
   PiAiModelProfile,
@@ -116,6 +118,8 @@ export interface PiAiProviderProfile {
    * model the catalog does not describe is refused rather than skipped.
    */
   modelOverrides?: Record<string, PiAiModelOverride>
+  /** Additive request-wire aliases inheriting complete installed model metadata. */
+  modelAliases?: Record<string, PiAiModelAlias>
   /**
    * pi-ai wire-compatibility switches defaulting every model on this route
    * whose protocol declares them; each model's own `compat` overrides per
@@ -320,6 +324,12 @@ const modelProfile: z<PiAiModelProfile> = z.object({
 /** A {@link modelProfile} whose id lives in the `modelOverrides` dict key. */
 const modelOverride: z<PiAiModelOverride> = z.object(modelFields)
 
+/** A {@link modelProfile} whose wire id lives in the `modelAliases` dict key. */
+const modelAlias: z<PiAiModelAlias> = z.object({
+  catalogModel: z.string().required(),
+  ...modelFields,
+})
+
 const profile = z.object({
   apiKeyEnv: z.string().role('credential-ref'),
   displayName: z.string(),
@@ -327,6 +337,7 @@ const profile = z.object({
   baseURL: z.string(),
   models: z.array(modelProfile),
   modelOverrides: z.dict(modelOverride),
+  modelAliases: z.dict(modelAlias),
   compat: compatProfile,
   defaultContextWindow: z.number().step(1).min(1).default(DEFAULT_CONTEXT_WINDOW),
   defaultMaxTokens: z.number().step(1).min(1).default(DEFAULT_MAX_TOKENS),
@@ -466,6 +477,7 @@ export function resolveProfiles(
         ...source.baseURL === undefined ? {} : { baseURL: source.baseURL },
         ...source.models === undefined ? {} : { models: source.models },
         ...source.modelOverrides === undefined ? {} : { modelOverrides: source.modelOverrides },
+        ...source.modelAliases === undefined ? {} : { modelAliases: source.modelAliases },
         ...source.compat === undefined ? {} : { compat: source.compat },
         defaultInput,
         defaultContextWindow: source.defaultContextWindow ?? DEFAULT_CONTEXT_WINDOW,

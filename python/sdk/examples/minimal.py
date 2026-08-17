@@ -23,8 +23,11 @@ def main() -> None:
     )
     parser.add_argument("--profile", default="sdk-minimal")
     parser.add_argument("--session-id")
-    parser.add_argument("--provider", default="deepseek-official")
-    parser.add_argument("--model", default=os.environ.get("DSH_MODEL", "deepseek-v4-flash"))
+    parser.add_argument("--provider", default="openrouter")
+    parser.add_argument(
+        "--model",
+        default=os.environ.get("DSH_MODEL", "deepseek/deepseek-v4-flash-0731:nitro"),
+    )
     parser.add_argument("--max-tokens", type=int)
     args = parser.parse_args()
     if args.dsh_home is None:

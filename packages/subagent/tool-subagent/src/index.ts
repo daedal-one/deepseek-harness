@@ -12,6 +12,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { scopeChainOf, scopeOf } from '@deepseek-ai/dsh-scope'
 import { defineTool } from '@deepseek-ai/dsh-tools'
+import { agentModelTargetId, type AgentModelTarget } from '@deepseek-ai/dsh-agent-default-model'
 import type { Agent, AgentOptions } from '@deepseek-ai/dsh-agent'
 import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
@@ -75,6 +76,8 @@ export interface Config {
    * Agent options applied to every child; omitted fields use child-loop defaults.
    */
   agentOptions?: AgentOptions
+  /** Human-facing role name used by graphical Agent model settings. */
+  agentLabel?: string
   /**
    * Per-child persona that shadows `deployment:persona-prefix`. Requires the
    * provider's `persona` capability; omission preserves the deployment persona.
@@ -134,6 +137,7 @@ export const Config: z<Config> = z.object({
     reasoningEffort: ReturnType<typeof ReasoningEffortId>
     maxTokens: number
   }),
+  agentLabel: z.string().min(1),
   persona: z.string(),
   // Preserve omission; Schemastery's `{ allow: [] }` default would deny every tool.
   toolFilter: z.object({
@@ -401,6 +405,34 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
   const backgroundEnabled = config.enableRunInBackground !== false
   const continuable = (config.backgroundMode ?? 'one-shot') === 'continuable'
   const toolName = config.toolName ?? 'subagent'
+  const configurableTarget: AgentModelTarget | undefined = config.agentLabel === undefined
+    && (config.agentOptions?.provider === undefined || config.agentOptions.model === undefined)
+    ? undefined
+    : {
+      id: agentModelTargetId(toolName.replaceAll('_', '-')),
+      label: config.agentLabel ?? toolName.split(/[-_]/u)
+        .map(word => word.length === 0 ? word : word.charAt(0).toLocaleUpperCase() + word.slice(1))
+        .join(' '),
+      ...config.agentOptions?.provider === undefined || config.agentOptions.model === undefined
+        ? {}
+        : {
+          defaultSelection: {
+            provider: config.agentOptions.provider,
+            model: config.agentOptions.model,
+            ...config.agentOptions.reasoningEffort === undefined
+              ? {}
+              : { reasoningEffort: ReasoningEffortId(String(config.agentOptions.reasoningEffort)) },
+          },
+        },
+    }
+  if (configurableTarget !== undefined) {
+    ctx.inject(['agentModels'], (modelCtx) => {
+      modelCtx.effect(
+        () => modelCtx.agentModels.registerTarget(configurableTarget),
+        `tool-subagent: Agent model target ${String(configurableTarget.id)}`,
+      )
+    })
+  }
 
   const modelSelectionCapable = config.modelSelectionSettings === true
   ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
@@ -588,13 +620,16 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
             result,
           })
 
+          const configuredAgentOptions = configurableTarget === undefined
+            ? config.agentOptions
+            : ctx.get('agentModels')?.optionsFor(configurableTarget.id, config.agentOptions) ?? config.agentOptions
           const modelRequest = args as DelegationModelRequest
           const parentOptions = parentAgentOptionsForDelegation(parent)
           const requiresRoutePreflight = hasDelegationModelRequest(modelRequest)
-            || hasConfiguredLlmSelection(config.agentOptions)
+            || hasConfiguredLlmSelection(configuredAgentOptions)
           const configuredChildAgentOptions = requiresRoutePreflight && providerRouteDefaults !== undefined
-            ? { ...providerRouteDefaults, ...config.agentOptions }
-            : config.agentOptions
+            ? { ...providerRouteDefaults, ...configuredAgentOptions }
+            : configuredAgentOptions
           const requestedChildAgentOptions = requestedAgentOptions(
             parentOptions,
             configuredChildAgentOptions,

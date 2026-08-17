@@ -1,5 +1,5 @@
 /**
- * Curated editor for the direct DeepSeek adapter's advisory model catalog.
+ * Curated editor for one configured provider's advisory model catalog.
  * The settings layer replaces `models` as one array, so the parent supplies
  * the effective inherited rows until the first edit materializes a user
  * override; reset removes that override instead of copying defaults into it.
@@ -14,7 +14,7 @@ import type { en } from './locales.ts'
 import styles from './ModelsSection.module.css'
 
 /** One catalog entry kept structurally open so hidden or future fields survive an edit. */
-export type DeepSeekModelDraft = Record<string, unknown>
+export type ModelCatalogDraft = Record<string, unknown>
 
 /** The catalog fields this editor writes. */
 type CatalogField = 'id' | 'name' | 'contextWindow' | 'maxTokens'
@@ -38,7 +38,7 @@ const CAPACITY_SCALE = { k: 1_000, m: 1_000_000 } as const
  * zeroes. The stored value stays a plain token count.
  * @param text - raw field text.
  * @returns the count; `undefined` when blank (inherit), `NaN` when unreadable
- * (rejected by {@link validateDeepSeekModels} before any write).
+ * (rejected by {@link validateModelCatalog} before any write).
  */
 export function parseCapacity(text: string): number | undefined {
   const trimmed = text.trim()
@@ -69,7 +69,7 @@ export function formatCapacity(value: number): string {
 }
 
 /** A localized validation failure for one user-owned model array. */
-export interface DeepSeekModelsValidationFailure {
+export interface ModelCatalogValidationFailure {
   /** Zero-based model position. */
   index: number
   /** Message key owned by the Models settings section. */
@@ -78,11 +78,11 @@ export interface DeepSeekModelsValidationFailure {
 }
 
 /** Convert a schema-validated catalog value into records without dropping hidden fields. */
-export function modelDrafts(value: unknown): DeepSeekModelDraft[] {
+export function modelDrafts(value: unknown): ModelCatalogDraft[] {
   if (!Array.isArray(value)) return []
   return value.map(entry =>
     typeof entry === 'object' && entry !== null && !Array.isArray(entry)
-      ? entry as DeepSeekModelDraft
+      ? entry as ModelCatalogDraft
       : {})
 }
 
@@ -91,7 +91,7 @@ export function modelDrafts(value: unknown): DeepSeekModelDraft[] {
  * @param value - user-owned `models` value, or undefined while inherited.
  * @returns the first invalid row, or undefined when the adapter will accept it.
  */
-export function validateDeepSeekModels(value: unknown): DeepSeekModelsValidationFailure | undefined {
+export function validateModelCatalog(value: unknown): ModelCatalogValidationFailure | undefined {
   if (value === undefined) return undefined
   const models = modelDrafts(value)
   const seen = new Set<string>()
@@ -122,10 +122,10 @@ export function validateDeepSeekModels(value: unknown): DeepSeekModelsValidation
   return undefined
 }
 
-/** Props of {@link DeepSeekModelsEditor}. */
-export interface DeepSeekModelsEditorProps {
+/** Props of {@link ModelCatalogEditor}. */
+export interface ModelCatalogEditorProps {
   /** Effective rows: inherited until the parent materializes an override. */
-  models: readonly DeepSeekModelDraft[]
+  models: readonly ModelCatalogDraft[]
   /** Whether the user layer currently owns the whole array. */
   overridden: boolean
   /** Fallback context capacity used when a row omits its exact value. */
@@ -137,18 +137,18 @@ export interface DeepSeekModelsEditorProps {
   /** Disable every mutation. */
   disabled: boolean
   /** Replace the user-owned array after one visible edit. */
-  onChange: (models: DeepSeekModelDraft[]) => void
+  onChange: (models: ModelCatalogDraft[]) => void
   /** Remove the user-owned array and return to inheritance. */
   onReset: () => void
 }
 
 /**
- * Render the direct DeepSeek adapter's model catalog: id and display name on
+ * Render a provider model catalog: id and display name on
  * each row, capacities behind the row's own disclosure.
  * @param props - effective rows plus the array-level override actions.
  * @returns the catalog editor.
  */
-export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNode {
+export function ModelCatalogEditor(props: ModelCatalogEditorProps): ReactNode {
   // Capacities are edited as text, so a field's keystrokes are held here
   // rather than re-derived from the parsed count on every change, which would
   // rewrite `1000` to `1K` mid-word. Unreadable text is kept past blur so the
@@ -211,7 +211,7 @@ export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNod
   }
 
   /** The field's text: its live keystrokes, else the stored count spelled short. */
-  const capacityText = (model: DeepSeekModelDraft, index: number, field: CapacityField): string => {
+  const capacityText = (model: ModelCatalogDraft, index: number, field: CapacityField): string => {
     const typed = editing.get(`${String(index)}:${field}`)
     if (typed !== undefined) return typed
     const value = model[field]
@@ -235,7 +235,7 @@ export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNod
 
   /** One capacity field of one row, rendered inside the row's disclosure. */
   const capacityField = (
-    model: DeepSeekModelDraft,
+    model: ModelCatalogDraft,
     index: number,
     field: CapacityField,
     fallback: number | undefined,

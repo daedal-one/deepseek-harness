@@ -34,15 +34,17 @@ kind: "package-reference"
 ### 最小配置
 
 ```yaml
-- name: '@deepseek-ai/dsh-llm-deepseek'
+- name: '@deepseek-ai/dsh-llm-pi-ai'
   config:
-    apiKeyEnv: DEEPSEEK_API_KEY
-    retryPolicy:
-      mode: always
-      backoff:
-        initialDelayMs: 1000
-        maxDelayMs: 30000
-        jitterRatio: 0.2
+    providers:
+      openrouter:
+        apiKeyEnv: OPENROUTER_API_KEY
+        retryPolicy:
+          mode: always
+          backoff:
+            initialDelayMs: 1000
+            maxDelayMs: 30000
+            jitterRatio: 0.2
 
 - name: '@deepseek-ai/dsh-llm-retry'
 ```
