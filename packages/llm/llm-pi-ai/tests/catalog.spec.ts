@@ -456,6 +456,44 @@ describe('catalog routes with per-model configuration', () => {
     expect((await ctx.llm.listModels('deepseek')).map(model => model.id)).toEqual([catalogModel.id])
   })
 
+  it('inherits complete catalog metadata under a different request-wire id', () => {
+    const catalogModel = getBuiltinModels('deepseek').find(model => model.reasoning && model.compat !== undefined)
+    if (catalogModel === undefined) throw new Error('the installed catalog ships no reasoning DeepSeek model')
+    const [model] = resolveProfiles({
+      deepseek: {
+        models: [{
+          id: `${catalogModel.id}-dated:nitro`,
+          catalogModel: catalogModel.id,
+          name: 'Dated Nitro',
+          maxTokens: 65_536,
+        }],
+      },
+    }).get('deepseek')?.piProvider.getModels() ?? []
+
+    expect(model).toMatchObject({
+      id: `${catalogModel.id}-dated:nitro`,
+      name: 'Dated Nitro',
+      provider: 'deepseek',
+      api: catalogModel.api,
+      baseUrl: catalogModel.baseUrl,
+      reasoning: catalogModel.reasoning,
+      thinkingLevelMap: catalogModel.thinkingLevelMap,
+      compat: catalogModel.compat,
+      input: catalogModel.input,
+      contextWindow: catalogModel.contextWindow,
+      maxTokens: 65_536,
+    })
+  })
+
+  it('rejects an invalid catalog metadata source', () => {
+    expect(() => resolveProfiles({
+      deepseek: { models: [{ id: 'dated', catalogModel: '' }] },
+    })).toThrow(/provider "deepseek" model "dated" has an empty catalogModel/)
+    expect(() => resolveProfiles({
+      deepseek: { models: [{ id: 'dated', catalogModel: 'not-installed' }] },
+    })).toThrow(/provider "deepseek" model "dated" names unknown catalogModel "not-installed"/)
+  })
+
   it('materializes a request default only from a configured output cap', async () => {
     const server = await mockServer([])
     const [catalogModel] = getBuiltinModels('deepseek')

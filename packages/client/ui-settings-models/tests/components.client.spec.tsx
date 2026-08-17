@@ -49,6 +49,13 @@ const PiAiConfig = Schema.object({
     baseURL: Schema.string(),
     reasoning: Schema.union(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']),
     headers: Schema.dict(Schema.string()),
+    models: Schema.array(Schema.object({
+      id: Schema.string().required(),
+      catalogModel: Schema.string(),
+      name: Schema.string(),
+      contextWindow: Schema.number().step(1).min(1),
+      maxTokens: Schema.number().step(1).min(1),
+    })),
   })),
 })
 
@@ -1093,6 +1100,46 @@ describe('ModelsSection', () => {
       [{ op: 'set', path: ['providers', 'openai', 'baseURL'], value: 'https://proxy/v2' }],
       0,
     ])
+  })
+
+  it('preserves a pi-ai model catalog source while editing its visible fields', async () => {
+    const sourceModel = {
+      id: 'deepseek/deepseek-v4-flash-0731:nitro',
+      catalogModel: 'deepseek/deepseek-v4-flash',
+      name: 'Dated route',
+    }
+    const namespace: SettingsNamespaceView = {
+      ...wireNamespaces()[2]!,
+      value: { providers: { openrouter: { models: [sourceModel] } } },
+      user: { providers: { openrouter: { models: [sourceModel] } } },
+    }
+    const { face, mutate } = scriptedFace()
+    const { ProviderEditor } = await import('../src/client/ProviderEditor.tsx')
+    render(<ProviderEditor
+      provider="openrouter"
+      displayName="OpenRouter"
+      namespace={namespace}
+      settingsPath={['providers', 'openrouter']}
+      api={face as never}
+      t={t}
+      readOnly={false}
+      onClose={() => {}}
+    />)
+
+    fireEvent.click(screen.getByText(en.customized))
+    fireEvent.change(screen.getByLabelText(`${en.modelName} 1`), { target: { value: 'V4 Nitro' } })
+    fireEvent.click(screen.getByText(en.apply))
+
+    await waitFor(() => { expect(mutate).toHaveBeenCalledOnce() })
+    expect(mutate.mock.calls[0]?.[0]).toEqual({
+      ns: 'llm-pi-ai',
+      ops: [{
+        op: 'set',
+        path: ['providers', 'openrouter', 'models'],
+        value: [{ ...sourceModel, name: 'V4 Nitro' }],
+      }],
+      expectedRevision: 0,
+    })
   })
 
   it('adds a dormant provider with a derived reference and stores its key', async () => {

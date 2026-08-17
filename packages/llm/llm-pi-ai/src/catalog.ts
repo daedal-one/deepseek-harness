@@ -574,6 +574,11 @@ function assertOfferedCompatFields(
 export interface PiAiModelProfile {
   /** Model id sent to the provider and accepted by {@link GenerateOptions.model}. */
   id: string
+  /**
+   * Installed model on this provider route whose metadata this entry inherits.
+   * The configured {@link id} remains the request-wire model identifier.
+   */
+  catalogModel?: string
   /** Display name for selectors; defaults to the catalog name, then the id. */
   name?: string
   /** Maximum combined request and response context in tokens. */
@@ -616,7 +621,7 @@ export interface PiAiModelProfile {
  * rest of the catalog serving untouched, which is what makes "correct one
  * model, keep the other thirty-seven" a three-line edit.
  */
-export type PiAiModelOverride = Omit<PiAiModelProfile, 'id'>
+export type PiAiModelOverride = Omit<PiAiModelProfile, 'id' | 'catalogModel'>
 
 /** The route-level facts model materialization reads. */
 export interface RouteCatalogRequest {
@@ -884,7 +889,14 @@ export function resolveRouteModels(
     if (entry.id.length === 0) invalid(provider, 'has a model with an empty id')
     if (seen.has(entry.id)) invalid(provider, `lists model "${entry.id}" more than once`)
     seen.add(entry.id)
-    const base = defaults.get(entry.id)
+    if (entry.catalogModel !== undefined && entry.catalogModel.length === 0) {
+      invalid(provider, `model "${entry.id}" has an empty catalogModel`)
+    }
+    const baseId = entry.catalogModel ?? entry.id
+    const base = defaults.get(baseId)
+    if (entry.catalogModel !== undefined && base === undefined) {
+      invalid(provider, `model "${entry.id}" names unknown catalogModel "${entry.catalogModel}"`)
+    }
     const api = request.api ?? base?.api ?? routeApi
     if (api === undefined) {
       invalid(provider, `model "${entry.id}" needs an api; the installed catalog does not describe it, so set the`

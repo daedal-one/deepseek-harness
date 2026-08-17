@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-17-configured-model-catalog-inheritance.md
+2026-08-17-configured-model-catalog-inheritance.md: 45562137bfdbb5e09ce2457f89b7e04a440d3c56
+2026-08-17-configured-model-catalog-inheritance.zh.md: 409513c7083ae879c95263b6c61f5cb3a01ac301
