@@ -429,3 +429,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.cardSummary { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.cardDescription { color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
+.cardMetadata { display: flex; flex-wrap: wrap; gap: 12px; color: var(--dsw-alias-label-secondary); font-size: 11px; }

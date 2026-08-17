@@ -109,3 +109,5 @@ These limits define what a point-in-time inventory cannot tell a client. They ar
 None.
 
 </details>
+
+Global plugin entries expose their package author, description, and version. Missing manifest fields remain null; the inventory displays that absence explicitly and includes metadata in text searches.

@@ -103,3 +103,5 @@ None.
 </details>
 
 **Runtime invariant:** No companion is published. This package owns a read-only Settings contribution.
+
+Global plugin entries expose their package author, description, and version. Missing manifest fields remain null; the inventory displays that absence explicitly and includes metadata in text searches.

@@ -61,18 +61,27 @@ describe('PluginInventoryGateway', () => {
       {
         entryId: activeId,
         moduleName: 'cordis:active',
+        author: null,
+        description: null,
+        version: null,
         enabled: true,
         fiberPhase: 'active',
       },
       {
         entryId: pendingId,
         moduleName: 'cordis:pending',
+        author: null,
+        description: null,
+        version: null,
         enabled: true,
         fiberPhase: 'pending',
       },
       {
         entryId: disabledId,
         moduleName: 'cordis:not-installed',
+        author: null,
+        description: null,
+        version: null,
         enabled: false,
         fiberPhase: null,
       },
@@ -82,6 +91,9 @@ describe('PluginInventoryGateway', () => {
     expect((await inventory.list()).entries.find(entry => entry.entryId === activeId)).toEqual({
       entryId: activeId,
       moduleName: 'cordis:active',
+      author: null,
+      description: null,
+      version: null,
       enabled: false,
       fiberPhase: null,
     })

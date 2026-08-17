@@ -89,7 +89,8 @@ function presetLabel(preset: AgentPresetGroup, t: Translate, presetName: (preset
 }
 
 /** One expandable plugin card; the caller owns the trailing status content. */
-function PluginCard({ rowKey, moduleName, entryId, trailing, ariaLabel, failed, expanded, onToggle, children }: {
+function PluginCard({ rowKey, moduleName, entryId, trailing, ariaLabel, failed, expanded, onToggle, metadata, children }: {
+  readonly metadata?: ReactNode
   readonly rowKey: string
   readonly moduleName: string
   readonly entryId: string | null
@@ -125,6 +126,7 @@ function PluginCard({ rowKey, moduleName, entryId, trailing, ariaLabel, failed, 
             <IconChevronDownOutline14 className={css.chevron} size={12} aria-hidden="true" />
           </span>
         </span>
+        {metadata}
         {entryId === null ? null : <code className={css.cardIdentity} title={entryId}>{entrySubtitle(entryId)}</code>}
       </button>
       {open ? <div className={css.cardDetails} id={detailId}>{children}</div> : null}
@@ -245,7 +247,7 @@ export function PluginInventorySettingsTab({ list, presetName, t }: PluginInvent
     else regularEntries.push(entry)
   }
 
-  const entryMatch = (entry: PluginInventoryEntry): boolean => matches(entry.moduleName, entry.entryId, normalizedQuery)
+  const entryMatch = (entry: PluginInventoryEntry): boolean => matches([entry.moduleName, entry.author, entry.description, entry.version].filter(value => value !== null).join(' '), entry.entryId, normalizedQuery)
   const rowMatch = (row: AgentPresetRow): boolean => matches(row.moduleName, row.entryId, normalizedQuery)
   const filteredFailed = failedEntries.filter(entryMatch)
   const filteredRegular = regularEntries.filter(entryMatch)
@@ -330,6 +332,15 @@ export function PluginInventorySettingsTab({ list, presetName, t }: PluginInvent
         key={key}
         rowKey={key}
         moduleName={entry.moduleName}
+        metadata={(
+          <span className={css.cardSummary}>
+            <span className={css.cardDescription}>{entry.description ?? t('descriptionUnavailable')}</span>
+            <span className={css.cardMetadata}>
+              <span>{t('author')}: {entry.author ?? t('authorUnavailable')}</span>
+              <span>{t('version')}: {entry.version ?? t('versionUnavailable')}</span>
+            </span>
+          </span>
+        )}
         entryId={entry.entryId}
         failed={failed}
         expanded={expanded}
