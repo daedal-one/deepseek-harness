@@ -35,6 +35,13 @@ Configure credentials, the model catalog, and deployment-specific transport sett
         models:
           - id: claude-sonnet-4-5
             contextWindow: 200000
+      # A dated or routed identifier can inherit a catalog model's complete
+      # request metadata while keeping its own id on the wire.
+      openrouter:
+        apiKeyEnv: OPENROUTER_API_KEY
+        models:
+          - id: deepseek/deepseek-v4-flash-0731:nitro
+            catalogModel: deepseek/deepseek-v4-flash
       # Catalog route with one model reshaped in place; the rest of the
       # catalog keeps serving (a models list would replace it instead).
       deepseek:
@@ -75,7 +82,7 @@ The dict shape makes duplicate routes unrepresentable, and the pre-release array
 
 ## Catalog resolution
 
-A profile's `models` list *replaces* the route's installed catalog rather than extending it; omitting it (or leaving it empty) serves that catalog unchanged. Each entry defaults its unset fields from the installed model of the same `id`, so narrowing a catalog route to two models, correcting one capacity, or adding a model newer than the installed catalog are all one-line edits — but declaring any `models` list means every model the route should keep serving must appear in it, an entry of nothing but `id` being enough. The configurable entry fields are `id`, `name`, `contextWindow`, `maxTokens`, `reasoningEfforts`, and `compat`. Pricing and input modalities have no harness consumer and ride the installed entry or are absent.
+A profile's `models` list *replaces* the route's installed catalog rather than extending it; omitting it (or leaving it empty) serves that catalog unchanged. Each entry defaults its unset fields from the installed model of the same `id`, so narrowing a catalog route to two models, correcting one capacity, or adding a model newer than the installed catalog are all one-line edits — but declaring any `models` list means every model the route should keep serving must appear in it, an entry of nothing but `id` being enough. `catalogModel` names a different installed model on the same provider route as the metadata source while `id` remains the request-wire identifier; an empty or unknown source fails configuration. The source model is spread in full before configured fields win, preserving reasoning mappings, compatibility behavior, headers, pricing, modalities, capacities, and fields added by future pi-ai releases. The configurable entry fields are `id`, `catalogModel`, `name`, `contextWindow`, `maxTokens`, `reasoningEfforts`, and `compat`.
 
 `modelOverrides` reshapes individual installed-catalog models without that cost: each key is a catalog model id, each value the same fields a `models` entry takes with the id living in the key, and the rest of the catalog keeps serving untouched — "correct one model, keep the other thirty-seven" as a three-line edit. An override becomes that catalog entry's configuration, so capacities, efforts, and compat resolve through the same path with the same diagnostics and the same request-default semantics as a `models` entry. Overrides are only meaningful on a catalog route serving its catalog: one set beside a `models` list (which already replaces the catalog), on a hand-declared route (whose models are fully spelled in `models`), or naming a model the catalog does not describe is refused rather than skipped, because a silently unchanged model is a typo someone would otherwise hunt for.
 

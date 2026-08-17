@@ -223,6 +223,7 @@ const modelFields = {
 
 const modelProfile: z<PiAiModelProfile> = z.object({
   id: z.string().required(),
+  catalogModel: z.string(),
   ...modelFields,
 })
 
