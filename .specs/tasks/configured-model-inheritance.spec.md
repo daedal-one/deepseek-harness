@@ -12,6 +12,7 @@ addresses:
   - REQ:llm/configured-model-inheritance#c-roundtrip
 labels: [llm, configuration, reasoning]
 assignee: carlo
+completion_checkpoint: a32fd5ff4b7ec50616c32a42098a45f182bec0f3
 ---
 
 # Configured model inheritance
