@@ -9,7 +9,7 @@ This tutorial is the programmatic alternative to the Web UI. It installs the pub
 - Python 3.10 or newer
 - Git
 - Linux x64, Linux arm64, or macOS 14 or newer on arm64
-- A DeepSeek-compatible API endpoint and credential
+- An OpenRouter API credential
 - An isolated workspace that the agent may modify
 
 ## Install the SDK
@@ -28,12 +28,12 @@ The installed runtime needs no system Node.js. Repository contributors who need 
 
 ## Run the checked-in example
 
-Set the credential in the environment. Set `DEEPSEEK_BASE_URL` as well when the model is served by an OpenAI-compatible proxy rather than the default DeepSeek endpoint.
+Set the OpenRouter credential in the environment. Set `OPENROUTER_BASE_URL` only when the route should use a compatible proxy instead of the public endpoint.
 
 ```sh
-export DEEPSEEK_API_KEY=sk-your-key-here
-# export DEEPSEEK_BASE_URL=http://127.0.0.1:8000/v1
-# export DSH_MODEL=deepseek-v4-flash
+export OPENROUTER_API_KEY=sk-or-your-key-here
+# export OPENROUTER_BASE_URL=http://127.0.0.1:8000/v1
+# export DSH_MODEL=deepseek/deepseek-v4-flash-0731:nitro
 # export DSH_SYSTEM_PROMPT='You are a helpful software engineer assistant.'
 ```
 
@@ -63,8 +63,8 @@ workspace = Path("/absolute/path/to/workspace").resolve()
 sessions = Path("/absolute/path/to/sessions").resolve()
 
 with DeepSeekHarness(
-    provider="deepseek-official",
-    model="deepseek-v4-flash",
+    provider="openrouter",
+    model="deepseek/deepseek-v4-flash-0731:nitro",
     max_tokens=49_152,
     cwd=str(workspace),
     session_root=str(sessions),
@@ -85,7 +85,7 @@ print(result.final_response)
 | Property | Value |
 |---|---|
 | System prompt | `DSH_SYSTEM_PROMPT`, falling back to `You are a helpful software engineer assistant.` |
-| Model in `minimal.py` | `--model`, then `DSH_MODEL`, then `deepseek-v4-flash` |
+| Model in `minimal.py` | `--model`, then `DSH_MODEL`, then `deepseek/deepseek-v4-flash-0731:nitro` |
 | Model-facing tools | Persistent `bash` and `str_replace_editor` only |
 | Bash timeout | 300 seconds |
 | Editor output limit | 16,000 characters |

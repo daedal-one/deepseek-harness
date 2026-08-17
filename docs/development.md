@@ -11,7 +11,7 @@ The setup tutorial takes a new contributor from prerequisites to a checked check
 - Node.js supports 22.19+ and 24+. CI covers 22.19, 24, and 26; see the [Node engine floor Agent Note](../.agents/notes/implemented/process/2026-07-06-node-engine-floor.md).
 - Corepack-enabled pnpm. The repo pins `pnpm@11.7.0` in `package.json`; run `corepack enable` if `pnpm --version` does not resolve through Corepack.
 - Git 2.26 or newer; hook setup enables Git's worktree-specific configuration extension.
-- Optional: a DeepSeek API key for the Web, headless, and ACP automation demos and real-API e2e tests.
+- Optional: an OpenRouter API key for the Web, headless, ACP automation demos, and conversation-model e2e tests.
 
 ### First-time setup
 
@@ -89,14 +89,14 @@ pnpm run build
 
 ### Environment variables
 
-The real DeepSeek adapter and key-backed agent demos read credentials from the environment or from a gitignored `.env` at the repo root:
+The shipped OpenRouter route and key-backed agent demos read credentials from the environment or from a gitignored `.env` at the repo root:
 
 ```sh
-DEEPSEEK_API_KEY=sk-...
-DEEPSEEK_BASE_URL=https://... # optional
+OPENROUTER_API_KEY=sk-or-...
+OPENROUTER_BASE_URL=https://... # optional
 ```
 
-`DEEPSEEK_BASE_URL` is optional and defaults to the public API. Never commit real credentials. The real-API e2e suites self-skip when `DEEPSEEK_API_KEY` is not set.
+`OPENROUTER_BASE_URL` is optional and defaults to the public OpenRouter API. Never commit real credentials. Each real-API e2e suite self-skips when its provider key is not set; DeepSeek web-search tests still use `DEEPSEEK_API_KEY` independently.
 
 ### Git integrations
 
@@ -132,7 +132,7 @@ Run the repository build separately before using these source-checkout demos:
 pnpm run build
 ```
 
-The one-shot Headless coding agent needs `DEEPSEEK_API_KEY` in the environment or repo-root `.env`:
+The one-shot Headless coding agent needs `OPENROUTER_API_KEY` in the environment or repo-root `.env`:
 
 ```sh
 pnpm dsh --profile headless "summarize this workspace"
@@ -144,7 +144,7 @@ The self-referential cordis demo can inspect and modify its live plugin runtime 
 pnpm run demo:cordis
 ```
 
-The ACP automation server exposes fresh agent sessions over JSON-RPC stdio and also needs `DEEPSEEK_API_KEY`:
+The ACP automation server exposes fresh agent sessions over JSON-RPC stdio and also needs `OPENROUTER_API_KEY`:
 
 ```sh
 pnpm run demo:acp

@@ -793,6 +793,62 @@ describe('modelOverrides', () => {
   })
 })
 
+describe('modelAliases', () => {
+  const baseModel = (): Model<Api> => {
+    const model = getBuiltinModels('openrouter')
+      .find(entry => entry.id === 'deepseek/deepseek-v4-flash') as Model<Api> | undefined
+    if (model === undefined) throw new Error('the installed OpenRouter catalog has no DeepSeek V4 Flash model')
+    return model
+  }
+
+  it('adds a routed wire id while preserving the installed model and its complete metadata', () => {
+    const base = baseModel()
+    const aliasId = 'deepseek/deepseek-v4-flash-0731:nitro'
+    const resolved = resolveProfiles({
+      openrouter: { modelAliases: { [aliasId]: { catalogModel: base.id } } },
+    })
+    const models = resolved.get('openrouter')?.piProvider.getModels() ?? []
+    const alias = models.find(model => model.id === aliasId)
+
+    expect(models.some(model => model.id === base.id)).toBe(true)
+    expect(alias).toMatchObject({
+      id: aliasId,
+      name: base.name,
+      api: base.api,
+      baseUrl: base.baseUrl,
+      reasoning: base.reasoning,
+      thinkingLevelMap: base.thinkingLevelMap,
+      compat: base.compat,
+      input: base.input,
+      contextWindow: base.contextWindow,
+      maxTokens: base.maxTokens,
+    })
+  })
+
+  it('refuses ambiguous, colliding, and unresolvable aliases', () => {
+    const base = baseModel()
+    expect(() => resolveProfiles({
+      openrouter: {
+        models: [{ id: base.id }],
+        modelAliases: { routed: { catalogModel: base.id } },
+      },
+    })).toThrow(/models already replaces the served catalog/)
+    expect(() => resolveProfiles({
+      openrouter: { modelAliases: { [base.id]: { catalogModel: base.id } } },
+    })).toThrow(/already an installed model id/)
+    expect(() => resolveProfiles({
+      openrouter: { modelAliases: { routed: { catalogModel: 'missing' } } },
+    })).toThrow(/unknown catalogModel "missing"/)
+    expect(() => resolveProfiles({
+      'acme-gateway': {
+        api: 'openai-completions',
+        baseURL: 'https://acme.test',
+        modelAliases: { routed: { catalogModel: 'missing' } },
+      },
+    })).toThrow(/installed catalog does not describe this route/)
+  })
+})
+
 describe('reasoning-dispatch compat switches', () => {
   /** The materialized models of one route, keyed by id. */
   function modelsOf(providers: Record<string, LlmPiAi.PiAiProviderProfile>, route: string): Map<string, Model<Api>> {
@@ -925,7 +981,7 @@ describe('configurable-provider directory', () => {
   it('keeps the previous directory when a route collides with another adapter family', async () => {
     const dir = await home()
     const ctx = await bootWithSettings(dir, {})
-    // Another adapter family owns this route id, exactly as llm-deepseek does.
+    // Another adapter family owns this route id.
     ctx.llm.registerConfigurableProviders([
       { provider: 'deepseek-official', displayName: 'DeepSeek', settingsNs: 'llm-deepseek', settingsPath: [] },
     ])

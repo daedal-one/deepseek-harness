@@ -13,15 +13,17 @@
 单独发布的 `./invariant` 配套模块会检查每个已调度重试是否指向当前开启轮次及其最新已关闭步骤，是否与失败请求的持久提供方匹配，是否携带非空的提供方与策略标识，是否满足 mode 特定边界，是否拥有唯一步骤记录和正确的提供方策略重试编号，以及是否携带有界定时器延迟。它还要求每个 `llm/retry-started` 事件通过相同的 `retryId`、轮次、步骤与重试编号指向一个先前调度的尝试，并拒绝重复的 started 事件。full jitter 可以在下界调度为零毫秒。
 
 ```yaml
-- name: '@deepseek-ai/dsh-llm-deepseek'
+- name: '@deepseek-ai/dsh-llm-pi-ai'
   config:
-    apiKeyEnv: DEEPSEEK_API_KEY
-    retryPolicy:
-      mode: always
-      backoff:
-        initialDelayMs: 1000
-        maxDelayMs: 30000
-        jitterRatio: 0.2
+    providers:
+      openrouter:
+        apiKeyEnv: OPENROUTER_API_KEY
+        retryPolicy:
+          mode: always
+          backoff:
+            initialDelayMs: 1000
+            maxDelayMs: 30000
+            jitterRatio: 0.2
 
 - name: '@deepseek-ai/dsh-llm-retry'
 ```

@@ -63,8 +63,8 @@ def run_smoke(repo_root: Path, keep_sessions: bool) -> None:
             cordis=str(bundled_default_config_path()),
             launch_args_override=("node", "--import", "tsx", str(runtime_entry)),
             env={
-                "DEEPSEEK_BASE_URL": base_url,
-                "DEEPSEEK_API_KEY": "sdk-smoke-key",
+                "OPENROUTER_BASE_URL": base_url,
+                "OPENROUTER_API_KEY": "sdk-smoke-key",
             },
             request_timeout_seconds=20,
             shutdown_timeout_seconds=2,

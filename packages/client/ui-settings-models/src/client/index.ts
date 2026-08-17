@@ -1,6 +1,6 @@
 /**
  * Models settings and product-onboarding plugin, browser half. It registers
- * the Models page plus the ordered internal-testing and official-DeepSeek
+ * the Models page plus the ordered internal-testing and OpenRouter
  * onboarding dialogs, whose UI shares this package's modal wrapper. The Host
  * settings and credential contracts stay behind their existing wire APIs.
  * Export discipline:
@@ -18,13 +18,16 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import { ModelsSection } from './ModelsSection.tsx'
 import type { ModelsSectionInjected } from './ModelsSection.tsx'
-import { DeepSeekOnboardingDialog } from './DeepSeekOnboardingDialog.tsx'
-import type { DeepSeekOnboardingInjected } from './DeepSeekOnboardingDialog.tsx'
+import { OpenRouterOnboardingDialog } from './OpenRouterOnboardingDialog.tsx'
+import type { OpenRouterOnboardingInjected } from './OpenRouterOnboardingDialog.tsx'
 import { WelcomeNotice } from './WelcomeNotice.tsx'
 import type { WelcomeNoticeInjected } from './WelcomeNotice.tsx'
 import { refreshWelcomeIfLoaded, WelcomeNoticeStore } from './welcome-store.ts'
 import { ModelsSettingsStore } from './store.ts'
 import { en, zh, type ModelsKey } from './locales.ts'
+import { AgentsSection } from './AgentsSection.tsx'
+import type { AgentsSectionInjected } from './AgentsSection.tsx'
+import { agentEn, agentZh, type AgentModelsKey } from './agent-locales.ts'
 import { WELCOME_NOTICE_SETTINGS_NAMESPACE } from '../onboarding-copy.ts'
 
 export type { ModelsSectionInjected, ModelsSectionProps } from './ModelsSection.tsx'
@@ -34,6 +37,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
     /** The Models page + product-onboarding copy. */
     'settings.models': ModelsKey
+    /** The graphical per-Agent model page. */
+    'settings.agents': AgentModelsKey
   }
 }
 
@@ -56,7 +61,7 @@ export function refreshIfLoaded(controller: ModelsSettingsStore): void {
  * ui-settings' apply, whose activation order relative to this one is NOT
  * constrained; registration depends on each slot through `slots.inject()`.
  */
-export const inject = ['slots', 'locale', 'connection', 'remote']
+export const inject = ['slots', 'locale', 'connection', 'remote', 'remote.agentModels']
 
 /**
  * Register the Models section once the `settings.section` declaration is on
@@ -66,6 +71,10 @@ export const inject = ['slots', 'locale', 'connection', 'remote']
  */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-settings-models: copy dictionaries')
+  ctx.effect(
+    () => ctx.locale.register('settings.agents', { zh: agentZh, en: agentEn }),
+    'ui-settings-models: Agent copy dictionaries',
+  )
 
   const connection = ctx.get('connection') as ConnectionHandle
   const controller = new ModelsSettingsStore(connection.api)
@@ -79,11 +88,27 @@ export function apply(ctx: ClientContext): void {
     api: connection.api,
     t,
   })
-  const deepSeekOnboardingInjected = (): DeepSeekOnboardingInjected => ({
+  const openRouterOnboardingInjected = (): OpenRouterOnboardingInjected => ({
     controller,
     hooks: { models: controller.store },
     api: connection.api,
     t,
+  })
+  const agentT = ctx.locale.bind('settings.agents') as AgentsSectionInjected['t']
+  const unwrap = async <Value>(operation: Promise<{ ok: true; value: Value } | {
+    ok: false
+    error: { code: string; message: string }
+  }>): Promise<Value> => {
+    const result = await operation
+    if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`)
+    return result.value
+  }
+  const agentsInjected = (): AgentsSectionInjected => ({
+    list: () => unwrap(ctx.remote.agentModels.list()),
+    save: (id, model, reasoningEffort, revision) =>
+      unwrap(ctx.remote.agentModels.save(id, model, reasoningEffort, revision)),
+    reset: (id, revision) => unwrap(ctx.remote.agentModels.reset(id, revision)),
+    t: agentT,
   })
   const welcomeController = new WelcomeNoticeStore(
     connection.api,
@@ -122,6 +147,13 @@ export function apply(ctx: ClientContext): void {
     label: () => t('nav'),
     inject: injected,
   }, ModelsSection))
+  ctx.slots.inject('settings.section', () => ctx.slots.register({
+    name: 'settings.section',
+    id: 'agents',
+    order: 20,
+    label: () => agentT('nav'),
+    inject: agentsInjected,
+  }, AgentsSection))
   ctx.slots.inject('settings.onboarding', () => ctx.slots.register({
     name: 'settings.onboarding',
     id: 'welcome-notice',
@@ -130,8 +162,8 @@ export function apply(ctx: ClientContext): void {
   }, WelcomeNotice))
   ctx.slots.inject('settings.onboarding', () => ctx.slots.register({
     name: 'settings.onboarding',
-    id: 'deepseek-official',
+    id: 'openrouter',
     order: 0,
-    inject: deepSeekOnboardingInjected,
-  }, DeepSeekOnboardingDialog))
+    inject: openRouterOnboardingInjected,
+  }, OpenRouterOnboardingDialog))
 }

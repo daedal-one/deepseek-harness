@@ -88,7 +88,7 @@
 
 /* Reads as an annotation on the name, not as a second name: caption size and
    the secondary label tone, so it never competes with the row's own title. It
-   sits inside `rowIdentity` with the credential dot, which is what keeps it
+   sits inside `rowIdentity` with the credential badge, which keeps it
    beside the name rather than drifting toward the actions. */
 .rowTag {
   flex: none;
@@ -100,21 +100,26 @@
   color: var(--dsw-alias-label-secondary);
 }
 
-.credentialDot {
-  box-sizing: border-box;
-  display: inline-block;
+.credentialConfigured,
+.credentialMissing {
   flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+  padding: 1px 6px;
+  border: 1px solid;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 16px;
 }
 
-.credentialDotConfigured {
-  background: var(--dsw-alias-state-success-primary);
+.credentialConfigured {
+  border-color: color-mix(in srgb, var(--dsw-alias-state-success-primary) 24%, var(--dsw-alias-border-l2));
+  background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 8%, transparent);
+  color: var(--dsw-alias-state-success-primary);
 }
 
-.credentialDotMissing {
-  background: var(--dsw-alias-state-error-primary);
+.credentialMissing {
+  border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 24%, var(--dsw-alias-border-l2));
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 8%, transparent);
+  color: var(--dsw-alias-state-error-primary);
 }
 
 .rowActions {

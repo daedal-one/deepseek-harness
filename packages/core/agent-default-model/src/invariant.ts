@@ -1,5 +1,5 @@
 /**
- * Package-owned invariant companion for the default Agent model selection.
+ * Package-owned invariant companion for persistent Agent model selections.
  *
  * The service owns no independent event relationship: settings registration
  * already validates every mutable value before `currentSelection()` can observe it.
@@ -14,7 +14,7 @@ import type { InvariantInstaller } from '@deepseek-ai/dsh-invariants'
 const PACKAGE_NAME = '@deepseek-ai/dsh-agent-default-model'
 
 /** Cordis companion plugin name. */
-export const name = 'agent-default-model-invariant'
+export const name = 'agent-models-invariant'
 /** Services required before the companion can register. */
 export const inject = ['invariants']
 

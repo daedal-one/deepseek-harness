@@ -62,8 +62,8 @@ def _client(tmp_path: Path, launch_args: tuple[str, ...]) -> HarnessClient:
                 "DSH_SESSION_ROOT": str(tmp_path / "sessions"),
                 "DSH_CWD": str(tmp_path),
                 # The lazily mounted adapter requires a key even without a model call.
-                "DEEPSEEK_API_KEY": "sk-dummy-for-boot",
-                "DEEPSEEK_BASE_URL": "http://127.0.0.1:9",
+                "OPENROUTER_API_KEY": "sk-dummy-for-boot",
+                "OPENROUTER_BASE_URL": "http://127.0.0.1:9",
             },
             request_timeout_seconds=120,
         )
@@ -76,7 +76,11 @@ def test_bundled_runtime_boots_a_cordis_config(tmp_path: Path, mode: str) -> Non
     (tmp_path / "cordis.yml").write_text(_CORDIS_YML)
 
     with _client(tmp_path, launch_args) as client:
-        init = client.initialize(provider="deepseek-official", cwd=str(tmp_path), model="deepseek-v4-pro")
+        init = client.initialize(
+            provider="openrouter",
+            cwd=str(tmp_path),
+            model="deepseek/deepseek-v4-flash-0731:nitro",
+        )
 
     assert init.serverInfo is not None
     assert init.serverInfo.name == "deepseek-harness-sdk-runtime"
@@ -117,7 +121,11 @@ def test_bundled_runtime_surfaces_unbundled_plugin_failure(tmp_path: Path, mode:
     client.start()
     try:
         with pytest.raises((TransportClosedError, TimeoutError)) as excinfo:
-            client.initialize(provider="deepseek-official", cwd=str(tmp_path), model="deepseek-v4-pro")
+            client.initialize(
+                provider="openrouter",
+                cwd=str(tmp_path),
+                model="deepseek/deepseek-v4-flash-0731:nitro",
+            )
     finally:
         client.close()
 
@@ -137,7 +145,7 @@ def test_zero_config_run_injects_bundled_default_cordis_config(
         monkeypatch.setenv("DSH_CORDIS_CONFIG", ambient_config)
 
     harness = DeepSeekHarness(
-        model="deepseek-v4-pro",
+        model="deepseek/deepseek-v4-flash-0731:nitro",
         cwd=str(tmp_path),
         session_root=str(tmp_path / "sessions"),
         api_key="sk-dummy-for-boot",

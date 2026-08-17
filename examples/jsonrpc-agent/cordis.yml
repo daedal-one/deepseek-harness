@@ -6,14 +6,16 @@
   config:
     maxTokensAsSuccess: !!js "process.env.DSH_MAX_TOKENS_AS_SUCCESS === undefined ? true : JSON.parse(process.env.DSH_MAX_TOKENS_AS_SUCCESS)"
 
-# The DeepSeek adapter. Shipped default: full thinking at max effort on every
-# request; exact-model resolution materializes request defaults before logging.
-# The model arrives per session over JSON-RPC, so it is not pinned here.
-- id: llm-deepseek
-  name: '@deepseek-ai/dsh-llm-deepseek'
+# OpenRouter through pi-ai. The model arrives per session over JSON-RPC.
+- id: llm-pi-ai
+  name: '@deepseek-ai/dsh-llm-pi-ai'
   config:
-    thinking: enabled
-    reasoningEffort: max
+    providers:
+      openrouter:
+        apiKeyEnv: OPENROUTER_API_KEY
+        modelAliases:
+          deepseek/deepseek-v4-flash-0731:nitro:
+            catalogModel: deepseek/deepseek-v4-flash
 
 # Managed child-process groups for the bash executor (spawn/kill/output plumbing).
 - id: subprocess

@@ -4,17 +4,17 @@ English | [中文](README.zh.md)
 
 The API gateway shared by every client consists of the TypeScript API contract (`src/api/`, zero Node dependencies, importable from the browser), the fetch carrier pair (`src/fetch/`: `toFetchHandler` on the host side, `AbstractApiClient` plus platform subclasses on the client side), and the host-side implementation (`src/api-proxy.ts`: `createApiProxy` plus the default-exported `ApiProxyService` gateway plugin — config `{nativeOpen?, sessionExportCompressionLevel?, coldBlankProbeMaxBytes?}`, provides `ctx.apiProxy`). This package registers no routes; carriers such as HTTP wrap `ctx.apiProxy` themselves. The shipped Web composition lives in [`packages/bundle/web-app/cordis.patch.yml`](../../bundle/web-app/cordis.patch.yml), while its default Agent model selection belongs to [`@deepseek-ai/dsh-agent-default-model`](../../core/agent-default-model/README.md) in the base bundle.
 
-## The shared Agent default (`agent-default-model` Settings section)
+## Shared Agent selections (`agent-models` Settings section)
 
-`ApiProxyService` consumes `ctx.agentDefaultModel`; it does not own a provider/model config or settings section. The shared service registers `{provider, model, reasoningEffort?}` under `agent-default-model`: the base bundle's composition entry is the lower layer and `settings.yaml` layers the user's choice over it.
+`ApiProxyService` consumes `ctx.agentModels`; it does not own a provider/model config or settings section. The shared service fixes the provider in composition and stores each registered Agent role's `{model, reasoningEffort?}` under `agent-models`. The main role always exists; named roles follow the lifetime of their contributing plugins.
 
 A session resolves its model selection from three tiers on every access: a selection made in this process, otherwise the session's latest logged `request/header`, otherwise this default. A session that has run a turn derives its selection from its log, while a blank session observes a default saved after it was created.
 
-`session.selectModel` saves an accepted switch as the deployment default; there is no separate gesture. It stores the resolved `ModelSelection`, including an adapter-materialized default effort. The complete-section write clears a stored effort when the selected model has none. A storage failure is logged without undoing the session selection. A deployment with no settings provider keeps the composition entry and the switch remains session-local.
+`session.selectModel` saves an accepted switch for the main Agent role; the graphical Agents page can change or reset every registered role independently. Both paths validate the exact model and effort through the owning adapter. A storage failure is logged without undoing a session-local selection. A deployment with no writable settings provider keeps the composition defaults and exposes the directory read-only.
 
-The section's `reasoningEffort` has no counterpart in the agent-default-model plugin config, deliberately: the seam merges the user layer over the composition entry per field, so an absent key cannot override a present one and a composition-set effort would survive every later switch to a model without one. A deployment default for effort belongs on the adapter profile, which resolves per model.
+The page writes with the Settings section revision it read. A concurrent writer advances that revision and causes a conflict instead of being overwritten. Removing one role's user entry restores its complete composition default, including the default reasoning effort when one is configured.
 
-The stored selection is independent of catalog membership. A default naming an unavailable provider still reaches `session.models` as the session's `current`, allowing the selector to request a replacement instead of silently choosing another model. Conversely, an adapter may serve a model that its catalog does not advertise.
+The stored selection is validated at each write, while old session logs may still name a route or model no longer advertised. `session.models` preserves such a current selection instead of silently replacing history; the next explicit switch must resolve through the live adapter.
 
 ## Contract layer (`/api`)
 

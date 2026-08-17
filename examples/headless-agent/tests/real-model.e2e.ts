@@ -7,7 +7,7 @@ import { runLoaderSmoke } from '@deepseek-ai/dsh-loader-smoke'
 const binScript = fileURLToPath(new URL('./fixtures/headless-driver.ts', import.meta.url))
 const configPath = fileURLToPath(new URL('../cordis.yml', import.meta.url))
 const tsconfigPath = fileURLToPath(new URL('../../../tsconfig.json', import.meta.url))
-const hasKey = Boolean(process.env.DEEPSEEK_API_KEY)
+const hasKey = Boolean(process.env.OPENROUTER_API_KEY)
 
 describe.skipIf(!hasKey)('headless-agent with real model', () => {
   it('modifies a temporary workspace and verifies the file outside the agent', async () => {

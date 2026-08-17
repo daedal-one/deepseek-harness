@@ -143,12 +143,7 @@ ctx.llm.registerAdapter(['my-provider'], adapter)
 
 ## 实战参考
 
-仓库中包含以下两个完整实现：
-
-- `packages/llm/llm-deepseek/` — DeepSeek API 适配器（OpenAI 兼容格式）
-- `packages/llm/llm-pi-ai/` — Pi AI 适配器（不同的 API 格式）
-
-对比这两个已交付的适配器，可以看到同一套 harness 契约如何在不同提供方 SDK 之上实现。
+`packages/llm/llm-pi-ai/` 是已交付的多提供方适配器。它展示了基于 catalog 与手工声明的提供方路由、凭据引用、请求转换、模型发现、路由模型 alias、推理调度，以及如何通过与提供方无关的 harness 接口实现流式输出。
 
 ## 错误处理
 

@@ -5,7 +5,12 @@ import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-test
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import * as FsPolicy from '@deepseek-ai/dsh-fs-observation-policy'
 import * as ToolFs from '@deepseek-ai/dsh-tool-fs'
-import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek'
+import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
+
+/** OpenRouter route used by the real-model filesystem tests. */
+export const E2E_PROVIDER = 'openrouter'
+/** Nitro model used by the real-model filesystem tests. */
+export const E2E_MODEL = 'deepseek/deepseek-v4-flash-0731:nitro'
 
 /**
  * Build the real fs-tool stack for with-key e2e tests. Agents have no session
@@ -16,7 +21,16 @@ export async function fsHarness(fsCwd: string, persona = ''): Promise<Context> {
   const ctx = new Context()
   await mountAgentLoopTestDependencies(ctx, { systemPrompt: { persona } })
   await ctx.plugin(AgentLoop, { agents: [] })
-  await ctx.plugin(LlmDeepSeek)
+  await ctx.plugin(LlmPiAi, {
+    providers: {
+      [E2E_PROVIDER]: {
+        apiKeyEnv: 'OPENROUTER_API_KEY',
+        modelAliases: {
+          [E2E_MODEL]: { catalogModel: 'deepseek/deepseek-v4-flash' },
+        },
+      },
+    },
+  })
   await ctx.plugin(LocalFileSystem, { cwd: fsCwd })
   await ctx.plugin(FsPolicy)
   await ctx.plugin(ToolFs)

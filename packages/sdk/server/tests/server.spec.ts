@@ -11,7 +11,7 @@ import AgentRegistry, { type Agent, type AgentHandle } from '@deepseek-ai/dsh-ag
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import * as agentCore from '@deepseek-ai/dsh-agent-spine-demo'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
-import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek'
+import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
 import SubagentRuntime, { type SubagentResult, type SubagentRunEndInfo } from '@deepseek-ai/dsh-subagent'
 import type { JsonRpcTransportPeer } from '@deepseek-ai/dsh-sdk-protocol'
 import { HarnessSdkJsonRpcServer } from '../src/index.ts'
@@ -59,9 +59,22 @@ async function mockCompletionServer(): Promise<{ url: string; requests: unknown[
   return { url: `http://127.0.0.1:${address.port}`, requests, headers }
 }
 
-async function makeHarness(storageDir: string) {
+async function makeHarness(storageDir: string, llmBaseURL?: string) {
   const ctx = new Context()
   await ctx.plugin(agentCore, { workspaceContext: false })
+  if (llmBaseURL !== undefined) {
+    await ctx.plugin(LlmPiAi, {
+      providers: {
+        'test-openai': {
+          displayName: 'Test OpenAI endpoint',
+          apiKeyEnv: 'TEST_LLM_API_KEY',
+          api: 'openai-completions',
+          baseURL: llmBaseURL,
+          models: [{ id: 'test-model', contextWindow: 16_384, maxTokens: 4_096 }],
+        },
+      },
+    })
+  }
   await ctx.plugin(SubagentRuntime)
   await ctx.plugin(JsonlSessionPersistence, { root: storageDir })
   await new Promise(resolve => setTimeout(resolve, 50))
@@ -112,17 +125,16 @@ describe('HarnessSdkJsonRpcServer', () => {
   it('creates a harness agent and calls the configured OpenAI-compatible endpoint', { timeout: 15_000 }, async () => {
     const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-'))
     const llmServer = await mockCompletionServer()
-    vi.stubEnv('DEEPSEEK_API_KEY', 'test-key')
-    vi.stubEnv('DEEPSEEK_BASE_URL', llmServer.url)
-    const ctx = await makeHarness(storageDir)
+    vi.stubEnv('TEST_LLM_API_KEY', 'test-key')
+    const ctx = await makeHarness(storageDir, llmServer.url)
     try {
       const transport = new FakeTransport()
       const server = new HarnessSdkJsonRpcServer(ctx, transport)
 
       const init = await server.handleRequest('initialize', {
         cwd: storageDir,
-        provider: 'deepseek-official',
-        model: 'dsagent-model',
+        provider: 'test-openai',
+        model: 'test-model',
         maxTokens: 321,
       }) as { serverInfo: { name: string } }
       expect(init.serverInfo.name).toBe('deepseek-harness-sdk-runtime')
@@ -134,9 +146,13 @@ describe('HarnessSdkJsonRpcServer', () => {
       expect((receipt as { messageId?: unknown }).messageId).toBeTypeOf('string')
 
       await vi.waitFor(() => { expect(llmServer.requests).toHaveLength(1) })
-      const body = llmServer.requests[0] as { model: string; messages: { role: string }[]; max_tokens?: number }
-      expect(body.model).toBe('dsagent-model')
-      expect(body.max_tokens).toBe(321)
+      const body = llmServer.requests[0] as {
+        model: string
+        messages: { role: string }[]
+        max_completion_tokens?: number
+      }
+      expect(body.model).toBe('test-model')
+      expect(body.max_completion_tokens).toBe(321)
       expect(body.messages[0]?.role).toBe('system')
       expect(body.messages.at(-1)?.role).toBe('user')
       expect(llmServer.headers[0]?.authorization).toBe('Bearer test-key')
@@ -157,7 +173,7 @@ describe('HarnessSdkJsonRpcServer', () => {
       const orphanHandle = await ctx.agents.create({
         sessionId: SessionId('orphan-session'),
         meta: { cwd: storageDir },
-        agentOptions: { provider: 'deepseek-official', model: 'dsagent-model' },
+        agentOptions: { provider: 'test-openai', model: 'test-model' },
       })
       orphanHandle.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'outside the sdk session map' }], source: { kind: 'user' } }))
       await orphanHandle.agent.whenIdle()
@@ -298,13 +314,12 @@ describe('HarnessSdkJsonRpcServer', () => {
   it('creates an SDK session without an optional system prompt', { timeout: 15_000 }, async () => {
     const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-no-system-'))
     const llmServer = await mockCompletionServer()
-    vi.stubEnv('DEEPSEEK_API_KEY', 'test-key')
-    vi.stubEnv('DEEPSEEK_BASE_URL', llmServer.url)
-    const ctx = await makeHarness(storageDir)
+    vi.stubEnv('TEST_LLM_API_KEY', 'test-key')
+    const ctx = await makeHarness(storageDir, llmServer.url)
     try {
       const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport())
 
-      await server.initialize({ cwd: storageDir, provider: 'deepseek-official', model: 'plain-model' })
+      await server.initialize({ cwd: storageDir, provider: 'test-openai', model: 'test-model' })
       await server.prompt({
         sessionId: 'plain',
         contentBlocks: [{ type: 'text', text: 'hello' }],
@@ -778,17 +793,17 @@ describe('HarnessSdkJsonRpcServer', () => {
   it('does not re-register an LLM adapter whose provider already has an owner', async () => {
     const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-existing-llm-'))
     const ctx = await makeHarness(storageDir)
-    vi.stubEnv('DEEPSEEK_API_KEY', 'test-key')
-    await ctx.plugin(LlmDeepSeek)
+    await ctx.plugin(LlmPiAi, { providers: { openrouter: { displayName: 'OpenRouter' } } })
     try {
       const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport())
       const inspect = server as unknown as { hasAdapterFor(provider: string): boolean }
 
-      expect(inspect.hasAdapterFor('deepseek-official')).toBe(true)
+      expect(inspect.hasAdapterFor('openrouter')).toBe(true)
       expect(inspect.hasAdapterFor('missing-provider')).toBe(false)
-      await server.initialize({ cwd: storageDir, provider: 'deepseek-official', model: 'preinstalled-model' })
+      await server.initialize({ cwd: storageDir, provider: 'openrouter', model: 'preinstalled-model' })
 
-      expect(ctx.get('llm')?.listProviders().filter(provider => provider.id === 'deepseek-official')).toEqual([{ id: 'deepseek-official', name: 'DeepSeek' }])
+      expect(ctx.get('llm')?.listProviders().filter(provider => provider.id === 'openrouter'))
+        .toEqual([{ id: 'openrouter', name: 'OpenRouter' }])
       await server.shutdown()
     } finally {
       await ctx.fiber.dispose()
@@ -796,18 +811,17 @@ describe('HarnessSdkJsonRpcServer', () => {
     }
   })
 
-  it('rejects a missing non-DeepSeek provider when an LLM service already exists', async () => {
+  it('rejects a provider whose adapter is not registered', async () => {
     const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-new-llm-'))
     const ctx = await makeHarness(storageDir)
-    vi.stubEnv('DEEPSEEK_API_KEY', 'test-key')
-    await ctx.plugin(LlmDeepSeek)
+    await ctx.plugin(LlmPiAi, { providers: { openrouter: { displayName: 'OpenRouter' } } })
     try {
       const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport())
 
       await expect(server.initialize({ cwd: storageDir, provider: 'private', model: 'new-model' }))
         .rejects.toThrow('no adapter registered for provider "private"')
 
-      expect(ctx.get('llm')?.listProviders()).toEqual([{ id: 'deepseek-official', name: 'DeepSeek' }])
+      expect(ctx.get('llm')?.listProviders()).toEqual([{ id: 'openrouter', name: 'OpenRouter' }])
       await server.shutdown()
     } finally {
       await ctx.fiber.dispose()

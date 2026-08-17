@@ -11,7 +11,7 @@
 - Node.js 支持 22.19+ 与 24+。CI 覆盖 22.19、24 和 26；见 [Node 引擎下限 Agent Note](../.agents/notes/implemented/process/2026-07-06-node-engine-floor.md)。
 - 启用了 Corepack 的 pnpm。仓库在 `package.json` 中固定使用 `pnpm@11.7.0`；如果 `pnpm --version` 无法通过 Corepack 解析，请先运行 `corepack enable`。
 - Git 2.26 或更高版本；钩子设置会启用 Git 的 worktree 专属配置扩展。
-- 可选：一个 DeepSeek API key，用于 Web、headless 和 ACP（Agent Client Protocol）自动化 agent（智能体）演示以及真实 API 的 e2e 测试。
+- 可选：一个 OpenRouter API key，用于 Web、headless 和 ACP（Agent Client Protocol）自动化 agent（智能体）演示以及对话模型 e2e 测试。
 
 ### 首次搭建
 
@@ -89,14 +89,14 @@ pnpm run build
 
 ### 环境变量
 
-真实的 DeepSeek 适配器和需要密钥的 agent 演示从环境变量或仓库根目录一个被 gitignore 的 `.env` 文件读取凭证：
+随产品交付的 OpenRouter route 和需要密钥的 agent 演示从环境变量或仓库根目录一个被 gitignore 的 `.env` 文件读取凭证：
 
 ```sh
-DEEPSEEK_API_KEY=sk-...
-DEEPSEEK_BASE_URL=https://... # optional
+OPENROUTER_API_KEY=sk-or-...
+OPENROUTER_BASE_URL=https://... # optional
 ```
 
-`DEEPSEEK_BASE_URL` 可选，默认为公开 API。请勿提交真实凭证。未设置 `DEEPSEEK_API_KEY` 时，真实 API 的 e2e 套件会自动跳过。
+`OPENROUTER_BASE_URL` 可选，默认为公开 OpenRouter API。请勿提交真实凭证。每个真实 API e2e 套件在缺少对应 provider key 时自行跳过；DeepSeek web-search 测试仍独立使用 `DEEPSEEK_API_KEY`。
 
 ### Git 集成
 
@@ -132,7 +132,7 @@ keyless [CI 工作流](../.github/workflows/ci.yml) 将独立门禁分组到若�
 pnpm run build
 ```
 
-单次运行的 Headless coding agent 需要环境变量或仓库根目录 `.env` 中的 `DEEPSEEK_API_KEY`：
+单次运行的 Headless coding agent 需要环境变量或仓库根目录 `.env` 中的 `OPENROUTER_API_KEY`：
 
 ```sh
 pnpm dsh --profile headless "summarize this workspace"
@@ -144,7 +144,7 @@ pnpm dsh --profile headless "summarize this workspace"
 pnpm run demo:cordis
 ```
 
-ACP 自动化服务器通过 JSON-RPC stdio 提供全新 agent 会话，同样需要 `DEEPSEEK_API_KEY`：
+ACP 自动化服务器通过 JSON-RPC stdio 提供全新 agent 会话，同样需要 `OPENROUTER_API_KEY`：
 
 ```sh
 pnpm run demo:acp

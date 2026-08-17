@@ -12,7 +12,11 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { AgentOptions } from '@deepseek-ai/dsh-agent'
-import type { ContentBlock } from '@deepseek-ai/dsh-llm'
+import {
+  agentModelTargetId,
+  type AgentModelTarget,
+} from '@deepseek-ai/dsh-agent-default-model'
+import { ReasoningEffortId, type ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-session'
 import { assertSubagentMaxDepth, settleRun, SubagentPrincipal } from '@deepseek-ai/dsh-subagent'
 import type {
@@ -55,6 +59,8 @@ export interface Config {
    * Agent options applied to every child; omitted fields use child-loop defaults.
    */
   agentOptions?: AgentOptions
+  /** Human-facing role name used by graphical Agent model settings. */
+  agentLabel?: string
   /**
    * Per-child persona that shadows `deployment:persona`. Requires the
    * provider's `persona` capability; omission preserves the deployment persona.
@@ -102,11 +108,13 @@ export const Config: z<Config> = z.object({
   enableRunInBackground: z.boolean().default(true),
   backgroundMode: z.union(['one-shot', 'continuable'] as const).default('one-shot'),
   // Prevent Schemastery from materializing omitted agentOptions as `{}`.
-  agentOptions: z.object({
+  agentOptions: (z.object({
     provider: z.string(),
     model: z.string(),
+    reasoningEffort: z.string(),
     maxTokens: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER),
-  }).default(undefined as unknown as { provider: string; model: string; maxTokens: number }),
+  }) as unknown as z<AgentOptions>).default(undefined as unknown as AgentOptions),
+  agentLabel: z.string().min(1),
   persona: z.string(),
   // Preserve omission; Schemastery's `{ allow: [] }` default would deny every tool.
   toolFilter: z.object({
@@ -361,6 +369,34 @@ export function apply(ctx: Context, config: Config): void {
   const backgroundEnabled = config.enableRunInBackground !== false
   const continuable = (config.backgroundMode ?? 'one-shot') === 'continuable'
   const toolName = config.toolName ?? 'subagent'
+  const configurableTarget: AgentModelTarget | undefined = config.agentLabel === undefined
+    && (config.agentOptions?.provider === undefined || config.agentOptions.model === undefined)
+    ? undefined
+    : {
+      id: agentModelTargetId(toolName.replaceAll('_', '-')),
+      label: config.agentLabel ?? toolName.split(/[-_]/u)
+        .map(word => word.length === 0 ? word : word.charAt(0).toLocaleUpperCase() + word.slice(1))
+        .join(' '),
+      ...config.agentOptions?.provider === undefined || config.agentOptions.model === undefined
+        ? {}
+        : {
+          defaultSelection: {
+            provider: config.agentOptions.provider,
+            model: config.agentOptions.model,
+            ...config.agentOptions.reasoningEffort === undefined
+              ? {}
+              : { reasoningEffort: ReasoningEffortId(String(config.agentOptions.reasoningEffort)) },
+          },
+        },
+    }
+  if (configurableTarget !== undefined) {
+    ctx.inject(['agentModels'], (modelCtx) => {
+      modelCtx.effect(
+        () => modelCtx.agentModels.registerTarget(configurableTarget),
+        `tool-subagent: Agent model target ${String(configurableTarget.id)}`,
+      )
+    })
+  }
   // Mirror provider lifecycle because sibling load order and HMR replacement
   // can change provider availability while this fiber remains active.
   let disposeTool: (() => void) | undefined
@@ -493,12 +529,16 @@ export function apply(ctx: Context, config: Config): void {
           })
 
         const maxDepth = typeof config.maxDepth === 'number' ? config.maxDepth : undefined
+        const configuredAgentOptions = configurableTarget === undefined
+          ? config.agentOptions
+          : ctx.get('agentModels')?.optionsFor(configurableTarget.id, config.agentOptions)
+            ?? config.agentOptions
         const request = {
           label: args.description,
           prompt: [{ type: 'text', text: args.prompt }] as ContentBlock[],
           parent,
           ...config.principal === undefined ? {} : { principal: SubagentPrincipal(config.principal) },
-          ...config.agentOptions !== undefined ? { agentOptions: config.agentOptions } : {},
+          ...configuredAgentOptions !== undefined ? { agentOptions: configuredAgentOptions } : {},
           ...config.persona !== undefined ? { persona: config.persona } : {},
           ...config.toolFilter !== undefined ? { toolFilter: config.toolFilter } : {},
           ...maxDepth !== undefined ? { maxDepth } : {},

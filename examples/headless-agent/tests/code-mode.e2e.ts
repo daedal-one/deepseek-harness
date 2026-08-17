@@ -16,7 +16,7 @@ import { LocalBashExecutor } from '@deepseek-ai/dsh-bash-local'
 import * as BashEnvPlugin from '@deepseek-ai/dsh-shell-env'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import * as ToolBash from '@deepseek-ai/dsh-tool-bash'
-import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek'
+import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
 import { WorkerThreadCodeRuntime } from '@deepseek-ai/dsh-code-runtime-worker-thread'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import * as ToolFs from '@deepseek-ai/dsh-tool-fs'
@@ -35,6 +35,19 @@ import * as ToolCordis from '@deepseek-ai/dsh-tool-cordis'
 const PERSONA = 'You are a coding agent. You work by writing TypeScript programs for run_code: '
   + 'batch related tool work into one program and print or return ONLY the findings that matter.'
 const WORKSPACE_PROBE = 'dragonfruit-8675309'
+const E2E_PROVIDER = 'openrouter'
+const E2E_MODEL = 'deepseek/deepseek-v4-flash-0731:nitro'
+
+const OPENROUTER_CONFIG = {
+  providers: {
+    [E2E_PROVIDER]: {
+      apiKeyEnv: 'OPENROUTER_API_KEY',
+      modelAliases: {
+        [E2E_MODEL]: { catalogModel: 'deepseek/deepseek-v4-flash' },
+      },
+    },
+  },
+} as const
 
 let ctx: Context | undefined
 let workdir: string | undefined
@@ -57,7 +70,7 @@ async function codeModeHarness(cwd: string): Promise<Context> {
   await harness.plugin(ToolRuntime, { mode: 'code' })
   await harness.plugin(AgentRegistry)
   await harness.plugin(AgentLoop, { agents: [] })
-  await harness.plugin(LlmDeepSeek)
+  await harness.plugin(LlmPiAi, OPENROUTER_CONFIG)
   await harness.plugin(LocalSubprocessRuntime)
   await harness.plugin(BashEnvPlugin)
   await harness.plugin(LocalBashExecutor, { cwd, timeoutMs: 30_000 })
@@ -77,7 +90,7 @@ async function workspaceCodeModeHarness(): Promise<Context> {
   await harness.plugin(ToolFs)
   await harness.plugin(WorkspaceContext, { maxBytes: 65536 })
   await harness.plugin(AgentLoop, { agents: [] })
-  await harness.plugin(LlmDeepSeek, { models: [{ id: 'deepseek-v4-flash' }] })
+  await harness.plugin(LlmPiAi, OPENROUTER_CONFIG)
   await harness.plugin(WorkerThreadCodeRuntime, {})
   return harness
 }
@@ -349,11 +362,11 @@ function waitForIdle(harness: Context, agent: Agent): Promise<void> {
   })
 }
 
-describe.skipIf(!process.env.DEEPSEEK_API_KEY)('Code Mode: real model writes a program over real tools', () => {
+describe.skipIf(!process.env.OPENROUTER_API_KEY)('Code Mode: real model writes a program over real tools', () => {
   it('collapses the wire tool list to [run_code], bridges sub-calls, and returns curated output', async () => {
     workdir = await mkdtemp(join(tmpdir(), 'dsh-code-mode-e2e-'))
     ctx = await codeModeHarness(workdir)
-    const agent = ctx.agentLoop.create(SessionId('e2e-code-mode'), { provider: 'deepseek-official', model: 'deepseek-v4-flash' })
+    const agent = ctx.agentLoop.create(SessionId('e2e-code-mode'), { provider: E2E_PROVIDER, model: E2E_MODEL })
 
     agent.followup(createUserMessage({
       content: [{
@@ -405,7 +418,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('Code Mode: real model writes a p
     const handle = await ctx.agents.create({
       sessionId: SessionId('e2e-code-mode-workspace-session'),
       meta: { cwd: workdir },
-      agentOptions: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+      agentOptions: { provider: E2E_PROVIDER, model: E2E_MODEL },
     })
 
     handle.agent.followup(createUserMessage({

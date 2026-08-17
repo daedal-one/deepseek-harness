@@ -18,10 +18,16 @@
       "path": "../../core/agent"
     },
     {
+      "path": "../../util/brand"
+    },
+    {
       "path": "../../llm/llm"
     },
     {
       "path": "../../settings/settings"
+    },
+    {
+      "path": "../../typert/protocol"
     },
     {
       "path": "../../runtime-diagnostics/invariants"

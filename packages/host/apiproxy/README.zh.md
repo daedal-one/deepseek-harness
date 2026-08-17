@@ -4,17 +4,17 @@
 
 所有客户端共用的 API 网关由三部分组成：TypeScript API 约定（`src/api/`，不依赖 Node，可从浏览器导入）、fetch 载体对（`src/fetch/`：宿主侧的 `toFetchHandler`，以及客户端侧的 `AbstractApiClient` 与平台子类）和宿主侧实现（`src/api-proxy.ts`：`createApiProxy` 加上默认导出的 `ApiProxyService` 网关插件，其配置为 `{nativeOpen?, sessionExportCompressionLevel?, coldBlankProbeMaxBytes?}`，提供 `ctx.apiProxy`）。该包不注册任何路由；HTTP 等载体自行包装 `ctx.apiProxy`。随发行版交付的 Web 组合位于 [`packages/bundle/web-app/cordis.patch.yml`](../../bundle/web-app/cordis.patch.yml)，其默认 Agent（智能体）模型选择属于 base 组合包中的 [`@deepseek-ai/dsh-agent-default-model`](../../core/agent-default-model/README.md)。
 
-## 共享 Agent 默认值（`agent-default-model` Settings 分节）
+## 共享 Agent 选择（`agent-models` Settings 分节）
 
-`ApiProxyService` 消费 `ctx.agentDefaultModel`；它不持有提供方／模型配置或 Settings 分节。共享服务在 `agent-default-model` 下注册 `{provider, model, reasoningEffort?}`：base 组合包的组合条目是底层，`settings.yaml` 把用户选择叠加其上。
+`ApiProxyService` 消费 `ctx.agentModels`；它不持有提供方／模型配置或 Settings 分节。共享服务在组合层固定提供方，并在 `agent-models` 下保存每个已注册 Agent 角色的 `{model, reasoningEffort?}`。主角色始终存在；具名角色跟随其贡献插件的生命期。
 
 会话每次访问时都按三级解析模型选择：本进程内作出的选择，其次是该会话日志中最新的 `request/header`，最后是这个默认值。已经跑过一轮的会话从自己的日志推导选择，空白会话则能观察到创建之后保存的默认值。
 
-`session.selectModel` 会把接受的切换保存为部署默认值；没有单独的选择动作。它存储已解析的 `ModelSelection`，包括适配器实体化的默认推理（reasoning）强度。完整分节写入会在所选模型没有推理强度时清除已存值。存储失败只记日志，不会撤销会话选择。没有设置提供方的部署保留组合条目，切换只对当前会话生效。
+`session.selectModel` 会为主 Agent 角色保存已接受的切换；图形化 Agents 页面则可独立更改或重置每个已注册角色。两条路径都会通过所属适配器校验精确的模型与推理强度。存储失败只记录日志，不撤销会话局部选择。没有可写 Settings 提供方的部署保留组合层默认值，并以只读方式公开目录。
 
-Settings 分节中的 `reasoningEffort` 在 agent-default-model 插件配置中刻意没有对应字段：seam 按字段把用户层合并到组合条目之上，因此缺席的键无法覆盖已有键，组合层中的推理强度会在以后选择没有推理强度的模型时继续存在。推理强度的部署默认值属于按模型解析的适配器 profile。
+页面使用它读取到的 Settings 分节 revision 进行写入。并发写方会推进该 revision，使过时写入发生冲突，而不是被覆盖。删除某个角色的用户条目会恢复其完整组合层默认值，包括已配置的默认推理强度。
 
-存储的选择独立于目录成员关系。默认值指向不可用的提供方时，它仍会作为会话的 `current` 送到 `session.models`，让选择器请求用户重新选择，而不是静默选用其他模型。反过来，适配器也可以服务其目录中未公布的模型。
+存储的选择在每次写入时都会校验，而旧 Session 日志仍可能指向已不再公布的路由或模型。`session.models` 会保留这类当前选择，而不会静默改写历史；下一次显式切换必须通过存活适配器解析。
 
 ## 约定层（`/api`）
 

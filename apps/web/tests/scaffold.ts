@@ -5,8 +5,8 @@
 // layer stack the profile boot composes), patched the
 // snapshot way — so a real chromium exercises the real HTTP uplink/WebSocket
 // downlink, api-gateway, agent loop, tools, and persistence. Modes ride $DSH_SNAPSHOT:
-// replay (default, keyless: normally disables the llm-deepseek row and
-// inserts dsh-llm-replay in providers mode), record (real adapter + key,
+// replay (default, keyless: inserts dsh-llm-replay in providers mode), record
+// (the shipped OpenRouter route + key,
 // harvests fixtures from live session memory), refresh (keyless replay that
 // rewrites goldens). A first-run option keeps the real adapter mounted while
 // masking its credential, without making a model call.
@@ -18,8 +18,8 @@
 // disabled (recorded fixtures must not embed this repo's AGENTS.md);
 // session-title-llm disabled (its fire-and-forget title call would race the
 // loop for the session's replay cursor); webserver pinned to port 0 with the
-// built dist; ordinary keyless modes disable llm-deepseek and fill the open
-// llm seam post-boot with installLlmReplay on the settled root ctx
+// built dist; ordinary keyless modes add installLlmReplay on the settled root
+// ctx beside the shipped OpenRouter route
 // (the plugin-row path discards the ReplayHandle; the direct install keeps
 // assertConsumed for the teardown fixture-consumption check).
 import { existsSync } from 'node:fs'
@@ -104,9 +104,9 @@ const INSTALL_ANCHOR = join(REPO_ROOT, 'apps/cli/package.json')
 /** The deployment's own agent-preset root, shipped beside the app's config. */
 const SHIPPED_PRESET_DIR = join(REPO_ROOT, 'apps/cli/config/agent-presets')
 
-// Replay publishes the provider catalog the gateway routes to (providers
-// mode, never catch-all: with llm-deepseek disabled no adapter exists, so a
-// catch-all would leave resolveModelInfo unroutable and compaction-basic's
+// Replay publishes the historical provider catalog recorded fixtures route to
+// (providers mode, never catch-all: a catch-all would leave resolveModelInfo
+// unroutable and compaction-basic's
 // post-step pressure check would warn every step). The published
 // contextWindow keeps that pressure path provably inert for small fixtures.
 const REPLAY_PROVIDERS = [{
@@ -195,8 +195,7 @@ export interface LaunchOptions {
    * Replay fixture (session.jsonl) served by the inserted dsh-llm-replay row
    * in replay/refresh modes; ignored in record mode (the real adapter
    * answers). Omit for scenarios issuing no model calls — a stray stream then
-   * fails loud with NO_ADAPTER (llm-deepseek is disabled and no replay row
-   * mounts).
+   * fails through the shipped route rather than being handled by replay.
    */
   replayFixture?: string
   /**
@@ -228,11 +227,11 @@ export interface LaunchOptions {
    */
   cordisTools?: boolean
   /**
-   * Keep the shipped DeepSeek adapter mounted while masking the process
-   * environment's DEEPSEEK_API_KEY for this scaffold lifetime. This is the
-   * keyless first-run configuration lane; the default disables the adapter.
+   * Keep the shipped OpenRouter route mounted while masking the process
+   * environment's OPENROUTER_API_KEY for this scaffold lifetime. This is the
+   * keyless first-run configuration lane.
    */
-  deepSeekMissingCredential?: boolean
+  openRouterMissingCredential?: boolean
   /** Leave the current welcome notice pending; ordinary scenarios pre-acknowledge it before browser boot. */
   welcomeNoticePending?: boolean
   /**
@@ -298,23 +297,23 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
   if (mode === 'record') {
     // Both owning vitest configs (web unconditionally, snapshot in record
     // mode) load the repo-root .env before this file runs.
-    if (process.env.DEEPSEEK_API_KEY === undefined || process.env.DEEPSEEK_API_KEY.length === 0) {
-      throw new Error('web e2e record mode needs DEEPSEEK_API_KEY (env or repo-root .env)')
+    if (process.env.OPENROUTER_API_KEY === undefined || process.env.OPENROUTER_API_KEY.length === 0) {
+      throw new Error('web e2e record mode needs OPENROUTER_API_KEY (env or repo-root .env)')
     }
   }
-  if (mode === 'record' && options.deepSeekMissingCredential === true) {
-    throw new Error('deepSeekMissingCredential is a keyless replay/refresh option')
+  if (mode === 'record' && options.openRouterMissingCredential === true) {
+    throw new Error('openRouterMissingCredential is a keyless replay/refresh option')
   }
-  const maskDeepSeekCredential = mode !== 'record' && options.deepSeekMissingCredential === true
-  const originalDeepSeekCredential = process.env.DEEPSEEK_API_KEY
+  const maskOpenRouterCredential = mode !== 'record' && options.openRouterMissingCredential === true
+  const originalOpenRouterCredential = process.env.OPENROUTER_API_KEY
   let credentialEnvironmentRestored = false
   const restoreCredentialEnvironment = (): void => {
-    if (credentialEnvironmentRestored || !maskDeepSeekCredential) return
+    if (credentialEnvironmentRestored || !maskOpenRouterCredential) return
     credentialEnvironmentRestored = true
-    if (originalDeepSeekCredential === undefined) {
-      Reflect.deleteProperty(process.env, 'DEEPSEEK_API_KEY')
+    if (originalOpenRouterCredential === undefined) {
+      Reflect.deleteProperty(process.env, 'OPENROUTER_API_KEY')
     } else {
-      process.env.DEEPSEEK_API_KEY = originalDeepSeekCredential
+      process.env.OPENROUTER_API_KEY = originalOpenRouterCredential
     }
   }
   const workspaceCwd = await realpath(await mkdtemp(join(tmpdir(), 'dsh-web-e2e-ws-')))
@@ -360,7 +359,7 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
     if (failures.length > 1) throw new AggregateError(failures, 'web scaffold temp-root setup failed')
     throw error
   }
-  if (maskDeepSeekCredential) Reflect.deleteProperty(process.env, 'DEEPSEEK_API_KEY')
+  if (maskOpenRouterCredential) Reflect.deleteProperty(process.env, 'OPENROUTER_API_KEY')
 
   // The include patch set — the same layer stack the profile boot composes
   // (bundle patches in dsh.profile.bundles order), applied over the SAME empty root (a
@@ -485,9 +484,6 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
           baseURL: options.deepSeekSearch.baseURL,
         },
       }],
-    ...mode === 'record' || options.deepSeekMissingCredential === true
-      ? []
-      : [{ id: 'llm-deepseek', disabled: true }],
   ]
 
   // Sessions inherit the gateway's process.cwd() default; run the boot from
@@ -543,10 +539,10 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
     }
     port = boundPort
 
-    // Fill the open llm seam on the settled root ctx. Ordinary keyless modes
-    // disable llm-deepseek; the first-run lane keeps it mounted but has no
-    // replay fixture and never streams. The direct install, unlike the plugin
-    // row, returns the ReplayHandle for the teardown consumption check.
+    // Add historical fixture routes on the settled root ctx. The shipped
+    // OpenRouter route remains mounted for product configuration surfaces. The
+    // direct install, unlike a plugin row, returns the ReplayHandle for the
+    // teardown consumption check.
     if (mode !== 'record' && options.replayFixture !== undefined) {
       replayHandle = installLlmReplay(ctx, {
         file: options.replayFixture,
@@ -555,12 +551,10 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
         ...(options.replayChildFixtures === undefined ? {} : { childFiles: options.replayChildFixtures }),
         ...(options.paceMs === undefined ? {} : { paceMs: options.paceMs }),
       })
-    } else if (mode !== 'record' && options.deepSeekMissingCredential !== true) {
-      // No fixture and no shipped adapter would leave the tree with ZERO
-      // provider routes — a state no product composition has, and one the
-      // composer refuses to type into. Register the same routes
-      // a fixture would, with streaming that still fails loud: the scenario
-      // issues no model calls, and one that slipped in must not pass quietly.
+    } else if (mode !== 'record' && options.openRouterMissingCredential !== true) {
+      // A fixture-less scenario may still render a historical saved selection.
+      // Register those replay-era routes with streaming that fails loud: the
+      // scenario issues no model calls, and one that slipped in must not pass.
       ctx.effect(() => ctx.llm.registerAdapter(
         replayProviders(options.replayContextWindow).map(provider => provider.id),
         new RouteOnlyAdapter(replayProviders(options.replayContextWindow)),

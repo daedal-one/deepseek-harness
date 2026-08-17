@@ -22,7 +22,7 @@ import type { CredentialInfo, CredentialRef, ResolvedCredential } from '@deepsee
 import type { HostFrame } from '../src/api/index.ts'
 import type { RpcRequest, RpcResponse } from '../src/api/rpc.ts'
 import { RpcId } from '../src/api/rpc.ts'
-import { AGENT_DEFAULT_MODEL_SETTINGS_NAMESPACE } from '@deepseek-ai/dsh-agent-default-model'
+import { AGENT_MODELS_SETTINGS_NAMESPACE } from '@deepseek-ai/dsh-agent-default-model'
 import { createApiProxy } from '../src/api-proxy.ts'
 
 const DEFAULTS = { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' }
@@ -488,18 +488,17 @@ describe('settings domain', () => {
 
   it('forwards an Agent-default settings change for model-catalog consumers', async () => {
     const ctx = await harness()
-    const defaultModel = ctx.settings.register(AGENT_DEFAULT_MODEL_SETTINGS_NAMESPACE, z.object({
-      provider: z.string().required(),
-      model: z.string().required(),
-    }), { base: { provider: 'deepseek-official', model: 'deepseek-v4-flash' } })
+    const defaultModel = ctx.settings.register(AGENT_MODELS_SETTINGS_NAMESPACE, z.object({
+      agents: z.dict(z.object({ model: z.string().required() })),
+    }), { base: { agents: { main: { model: 'fast' } } } })
     const api = createApiProxy(ctx, DEFAULTS)
     // The shared section names the selection every blank session resolves to,
     // so an externally edited default — another tab, a
     // hand-edited settings.yaml — has to reach an open selector as well.
     const frames = await collectHost(api, ['host/remote-event'], 1, async () => {
-      await defaultModel.replace({ provider: 'deepseek-official', model: 'deepseek-reasoner' })
+      await defaultModel.replace({ agents: { main: { model: 'think' } } })
     })
-    expect(frames).toEqual([forwardedSettings('agent-default-model')])
+    expect(frames).toEqual([forwardedSettings('agent-models')])
   })
 
   it('maps a stale expectedRevision to settings-conflict carrying both revisions', async () => {

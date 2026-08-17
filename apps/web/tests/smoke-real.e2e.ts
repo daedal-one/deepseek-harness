@@ -1,6 +1,6 @@
 // Real-host smoke: spawn `dsh web` with a real key, walk the full flow
 // list in a real chromium, screenshot every screen into .artifacts/ for the
-// figma comparison pass. Self-skips without DEEPSEEK_API_KEY (repo e2e
+// figma comparison pass. Self-skips without OPENROUTER_API_KEY (repo e2e
 // convention); vitest.web.config.ts loads the repo-root .env before this file
 // runs (the CLI only auto-loads .env from its cwd — a temp dir here, so
 // sessions never land in the repo's .sessions).
@@ -28,6 +28,20 @@ import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { REPO_ROOT, connectFreshWorkspace, newEnglishPage, probeFreePort, requireDist, saveFailureShot } from './support.ts'
 
 const WEB_SURFACE_PROMPT = fileURLToPath(new URL('./snapshots/web-runtime-context/web-surface-prompt.expected.md', import.meta.url))
+
+/** Point the shipped pi-ai OpenRouter route at one deterministic local endpoint. */
+function configureOpenRouterEndpoint(workspace: string, baseURL: string): string {
+  const dshHome = join(workspace, '.dsh')
+  mkdirSync(dshHome, { recursive: true })
+  writeFileSync(join(dshHome, 'settings.yaml'), [
+    'llm-pi-ai:',
+    '  providers:',
+    '    openrouter:',
+    `      baseURL: ${baseURL}`,
+    '',
+  ].join('\n'))
+  return dshHome
+}
 
 function waitForReadyLine(child: ChildProcess): Promise<string> {
   return new Promise((resolveReady, reject) => {
@@ -165,7 +179,7 @@ describe('dsh web keyless CLI smoke', () => {
         cwd: sessionsDir,
         env: {
           ...process.env,
-          DEEPSEEK_API_KEY: 'keyless-web-no-call',
+          OPENROUTER_API_KEY: 'keyless-web-no-call',
           DSH_HOME: join(sessionsDir, '.dsh'),
           DSH_AGENTS_HOME: join(sessionsDir, '.agents'),
           TSX_TSCONFIG_PATH: join(REPO_ROOT, 'tsconfig.json'),
@@ -223,6 +237,7 @@ describe('dsh web keyless CLI smoke', () => {
     await new Promise<void>(resolve => provider.listen(0, '127.0.0.1', resolve))
     const address = provider.address()
     if (address === null || typeof address === 'string') throw new Error('mock provider did not bind a TCP port')
+    const dshHome = configureOpenRouterEndpoint(workspace, `http://127.0.0.1:${address.port}`)
     const tsxLoader = pathToFileURL(createRequire(join(REPO_ROOT, 'package.json')).resolve('tsx')).href
     const child = spawn(
       process.execPath,
@@ -231,9 +246,8 @@ describe('dsh web keyless CLI smoke', () => {
         cwd: workspace,
         env: {
           ...process.env,
-          DEEPSEEK_API_KEY: 'keyless-web-workspace',
-          DEEPSEEK_BASE_URL: `http://127.0.0.1:${address.port}`,
-          DSH_HOME: join(workspace, '.dsh'),
+          OPENROUTER_API_KEY: 'keyless-web-workspace',
+          DSH_HOME: dshHome,
           DSH_AGENTS_HOME: join(workspace, '.agents'),
           TSX_TSCONFIG_PATH: join(REPO_ROOT, 'tsconfig.json'),
         },
@@ -336,6 +350,7 @@ describe('dsh web keyless CLI smoke', () => {
     await new Promise<void>(resolve => provider.listen(0, '127.0.0.1', resolve))
     const address = provider.address()
     if (address === null || typeof address === 'string') throw new Error('mock provider did not bind a TCP port')
+    const dshHome = configureOpenRouterEndpoint(workspace, `http://127.0.0.1:${address.port}`)
     const tsxLoader = pathToFileURL(createRequire(join(REPO_ROOT, 'package.json')).resolve('tsx')).href
     const child = spawn(
       process.execPath,
@@ -344,9 +359,8 @@ describe('dsh web keyless CLI smoke', () => {
         cwd: workspace,
         env: {
           ...process.env,
-          DEEPSEEK_API_KEY: 'keyless-web-retry',
-          DEEPSEEK_BASE_URL: `http://127.0.0.1:${address.port}`,
-          DSH_HOME: join(workspace, '.dsh'),
+          OPENROUTER_API_KEY: 'keyless-web-retry',
+          DSH_HOME: dshHome,
           TSX_TSCONFIG_PATH: join(REPO_ROOT, 'tsconfig.json'),
         },
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -418,6 +432,7 @@ describe('dsh web keyless CLI smoke', () => {
     await new Promise<void>(resolve => provider.listen(0, '127.0.0.1', resolve))
     const address = provider.address()
     if (address === null || typeof address === 'string') throw new Error('mock provider did not bind a TCP port')
+    const dshHome = configureOpenRouterEndpoint(workspace, `http://127.0.0.1:${address.port}`)
     const tsxLoader = pathToFileURL(createRequire(join(REPO_ROOT, 'package.json')).resolve('tsx')).href
     const child = spawn(
       process.execPath,
@@ -426,10 +441,9 @@ describe('dsh web keyless CLI smoke', () => {
         cwd: workspace,
         env: {
           ...process.env,
-          DEEPSEEK_API_KEY: 'keyless-web-code-mode',
-          DEEPSEEK_BASE_URL: `http://127.0.0.1:${address.port}`,
+          OPENROUTER_API_KEY: 'keyless-web-code-mode',
           DSH_TOOLS_MODE: 'code',
-          DSH_HOME: join(workspace, '.dsh'),
+          DSH_HOME: dshHome,
           DSH_AGENTS_HOME: join(workspace, '.agents'),
           TSX_TSCONFIG_PATH: join(REPO_ROOT, 'tsconfig.json'),
         },
@@ -466,7 +480,7 @@ describe('dsh web keyless CLI smoke', () => {
   })
 })
 
-describe.skipIf(!process.env.DEEPSEEK_API_KEY || notReady.length > 0)('web smoke (real host, real key)', () => {
+describe.skipIf(!process.env.OPENROUTER_API_KEY || notReady.length > 0)('web smoke (real host, real key)', () => {
   let child: ChildProcess
   let sessionsDir: string
   let baseUrl: string

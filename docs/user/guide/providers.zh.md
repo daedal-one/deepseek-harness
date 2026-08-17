@@ -95,4 +95,4 @@ llm-pi-ai:
 
 ## 进阶配置
 
-自动生成的[插件配置目录](../../config-catalog.md)列出所有受支持的字段与默认值。[`dsh-llm-pi-ai`](../../../packages/llm/llm-pi-ai/README.md) 和 [`dsh-llm-deepseek`](../../../packages/llm/llm-deepseek/README.md) 参考文档负责直接 `settings.yaml` 配置、目录解析、推理控制、凭据与适配器错误。
+自动生成的[插件配置目录](../../config-catalog.md)列出所有受支持的字段与默认值。[`dsh-llm-pi-ai`](../../../packages/llm/llm-pi-ai/README.md) 参考文档负责直接 `settings.yaml` 配置、目录解析、推理控制、凭据与适配器错误。

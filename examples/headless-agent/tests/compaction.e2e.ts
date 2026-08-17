@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
-import { codingHarness, finalText, SYSTEM_PROMPT, waitForIdle } from './harness.ts'
+import { codingHarness, E2E_MODEL, E2E_PROVIDER, finalText, SYSTEM_PROMPT, waitForIdle } from './harness.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 
 /**
@@ -24,7 +24,7 @@ afterEach(async () => {
   workdir = undefined
 })
 
-describe.skipIf(!process.env.DEEPSEEK_API_KEY)('compaction: a long session compacts mid-flight and keeps running', () => {
+describe.skipIf(!process.env.OPENROUTER_API_KEY)('compaction: a long session compacts mid-flight and keeps running', () => {
   it('summarizes older history into a checkpoint without breaking the task', async () => {
     workdir = await mkdtemp(join(tmpdir(), 'dsh-compaction-'))
     for (let i = 1; i <= 4; i++) {
@@ -45,7 +45,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('compaction: a long session compa
       },
       persistenceRoot: join(workdir, '.sessions'),
     })
-    const agent = ctx.agentLoop.create(SessionId('e2e-compaction'), { provider: 'deepseek-official', model: 'deepseek-v4-flash' })
+    const agent = ctx.agentLoop.create(SessionId('e2e-compaction'), { provider: E2E_PROVIDER, model: E2E_MODEL })
 
     agent.followup(createUserMessage({
       content: [{

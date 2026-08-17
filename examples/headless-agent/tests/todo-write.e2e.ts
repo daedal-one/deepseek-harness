@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
-import { codingHarness, TODO_SYSTEM_PROMPT, waitForIdle } from './harness.ts'
+import { codingHarness, E2E_MODEL, E2E_PROVIDER, TODO_SYSTEM_PROMPT, waitForIdle } from './harness.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 
 /**
@@ -23,11 +23,11 @@ afterEach(async () => {
   workdir = undefined
 })
 
-describe.skipIf(!process.env.DEEPSEEK_API_KEY)('todo_write: real model records a plan', () => {
+describe.skipIf(!process.env.OPENROUTER_API_KEY)('todo_write: real model records a plan', () => {
   it('appends a todo/write event with the model-produced task list', async () => {
     workdir = await mkdtemp(join(tmpdir(), 'dsh-todo-write-e2e-'))
     ctx = await codingHarness(workdir, { persona: TODO_SYSTEM_PROMPT })
-    const agent = ctx.agentLoop.create(SessionId('e2e-todo'), { provider: 'deepseek-official', model: 'deepseek-v4-flash' })
+    const agent = ctx.agentLoop.create(SessionId('e2e-todo'), { provider: E2E_PROVIDER, model: E2E_MODEL })
 
     agent.followup(createUserMessage({
       content: [{ type: 'text', text:

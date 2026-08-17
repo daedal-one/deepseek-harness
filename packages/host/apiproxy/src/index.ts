@@ -7,7 +7,7 @@
  * `ctx.apiProxy`). Transport-agnostic by design: this package registers no
  * routes — physical carriers wrap `ctx.apiProxy` themselves.
  *
- * The gateway consumes `ctx.agentDefaultModel`, the transport-independent default
+ * The gateway consumes `ctx.agentModels`, the transport-independent default
  * shared with direct entry points. Switching models persists through that
  * service; sessions that have already logged a selection remain unchanged.
  */
@@ -68,7 +68,7 @@ export interface Config {
  */
 export class ApiProxyService extends Service implements ApiProxy {
   static inject = [
-    'agentDefaultModel', 'agents', 'attachments', 'directoryPicker', 'llm', 'sessions', 'subagents', 'sessionQuery',
+    'agentModels', 'agents', 'attachments', 'directoryPicker', 'llm', 'sessions', 'subagents', 'sessionQuery',
     'tools', 'userQuestions', 'workspaceRegistry',
   ]
 
@@ -96,8 +96,8 @@ export class ApiProxyService extends Service implements ApiProxy {
   constructor(ctx: Context, config: Config) {
     super(ctx, 'apiProxy')
     const api = createApiProxy(ctx, {
-      defaultModelSelection: () => ctx.agentDefaultModel.currentSelection(),
-      saveDefaultModelSelection: selection => ctx.agentDefaultModel.saveSelection(selection),
+      defaultModelSelection: () => ctx.agentModels.currentSelection(),
+      saveDefaultModelSelection: selection => ctx.agentModels.saveSelection(selection),
       cwd: process.cwd(),
       ...config.nativeOpen === undefined ? {} : { canOpenPath: () => config.nativeOpen as boolean },
       ...(config.sessionExportCompressionLevel === undefined

@@ -6,7 +6,7 @@ The `jsonrpc` plugin serves newline-delimited JSON-RPC over stdio so out-of-proc
 
 ## Wiring
 
-`inject: ['agents']`. The server gets or creates one agent per `sessionId`. It forwards subagent completions only when the service-snapshotted lifecycle `local` flag is true; provider names, child ids, and durable lineage never establish locality. A registered adapter wins, an unowned `deepseek-official` route mounts `dsh-llm-deepseek`, and any other unowned provider fails initialization. Other capabilities come from the surrounding `cordis.yml`.
+`inject: ['agents']`. The server gets or creates one agent per `sessionId`. It forwards subagent completions only when the service-snapshotted lifecycle `local` flag is true; provider names, child ids, and durable lineage never establish locality. The requested provider must already be owned by an adapter in the surrounding `cordis.yml`; initialization fails before creating a session when no adapter owns it.
 
 ## Config
 
@@ -45,4 +45,4 @@ Append-only; newly visible content follows the reusable request prefix and does 
 - **The wire has no per-session close or prompt-cancel method** — SDK-created agents remain live until process shutdown.
 - **There is no per-prompt result** — `MessageId` identifies inbox admission only; clients that own an automation interval must define and observe that interval themselves.
 - **stdout purity is deployment-enforced** — a surrounding config can still load a stdout logger and corrupt the JSON-RPC channel; this plugin does not inspect or veto sibling loggers.
-- **Automatic adapter mounting is DeepSeek-specific** — `initialize` can reuse any pre-registered model adapter, but its only fallback mounts `dsh-llm-deepseek`.
+- **Adapters are composition-owned** — the server never mounts a provider implicitly; each deployment must declare the routes its SDK clients may request.

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
-import { spawnHarness, waitForIdle } from './harness.ts'
+import { E2E_MODEL, E2E_PROVIDER, spawnHarness, waitForIdle } from './harness.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 
 /** Key-gated smoke for a real parent delegating filesystem work to a real child. */
@@ -19,11 +19,11 @@ afterEach(async () => {
   workdir = undefined
 })
 
-describe.skipIf(!process.env.DEEPSEEK_API_KEY)('spawn backend with-key smoke', () => {
+describe.skipIf(!process.env.OPENROUTER_API_KEY)('spawn backend with-key smoke', () => {
   it('a parent delegates to a child that writes a file on disk', async () => {
     workdir = await mkdtemp(join(tmpdir(), 'dsh-subagent-spawn-e2e-'))
     ctx = await spawnHarness(workdir)
-    const parent = ctx.agentLoop.create(SessionId('e2e-parent'), { provider: 'deepseek-official', model: 'deepseek-v4-flash' })
+    const parent = ctx.agentLoop.create(SessionId('e2e-parent'), { provider: E2E_PROVIDER, model: E2E_MODEL })
 
     parent.followup(createUserMessage({
       content: [{ type: 'text', text:

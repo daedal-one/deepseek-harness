@@ -18,7 +18,7 @@ export interface SettingsSecretView {
 
 /** Wire view of one registered settings namespace. */
 export interface SettingsNamespaceView {
-  /** Namespace key (`llm-deepseek`, `llm-pi-ai`, …). */
+  /** Namespace key (`llm-pi-ai`, `permission`, …). */
   ns: string
   /** Serialized schemastery schema envelope (`schema.toJSON()`); rehydrate with `new Schema(json)`. */
   schema: unknown

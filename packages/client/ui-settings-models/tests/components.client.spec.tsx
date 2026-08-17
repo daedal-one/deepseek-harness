@@ -11,8 +11,8 @@ import {
 import type { ModelsSectionInjected, ModelsSectionProps } from '../src/client/ModelsSection.tsx'
 import { pathOps } from '../src/client/ProviderEditor.tsx'
 import {
-  DeepSeekModelsEditor, formatCapacity, modelDrafts, parseCapacity, validateDeepSeekModels,
-} from '../src/client/DeepSeekModelsEditor.tsx'
+  ModelCatalogEditor, formatCapacity, modelDrafts, parseCapacity, validateModelCatalog,
+} from '../src/client/ModelCatalogEditor.tsx'
 import { apiKeyFailure } from '../src/client/apiKey.ts'
 import { deriveKeyRef, ModelsSettingsStore } from '../src/client/store.ts'
 import type { ProviderRow } from '../src/client/store.ts'
@@ -23,6 +23,7 @@ afterEach(cleanup)
 const t: ModelsSectionInjected['t'] = key => en[key]
 const OPENAI_TARGET = { provider: 'openai', displayName: 'openai' }
 const openaiCopy = (template: string): string => providerCopy(template, OPENAI_TARGET)
+const OPENROUTER_TARGET = { provider: 'openrouter', displayName: 'OpenRouter' }
 const DEEPSEEK_TARGET = { provider: 'deepseek-official', displayName: 'DeepSeek' }
 const deepSeekCopy = (template: string): string => providerCopy(template, DEEPSEEK_TARGET)
 
@@ -121,7 +122,7 @@ function wireNamespaces(): SettingsNamespaceView[] {
     {
       ns: 'llm-pi-ai',
       schema: JSON.parse(JSON.stringify(PiAiConfig.toJSON())) as unknown,
-      value: { providers: { openai: { apiKeyEnv: 'OPENAI_API_KEY', baseURL: 'https://proxy', headers: { 'X-Team': 'a' } }, zombie: {} } },
+      value: { providers: { openrouter: { apiKeyEnv: 'OPENROUTER_API_KEY' }, openai: { apiKeyEnv: 'OPENAI_API_KEY', baseURL: 'https://proxy', headers: { 'X-Team': 'a' } }, zombie: {} } },
       user: { providers: { openai: { apiKeyEnv: 'OPENAI_API_KEY', baseURL: 'https://proxy', headers: { 'X-Team': 'a' } }, zombie: {} } },
       applies: 'live',
       secrets: [],
@@ -157,6 +158,7 @@ function scriptedFace(overrides: {
     llm: {
       providers: vi.fn(() => Promise.resolve(ok({
         providers: [
+          { provider: 'openrouter', displayName: 'OpenRouter', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'openrouter'], active: true },
           { provider: 'deepseek-official', displayName: 'DeepSeek', settingsNs: 'llm-deepseek', settingsPath: [], active: true },
           { provider: 'openai', displayName: 'openai', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'openai'], active: true },
           { provider: 'anthropic', displayName: 'anthropic', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'anthropic'], active: false },
@@ -210,7 +212,7 @@ async function mountSection(overrides: Parameters<typeof scriptedFace>[0] = {}) 
 
 /**
  * Mount for a user who cannot reach any provider yet: no credential is stored
- * anywhere, so the whole-section DeepSeek route owns the first-run setup card.
+ * anywhere, so the OpenRouter route owns the first-run setup card.
  */
 async function mountFirstRun(overrides: Parameters<typeof scriptedFace>[0] = {}) {
   const scripted = scriptedFace(overrides)
@@ -239,11 +241,10 @@ describe('ModelsSection', () => {
     expect(document.body.textContent).toBe('')
   })
 
-  it('renders the unkeyed whole-section provider as an open setup card in the first-run posture', async () => {
+  it('renders OpenRouter as an open setup card in the first-run posture', async () => {
     await mountFirstRun()
-    // Nothing is reachable yet, and DeepSeek has no configured credential and
-    // no stored apiKey → setup card.
-    expect(screen.getByText('DeepSeek')).toBeTruthy()
+    // Nothing is reachable yet, and OpenRouter has no configured credential.
+    expect(screen.getByText('OpenRouter')).toBeTruthy()
     expect(screen.getByLabelText(en.keyInput)).toBeTruthy()
     expect(screen.getByText('openai')).toBeTruthy()
     expect(screen.queryByText('Active')).toBeNull()
@@ -256,12 +257,12 @@ describe('ModelsSection', () => {
     // openai's key is stored, so the user is not blocked and nothing on the
     // page opens itself over them.
     expect(screen.queryByLabelText(en.keyInput)).toBeNull()
-    const configured = screen.getByRole('img', { name: en.credentialConfigured })
-    expect(configured.getAttribute('title')).toBe(en.credentialConfigured)
-    expect(configured.className).toContain('credentialDotConfigured')
+    const configured = screen.getByText(en.credentialConfigured)
+    expect(configured.className).toContain('credentialConfigured')
     expect(configured.closest('li')?.textContent).toContain('openai')
-    const missing = screen.getByRole('img', { name: en.credentialMissing })
-    expect(missing.closest('li')?.textContent).toContain('DeepSeek')
+    const missing = screen.getAllByText(en.credentialMissing)
+      .find(candidate => candidate.closest('li')?.textContent?.includes('DeepSeek'))!
+    expect(missing.className).toContain('credentialMissing')
     // The card is still one click away.
     fireEvent.click(screen.getByRole('button', { name: deepSeekCopy(en.editProvider) }))
     expect(screen.getByLabelText(en.keyInput)).toBeTruthy()
@@ -281,12 +282,11 @@ describe('ModelsSection', () => {
       t={t}
     />)
 
-    const missing = screen.getByRole('img', { name: en.credentialMissing })
-    expect(missing.getAttribute('title')).toBe(en.credentialMissing)
-    expect(missing.className).toContain('credentialDotMissing')
-    expect(missing.closest('li')?.textContent).toContain('openai')
-    expect(screen.queryByRole('img', { name: en.credentialConfigured })).toBeNull()
-    expect(screen.getByText('zombie').closest('li')?.querySelector('[role="img"]')).toBeNull()
+    const missing = screen.getAllByText(en.credentialMissing)
+      .find(candidate => candidate.closest('li')?.textContent?.includes('openai'))!
+    expect(missing.className).toContain('credentialMissing')
+    expect(screen.queryByText(en.credentialConfigured)).toBeNull()
+    expect(screen.getByText('zombie').closest('li')?.textContent).not.toContain(en.credentialMissing)
   })
 
   it('turns the setup card into a row once the credential reports configured', async () => {
@@ -309,7 +309,7 @@ describe('ModelsSection', () => {
   })
 
   it('decides setup need from the joined credential state and the first-run posture', () => {
-    const entry = { provider: 'p', displayName: 'p', settingsNs: 'llm-deepseek', settingsPath: [], active: true }
+    const entry = { provider: 'openrouter', displayName: 'OpenRouter', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'openrouter'], active: true }
     const row = (credential: ProviderRow['credential']): ProviderRow => ({
       entry,
       configured: true,
@@ -352,11 +352,11 @@ describe('ModelsSection', () => {
     const key = screen.getByLabelText<HTMLInputElement>(en.keyInput)
     fireEvent.change(key, { target: { value: '  sk-live  ' } })
     fireEvent.click(screen.getByText(en.apply))
-    await waitFor(() => { expect(set).toHaveBeenCalledWith({ ref: 'DEEPSEEK_API_KEY', value: 'sk-live' }) })
+    await waitFor(() => { expect(set).toHaveBeenCalledWith({ ref: 'OPENROUTER_API_KEY', value: 'sk-live' }) })
     expect(update).not.toHaveBeenCalled()
     await waitFor(() => { expect(face.settings.describe.mock.calls.length).toBeGreaterThan(1) })
     expect((await screen.findByRole('status')).textContent).toBe(
-      providerCopy(en.savedProvider, { provider: 'deepseek-official', displayName: 'DeepSeek' }),
+      providerCopy(en.savedProvider, OPENROUTER_TARGET),
     )
     fireEvent.click(screen.getByText(en.add))
     expect(screen.queryByRole('status')).toBeNull()
@@ -421,15 +421,13 @@ describe('ModelsSection', () => {
     expect(onClose).toHaveBeenCalledWith(true)
   })
 
-  it('applies customized deepseek fields as path ops', async () => {
+  it('applies customized catalog-provider fields as path ops', async () => {
     const { mutate } = await mountDeepSeekCard({
       mutate: vi.fn(() => Promise.resolve(ok(wireNamespaces()[0]))),
     })
     fireEvent.click(screen.getByText(en.customized))
     const baseURL = screen.getByLabelText<HTMLInputElement>(en.baseUrl)
-    // The deepseek placeholder is pinned to the public endpoint, not the
-    // effective value (which may reflect a launch-environment override).
-    expect(baseURL.placeholder).toBe('https://api.deepseek.com')
+    expect(baseURL.placeholder).toBe('https://base')
     fireEvent.change(baseURL, { target: { value: 'https://next2' } })
     fireEvent.click(screen.getByText(en.apply))
     await waitFor(() => { expect(mutate).toHaveBeenCalledTimes(1) })
@@ -491,25 +489,25 @@ describe('ModelsSection', () => {
   it('validates every adapter-owned model catalog invariant', () => {
     expect(modelDrafts(undefined)).toEqual([])
     expect(modelDrafts([null, 'bad', { id: 'ok' }])).toEqual([{}, {}, { id: 'ok' }])
-    expect(validateDeepSeekModels([{}])).toEqual({ index: 0, key: 'modelIdRequired' })
-    expect(validateDeepSeekModels([{ id: 'same' }, { id: 'same' }]))
+    expect(validateModelCatalog([{}])).toEqual({ index: 0, key: 'modelIdRequired' })
+    expect(validateModelCatalog([{ id: 'same' }, { id: 'same' }]))
       .toEqual({ index: 1, key: 'modelIdDuplicate' })
-    expect(validateDeepSeekModels([{ id: 'model', name: '' }]))
+    expect(validateModelCatalog([{ id: 'model', name: '' }]))
       .toEqual({ index: 0, key: 'modelNameInvalid' })
-    expect(validateDeepSeekModels([{ id: 'model', contextWindow: null }]))
+    expect(validateModelCatalog([{ id: 'model', contextWindow: null }]))
       .toEqual({ index: 0, key: 'modelContextInvalid' })
-    expect(validateDeepSeekModels([{ id: 'model', contextWindow: 1.5 }]))
+    expect(validateModelCatalog([{ id: 'model', contextWindow: 1.5 }]))
       .toEqual({ index: 0, key: 'modelContextInvalid' })
-    expect(validateDeepSeekModels([{ id: 'model', contextWindow: 0 }]))
+    expect(validateModelCatalog([{ id: 'model', contextWindow: 0 }]))
       .toEqual({ index: 0, key: 'modelContextInvalid' })
-    expect(validateDeepSeekModels([{ id: 'model', contextWindow: 1 }])).toBeUndefined()
-    expect(validateDeepSeekModels([{ id: 'model', maxTokens: null }]))
+    expect(validateModelCatalog([{ id: 'model', contextWindow: 1 }])).toBeUndefined()
+    expect(validateModelCatalog([{ id: 'model', maxTokens: null }]))
       .toEqual({ index: 0, key: 'modelMaxTokensInvalid' })
-    expect(validateDeepSeekModels([{ id: 'model', maxTokens: 1.5 }]))
+    expect(validateModelCatalog([{ id: 'model', maxTokens: 1.5 }]))
       .toEqual({ index: 0, key: 'modelMaxTokensInvalid' })
-    expect(validateDeepSeekModels([{ id: 'model', maxTokens: 0 }]))
+    expect(validateModelCatalog([{ id: 'model', maxTokens: 0 }]))
       .toEqual({ index: 0, key: 'modelMaxTokensInvalid' })
-    expect(validateDeepSeekModels([{ id: 'model', maxTokens: 8192 }])).toBeUndefined()
+    expect(validateModelCatalog([{ id: 'model', maxTokens: 8192 }])).toBeUndefined()
   })
 
   it('reads context windows written as counts, thousands, or millions', () => {
@@ -767,13 +765,13 @@ describe('ModelsSection', () => {
 
     // An id that is only whitespace is as absent as an empty one, and a padded
     // id is a duplicate of its trimmed twin.
-    expect(validateDeepSeekModels([{ id: '   ' }])).toEqual({ index: 0, key: 'modelIdRequired' })
-    expect(validateDeepSeekModels([{ id: 'model' }, { id: 'model ' }]))
+    expect(validateModelCatalog([{ id: '   ' }])).toEqual({ index: 0, key: 'modelIdRequired' })
+    expect(validateModelCatalog([{ id: 'model' }, { id: 'model ' }]))
       .toEqual({ index: 1, key: 'modelIdDuplicate' })
   })
 
   it('renders malformed draft fallbacks without inventing catalog values', () => {
-    render(<DeepSeekModelsEditor
+    render(<ModelCatalogEditor
       models={[{}]}
       overridden={false}
       defaultContextWindow={undefined}
@@ -865,7 +863,7 @@ describe('ModelsSection', () => {
     />)
     fireEvent.click(screen.getByText(en.customized))
     const baseURL = screen.getByLabelText<HTMLInputElement>(en.baseUrl)
-    expect(baseURL.placeholder).toBe('https://api.deepseek.com')
+    expect(baseURL.placeholder).toBe(en.baseUrlDefault)
     fireEvent.change(baseURL, { target: { value: 'https://x' } })
     expect(baseURL.value).toBe('https://x')
     fireEvent.change(baseURL, { target: { value: '' } })
@@ -1063,7 +1061,7 @@ describe('ModelsSection', () => {
         t={t}
       />)
       const key = await screen.findByLabelText<HTMLInputElement>(en.keyInput)
-      expect(key.placeholder).toBe(en.keyPlaceholder)
+      expect(key.placeholder).toBe(en.keyPlaceholderNative)
       await new Promise(resolve => setTimeout(resolve, 10))
       expect(unhandled).not.toHaveBeenCalled()
     } finally {
@@ -1261,10 +1259,10 @@ describe('ModelsSection', () => {
     fireEvent.click(screen.getAllByText(en.cancel)[0] as HTMLElement)
     // The add card kept its draft…
     expect(screen.getByLabelText(en.provider)).toBeTruthy()
-    // …and DeepSeek collapsed to an ordinary row carrying the missing-key dot.
+    // …and DeepSeek collapsed to an ordinary row carrying the missing-key badge.
     expect(screen.getAllByLabelText(en.keyInput)).toHaveLength(1)
-    expect(screen.getAllByRole('img', { name: en.credentialMissing })
-      .some(dot => dot.closest('li')?.textContent?.includes('DeepSeek') === true)).toBe(true)
+    expect(screen.getAllByText(en.credentialMissing)
+      .some(badge => badge.closest('li')?.textContent?.includes('DeepSeek') === true)).toBe(true)
     // Its card reopens through Edit, which closes the add card as any row does.
     fireEvent.click(screen.getByRole('button', { name: deepSeekCopy(en.editProvider) }))
     expect(screen.getAllByLabelText(en.keyInput)).toHaveLength(1)

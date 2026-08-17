@@ -324,30 +324,6 @@ type Branded<B extends string> = string & { readonly [BRAND]: B }
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — this section is byte-identical in both language sides of the page. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
-<a id="ctxagentdefaultmodel--agentdefaultmodelconfig"></a>
-
-### `ctx.agentDefaultModel` — `AgentDefaultModelConfig`
-
-Owns the default model selection independently of any Host or transport. The composition entry remains usable without a settings provider; when one is mounted, its user layer is read live.
-
-```ts cordis-catalog
-/**
- * Read the current default model selection.
- * @returns a detached provider, model, and optional reasoning selection.
- */
-currentSelection(): ModelSelection
-
-/**
- * Save the complete default model selection. A deployment without a settings
- * provider keeps its composition entry.
- * @param next - resolved selection accepted by an entry point.
- * @returns fulfillment after the optional settings write settles.
- */
-async saveSelection(next: ModelSelection): Promise<void>
-```
-
-Source: [`packages/core/agent-default-model/src/index.ts:64`](../../packages/core/agent-default-model/src/index.ts)
-
 <a id="ctxagentloop--agentloop"></a>
 
 ### `ctx.agentLoop` — `AgentLoop`
@@ -386,6 +362,72 @@ async resume(ownerCtx: Context, options: ResumeAgentOptions): Promise<AgentHandl
 Types: [SessionHeader](persistence.md)
 
 Source: [`packages/core/agent-loop/src/index.ts:296`](../../packages/core/agent-loop/src/index.ts)
+
+<a id="ctxagentmodels--agentmodelconfig"></a>
+
+### `ctx.agentModels` — `AgentModelConfig`
+
+Owns persistent Agent model selections and their lifecycle-safe directory. The provider route is fixed by composition; settings select only a model and optional reasoning effort for each registered Agent target.
+
+```ts cordis-catalog
+/**
+ * Register one named Agent target. Equivalent registrations from several
+ * Agent scopes coalesce; a conflicting definition fails before either can
+ * silently win.
+ * @param target - stable id, display label, and deployment default.
+ * @returns idempotent disposer for this contribution.
+ */
+registerTarget(target: AgentModelTarget): () => void
+
+/**
+ * Read one registered target's current provider, model, and optional effort.
+ * @param id - target to resolve; defaults to the main Agent.
+ * @returns a detached complete selection.
+ */
+currentSelection(id: AgentModelTargetId = MAIN_AGENT_MODEL_TARGET): ModelSelection
+
+/**
+ * Apply one target's live selection over child options without disturbing
+ * independent limits such as `maxTokens`.
+ * @param id - registered named Agent target.
+ * @param fallback - deployment options carrying non-selection fields.
+ * @returns detached child options with the current selection.
+ */
+optionsFor(id: AgentModelTargetId, fallback: AgentOptions = {}): AgentOptions
+
+/**
+ * Save the main Agent selection after a session-local model switch.
+ * @param next - resolved selection accepted by the session entry point.
+ * @returns fulfillment after the optional settings write settles.
+ */
+async saveSelection(next: ModelSelection): Promise<void>
+
+/**
+ * Read the live target directory and fixed-provider model catalog.
+ * @returns point-in-time graphical settings snapshot.
+ */
+@Remote('list') async list(): Promise<AgentModelsSnapshot>
+
+/**
+ * Persist one graphical Agent selection after exact model validation.
+ * @param id - registered target id.
+ * @param model - exact model id under the fixed provider.
+ * @param reasoningEffort - exact supported effort, or omitted for provider behavior.
+ * @param expectedRevision - settings revision read by the graphical page.
+ * @returns refreshed directory and catalog.
+ */
+@Remote('save') async save( id: AgentModelTargetId, model: string, reasoningEffort: string | undefined, expectedRevision: number, ): Promise<AgentModelsSnapshot>
+
+/**
+ * Remove one graphical override and restore its deployment default.
+ * @param id - registered target id.
+ * @param expectedRevision - settings revision read by the graphical page.
+ * @returns refreshed directory and catalog.
+ */
+@Remote('reset') async reset(id: AgentModelTargetId, expectedRevision: number): Promise<AgentModelsSnapshot>
+```
+
+Source: [`packages/core/agent-default-model/src/index.ts:166`](../../packages/core/agent-default-model/src/index.ts)
 
 <a id="ctxagentpresets--agentpresets"></a>
 
@@ -756,7 +798,7 @@ A fully configured agent and live session were published. Setup is composition-o
 
 Types: [Scoped](scope.md)
 
-Source: [`packages/core/agent/src/runtime-types.ts:159`](../../packages/core/agent/src/runtime-types.ts)
+Source: [`packages/core/agent/src/runtime-types.ts:161`](../../packages/core/agent/src/runtime-types.ts)
 
 <a id="agentdisposed--emit"></a>
 
@@ -778,7 +820,7 @@ An agent left the registry; AgentLoop emits this after driver quiescence and sco
 
 Types: [Scoped](scope.md)
 
-Source: [`packages/core/agent/src/runtime-types.ts:168`](../../packages/core/agent/src/runtime-types.ts)
+Source: [`packages/core/agent/src/runtime-types.ts:170`](../../packages/core/agent/src/runtime-types.ts)
 
 <a id="agenterror--emit"></a>
 
@@ -802,7 +844,7 @@ A step or turn errored. The machine reports a failure here even when the error h
 
 Types: [Scoped](scope.md)
 
-Source: [`packages/core/agent/src/runtime-types.ts:290`](../../packages/core/agent/src/runtime-types.ts)
+Source: [`packages/core/agent/src/runtime-types.ts:292`](../../packages/core/agent/src/runtime-types.ts)
 
 <a id="agentinboxclaimed--emit"></a>
 
@@ -826,7 +868,7 @@ One message left the inbox inside its open turn. If the proposed step is rejecte
 
 Types: [Scoped](scope.md) · [UserMessage](session.md)
 
-Source: [`packages/core/agent/src/runtime-types.ts:197`](../../packages/core/agent/src/runtime-types.ts)
+Source: [`packages/core/agent/src/runtime-types.ts:199`](../../packages/core/agent/src/runtime-types.ts)
 
 <a id="agentinboxdiscarded--emit"></a>
 
@@ -847,7 +889,7 @@ One message was discarded from the live inbox.
 
 Types: [Scoped](scope.md) · [UserMessage](session.md)
 
-Source: [`packages/core/agent/src/runtime-types.ts:205`](../../packages/core/agent/src/runtime-types.ts)
+Source: [`packages/core/agent/src/runtime-types.ts:207`](../../packages/core/agent/src/runtime-types.ts)
 
 <a id="agentinboxinserted--emit"></a>
 
@@ -868,7 +910,7 @@ One message entered the live inbox.
 
 Types: [Scoped](scope.md) · [UserMessage](session.md)
 
-Source: [`packages/core/agent/src/runtime-types.ts:186`](../../packages/core/agent/src/runtime-types.ts)
+Source: [`packages/core/agent/src/runtime-types.ts:188`](../../packages/core/agent/src/runtime-types.ts)
 
 <a id="agentpre-step--waterfall"></a>
 
@@ -893,7 +935,7 @@ Reject a proposed step or replace the messages that enter it. Calling `next()` p
 
 Types: [Scoped](scope.md) · [UserMessage](session.md)
 
-Source: [`packages/core/agent/src/runtime-types.ts:231`](../../packages/core/agent/src/runtime-types.ts)
+Source: [`packages/core/agent/src/runtime-types.ts:233`](../../packages/core/agent/src/runtime-types.ts)
 
 <a id="agentrequest--waterfall"></a>
 
@@ -919,7 +961,7 @@ Replace the frozen call configuration. `await next()` yields the config the mach
 
 Types: [LlmCallConfig](llm-streaming.md) · [Scoped](scope.md)
 
-Source: [`packages/core/agent/src/runtime-types.ts:244`](../../packages/core/agent/src/runtime-types.ts)
+Source: [`packages/core/agent/src/runtime-types.ts:246`](../../packages/core/agent/src/runtime-types.ts)
 
 <a id="agentrequest-error--waterfall"></a>
 
@@ -948,7 +990,7 @@ Handle one failed model-request attempt before the loop retries or closes its st
 
 Types: [LlmFailure](llm-streaming.md) · [ResolvedRetryPolicy](llm-streaming.md) · [Scoped](scope.md)
 
-Source: [`packages/core/agent/src/runtime-types.ts:260`](../../packages/core/agent/src/runtime-types.ts)
+Source: [`packages/core/agent/src/runtime-types.ts:262`](../../packages/core/agent/src/runtime-types.ts)
 
 <a id="agentsession-start--emit"></a>
 
@@ -972,7 +1014,7 @@ The session lifecycle began, once before the first turn. Use `agent.inject()` to
 
 Types: [Scoped](scope.md)
 
-Source: [`packages/core/agent/src/runtime-types.ts:217`](../../packages/core/agent/src/runtime-types.ts)
+Source: [`packages/core/agent/src/runtime-types.ts:219`](../../packages/core/agent/src/runtime-types.ts)
 
 <a id="agentstatus--emit"></a>
 
@@ -995,7 +1037,7 @@ Agent status changed (`idle` ⇄ `running`). A waking delivery enters `running` 
 
 Types: [Scoped](scope.md)
 
-Source: [`packages/core/agent/src/runtime-types.ts:178`](../../packages/core/agent/src/runtime-types.ts)
+Source: [`packages/core/agent/src/runtime-types.ts:180`](../../packages/core/agent/src/runtime-types.ts)
 
 <a id="agentturn-stopping--serial"></a>
 
@@ -1026,7 +1068,7 @@ The turn is about to close: the model owes no response (no live tool calls, no f
 
 Types: [Scoped](scope.md)
 
-Source: [`packages/core/agent/src/runtime-types.ts:278`](../../packages/core/agent/src/runtime-types.ts)
+Source: [`packages/core/agent/src/runtime-types.ts:280`](../../packages/core/agent/src/runtime-types.ts)
 
 <a id="agent-loop-events"></a>
 

@@ -2,24 +2,28 @@
 
 [English](README.md) | 中文
 
-该部署默认值供入口在创建尚无会话级模型选择的 Agent 时使用。`AgentDefaultModelConfig` 提供 `ctx.agentDefaultModel`；`dsh --profile headless` 这类直接入口与 ApiProxy 这类由 Host 支撑的入口读取同一服务，而不是分别持有平行的提供方／模型默认值。
+主 Agent 与部署定义的具名 Agent 角色共用的持久模型选择服务。`AgentModelConfig` 提供 `ctx.agentModels`；直接入口、Host 支撑的入口与具名子 Agent 工具都读取同一个状态所有者，不再分别携带无关的默认模型。
 
-插件配置必须提供 `{ provider, model }`。该组合配置项构成 Settings 中 `agent-default-model` 分节的基础层；挂载的设置提供方在其上叠加用户选择，更改会在下一次调用 `currentSelection()` 时可见。`reasoningEffort` 属于该 Settings 分节，但特意不属于插件配置：完整保存的选择必须能在下一个选定模型没有推理（reasoning）强度时清除旧值，而组合配置值会再次被继承。
+插件配置必须提供 `{ provider, model }`，也可提供 `reasoningEffort`。所有 Agent 角色的提供方由组合层固定。`agent-models` Settings 分节只保存每个角色的模型与可选推理强度，因此图形界面无法把 Agent 悄然切换到另一套凭据或提供方路由。
 
-- `ctx.agentDefaultModel.currentSelection()` 返回一份独立的 `{ provider, model, reasoningEffort? }` 选择，供新创建的 Agent 使用。
-- `ctx.agentDefaultModel.saveSelection(selection)` 保存完整的用户选择。未挂载设置提供方时，此调用不执行任何操作，组合配置项仍为当前值。
+- `currentSelection(id?)` 返回主 Agent 或某个已注册角色的有效选择。
+- `optionsFor(id, fallback?)` 应用角色选择，同时保留输出上限等无关 Agent 选项。
+- `registerTarget(target)` 在插件 scope 的生命期内贡献一个具名角色。等价贡献会合并，冲突定义会失败。
+- `saveSelection(selection)` 在挂载 Settings 提供方时持久化主 Agent 的切换。
+- 生成的 `agentModels.list/save/reset` Remote namespace 为 Settings > Agents 页面提供精确模型元数据与比较并交换 revision。
 
-该服务不校验目录成员关系。提供方路由可以服务未在目录中公布的模型；实际发起模型请求的消费方负责可用性诊断。
+每次图形界面保存都会先通过 `ctx.llm` 校验精确的模型与推理强度。过时的 Settings revision 会被拒绝，不会覆盖并发编辑。删除覆盖后，该角色恢复组合层默认值。
 
 ## 模型体验
 
-通过提供给入口的提供方／模型选择间接影响；模型可见请求由请求组装与适配器负责。
+本服务只会改变之后创建的 Agent 所获得的选择，不添加任何提示词内容。
 
 #### KV Cache 影响
 
-更改默认值只影响之后从该默认值解析选择的 Agent。请求日志已经指明选择的现有会话仍沿用该选择，因此本服务不会使其已建立的前缀失效。
+已存在的 Agent 与 Session 保留日志中的选择。已保存的变更只影响之后的 Agent 启动，不会使已建立的请求前缀失效。
 
 ## 已知限制与暂缓事项
 
-- 该服务只拥有一项进程级默认值；每个会话的选择仍由入口负责。
-- 未挂载设置提供方时，`saveSelection()` 无法保留选择供后续 Agent 使用。
+- 提供方路由归部署所有，不能在图形页面中修改。
+- 具名角色只在贡献它们的插件处于挂载状态时显示。
+- 没有可写 Settings 提供方时，目录仍可读，但无法持久化变更。

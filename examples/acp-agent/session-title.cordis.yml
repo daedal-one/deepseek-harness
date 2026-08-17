@@ -15,5 +15,5 @@
               maxInputBytes: 4096
               maxOutputTokens: 32
               timeoutMs: 5000
-              provider: deepseek-official
-              model: deepseek-v4-flash
+              provider: !!js 'process.env.DSH_SNAPSHOT === "replay" ? "deepseek-official" : "openrouter"'
+              model: !!js 'process.env.DSH_SNAPSHOT === "replay" ? "deepseek-v4-flash" : "deepseek/deepseek-v4-flash-0731:nitro"'

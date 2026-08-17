@@ -10,8 +10,8 @@
       - id: acp-agent
         name: '@deepseek-ai/dsh-acp-demo'
         config:
-          provider: deepseek-official
-          model: deepseek-v4-pro
+          provider: !!js 'process.env.DSH_SNAPSHOT === "replay" ? "deepseek-official" : "openrouter"'
+          model: !!js 'process.env.DSH_SNAPSHOT === "replay" ? "deepseek-v4-pro" : "deepseek/deepseek-v4-flash-0731:nitro"'
           persistenceRoot: !!js process.env.DSH_SNAPSHOT_SESSIONS_ROOT ?? './.sessions'
           persistenceCompression: !!js "process.env.DSH_SNAPSHOT === undefined ? 'zstd' : 'none'"
           workspaceContext:

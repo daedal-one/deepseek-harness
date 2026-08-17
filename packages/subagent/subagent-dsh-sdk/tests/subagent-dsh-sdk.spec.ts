@@ -86,6 +86,15 @@ describe('sdkStopReason', () => {
 })
 
 describe('dsh-subagent-dsh-sdk provider', () => {
+  it('defaults child runtimes to the OpenRouter Nitro route', () => {
+    expect(sdk.Config({ command: 'true' } as sdk.Config)).toMatchObject({
+      providerName: 'dsh-sdk',
+      provider: 'openrouter',
+      model: 'deepseek/deepseek-v4-flash-0731:nitro',
+      env: {},
+    })
+  })
+
   it('runs a child turn end to end with a parent-unique run id', async () => {
     const ctx = await setup({ FAKE_TEXT: 'hello from sdk child' })
     const run = await ctx.subagents.start('dsh-sdk', request('do X'))

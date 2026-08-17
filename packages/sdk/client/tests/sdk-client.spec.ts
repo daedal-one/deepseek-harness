@@ -54,6 +54,24 @@ async function tempDir(prefix: string): Promise<string> {
 }
 
 describe('DeepSeekHarness', () => {
+  it('defaults SDK-created agents to the OpenRouter Nitro route', async () => {
+    const dir = await tempDir('sdk-client-default-route-')
+    const recordFile = join(dir, 'init.jsonl')
+    const harness = new DeepSeekHarness({
+      launch: fakeLaunch({ FAKE_RECORD_INIT: recordFile }),
+      cwd: dir,
+    })
+    cleanups.push(() => harness.close())
+    await harness.start()
+    await harness.close()
+    const records = (await readFile(recordFile, 'utf8')).trim().split('\n').map(line => JSON.parse(line) as object)
+    expect(records).toEqual([{
+      cwd: dir,
+      provider: 'openrouter',
+      model: 'deepseek/deepseek-v4-flash-0731:nitro',
+    }])
+  })
+
   it('ignores notifications that precede the submitted message receipt', async () => {
     const notifications = [
       { method: 'session.status', params: { sessionId: 'owned', status: 'running' } },

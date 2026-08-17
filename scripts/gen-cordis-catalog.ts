@@ -51,7 +51,7 @@ export { REGION_BEGIN, REGION_END }
  */
 export const SERVICE_PAGE: Record<string, string> = {
   agentLoop: 'core.md',
-  agentDefaultModel: 'core.md',
+  agentModels: 'core.md',
   agentPresets: 'core.md',
   agents: 'core.md',
   apiProxy: 'typert.md',
@@ -219,6 +219,9 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   AgentCancelCause: 'core.md',
   AgentFactory: 'core.md',
   AgentHandle: 'core.md',
+  AgentModelTarget: 'core.md',
+  AgentModelTargetId: 'core.md',
+  AgentModelsSnapshot: 'core.md',
   ModelSelection: 'core.md',
   AgentOptions: 'core.md',
   AgentStatus: 'core.md',

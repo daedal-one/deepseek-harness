@@ -27,7 +27,7 @@ uv run --project python/sdk pytest
 
 `python/sdk/tests/test_bundled_runtime.py` 会运行可用的内置载体；某个载体的产物尚未构建时，会跳过该载体。仓库级测试政策见 [测试](../docs/testing.md)。
 
-交互式冒烟测试需要环境变量或仓库根目录 `.env` 中存在 `DEEPSEEK_API_KEY`：
+交互式冒烟测试需要环境变量或仓库根目录 `.env` 中存在 `OPENROUTER_API_KEY`：
 
 ```python
 from deepseek_harness import DeepSeekHarness

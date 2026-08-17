@@ -79,9 +79,9 @@
 - `EMPTY_RESPONSE_CODE`：两个适配器都使用的提供方无关 code，用于表示退化的提供方生成结果：一个未携带任何内容块的终止 `stop`。它会被分类为错误 finish（而非成功空消息），因为尝试未产生持久内容；`dsh-llm-retry` 默认重试它。
 - `INVALID_CREDENTIAL_CODE`：已提供但无法使用的凭据所用的提供方无关 code——格式错误而非缺失，修复方式是改正已存储的值，而不是补充一个凭据，这正是它与 `MISSING_CREDENTIAL` 的区别。它被刻意排除在默认可重试集合之外：格式错误的凭据每次尝试都会以同样方式失败。`assertUsableApiKey(raw, pkg, ref)` 会以该 code 抛出 `LlmError`，是每个适配器判定已存储凭据不可用时共用的诊断。
 
-### 真实适配器
+### 随发行版交付的适配器
 
-两个适配器使用不同内部机制实现 `LlmAdapter`：[`@deepseek-ai/dsh-llm-deepseek`](../llm-deepseek) 针对 `deepseek-official` 路由使用直接 fetch 加 `eventsource-parser` SSE（Server-Sent Events）分帧，[`@deepseek-ai/dsh-llm-pi-ai`](../llm-pi-ai) 则通过 `@earendil-works/pi-ai` 动态解析已配置提供方／模型对。两者都遵循 `types.ts` 中的 `StreamChunk` 约定：usage 先于 finish，工具参数保持原始字符串。适配器实现在内部可以抛出异常或发出失败 finish；`LlmRuntime` 会将两者都暴露为终止失败 finish。适配器理由见[双 LLM 适配器](../../../.agents/notes/implemented/architecture/2026-06-13-twin-llm-adapters.md)，服务边界见[终止失败决策](../../../.agents/notes/implemented/architecture/2026-07-29-terminal-llm-stream-failures.md)。
+[`@deepseek-ai/dsh-llm-pi-ai`](../llm-pi-ai) 通过 `@earendil-works/pi-ai` 动态解析已配置的提供方／模型对，并是随发行版交付的对话适配器。它遵循 `types.ts` 中的 `StreamChunk` 约定：usage 先于 finish，工具参数保持原始字符串。适配器实现可以在内部抛出异常或发出失败 finish；`LlmRuntime` 会把两者都暴露为终止失败 finish。该服务义务见[终止失败决策](../../../.agents/notes/implemented/architecture/2026-07-29-terminal-llm-stream-failures.md)。
 
 ## 模型体验
 

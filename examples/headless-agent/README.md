@@ -2,14 +2,14 @@
 
 English | [中文](README.zh.md)
 
-This directory owns the replay and real-model test composition for a headless coding agent: DeepSeek V4 + local bash and filesystem tools + subagent delegation + workflows and fresh-agent Ralph iteration + `todo_write` + JSONL persistence. It explicitly mounts the shared agent spine, one root agent, persistence, and checkpoint policy; it is not a second product entry point.
+This directory owns the replay and real-model test composition for a headless coding agent: OpenRouter Nitro + local bash and filesystem tools + subagent delegation + workflows and fresh-agent Ralph iteration + `todo_write` + JSONL persistence. It explicitly mounts the shared agent spine, one root agent, persistence, and checkpoint policy; it is not a second product entry point.
 
 ## Run it
 
 ```sh
 # repo root .env (gitignored) or exported env:
-#   DEEPSEEK_API_KEY=sk-…
-#   DEEPSEEK_BASE_URL=https://…   # optional; defaults to the public API
+#   OPENROUTER_API_KEY=sk-or-…
+#   OPENROUTER_BASE_URL=https://…   # optional; defaults to the public API
 pnpm dsh --profile headless "fix the failing test in this workspace"
 ```
 
@@ -19,7 +19,7 @@ Snapshot suites run this directory's configuration through [`tests/fixtures/head
 
 ## E2B POC overlay
 
-[`e2b.cordis.yml`](e2b.cordis.yml) replaces the local filesystem and subprocess providers with one shared E2B sandbox while retaining `dsh-bash-local` and the same model-facing tools. Put `E2B_API_KEY` beside `DEEPSEEK_API_KEY` in the gitignored root `.env`, then run the credential-gated live composition, which drives FS, Bash, PTY, and LSP in one sandbox and proves final deletion:
+[`e2b.cordis.yml`](e2b.cordis.yml) replaces the local filesystem and subprocess providers with one shared E2B sandbox while retaining `dsh-bash-local` and the same model-facing tools. Put `E2B_API_KEY` beside `OPENROUTER_API_KEY` in the gitignored root `.env`, then run the credential-gated live composition, which drives FS, Bash, PTY, and LSP in one sandbox and proves final deletion:
 
 ```sh
 pnpm exec vitest run --config vitest.e2e.config.ts packages/e2b/e2b/tests/composition.e2e.ts

@@ -90,17 +90,21 @@ Source: [`packages/examples/acp-demo/src/index.ts:39`](../packages/examples/acp-
 
 ## `@deepseek-ai/dsh-agent-default-model`
 
+Requires: `llm`
+
 ```ts config-catalog
-/** Composition entry for the default model selection. */
+/** Composition entry for the main Agent and fixed provider route. */
 export interface Config {
-  /** Registered provider route. */
+  /** Provider route shared by every registered Agent target. */
   provider: string
-  /** Provider-owned model id. */
+  /** Main Agent model id. */
   model: string
+  /** Main Agent reasoning effort, or provider/default behavior when absent. */
+  reasoningEffort?: string
 }
 ```
 
-Source: [`packages/core/agent-default-model/src/index.ts:41`](../packages/core/agent-default-model/src/index.ts)
+Source: [`packages/core/agent-default-model/src/index.ts:74`](../packages/core/agent-default-model/src/index.ts)
 
 <a id="deepseek-aidsh-agent-instructions"></a>
 
@@ -684,7 +688,7 @@ Source: [`packages/goal/goal/src/index.ts:116`](../packages/goal/goal/src/index.
 
 ## `@deepseek-ai/dsh-headless`
 
-Requires: `agentDefaultModel` · `agents` · `sessions`
+Requires: `agentModels` · `agents` · `sessions`
 
 ```ts config-catalog
 /** Plugin config: the task resolved from this app's injected provider service. */
@@ -765,7 +769,7 @@ Source: [`packages/hooks/hooks-codex/src/index.ts:44`](../packages/hooks/hooks-c
 
 ## `@deepseek-ai/dsh-host-apiproxy`
 
-Requires: `agentDefaultModel` · `agents` · `attachments` · `directoryPicker` · `llm` · `sessions` · `subagents` · `sessionQuery` · `tools` · `userQuestions` · `workspaceRegistry`
+Requires: `agentModels` · `agents` · `attachments` · `directoryPicker` · `llm` · `sessions` · `subagents` · `sessionQuery` · `tools` · `userQuestions` · `workspaceRegistry`
 
 ```ts config-catalog
 /** Gateway plugin configuration. */
@@ -876,61 +880,6 @@ export interface Config {
 
 Source: [`packages/jobs/jobs-local/src/index.ts:31`](../packages/jobs/jobs-local/src/index.ts)
 
-<a id="deepseek-aidsh-llm-deepseek"></a>
-
-## `@deepseek-ai/dsh-llm-deepseek`
-
-Requires: `llm`
-
-```ts config-catalog
-/**
- * Plugin config, validated by the same-named schemastery schema and doubling
- * as the `llm-deepseek` settings-section shape. Every field is optional in
- * yml: a missing API key resolves through {@link Config.apiKeyEnv} at each
- * request (a request without any key fails with `MISSING_CREDENTIAL`, not at
- * plugin load), omitted thinking mode uses the provider default, and omitted
- * reasoning effort resolves to `high`.
- */
-export interface Config {
-  /** Credential reference (environment-variable name) resolved per request; defaults to `DEEPSEEK_API_KEY`. */
-  apiKeyEnv?: string
-  /** Endpoint base; falls back to $DEEPSEEK_BASE_URL from a trusted environment layer, then the public API. */
-  baseURL?: string
-  /** Deployment thinking policy; `disabled` limits every conversation request to `off`. */
-  thinking?: 'enabled' | 'disabled'
-  /** Default thinking effort (default `high`); `off` disables thinking per request. */
-  reasoningEffort?: 'off' | 'high' | 'max'
-  /** Default per-request output cap (default 256,000); a model's own cap and explicit request values win. */
-  maxTokens?: number
-  /** Positive context capacity used when the selected model has no exact value (default 1,000,000). */
-  defaultContextWindow?: number
-  /** Advisory models shown by discovery consumers; defaults to V4 Flash and V4 Pro. */
-  models?: DeepSeekCatalogModel[]
-  /** Maximum provider idle time while one stream read is outstanding (default five minutes). */
-  streamIdleTimeoutMs?: number
-  /** Provider-owned model-request retry policy; omission uses normal defaults. */
-  retryPolicy?: RetryPolicyConfig
-}
-
-/** One optional model entry advertised by the direct-fetch adapter. */
-export interface DeepSeekCatalogModel {
-  /** Wire model id accepted by the configured endpoint. */
-  id: string
-  /** Selector label; defaults to {@link id}. */
-  name?: string
-  /** Optional selector detail for deployments with similar model variants. */
-  description?: string
-  /** Known combined request/response context capacity; omitted when deployment metadata is unavailable. */
-  contextWindow?: number
-  /** Per-request output cap for this model; omission falls back to the profile's {@link DeepSeekConnectionOptions.maxTokens}. */
-  maxTokens?: number
-}
-```
-
-Depends on: [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts)
-
-Source: [`packages/llm/llm-deepseek/src/index.ts:62`](../packages/llm/llm-deepseek/src/index.ts)
-
 <a id="deepseek-aidsh-llm-pi-ai"></a>
 
 ## `@deepseek-ai/dsh-llm-pi-ai`
@@ -977,6 +926,8 @@ export interface PiAiProviderProfile {
    * model the catalog does not describe is refused rather than skipped.
    */
   modelOverrides?: Record<string, PiAiModelOverride>
+  /** Additive request-wire aliases inheriting complete installed model metadata. */
+  modelAliases?: Record<string, PiAiModelAlias>
   /**
    * Reasoning-dispatch switches for every `openai-completions` model on this
    * route; each model's own `compat` overrides per field. What neither sets
@@ -1031,6 +982,11 @@ export interface PiAiProviderProfile {
 export interface PiAiModelProfile {
   /** Model id sent to the provider and accepted by {@link GenerateOptions.model}. */
   id: string
+  /**
+   * Installed model on this provider route whose metadata this entry inherits.
+   * The configured {@link id} remains the request-wire model identifier.
+   */
+  catalogModel?: string
   /** Display name for selectors; defaults to the catalog name, then the id. */
   name?: string
   /** Maximum combined request and response context in tokens. */
@@ -1073,7 +1029,13 @@ export interface PiAiModelProfile {
  * rest of the catalog serving untouched, which is what makes "correct one
  * model, keep the other thirty-seven" a three-line edit.
  */
-export type PiAiModelOverride = Omit<PiAiModelProfile, 'id'>
+export type PiAiModelOverride = Omit<PiAiModelProfile, 'id' | 'catalogModel'>
+
+/** Additive request-wire alias inheriting one installed catalog model. */
+export type PiAiModelAlias = Omit<PiAiModelProfile, 'id' | 'catalogModel'> & {
+  /** Installed model whose complete metadata the alias inherits. */
+  catalogModel: string
+}
 
 /**
  * Reasoning-dispatch compatibility switches, set on the route (its models'
@@ -1119,7 +1081,7 @@ type WithheldThinkingFormat = 'chat-template' | 'qwen-chat-template'
 
 Depends on: `Api` (`@earendil-works/pi-ai`) · `CacheRetention` (`@earendil-works/pi-ai`) · `Model` (`@earendil-works/pi-ai`) · `ModelThinkingLevel` (`@earendil-works/pi-ai`) · `OpenAICompletionsCompat` (`@earendil-works/pi-ai`) · [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts) · `ThinkingBudgets` (`@earendil-works/pi-ai`) · `Transport` (`@earendil-works/pi-ai`)
 
-Source: [`packages/llm/llm-pi-ai/src/config.ts:172`](../packages/llm/llm-pi-ai/src/config.ts)
+Source: [`packages/llm/llm-pi-ai/src/config.ts:176`](../packages/llm/llm-pi-ai/src/config.ts)
 
 <a id="deepseek-aidsh-llm-replay"></a>
 
@@ -2259,15 +2221,15 @@ export interface Config {
    * fails.
    */
   cwd?: string
-  /** Provider route the child runtime initializes with (default `deepseek-official`). */
+  /** Provider route the child runtime initializes with (default `openrouter`). */
   provider: string
-  /** Model the child runtime initializes with (default `deepseek-v4-flash`). */
+  /** Model the child runtime initializes with (default `deepseek/deepseek-v4-flash-0731:nitro`). */
   model: string
   /** Optional per-request output-token cap for the child runtime. */
   maxTokens?: number
   /**
    * Extra environment variables for the child process — e.g. the child
-   * runtime's own `DEEPSEEK_API_KEY`, or `DSH_CORDIS_CONFIG` naming its
+   * runtime's own `OPENROUTER_API_KEY`, or `DSH_CORDIS_CONFIG` naming its
    * config. Forwarded on top of a credential-scrubbed copy of the parent
    * env, so an explicit key here reaches the child while ambient secrets do
    * not leak implicitly.
@@ -2920,6 +2882,8 @@ export interface Config {
    * Agent options applied to every child; omitted fields use child-loop defaults.
    */
   agentOptions?: AgentOptions
+  /** Human-facing role name used by graphical Agent model settings. */
+  agentLabel?: string
   /**
    * Per-child persona that shadows `deployment:persona`. Requires the
    * provider's `persona` capability; omission preserves the deployment persona.
@@ -2964,7 +2928,7 @@ export interface Config {
 
 Depends on: [`AgentOptions`](subsystems/core.md)
 
-Source: [`packages/subagent/tool-subagent/src/index.ts:34`](../packages/subagent/tool-subagent/src/index.ts)
+Source: [`packages/subagent/tool-subagent/src/index.ts:38`](../packages/subagent/tool-subagent/src/index.ts)
 
 <a id="deepseek-aidsh-tool-subagent-report"></a>
 

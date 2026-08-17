@@ -189,6 +189,7 @@
       config:
         provider: spawn
         toolName: subagent
+        agentLabel: Subagent
         backgroundMode: continuable
 
     - id: tool-subagent-fork
@@ -196,6 +197,7 @@
       config:
         provider: fork
         toolName: subagent_fork
+        agentLabel: Forked agent
         backgroundMode: continuable
 
     # Product providers are host-plane singletons. Copy this preset, then

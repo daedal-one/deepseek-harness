@@ -18,8 +18,8 @@ import { useState } from 'react'
 import type { ReactNode } from 'react'
 import type { DiscoveredModelView, IApiClient } from '@deepseek-ai/dsh-api-remotes/client'
 import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
-import { formatCapacity, parseCapacity } from './DeepSeekModelsEditor.tsx'
-import type { DeepSeekModelDraft } from './DeepSeekModelsEditor.tsx'
+import { formatCapacity, parseCapacity } from './ModelCatalogEditor.tsx'
+import type { ModelCatalogDraft } from './ModelCatalogEditor.tsx'
 import { messageOf } from './store.ts'
 import type { en } from './locales.ts'
 import styles from './ModelsSection.module.css'
@@ -30,7 +30,7 @@ import styles from './ModelsSection.module.css'
  * schema adds, or one hand-written in `settings.yaml` — has to survive being
  * edited here rather than being dropped by a rebuild.
  */
-export type ModelDraft = DeepSeekModelDraft
+export type ModelDraft = ModelCatalogDraft
 
 /** A row's text field, or the empty string when unset or not a string. */
 function textOf(model: ModelDraft, key: string): string {

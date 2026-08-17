@@ -13,7 +13,7 @@ import type { ModelCatalogFailure, ModelProviderGroup } from './sessions.ts'
 
 /** Wire view of one configurable provider. */
 export interface ConfigurableProviderView {
-  /** Provider route key (`deepseek-official`, `openai`, …). */
+  /** Provider route key (`openrouter`, `openai`, …). */
   provider: string
   /** Human-readable name for configuration surfaces. */
   displayName: string

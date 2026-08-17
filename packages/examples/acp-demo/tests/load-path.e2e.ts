@@ -31,8 +31,15 @@ const repoTsconfig = fileURLToPath(new URL('../../../../tsconfig.json', import.m
 // A minimal opt-in leaf that loads this app + the two backends and the optional
 // session-query consumer/policies, inlined so the package test owns its fixture.
 const CORDIS_YML = `
-- id: llm-deepseek
-  name: '@deepseek-ai/dsh-llm-deepseek'
+- id: llm-pi-ai
+  name: '@deepseek-ai/dsh-llm-pi-ai'
+  config:
+    providers:
+      openrouter:
+        apiKeyEnv: OPENROUTER_API_KEY
+        modelAliases:
+          deepseek/deepseek-v4-flash-0731:nitro:
+            catalogModel: deepseek/deepseek-v4-flash
 - id: subprocess
   name: '@deepseek-ai/dsh-subprocess-local'
 - id: bash
@@ -40,8 +47,8 @@ const CORDIS_YML = `
 - id: acp-agent
   name: '@deepseek-ai/dsh-acp-demo'
   config:
-    provider: deepseek-official
-    model: deepseek-v4-flash
+    provider: openrouter
+    model: deepseek/deepseek-v4-flash-0731:nitro
     persona: 'You are a test agent.'
     workspaceContext: false
 - id: tool-session-query
@@ -88,7 +95,7 @@ async function boot(): Promise<Spawned & { cwd: string }> {
         ...process.env,
         TSX_TSCONFIG_PATH: repoTsconfig,
         // Key-present check only; no prompt is sent, so the model is never called.
-        DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY ?? 'keyless-acp-agent-smoke',
+        OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY ?? 'keyless-acp-agent-smoke',
         DSH_HOME: join(cwd, '.dsh'),
         DSH_AGENTS_HOME: join(cwd, '.agents'),
       },

@@ -43,7 +43,6 @@
     "@deepseek-ai/dsh-sdk-jsonrpc-server": "workspace:^",
     "@deepseek-ai/dsh-sdk-jsonrpc-demo": "workspace:^",
     "@deepseek-ai/dsh-llm": "workspace:^",
-    "@deepseek-ai/dsh-llm-deepseek": "workspace:^",
     "@deepseek-ai/dsh-llm-pi-ai": "workspace:^",
     "@deepseek-ai/dsh-llm-retry": "workspace:^",
     "@deepseek-ai/dsh-home-paths": "workspace:^",

@@ -1,14 +1,13 @@
 /**
- * One provider's editor card, hand-written per adapter family: the primary
+ * One provider's editor card for the shipped pi-ai adapter: the primary
  * field is a single write-only **API key** input (the page never asks for an
  * environment-variable name — a typed key stores through `credentials.set`
  * under the profile's reference, deriving `<ROUTE>_API_KEY` when the profile
  * has none. The pi-ai profile records that derivation as `apiKeyEnv` only when
  * a key is entered; a blank key materializes a reference-free profile for
  * provider-native authentication);
- * the collapsed 自定义设置 area carries the per-family extras (`baseURL` for
- * both families, DeepSeek's id/name/context-window model catalog, and the
- * display name and wire protocol of a pi-ai route the adapter does not ship —
+ * the collapsed 自定义设置 area carries the provider endpoint and model
+ * catalog, plus the display name and wire protocol of a route the adapter does not ship —
  * the two fields the create card asked that route for, editable here for the
  * same reason).
  * Reasoning effort is deliberately absent: it is a per-MODEL capability, and
@@ -27,9 +26,7 @@ import type { CredentialView, IApiClient, SettingsNamespaceView, SettingsPathOpV
 import {
   deletePath, getPath, hasPath, nodeAtPath, rehydrateSchema, setPath, validateDraft,
 } from '@deepseek-ai/dsh-client-schema-form'
-import {
-  DeepSeekModelsEditor, modelDrafts, validateDeepSeekModels,
-} from './DeepSeekModelsEditor.tsx'
+import { ModelCatalogEditor, modelDrafts, validateModelCatalog } from './ModelCatalogEditor.tsx'
 import { apiKeyFailure } from './apiKey.ts'
 import { EditorFooter } from './EditorFooter.tsx'
 import { ModelListEditor } from './ModelListEditor.tsx'
@@ -38,10 +35,7 @@ import type { en } from './locales.ts'
 import styles from './ModelsSection.module.css'
 
 /** Per-adapter-family curated field sets (unknown namespaces get the hint alone). */
-type EditorLayout = 'deepseek' | 'pi-ai' | 'unknown'
-
-/** The public DeepSeek endpoint shown as the deepseek base-URL placeholder. */
-const DEEPSEEK_PUBLIC_BASE_URL = 'https://api.deepseek.com'
+type EditorLayout = 'catalog' | 'pi-ai' | 'unknown'
 
 /** Props of {@link ProviderEditor}. */
 export interface ProviderEditorProps {
@@ -121,13 +115,6 @@ export function pathOps(
   return ops
 }
 
-/** The editor layout the owning namespace selects. */
-function layoutOf(ns: string): EditorLayout {
-  if (ns === 'llm-deepseek') return 'deepseek'
-  if (ns === 'llm-pi-ai') return 'pi-ai'
-  return 'unknown'
-}
-
 /** The credential reference this profile resolves keys through. */
 function refFor(namespace: SettingsNamespaceView, path: readonly string[], provider: string): string {
   const profile = getPath(namespace.value, path)
@@ -158,9 +145,13 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   const [expectedRevision, setExpectedRevision] = useState(() => namespace.revision)
   const root = useMemo(() => rehydrateSchema(namespace.schema), [namespace.schema])
   const node = useMemo(() => nodeAtPath(root, settingsPath), [root, settingsPath])
+  const layout: EditorLayout = namespace.ns === 'llm-pi-ai'
+    ? 'pi-ai'
+    : nodeAtPath(root, [...settingsPath, 'models']) === undefined
+      ? 'unknown'
+      : 'catalog'
   const fallback = getPath(namespace.value, settingsPath)
   const disabled = props.readOnly || busy
-  const layout = layoutOf(namespace.ns)
   const keyRef = refFor(namespace, settingsPath, props.provider)
   // The same schema read the create card makes, so the choices offered here
   // and there cannot drift apart: both come from the adapter's own `Config`.
@@ -203,7 +194,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
 
   // The model list is validated by the same per-row checker for both families,
   // so a bad row is named by its position rather than by a blanket message.
-  const modelFailure = validateDeepSeekModels(getPath(draft, ['models']))
+  const modelFailure = validateModelCatalog(getPath(draft, ['models']))
   const keyFailure = apiKeyFailure(keyDraft)
   // What a probe or a write must carry: the typed key with paste whitespace
   // removed. A blank field yields an empty string, which both call sites read
@@ -247,7 +238,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
       // with a bad row; it stays because the schema check below would refuse
       // the write with a message naming a path instead of the row, and because
       // nothing but this function decides what is written.
-      const failure = validateDeepSeekModels(getPath(next, ['models']))
+      const failure = validateModelCatalog(getPath(next, ['models']))
       /* v8 ignore next 3 -- unreachable from the card: the same failure disables submit */
       if (failure !== undefined) {
         return `${t('model')} ${String(failure.index + 1)}: ${t(failure.key)}`
@@ -331,16 +322,12 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
    * narrowed so the per-family branches below are total: an unknown namespace
    * renders the hint instead and never reaches this body.
    */
-  const curatedFields = (family: 'deepseek' | 'pi-ai'): ReactNode => {
+  const curatedFields = (family: 'catalog' | 'pi-ai'): ReactNode => {
     // What a hand-declared route names for itself and nothing else can supply.
-    // A whole-section `llm-deepseek` profile is a composition fact with no
-    // per-route identity for its schema to carry, hence the family test.
-    const ownsIdentity = family === 'pi-ai' && props.declared === true
+    const ownsIdentity = props.declared === true
     const customModels = getPath(draft, ['models'])
     const modelsOverridden = hasPath(draft, ['models'])
     const models = modelDrafts(modelsOverridden ? customModels : inheritedModels())
-    const defaultContextWindow = getPath(fallback, ['defaultContextWindow'])
-    const defaultMaxTokens = getPath(fallback, ['maxTokens'])
     const keyPlaceholder = keyLocked
       ? t('keyEnvLocked')
       : keyState?.configured === true && props.credentialRequired !== true
@@ -412,9 +399,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
                 className={styles['input']}
                 type="text"
                 value={stringAt(draft, 'baseURL') ?? ''}
-                placeholder={family === 'deepseek'
-                  ? DEEPSEEK_PUBLIC_BASE_URL
-                  : stringAt(fallback, 'baseURL') ?? t('baseUrlDefault')}
+                placeholder={stringAt(fallback, 'baseURL') ?? t('baseUrlDefault')}
                 aria-label={t('baseUrl')}
                 disabled={disabled}
                 onChange={(event) => {
@@ -447,17 +432,16 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
                 </div>
               )
               : null}
-            {/* Both families edit the same rows through the same contract; only
-                the extras differ — DeepSeek's inherited capacities, pi-ai's
-                endpoint interrogation. */}
-            {family === 'deepseek'
+            {family === 'catalog'
               ? (
-                <DeepSeekModelsEditor
+                <ModelCatalogEditor
                   {...catalogProps}
-                  defaultContextWindow={typeof defaultContextWindow === 'number'
-                    ? defaultContextWindow
+                  defaultContextWindow={typeof getPath(fallback, ['defaultContextWindow']) === 'number'
+                    ? getPath(fallback, ['defaultContextWindow']) as number
                     : undefined}
-                  defaultMaxTokens={typeof defaultMaxTokens === 'number' ? defaultMaxTokens : undefined}
+                  defaultMaxTokens={typeof getPath(fallback, ['maxTokens']) === 'number'
+                    ? getPath(fallback, ['maxTokens']) as number
+                    : undefined}
                 />
               )
               : <ModelListEditor {...catalogProps} probe={probe} probeBlocked={keyFailure} api={api} />}

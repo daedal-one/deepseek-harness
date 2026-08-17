@@ -7,7 +7,8 @@ import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { TestRemote, usePinnedBrowserLanguages } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply, inject, refreshIfLoaded } from '@deepseek-ai/dsh-client-ui-settings-models/client'
 import { ModelsSection } from '../src/client/ModelsSection.tsx'
-import { DeepSeekOnboardingDialog } from '../src/client/DeepSeekOnboardingDialog.tsx'
+import { AgentsSection } from '../src/client/AgentsSection.tsx'
+import { OpenRouterOnboardingDialog } from '../src/client/OpenRouterOnboardingDialog.tsx'
 import { WelcomeNotice } from '../src/client/WelcomeNotice.tsx'
 
 // The service reads its initial locale from the browser; these specs assert
@@ -22,6 +23,7 @@ async function bench(isLoopback = true) {
   // The plugins inject `remote`; forwarded events reach them through the
   // same `$dispatch` handoff the connection sink makes.
   new TestRemote(ctx)
+  ctx.provide('remote.agentModels', {} as never)
   // The apply path only captures the wire face; no call leaves this fake
   // until a section actually loads.
   ctx.provide('connection', { api: {}, isLoopback } as never)
@@ -43,7 +45,7 @@ function declare(slots: SlotRegistry): () => void {
 
 describe('ui-settings-models apply', () => {
   it('declares the services it uses', () => {
-    expect(inject).toEqual(['slots', 'locale', 'connection', 'remote'])
+    expect(inject).toEqual(['slots', 'locale', 'connection', 'remote', 'remote.agentModels'])
   })
 
   it('registers the models nav entry for declarations before or after apply', async () => {
@@ -61,20 +63,23 @@ describe('ui-settings-models apply', () => {
     expect(typeof injected.controller.load).toBe('function')
     expect(typeof injected.useSnapshot).toBe('function')
     expect(injected.api).toBeDefined()
+    const agents = before.slots.entries('settings.section').find(candidate => candidate.options.id === 'agents')!
+    expect(agents.component).toBe(AgentsSection)
+    expect(agents.options).toMatchObject({ id: 'agents', order: 20 })
     const onboarding = before.slots.entries('settings.onboarding')
     expect(onboarding).toHaveLength(2)
     expect(onboarding.find(entry => entry.options.id === 'welcome-notice')).toMatchObject({
       component: WelcomeNotice,
       options: { id: 'welcome-notice', order: -100 },
     })
-    const deepSeek = onboarding.find(entry => entry.options.id === 'deepseek-official')!
-    expect(deepSeek.component).toBe(DeepSeekOnboardingDialog)
-    expect(deepSeek.options).toMatchObject({ id: 'deepseek-official', order: 0 })
-    const deepSeekInjected = (
-      deepSeek.inject as unknown as () => import('../src/client/DeepSeekOnboardingDialog.tsx').DeepSeekOnboardingInjected
+    const openRouter = onboarding.find(entry => entry.options.id === 'openrouter')!
+    expect(openRouter.component).toBe(OpenRouterOnboardingDialog)
+    expect(openRouter.options).toMatchObject({ id: 'openrouter', order: 0 })
+    const openRouterInjected = (
+      openRouter.inject as unknown as () => import('../src/client/OpenRouterOnboardingDialog.tsx').OpenRouterOnboardingInjected
     )()
-    expect(deepSeekInjected.hooks.models).toBe(injected.controller.store)
-    expect(deepSeekInjected.api).toBeDefined()
+    expect(openRouterInjected.hooks.models).toBe(injected.controller.store)
+    expect(openRouterInjected.api).toBeDefined()
 
     const after = await bench()
     await after.ctx.plugin({ inject: [...inject], apply }).await()
@@ -85,7 +90,7 @@ describe('ui-settings-models apply', () => {
     expect(after.slots.entries('settings.section')[0]!.component).toBe(ModelsSection)
     expect(after.slots.entries('settings.onboarding')).toHaveLength(2)
     // The self-inflicted ledger notifications hit the duplicate guard.
-    expect(after.slots.entries('settings.section')).toHaveLength(1)
+    expect(after.slots.entries('settings.section')).toHaveLength(2)
   })
 
   it('the label thunk follows the active locale without re-registration', async () => {
@@ -113,7 +118,7 @@ describe('ui-settings-models apply', () => {
     const b = await bench()
     const redeclare = declare(b.slots)
     await b.ctx.plugin({ inject: [...inject], apply }).await()
-    expect(b.slots.entries('settings.section')).toHaveLength(1)
+    expect(b.slots.entries('settings.section')).toHaveLength(2)
     // Declarer unload: the cascade removes our entry while our local
     // disposer variable goes stale.
     redeclare()
@@ -135,12 +140,15 @@ describe('ui-settings-models apply', () => {
     const fiber = b.ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
     expect(b.locale.bind('settings.models')('nav')).toBe('模型')
+    expect(b.locale.bind('settings.agents')('nav')).toBe('智能体')
     await fiber.dispose()
     expect(b.slots.entries('settings.section')).toHaveLength(0)
     expect(b.slots.entries('settings.onboarding')).toHaveLength(0)
     // The (ns, locale) seats are free again — the dictionary disposers ran.
     expect(() => b.locale.register('settings.models', 'zh', {})).not.toThrow()
     expect(() => b.locale.register('settings.models', 'en', {})).not.toThrow()
+    expect(() => b.locale.register('settings.agents', 'zh', {})).not.toThrow()
+    expect(() => b.locale.register('settings.agents', 'en', {})).not.toThrow()
   })
 
   it('keeps remote-browser acknowledgement in process memory', async () => {
@@ -193,14 +201,14 @@ describe('pushed invalidations', () => {
     declare(b.slots)
     await b.ctx.plugin({ inject: [...inject], apply }).await()
     const entry = b.slots.entries('settings.onboarding')
-      .find(candidate => candidate.options.id === 'deepseek-official')!
+      .find(candidate => candidate.options.id === 'openrouter')!
     const injected = (
       entry.inject as unknown as
-      () => import('../src/client/DeepSeekOnboardingDialog.tsx').DeepSeekOnboardingInjected
+      () => import('../src/client/OpenRouterOnboardingDialog.tsx').OpenRouterOnboardingInjected
     )()
     injected.controller.store.update((state) => { state.status = 'ready' })
     const load = vi.spyOn(injected.controller, 'load').mockResolvedValue()
-    b.ctx.remote.$dispatch('credentials/updated', ['DEEPSEEK_API_KEY'])
+    b.ctx.remote.$dispatch('credentials/updated', ['OPENROUTER_API_KEY'])
     expect(load).toHaveBeenCalledTimes(1)
   })
 
@@ -217,7 +225,7 @@ describe('pushed invalidations', () => {
     injected.hooks.welcome.update((state) => { state.status = 'ready' })
     const load = vi.spyOn(injected.controller, 'load').mockResolvedValue()
 
-    b.ctx.remote.$dispatch('settings/document-updated', ['llm-deepseek', 1])
+    b.ctx.remote.$dispatch('settings/document-updated', ['llm-pi-ai', 1])
     expect(load).not.toHaveBeenCalled()
     b.ctx.remote.$dispatch('settings/document-updated', ['ui-onboarding', 2])
     expect(load).toHaveBeenCalledOnce()

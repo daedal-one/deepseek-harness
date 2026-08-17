@@ -330,6 +330,60 @@ describe('dsh-tool-subagent', () => {
     })
   })
 
+  it('registers a labeled Agent role and applies its current selection to future starts', async () => {
+    let seen: ResolvedSubagentStartRequest | undefined
+    const registerTarget = vi.fn(() => vi.fn())
+    const optionsFor = vi.fn(() => ({
+      provider: 'openrouter',
+      model: 'deepseek/deepseek-v4-flash-0731:nitro',
+      reasoningEffort: 'xhigh' as never,
+    }))
+    const ctx = new Context()
+    ctx.provide('agentModels', { registerTarget, optionsFor } as never)
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ToolRuntime)
+    await ctx.plugin(SubagentRuntime)
+    ctx.subagents.registerProvider({
+      name: 'capture',
+      capabilities: { outputSchema: false, depthLimit: false, toolFilter: false, persona: false, principal: false },
+      inheritsParentContext: false,
+      start: async (request) => {
+        seen = request
+        return {
+          id: SessionId('configured-child'),
+          localAgent: undefined,
+          result: Promise.resolve({ output: [{ type: 'text', text: 'ok' }], stopReason: 'completed' as const }),
+          dispose: async () => {},
+        }
+      },
+    })
+    await ctx.plugin(tool, {
+      provider: 'capture',
+      toolName: 'subagent_reviewer',
+      agentLabel: 'Reviewer',
+      maxDepth: 'provider-managed',
+    })
+
+    expect(registerTarget).toHaveBeenCalledWith({
+      id: 'subagent-reviewer',
+      label: 'Reviewer',
+    })
+    await ctx.tools.execute({
+      signal: testToolSignal,
+      callId: CallId('configured-role'),
+      name: 'subagent_reviewer',
+      arguments: { description: 'review', prompt: 'inspect this' },
+      agent: fakeAgent(),
+    })
+    expect(optionsFor).toHaveBeenCalledWith('subagent-reviewer', undefined)
+    expect(seen?.agentOptions).toEqual({
+      provider: 'openrouter',
+      model: 'deepseek/deepseek-v4-flash-0731:nitro',
+      reasoningEffort: 'xhigh',
+    })
+    await ctx.fiber.dispose()
+  })
+
   it('defaults toolName and omits agentOptions when apply() is called directly (schema bypass)', async () => {
     // `ctx.plugin` validates+defaults config first (toolName→'subagent', the
     // agentOptions object→{}), so the runtime `?? 'subagent'` fallback and the

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import LlmRuntime, { createUserMessage, CallId, LlmError, StreamChunk  } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { createUserMessage, CallId, LlmError, ReasoningEffortId, StreamChunk  } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId, TurnEndReason } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
@@ -75,6 +75,23 @@ describe('agent loop', () => {
     await waitForIdle(ctx, agent)
 
     expect(adapter.requests[0]?.maxTokens).toBe(256)
+  })
+
+  it('seeds AgentOptions.reasoningEffort into the first model request', async () => {
+    const adapter = new MockAdapter([textResponse('thoughtful')], {
+      efforts: [{ id: ReasoningEffortId('xhigh'), name: 'Extra high' }],
+    })
+    const ctx = await harness(adapter)
+    const agent = ctx.agentLoop.create(
+      SessionId('configured-reasoning'),
+      { provider: 'mock', model: 'mock', reasoningEffort: ReasoningEffortId('xhigh') },
+    )
+
+    send(agent, 'use the configured reasoning effort')
+    await waitForIdle(ctx, agent)
+
+    expect(adapter.requests[0]?.reasoningEffort).toBe(ReasoningEffortId('xhigh'))
+    expect(agent.session.requestHeader()?.config.reasoningEffort).toBe(ReasoningEffortId('xhigh'))
   })
 
   it('cancels queued wakeup work together with an active maintenance task', async () => {

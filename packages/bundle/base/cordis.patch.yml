@@ -63,8 +63,9 @@
     - id: agent-default-model
       name: '@deepseek-ai/dsh-agent-default-model'
       config:
-        provider: deepseek-official
-        model: deepseek-v4-flash
+        provider: openrouter
+        model: deepseek/deepseek-v4-flash-0731:nitro
+        reasoningEffort: xhigh
 
     - id: jobs
       name: '@deepseek-ai/dsh-jobs-local'
@@ -72,9 +73,9 @@
     - id: llm-retry
       name: '@deepseek-ai/dsh-llm-retry'
 
-    # User-settings document (`$DSH_HOME/settings.yaml`, hot-reloaded): a
-    # `llm-deepseek:` or `llm-pi-ai:` section there overrides the adapter entries
-    # below without a restart, and is what the web Models page writes.
+    # User-settings document (`$DSH_HOME/settings.yaml`, hot-reloaded): the
+    # `llm-pi-ai:` section overrides the OpenRouter route below without a
+    # restart, and is what the web Models page writes.
     - id: settings
       name: '@deepseek-ai/dsh-settings-file'
 
@@ -85,15 +86,20 @@
     - id: credentials
       name: '@deepseek-ai/dsh-credentials-local'
 
-    # The pi-ai multi-provider twin, mounted dormant: zero routes (and no extra
-    # models in the picker) until a `llm-pi-ai:` settings section supplies provider
-    # profiles — then those routes register live, keys resolving per request
-    # through their apiKeyEnv references, and drop again when the section empties.
-    # Supplying those profiles is exactly what the web Models page does. Which
-    # adapters exist is composition; which providers run is the user's settings
-    # document.
+    # OpenRouter is the shipped conversation route. Its installed pi-ai catalog
+    # stays intact; the dated Nitro request id inherits full reasoning and wire
+    # metadata from the catalog's base DeepSeek V4 Flash entry.
     - id: llm-pi-ai
       name: '@deepseek-ai/dsh-llm-pi-ai'
+      config:
+        providers:
+          openrouter:
+            displayName: OpenRouter
+            apiKeyEnv: OPENROUTER_API_KEY
+            modelAliases:
+              deepseek/deepseek-v4-flash-0731:nitro:
+                catalogModel: deepseek/deepseek-v4-flash
+                name: DeepSeek V4 Flash 0731 (Nitro)
 
     - id: session-persistence-jsonl
       name: '@deepseek-ai/dsh-session-persistence-jsonl'
@@ -315,6 +321,7 @@
       config:
         provider: spawn
         toolName: subagent
+        agentLabel: Subagent
         backgroundMode: continuable
 
     # Fork stays one-shot: a continuable child's `report` tool and prompt
@@ -326,6 +333,7 @@
       config:
         provider: fork
         toolName: subagent_fork
+        agentLabel: Forked agent
         backgroundMode: one-shot
 
     # Optional direct-child return channel; absent from roots and one-shot agents.
@@ -394,9 +402,9 @@
         argumentsPreviewChars: 500
 
     # Every mode enables the stable model-facing web_search tool. DeepSeek search
-    # resolves the same DEEPSEEK_API_KEY credential the Models page manages for
-    # chat, at each search; its Messages endpoint is separate from the
-    # chat-completions endpoint, so it takes its own base-URL override. Fetch stays
+    # resolves its own DEEPSEEK_API_KEY credential at each search; its Messages
+    # endpoint is separate from OpenRouter conversation traffic, so it takes its
+    # own base-URL override. Fetch stays
     # disabled and no fetch provider is mounted: that provider defers SSRF
     # protection and the model would choose the request target. Search is a full
     # auxiliary model request with server-side retrieval, so this shipped DeepSeek
@@ -442,10 +450,3 @@
     # overlay can pin another workspace.
     - id: fs-sandbox
       name: '@deepseek-ai/dsh-fs-sandbox'
-
-    # The native DeepSeek adapter. No key or endpoint is inlined: both resolve per
-    # request from the `llm-deepseek:` settings section over this entry, with the
-    # key coming from the credential store below. Thinking defaults are a deployment
-    # choice.
-    - id: llm-deepseek
-      name: '@deepseek-ai/dsh-llm-deepseek'

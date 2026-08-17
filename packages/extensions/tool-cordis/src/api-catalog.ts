@@ -82,25 +82,6 @@ export interface TypeApiEntry {
 /** Every harness `ctx.<key>` service, sorted by key. */
 export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
-    key: 'agentDefaultModel',
-    summary: 'Owns the default model selection independently of any Host or transport.',
-    description: 'Owns the default model selection independently of any Host or transport. The composition entry remains usable without a settings provider; when one is mounted, its user layer is read live.',
-    methods: [
-      {
-        signature: 'currentSelection(): ModelSelection',
-        description: 'Read the current default model selection.',
-        parameters: [],
-        returns: 'a detached provider, model, and optional reasoning selection.',
-      },
-      {
-        signature: 'async saveSelection(next: ModelSelection): Promise<void>',
-        description: 'Save the complete default model selection. A deployment without a settings provider keeps its composition entry.',
-        parameters: [{ name: 'next', description: 'resolved selection accepted by an entry point.' }],
-        returns: 'fulfillment after the optional settings write settles.',
-      },
-    ],
-  },
-  {
     key: 'agentLoop',
     summary: 'Concrete agent factory and driver service.',
     description: 'Concrete agent factory and driver service.',
@@ -127,6 +108,55 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Resume an owned agent from the configured persistence service.',
         parameters: [{ name: 'ownerCtx', description: 'caller context that owns load, setup, and the live lifecycle.' }, { name: 'options', description: 'persisted identity, loop options, setup, and cancellation.' }],
         returns: 'the published handle.',
+      },
+    ],
+  },
+  {
+    key: 'agentModels',
+    summary: 'Owns persistent Agent model selections and their lifecycle-safe directory.',
+    description: 'Owns persistent Agent model selections and their lifecycle-safe directory. The provider route is fixed by composition; settings select only a model and optional reasoning effort for each registered Agent target.',
+    methods: [
+      {
+        signature: 'registerTarget(target: AgentModelTarget): () => void',
+        description: 'Register one named Agent target. Equivalent registrations from several Agent scopes coalesce; a conflicting definition fails before either can silently win.',
+        parameters: [{ name: 'target', description: 'stable id, display label, and deployment default.' }],
+        returns: 'idempotent disposer for this contribution.',
+      },
+      {
+        signature: 'currentSelection(id: AgentModelTargetId = MAIN_AGENT_MODEL_TARGET): ModelSelection',
+        description: 'Read one registered target\'s current provider, model, and optional effort.',
+        parameters: [{ name: 'id', description: 'target to resolve; defaults to the main Agent.' }],
+        returns: 'a detached complete selection.',
+      },
+      {
+        signature: 'optionsFor(id: AgentModelTargetId, fallback: AgentOptions = {}): AgentOptions',
+        description: 'Apply one target\'s live selection over child options without disturbing independent limits such as `maxTokens`.',
+        parameters: [{ name: 'id', description: 'registered named Agent target.' }, { name: 'fallback', description: 'deployment options carrying non-selection fields.' }],
+        returns: 'detached child options with the current selection.',
+      },
+      {
+        signature: 'async saveSelection(next: ModelSelection): Promise<void>',
+        description: 'Save the main Agent selection after a session-local model switch.',
+        parameters: [{ name: 'next', description: 'resolved selection accepted by the session entry point.' }],
+        returns: 'fulfillment after the optional settings write settles.',
+      },
+      {
+        signature: '@Remote(\'list\') async list(): Promise<AgentModelsSnapshot>',
+        description: 'Read the live target directory and fixed-provider model catalog.',
+        parameters: [],
+        returns: 'point-in-time graphical settings snapshot.',
+      },
+      {
+        signature: '@Remote(\'save\') async save( id: AgentModelTargetId, model: string, reasoningEffort: string | undefined, expectedRevision: number, ): Promise<AgentModelsSnapshot>',
+        description: 'Persist one graphical Agent selection after exact model validation.',
+        parameters: [{ name: 'id', description: 'registered target id.' }, { name: 'model', description: 'exact model id under the fixed provider.' }, { name: 'reasoningEffort', description: 'exact supported effort, or omitted for provider behavior.' }, { name: 'expectedRevision', description: 'settings revision read by the graphical page.' }],
+        returns: 'refreshed directory and catalog.',
+      },
+      {
+        signature: '@Remote(\'reset\') async reset(id: AgentModelTargetId, expectedRevision: number): Promise<AgentModelsSnapshot>',
+        description: 'Remove one graphical override and restore its deployment default.',
+        parameters: [{ name: 'id', description: 'registered target id.' }, { name: 'expectedRevision', description: 'settings revision read by the graphical page.' }],
+        returns: 'refreshed directory and catalog.',
       },
     ],
   },
@@ -2742,8 +2772,28 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface AgentHandle {\n    agent: Agent;\n    dispose(): Promise<void>;\n}',
   },
   {
+    name: 'AgentModelOption',
+    declaration: 'export interface AgentModelOption {\n    readonly id: string;\n    readonly name: string;\n    readonly description?: string;\n    readonly reasoningEfforts: readonly {\n        readonly id: string;\n        readonly name: string;\n        readonly description?: string;\n    }[];\n    readonly defaultReasoningEffort?: string;\n}',
+  },
+  {
+    name: 'AgentModelsSnapshot',
+    declaration: 'export interface AgentModelsSnapshot {\n    readonly provider: string;\n    readonly writable: boolean;\n    readonly revision: number;\n    readonly targets: readonly AgentModelTargetView[];\n    readonly models: readonly AgentModelOption[];\n}',
+  },
+  {
+    name: 'AgentModelTarget',
+    declaration: 'export interface AgentModelTarget {\n    id: AgentModelTargetId;\n    label: string;\n    defaultSelection?: ModelSelection;\n}',
+  },
+  {
+    name: 'AgentModelTargetId',
+    declaration: 'export type AgentModelTargetId = Branded<\'AgentModelTargetId\'>;',
+  },
+  {
+    name: 'AgentModelTargetView',
+    declaration: 'export interface AgentModelTargetView {\n    readonly id: AgentModelTargetId;\n    readonly label: string;\n    readonly selection: StoredAgentModelSelection;\n    readonly defaultSelection: StoredAgentModelSelection;\n    readonly overridden: boolean;\n}',
+  },
+  {
     name: 'AgentOptions',
-    declaration: 'export interface AgentOptions {\n    provider?: string;\n    model?: string;\n    maxTokens?: number;\n}',
+    declaration: 'export interface AgentOptions {\n    provider?: string;\n    model?: string;\n    reasoningEffort?: ReasoningEffortId;\n    maxTokens?: number;\n}',
   },
   {
     name: 'AgentPreset',
@@ -4260,6 +4310,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'StorageForms',
     declaration: 'export interface StorageForms {\n}',
+  },
+  {
+    name: 'StoredAgentModelSelection',
+    declaration: 'export interface StoredAgentModelSelection {\n    model: string;\n    reasoningEffort?: string;\n}',
   },
   {
     name: 'StoredImageAttachment',

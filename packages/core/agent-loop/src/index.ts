@@ -304,6 +304,7 @@ export class AgentLoop extends Service implements AgentFactory {
       sessionId: z.string().min(1),
       provider: z.string(),
       model: z.string(),
+      reasoningEffort: z.string(),
       maxTokens: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER),
       cwd: z.string(),
       resumeSessionId: z.string(),

@@ -25,7 +25,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
 
 declare const ctx: Context
-const endpoint = launchEnvironmentOf(ctx).get('DEEPSEEK_BASE_URL')?.value
+const endpoint = launchEnvironmentOf(ctx).get('OPENROUTER_BASE_URL')?.value
 ```
 
 当产品 CLI（命令行界面）启动了这棵树时，`launchEnvironmentOf(ctx)` 返回启动器的快照；否则返回只含继承环境的那一层。该回退并不削弱规则：SDK 宿主或裸 `cordis.yml` 从未发现过任何文件，因此它拥有的一切确实就是它被启动时的环境。
