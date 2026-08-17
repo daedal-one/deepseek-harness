@@ -56,7 +56,8 @@ function moduleShortName(moduleName: string): string {
 /** Whether an inventory row matches the local catalog query. */
 function matches(entry: PluginInventoryEntry, normalizedQuery: string): boolean {
   if (normalizedQuery.length === 0) return true
-  return [entry.moduleName, entry.entryId]
+  return [entry.moduleName, entry.entryId, entry.author, entry.description, entry.version]
+    .filter((value): value is string => value !== null)
     .some(value => value.toLocaleLowerCase().includes(normalizedQuery))
 }
 
@@ -131,6 +132,9 @@ export function PluginInventorySettingsTab({ list, t }: PluginInventorySettingsT
               {filteredEntries.map((entry) => {
                 const status = phaseLabel(entry.fiberPhase, t)
                 const title = moduleShortName(entry.moduleName)
+                const author = entry.author ?? t('authorUnavailable')
+                const description = entry.description ?? t('descriptionUnavailable')
+                const version = entry.version ?? t('versionUnavailable')
                 const configuration = t(entry.enabled ? 'enabledTag' : 'disabledTag')
                 const open = expanded === entry.entryId
                 const detailId = `${catalogId}-details-${encodeURIComponent(entry.entryId)}`
@@ -146,21 +150,33 @@ export function PluginInventorySettingsTab({ list, t }: PluginInventorySettingsT
                       type="button"
                       aria-expanded={open}
                       aria-controls={detailId}
-                      aria-label={entry.enabled ? `${title}, ${status}, ${configuration}` : `${title}, ${configuration}`}
+                      aria-label={[
+                        title,
+                        description,
+                        `${t('author')}: ${author}`,
+                        `${t('version')}: ${version}`,
+                        entry.enabled ? status : null,
+                        configuration,
+                      ].filter((value): value is string => value !== null).join(', ')}
                       onClick={() => {
                         setExpanded(current => current === entry.entryId ? null : entry.entryId)
                       }}
                     >
-                      <strong className={css.cardTitle} title={entry.moduleName}>{title}</strong>
+                      <span className={css.cardSummary}>
+                        <strong className={css.cardTitle} title={entry.moduleName}>{title}</strong>
+                        <span className={css.cardDescription}>{description}</span>
+                        <span className={css.cardMetadata}>
+                          <span><span className={css.metadataLabel}>{t('author')}:</span> <span>{author}</span></span>
+                          <span><span className={css.metadataLabel}>{t('version')}:</span> <span>{version}</span></span>
+                        </span>
+                      </span>
                       <span className={css.cardTrailing}>
                         {entry.enabled ? (
                           <span
-                            className={css.statusDot}
+                            className={css.statusTag}
                             data-phase={entry.fiberPhase ?? 'unobserved'}
-                            role="img"
-                            aria-label={status}
                             title={status}
-                          />
+                          >{status}</span>
                         ) : null}
                         <span className={css.configTag} data-enabled={entry.enabled ? 'true' : 'false'}>
                           {configuration}

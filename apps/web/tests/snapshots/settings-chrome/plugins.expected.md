@@ -1,6 +1,5 @@
 - listitem:
-  - button "ui-settings, 已挂载, 已启用":
+  - 'button "ui-settings, Settings domain base plugin: the settings-namespace scope service and the canonical settings slot-type contract, 作者: 未提供, 版本: 0.1.0-rc.5, 已挂载, 已启用"':
     - strong: ui-settings
-    - img "已挂载"
-    - text: 已启用
+    - text: "Settings domain base plugin: the settings-namespace scope service and the canonical settings slot-type contract 作者: 未提供 版本: 0.1.0-rc.5 已挂载 已启用"
     - img

@@ -25,6 +25,7 @@ const SNAPSHOT_DIR = fileURLToPath(new URL('./snapshots/settings-chrome', import
 const DIALOG_EXPECTED = join(SNAPSHOT_DIR, 'dialog.expected.md')
 const PLUGINS_EXPECTED = join(SNAPSHOT_DIR, 'plugins.expected.md')
 const PLUGIN_ROW_SELECTOR = '[data-plugin-entry$="ui-settings"]'
+const UI_SETTINGS_MANIFEST = fileURLToPath(new URL('../../../packages/client/ui-settings/package.json', import.meta.url))
 const MODE = webSnapshotMode()
 
 describe('web e2e: settings modal and General preferences', () => {
@@ -112,6 +113,17 @@ describe('web e2e: settings modal and General preferences', () => {
     expect(await dialog.getByRole('button', { name: '插件', exact: true }).getAttribute('aria-current')).toBe('true')
     expect(await dialog.getByRole('tab', { name: '插件列表', exact: true }).getAttribute('aria-selected')).toBe('true')
     expect(await dialog.getByRole('button', { name: '模型' }).getAttribute('aria-current')).toBeNull()
+    const manifest = JSON.parse(await readFile(UI_SETTINGS_MANIFEST, 'utf8')) as {
+      readonly author?: string | { readonly name?: string }
+      readonly description: string
+      readonly version: string
+    }
+    const author = typeof manifest.author === 'string' ? manifest.author : manifest.author?.name ?? '未提供'
+    expect(await pluginRow.getByText(manifest.description, { exact: true }).count()).toBe(1)
+    expect(await pluginRow.getByText('作者:', { exact: true }).count()).toBe(1)
+    expect(await pluginRow.getByText(author, { exact: true }).count()).toBe(1)
+    expect(await pluginRow.getByText('版本:', { exact: true }).count()).toBe(1)
+    expect(await pluginRow.getByText(manifest.version, { exact: true }).count()).toBe(1)
     const pluginsSnapshot = await captureStableAria(
       page,
       PLUGIN_ROW_SELECTOR,

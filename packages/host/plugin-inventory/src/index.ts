@@ -11,6 +11,7 @@ import type {
   PluginInventoryEntry,
   PluginInventorySnapshot,
 } from './types.ts'
+import { PluginPackageMetadataResolver } from './metadata.ts'
 
 export type * from './types.ts'
 
@@ -42,6 +43,7 @@ const FIBER_PHASE = {
 /** Remote-only service exposing the Loader's current non-group entry state. */
 export class PluginInventoryGateway extends TypertRemoteService {
   static inject = ['loader']
+  private readonly metadata = new PluginPackageMetadataResolver()
 
   constructor(ctx: Context) {
     super(ctx, 'pluginInventory')
@@ -58,9 +60,11 @@ export class PluginInventoryGateway extends TypertRemoteService {
     const entries: PluginInventoryEntry[] = []
     for (const entry of this.ctx.loader.entries()) {
       if (entry.options.group) continue
+      const metadata = this.metadata.resolve(entry.options.name, entry.parent.tree.ctx.baseUrl)
       entries.push({
         entryId: pluginEntryId(entry.id),
         moduleName: entry.options.name,
+        ...metadata,
         enabled: !entry.disabled,
         fiberPhase: entry.fiber === undefined ? null : FIBER_PHASE[entry.fiber.state],
       })

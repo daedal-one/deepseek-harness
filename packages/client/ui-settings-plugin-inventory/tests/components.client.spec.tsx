@@ -22,13 +22,35 @@ function props(list: PluginInventorySettingsTabInjected['list']): PluginInventor
 
 const SNAPSHOT = {
   entries: [
-    { entryId: '8a1b2c3d', moduleName: '@deepseek-ai/cordis-plugin-hmr', enabled: true, fiberPhase: 'active' },
-    { entryId: 'pending', moduleName: 'cordis:pending-name', enabled: true, fiberPhase: 'pending' },
-    { entryId: 'loading', moduleName: '@fixture/loading-name', enabled: true, fiberPhase: 'loading' },
-    { entryId: 'failed', moduleName: '@fixture/failed-name', enabled: true, fiberPhase: 'failed' },
-    { entryId: 'unloading', moduleName: '@fixture/unloading-name', enabled: true, fiberPhase: 'unloading' },
-    { entryId: 'unobserved', moduleName: '@fixture/unobserved-name', enabled: true, fiberPhase: null },
-    { entryId: 'disabled-entry', moduleName: '@deepseek-ai/dsh-host-directory-picker-native', enabled: false, fiberPhase: null },
+    {
+      entryId: '8a1b2c3d', moduleName: '@deepseek-ai/cordis-plugin-hmr', author: 'Shigma',
+      description: 'Reloads changed Cordis plugins.', version: '1.0.2', enabled: true, fiberPhase: 'active',
+    },
+    {
+      entryId: 'pending', moduleName: 'cordis:pending-name', author: null,
+      description: null, version: null, enabled: true, fiberPhase: 'pending',
+    },
+    {
+      entryId: 'loading', moduleName: '@fixture/loading-name', author: null,
+      description: null, version: null, enabled: true, fiberPhase: 'loading',
+    },
+    {
+      entryId: 'failed', moduleName: '@fixture/failed-name', author: null,
+      description: null, version: null, enabled: true, fiberPhase: 'failed',
+    },
+    {
+      entryId: 'unloading', moduleName: '@fixture/unloading-name', author: null,
+      description: null, version: null, enabled: true, fiberPhase: 'unloading',
+    },
+    {
+      entryId: 'unobserved', moduleName: '@fixture/unobserved-name', author: null,
+      description: null, version: null, enabled: true, fiberPhase: null,
+    },
+    {
+      entryId: 'disabled-entry', moduleName: '@deepseek-ai/dsh-host-directory-picker-native', author: 'DeepSeek',
+      description: 'Chooses a workspace directory with the native picker.', version: '0.1.0-rc.5',
+      enabled: false, fiberPhase: null,
+    },
   ],
 } as unknown as Snapshot
 
@@ -55,9 +77,14 @@ describe('PluginInventorySettingsTab', () => {
       'Unloading',
       'Not mounted',
     ]) {
-      expect(screen.getByRole('img', { name: value })).toBeTruthy()
+      expect(screen.getByText(value)).toBeTruthy()
     }
-    const active = screen.getByRole('button', { name: 'hmr, Mounted, Enabled' })
+    expect(screen.getByText('Reloads changed Cordis plugins.')).toBeTruthy()
+    expect(screen.getByText('Shigma')).toBeTruthy()
+    expect(screen.getByText('1.0.2')).toBeTruthy()
+    const active = screen.getByRole('button', {
+      name: 'hmr, Reloads changed Cordis plugins., Author: Shigma, Version: 1.0.2, Mounted, Enabled',
+    })
     expect(active.getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(active)
     expect(active.getAttribute('aria-expanded')).toBe('true')
@@ -72,13 +99,15 @@ describe('PluginInventorySettingsTab', () => {
       target: { value: 'disabled-entry' },
     })
     expect(view.container.querySelector('[data-loader-entry]')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'directory-picker-native, Disabled' }))
+    fireEvent.click(screen.getByRole('button', {
+      name: 'directory-picker-native, Chooses a workspace directory with the native picker., Author: DeepSeek, Version: 0.1.0-rc.5, Disabled',
+    }))
     expect(screen.getAllByText(en.disabledTag)).toHaveLength(2)
     expect(screen.queryByText(en.cordis)).toBeNull()
     expect(screen.queryByText(en.unobserved)).toBeNull()
   })
 
-  it('filters by module name or Loader entry id', async () => {
+  it('filters by module name, Loader entry id, or package metadata', async () => {
     render(<PluginInventorySettingsTab {...props(async () => SNAPSHOT)} />)
     const search = await screen.findByRole('searchbox', { name: en.search })
 
@@ -89,6 +118,14 @@ describe('PluginInventorySettingsTab', () => {
     fireEvent.change(search, { target: { value: 'cordis-plugin-hmr' } })
     expect(screen.getAllByRole('listitem')).toHaveLength(1)
     expect(screen.getByText('hmr')).toBeTruthy()
+
+    fireEvent.change(search, { target: { value: 'changed cordis' } })
+    expect(screen.getAllByRole('listitem')).toHaveLength(1)
+    expect(screen.getByText('hmr')).toBeTruthy()
+
+    fireEvent.change(search, { target: { value: '0.1.0-rc.5' } })
+    expect(screen.getAllByRole('listitem')).toHaveLength(1)
+    expect(screen.getByText('directory-picker-native')).toBeTruthy()
 
     fireEvent.change(search, { target: { value: 'not-a-plugin' } })
     expect(screen.queryAllByRole('listitem')).toHaveLength(0)
