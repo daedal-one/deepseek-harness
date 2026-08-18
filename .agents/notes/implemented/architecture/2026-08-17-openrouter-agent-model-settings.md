@@ -10,7 +10,7 @@ Conversation-model transport, provider credentials, routed model identifiers, an
 
 ## Decision
 
-**pi-ai is the only shipped conversation-model adapter, with OpenRouter as the fixed deployment route.** The base, headless, Web, ACP, SDK, and Python runtime compositions register OpenRouter through `llm-pi-ai`; the dedicated DeepSeek LLM package and route are absent. DeepSeek web search remains an independent search provider because it implements the Web capability rather than conversation-model transport.
+**pi-ai is the only shipped conversation-model adapter, with OpenRouter as the fixed deployment route.** The base, headless, Web, ACP, SDK, and Python runtime compositions register OpenRouter through `llm-pi-ai`; the dedicated DeepSeek LLM package and route are absent. Web search makes an independent auxiliary OpenRouter request because it implements the Web capability rather than conversation-model transport.
 
 **Routed identifiers are additive aliases over the installed catalog.** `modelAliases` appends a request-wire id while requiring a `catalogModel` from the installed provider catalog. The alias inherits protocol, endpoint, capacities, modalities, reasoning dialect, supported effort map, compatibility fields, and cost metadata before applying explicit overrides. It cannot replace an installed id, coexist with a replacement `models` list, or name an unknown catalog entry. The shipped alias `deepseek/deepseek-v4-flash-0731:nitro` therefore keeps the catalog's OpenRouter reasoning protocol while sending the exact dated Nitro id.
 

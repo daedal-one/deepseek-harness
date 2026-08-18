@@ -109,10 +109,18 @@ const SHIPPED_PRESET_DIR = join(REPO_ROOT, 'apps/cli/config/agent-presets')
 // unroutable and compaction-basic's
 // post-step pressure check would warn every step). The published
 // contextWindow keeps that pressure path provably inert for small fixtures.
+const REPLAY_PROVIDER_ID = 'web-e2e-replay'
+const REPLAY_MODEL_ID = 'deepseek/deepseek-v4-flash-0731:nitro'
 const REPLAY_PROVIDERS = [{
-  id: 'deepseek-official',
-  name: 'DeepSeek',
-  models: [{ id: 'deepseek-v4-flash', name: 'DeepSeek-V4-Flash', contextWindow: 128_000 }],
+  id: REPLAY_PROVIDER_ID,
+  name: 'Web E2E Replay',
+  models: [{
+    id: REPLAY_MODEL_ID,
+    name: 'DeepSeek V4 Flash 0731 (Nitro)',
+    contextWindow: 163_840,
+    reasoningEfforts: ['xhigh'],
+    defaultReasoningEffort: 'xhigh',
+  }],
 }]
 
 /**
@@ -235,12 +243,12 @@ export interface LaunchOptions {
   /** Leave the current welcome notice pending; ordinary scenarios pre-acknowledge it before browser boot. */
   welcomeNoticePending?: boolean
   /**
-   * Patch the shipped DeepSeek search row to a deterministic endpoint and
+   * Patch the shipped OpenRouter search row to a deterministic endpoint and
    * credential reference. Browser search scenarios keep the real provider and
    * credentials seam while avoiding external search traffic and ambient keys.
    */
-  deepSeekSearch?: {
-    /** Anthropic-compatible base URL; the provider appends `/messages`. */
+  openRouterSearch?: {
+    /** OpenRouter-compatible base URL; the provider appends `/chat/completions`. */
     baseURL: string
     /** Credential reference resolved by the shipped search provider. */
     apiKeyEnv: string
@@ -379,6 +387,19 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
     ...basePatches,
     ...surfacePatches,
     ...extraOverlayPatches,
+    // The shipped OpenRouter adapter remains mounted for configuration UI,
+    // while a fixture session selects a distinct replay route so registration
+    // stays unique and no keyless snapshot can fall through to the network.
+    ...mode !== 'record' && options.replayFixture !== undefined
+      ? [{
+        id: 'agent-default-model',
+        config: {
+          provider: REPLAY_PROVIDER_ID,
+          model: REPLAY_MODEL_ID,
+          reasoningEffort: 'xhigh',
+        },
+      }]
+      : [],
     // The roster's `roots` is an assembly fact AppCLIEntry resolves and patches
     // in, exactly like `distIndex` on the webserver row — the shipped preset
     // directory sits beside the composition that names it, and no config author
@@ -475,13 +496,13 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
         { id: 'tool-cordis', name: '@deepseek-ai/dsh-tool-cordis' },
       ] }]
       : [],
-    ...options.deepSeekSearch === undefined
+    ...options.openRouterSearch === undefined
       ? []
       : [{
-        id: 'web-search-deepseek',
+        id: 'web-search-openrouter',
         config: {
-          apiKeyEnv: options.deepSeekSearch.apiKeyEnv,
-          baseURL: options.deepSeekSearch.baseURL,
+          apiKeyEnv: options.openRouterSearch.apiKeyEnv,
+          baseURL: options.openRouterSearch.baseURL,
         },
       }],
   ]

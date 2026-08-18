@@ -1,16 +1,16 @@
 /**
- * Package-owned invariant companion for `@deepseek-ai/dsh-web-search-deepseek`.
- * @module @deepseek-ai/dsh-web-search-deepseek/invariant
+ * Package-owned invariant companion for `@deepseek-ai/dsh-web-search-openrouter`.
+ * @module @deepseek-ai/dsh-web-search-openrouter/invariant
  */
 
 /* jscpd:ignore-start */
 import type { Context } from '@deepseek-ai/cordis'
 import type { InvariantInstaller } from '@deepseek-ai/dsh-invariants'
 
-const PACKAGE_NAME = '@deepseek-ai/dsh-web-search-deepseek'
+const PACKAGE_NAME = '@deepseek-ai/dsh-web-search-openrouter'
 
 /** Cordis companion plugin name. */
-export const name = 'web-search-deepseek-invariant'
+export const name = 'web-search-openrouter-invariant'
 /** Service required before the companion can reserve package ownership. */
 export const inject = ['invariants']
 

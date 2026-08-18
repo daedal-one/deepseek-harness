@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-17-openrouter-agent-model-settings.md
-2026-08-17-openrouter-agent-model-settings.md: c0d3424666ea38668c1729fc825c249cc807e52b
-2026-08-17-openrouter-agent-model-settings.zh.md: 7cfbe3223048757d8a00438be9345028f58844f7
+2026-08-17-openrouter-agent-model-settings.md: 27cd955cd623a3220cb59444d85b59b349468bab
+2026-08-17-openrouter-agent-model-settings.zh.md: d60e2116082bf1753ffb19c302bf573c1c6d3436

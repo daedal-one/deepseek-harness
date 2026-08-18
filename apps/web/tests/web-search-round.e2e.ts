@@ -1,6 +1,6 @@
 // Web e2e scenario for the shipped default search composition. A real browser
-// drives `web_search`; the model stream is replayed while the real DeepSeek
-// provider calls a deterministic local Anthropic-compatible endpoint through
+// drives `web_search`; the model stream is replayed while the real OpenRouter
+// provider calls a deterministic local Chat Completions endpoint through
 // the real credentials service.
 import { readFile } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
@@ -50,11 +50,6 @@ function resultSnippet(ordinal: number): string {
   return `Snapshot search excerpt ${ordinal}: the harness replays this source list from a local endpoint.`
 }
 
-/** One provider result's `page_age`, by 1-based provider order (July 2026 days 01..12). */
-function resultPageAge(ordinal: number): string {
-  return `2026-07-${String(ordinal).padStart(2, '0')}`
-}
-
 /** The 1-based provider ordinals, in provider order. */
 const RESULT_ORDINALS = Array.from({ length: PROVIDER_RESULT_COUNT }, (_value, index) => index + 1)
 
@@ -64,7 +59,7 @@ interface CapturedSearchRequest {
   body: unknown
 }
 
-/** Start the deterministic DeepSeek Messages double used by the real provider. */
+/** Start the deterministic OpenRouter Chat Completions double used by the real provider. */
 async function startSearchServer(captured: CapturedSearchRequest[]): Promise<{ server: Server; baseURL: string }> {
   const server = createServer((request, response) => {
     let body = ''
@@ -73,31 +68,26 @@ async function startSearchServer(captured: CapturedSearchRequest[]): Promise<{ s
     request.on('end', () => {
       captured.push({
         path: request.url ?? '',
-        apiKey: typeof request.headers['x-api-key'] === 'string' ? request.headers['x-api-key'] : undefined,
+        apiKey: typeof request.headers.authorization === 'string'
+          ? request.headers.authorization.replace(/^Bearer /u, '')
+          : undefined,
         body: JSON.parse(body) as unknown,
       })
       response.writeHead(200, { 'content-type': 'application/json' })
       response.end(JSON.stringify({
-        content: [
-          {
-            type: 'text',
-            text: `Found ${PROVIDER_RESULT_COUNT} sources.`,
-            citations: RESULT_ORDINALS.map(ordinal => ({
-              type: 'web_search_result_location',
-              url: resultUrl(ordinal),
-              cited_text: resultSnippet(ordinal),
+        choices: [{
+          message: {
+            content: `Found ${PROVIDER_RESULT_COUNT} sources.`,
+            annotations: RESULT_ORDINALS.map(ordinal => ({
+              type: 'url_citation',
+              url_citation: {
+                url: resultUrl(ordinal),
+                title: resultTitle(ordinal),
+                content: resultSnippet(ordinal),
+              },
             })),
           },
-          {
-            type: 'web_search_tool_result',
-            content: RESULT_ORDINALS.map(ordinal => ({
-              type: 'web_search_result',
-              url: resultUrl(ordinal),
-              title: resultTitle(ordinal),
-              page_age: resultPageAge(ordinal),
-            })),
-          },
-        ],
+        }],
       }))
     })
   })
@@ -127,7 +117,7 @@ describe('web e2e: shipped default web search', () => {
     searchServer = search.server
     searchBaseURL = search.baseURL
     scaffold = await launchWebScaffold({
-      deepSeekSearch: {
+      openRouterSearch: {
         baseURL: search.baseURL,
         apiKeyEnv: SEARCH_CREDENTIAL_REF,
       },
@@ -175,24 +165,24 @@ describe('web e2e: shipped default web search', () => {
   it.skipIf(MODE === 'record')('uses the real provider and persists the capped structured result', () => {
     expect(searchRequests).toHaveLength(1)
     expect(searchRequests[0]).toMatchObject({
-      path: '/messages',
+      path: '/chat/completions',
       apiKey: SEARCH_CREDENTIAL,
       body: {
         messages: [{
           role: 'user',
-          content: [{ type: 'text', text: `Perform a web search for the query: ${QUERY}` }],
+          content: `Use web search to answer this query with cited sources: ${QUERY}`,
         }],
-        tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+        tools: [{ type: 'openrouter:web_search', parameters: { engine: 'auto' } }],
+        provider: { data_collection: 'deny' },
       },
     })
 
     const auxiliaryRequest = sessionEvents.find(
-      (event): event is Extract<SessionEvent, { type: 'web/deepseek-search-llm-request' }> =>
-        event.type === 'web/deepseek-search-llm-request',
+      (event): event is Extract<SessionEvent, { type: 'web/openrouter-search-llm-request' }> =>
+        event.type === 'web/openrouter-search-llm-request',
     )
     expect(auxiliaryRequest?.data).toEqual({
-      endpoint: `${searchBaseURL}/messages`,
-      apiVersion: '2023-06-01',
+      endpoint: `${searchBaseURL}/chat/completions`,
       body: searchRequests[0]?.body,
     })
 
@@ -226,7 +216,6 @@ describe('web e2e: shipped default web search', () => {
         url: resultUrl(ordinal),
         title: resultTitle(ordinal),
         snippet: resultSnippet(ordinal),
-        publishedAt: resultPageAge(ordinal),
       })),
       truncated: true,
     })

@@ -96,7 +96,7 @@ OPENROUTER_API_KEY=sk-or-...
 OPENROUTER_BASE_URL=https://... # optional
 ```
 
-`OPENROUTER_BASE_URL` 可选，默认为公开 OpenRouter API。请勿提交真实凭证。每个真实 API e2e 套件在缺少对应 provider key 时自行跳过；DeepSeek web-search 测试仍独立使用 `DEEPSEEK_API_KEY`。
+`OPENROUTER_BASE_URL` 可选，默认为公开 OpenRouter API。请勿提交真实凭证。每个真实 API e2e 套件在缺少对应 provider key 时自行跳过；OpenRouter web-search 测试复用 `OPENROUTER_API_KEY`，但会发起独立的辅助请求。
 
 ### Git 集成
 

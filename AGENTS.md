@@ -97,7 +97,7 @@ Run checks before pushes via [dsh-pre-push-checks](.agents/skills/dsh-pre-push-c
 
 ## Secrets / .env
 
-Shipped conversation-model tests and demos read `OPENROUTER_API_KEY`, optional `OPENROUTER_BASE_URL`, and root `.env`; the independent DeepSeek search provider uses `DEEPSEEK_API_KEY` and `DEEPSEEK_SEARCH_BASE_URL`. cordis.yml allows `!!js` (never `!js`) under plugin `config` and entry `disabled`; other metadata stays literal, so conditional composition also uses overlays ([primer](docs/cordis-primer.md#loader-configuration)). Never commit credentials. CI e2e skips without the relevant key; [testing.md](docs/testing.md) owns key policy.
+Shipped conversation-model and web-search tests and demos read `OPENROUTER_API_KEY`, optional `OPENROUTER_BASE_URL`, and root `.env`; web search makes an independent auxiliary OpenRouter request while reusing those connection settings. cordis.yml allows `!!js` (never `!js`) under plugin `config` and entry `disabled`; other metadata stays literal, so conditional composition also uses overlays ([primer](docs/cordis-primer.md#loader-configuration)). Never commit credentials. CI e2e skips without the relevant key; [testing.md](docs/testing.md) owns key policy.
 
 ## Conventions
 

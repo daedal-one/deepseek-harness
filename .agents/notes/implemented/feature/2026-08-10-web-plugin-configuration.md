@@ -20,7 +20,7 @@ Three host-plane plugins register their own settings namespace, and one browser-
 
 **A section is a subset when the plugin config is bigger than what a user owns.** `agent-loop` exposes only `maxParallelToolCalls`; its `agents` array is consumed once when the service starts, so a stored change there could only look like it had an effect.
 
-**The provider projects, rather than captures.** `web-search-deepseek` hands its provider a thunk instead of an options value, so an endpoint or model change reaches the next search without re-registering the provider — which would make the web seam's provider selection observable to the user as a flicker.
+**The provider projects, rather than captures.** `web-search-openrouter` hands its provider a thunk instead of an options value, so an endpoint, model, or engine change reaches the next search without re-registering the provider — which would make the web seam's provider selection observable to the user as a flicker.
 
 **Exposure stays a Host allowlist.** The three namespaces join `WEB_SETTINGS_NAMESPACES`; registration alone still never crosses the transport, and a namespace absent from that list answers `settings-not-exposed` exactly as an unregistered one does.
 
@@ -41,7 +41,7 @@ Three host-plane plugins register their own settings namespace, and one browser-
 
 ## Consequences
 
-A user edits the shell's command timeout and output cap, the agent loop's parallel tool-call cap, and the search provider's key, endpoint, and per-request budget from the settings page, with each field marking whether they set it and offering a reset.
+A user edits the shell's command timeout and output cap, the agent loop's parallel tool-call cap, and the search provider's key, endpoint, model, engine, and per-request budget from the settings page, with each field marking whether they set it and offering a reset.
 
 Two costs are real. Adding a fourth plugin still requires an entry in the apiproxy allowlist, so the page's reach is a Host decision rather than a plugin's. And the plugins the web deployment moved into the agent plane — the file tools, the skills, compaction, the todo tool — appear nowhere here, which is most of what a user might expect to find; their configuration remains the preset editor's.
 

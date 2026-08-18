@@ -401,23 +401,21 @@
         thresholds: [3, 5, 8]
         argumentsPreviewChars: 500
 
-    # Every mode enables the stable model-facing web_search tool. DeepSeek search
-    # resolves its own DEEPSEEK_API_KEY credential at each search; its Messages
-    # endpoint is separate from OpenRouter conversation traffic, so it takes its
-    # own base-URL override. Fetch stays
-    # disabled and no fetch provider is mounted: that provider defers SSRF
-    # protection and the model would choose the request target. Search is a full
-    # auxiliary model request with server-side retrieval, so this shipped DeepSeek
-    # route gets 60s while the provider-neutral tool default remains 30s.
+    # Every mode enables the stable model-facing web_search tool. Search reuses
+    # the OpenRouter credential and endpoint but remains an auxiliary request so
+    # its provider-private server tool stays behind ctx.web. Fetch stays disabled
+    # and no fetch provider is mounted because the model chooses that request
+    # target. Server-side retrieval keeps the shipped 60s search budget while
+    # custom providers retain dsh-tool-web's provider-neutral 30s default.
     - id: web
       name: '@deepseek-ai/dsh-web'
       config:
-        searchProvider: deepseek-official
+        searchProvider: openrouter
 
-    - id: web-search-deepseek
-      name: '@deepseek-ai/dsh-web-search-deepseek'
+    - id: web-search-openrouter
+      name: '@deepseek-ai/dsh-web-search-openrouter'
       config:
-        apiKeyEnv: DEEPSEEK_API_KEY
+        apiKeyEnv: OPENROUTER_API_KEY
 
     - id: tool-web
       name: '@deepseek-ai/dsh-tool-web'

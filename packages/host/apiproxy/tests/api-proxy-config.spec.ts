@@ -368,7 +368,7 @@ describe('settings domain', () => {
     ctx.settings.register(settingsNamespace('agent-loop'), z.object({
       maxParallelToolCalls: z.number().default(10),
     }))
-    ctx.settings.register(settingsNamespace('web-search-deepseek'), z.object({
+    ctx.settings.register(settingsNamespace('web-search-openrouter'), z.object({
       baseURL: z.string(),
     }))
     const api = createApiProxy(ctx, DEFAULTS)
@@ -376,7 +376,7 @@ describe('settings domain', () => {
     const value = expectOk(await api.settings.describe(request({})))
     expect(value.namespaces.map(view => view.ns)).toEqual([
       'llm-deepseek', 'permission', 'ui-theme', 'locale', 'ui-conversation',
-      'shell', 'agent-loop', 'web-search-deepseek',
+      'shell', 'agent-loop', 'web-search-openrouter',
     ])
     const permission = expectOk(await api.settings.mutate(request({
       ns: 'permission',
@@ -409,7 +409,7 @@ describe('settings domain', () => {
     })))
     expect(agentLoop.value).toEqual({ maxParallelToolCalls: 2 })
     const webSearch = expectOk(await api.settings.mutate(request({
-      ns: 'web-search-deepseek',
+      ns: 'web-search-openrouter',
       ops: [{ op: 'set', path: ['baseURL'], value: 'https://search.test/v1' }],
     })))
     expect(webSearch.value).toEqual({ baseURL: 'https://search.test/v1' })

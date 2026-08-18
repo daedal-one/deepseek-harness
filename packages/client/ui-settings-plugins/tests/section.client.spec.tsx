@@ -336,6 +336,8 @@ describe('WebSearchCard', () => {
     const store = createSnapshotStore<WebSearchCardState>({
       ...settled,
       baseURL: field(''),
+      model: field('openrouter/auto'),
+      engine: field('auto'),
       maxUses: field('5'),
       apiKey: field(''),
       apiKeyConfigured: false,
@@ -363,10 +365,12 @@ describe('WebSearchCard', () => {
     const key = screen.getByLabelText(en.webSearchApiKey)
     expect(key).toHaveProperty('disabled', false)
     expect(screen.getByLabelText(en.webSearchBaseUrl)).toHaveProperty('disabled', true)
+    expect(screen.getByLabelText(en.webSearchModel)).toHaveProperty('disabled', true)
+    expect(screen.getByLabelText(en.webSearchEngine)).toHaveProperty('disabled', true)
 
-    fireEvent.change(key, { target: { value: 'ds-secret' } })
+    fireEvent.change(key, { target: { value: 'or-secret' } })
 
-    expect(actions.edit).toHaveBeenCalledWith('apiKey', 'ds-secret')
+    expect(actions.edit).toHaveBeenCalledWith('apiKey', 'or-secret')
   })
 
   it('disables the key control when the reference itself is not writable', () => {
@@ -379,23 +383,29 @@ describe('WebSearchCard', () => {
     expect(screen.getByLabelText(en.webSearchBaseUrl)).toHaveProperty('disabled', false)
   })
 
-  it('stages the endpoint, the search budget, and their resets', () => {
+  it('stages every OpenRouter search field and its reset', () => {
     const actions = renderWebSearch({
       baseURL: field('https://search.test/v1', { overridden: true }),
+      model: field('openai/gpt-5-mini', { overridden: true }),
+      engine: field('native', { overridden: true }),
       maxUses: field('3', { overridden: true }),
     })
     fireEvent.click(screen.getByText(en.webSearchTitle))
 
     fireEvent.change(screen.getByLabelText(en.webSearchBaseUrl), { target: { value: 'https://other.test' } })
+    fireEvent.change(screen.getByLabelText(en.webSearchModel), { target: { value: 'openrouter/auto' } })
+    fireEvent.change(screen.getByLabelText(en.webSearchEngine), { target: { value: 'auto' } })
     fireEvent.change(screen.getByLabelText(en.webSearchMaxUses), { target: { value: '4' } })
     const resets = screen.getAllByRole('button', { name: en.reset })
-    expect(resets).toHaveLength(2)
+    expect(resets).toHaveLength(4)
     for (const reset of resets) fireEvent.click(reset)
 
     expect(actions.edit.mock.calls).toEqual([
       ['baseURL', 'https://other.test'],
+      ['model', 'openrouter/auto'],
+      ['engine', 'auto'],
       ['maxUses', '4'],
     ])
-    expect(actions.resetField.mock.calls).toEqual([['baseURL'], ['maxUses']])
+    expect(actions.resetField.mock.calls).toEqual([['baseURL'], ['model'], ['engine'], ['maxUses']])
   })
 })

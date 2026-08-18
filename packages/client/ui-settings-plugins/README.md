@@ -8,7 +8,7 @@ The **Plugins** settings section and its **Plugin configuration** tab. The secti
 
 A card renders only when its namespace is both registered by a live Host plugin and served to the browser. A deployment that does not compose the owning plugin — or serves the namespace to no client — renders nothing for it rather than an empty or disabled card, so the configurable tab reflects what this deployment actually runs.
 
-The first batch covers the shell executor (`bash`), the agent loop's tool-call parallelism (`agent-loop`), and the DeepSeek search provider (`web-search-deepseek`).
+The first batch covers the shell executor (`bash`), the agent loop's tool-call parallelism (`agent-loop`), and the OpenRouter search provider (`web-search-openrouter`).
 
 ## Extension point
 

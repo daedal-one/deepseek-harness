@@ -996,13 +996,13 @@ Source: [`packages/core/session/src/types.ts:264`](../packages/core/session/src/
 
 ### `web/*`
 
-<a id="webdeepseek-search-llm-request--log-only"></a>
+<a id="webopenrouter-search-llm-request--log-only"></a>
 
-#### `web/deepseek-search-llm-request` — log-only
+#### `web/openrouter-search-llm-request` — log-only
 
 ```ts persistence-catalog
-/** Secret-free auxiliary DeepSeek search request recorded before dispatch. */
-'web/deepseek-search-llm-request': DeepSeekSearchLlmRequest
+/** Secret-free auxiliary OpenRouter search request recorded before dispatch. */
+'web/openrouter-search-llm-request': OpenRouterSearchLlmRequest
 ```
 
-Source: [`packages/web/web-search-deepseek/src/provider.ts:82`](../packages/web/web-search-deepseek/src/provider.ts)
+Source: [`packages/web/web-search-openrouter/src/provider.ts:74`](../packages/web/web-search-openrouter/src/provider.ts)

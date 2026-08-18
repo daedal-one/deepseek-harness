@@ -27,7 +27,7 @@ function acceptWrites<T>(host: StubSettingsScope<T>): void {
 function credentialsApi(configured: boolean) {
   const describe = vi.fn(() => Promise.resolve({
     rpcId: 'c-1' as never,
-    result: { ok: true as const, value: { credentials: { DEEPSEEK_API_KEY: { configured, writable: true } } } },
+    result: { ok: true as const, value: { credentials: { OPENROUTER_API_KEY: { configured, writable: true } } } },
   }))
   const set = vi.fn(() => Promise.resolve({ rpcId: 'c-2' as never, result: { ok: true as const, value: {} } }))
   return { api: { credentials: { describe, set } } as never, describe, set }
@@ -387,11 +387,18 @@ describe('WebSearchCardController', () => {
     const state = () => controller.inject().hooks.webSearchCard.getSnapshot()
     await vi.waitFor(() => { expect(credentials.describe).toHaveBeenCalled() })
 
-    host.publish({ status: 'ready', writable: true, value: { baseURL: 'https://search.test/v1' }, user: {} })
+    host.publish({
+      status: 'ready',
+      writable: true,
+      value: { baseURL: 'https://search.test/v1', model: 'openrouter/auto', engine: 'auto' },
+      user: {},
+    })
     await vi.waitFor(() => { expect(state().apiKeyConfigured).toBe(true) })
 
     expect(state()).toMatchObject({
       baseURL: { text: 'https://search.test/v1', overridden: false },
+      model: { text: 'openrouter/auto', overridden: false },
+      engine: { text: 'auto', overridden: false },
       apiKey: { text: '', overridden: false },
     })
   })
@@ -403,18 +410,18 @@ describe('WebSearchCardController', () => {
     host.publish({ status: 'ready', writable: true, value: {}, user: {} })
     const face = controller.inject()
 
-    face.edit('apiKey', ' ds-secret ')
+    face.edit('apiKey', ' or-secret ')
     expect(face.hooks.webSearchCard.getSnapshot().dirty).toBe(true)
     expect(credentials.set).not.toHaveBeenCalled()
 
     credentials.describe.mockImplementation(() => Promise.resolve({
       rpcId: 'c-1' as never,
-      result: { ok: true as const, value: { credentials: { DEEPSEEK_API_KEY: { configured: true, writable: true } } } },
+      result: { ok: true as const, value: { credentials: { OPENROUTER_API_KEY: { configured: true, writable: true } } } },
     }))
     face.save()
     await vi.waitFor(() => { expect(credentials.set).toHaveBeenCalled() })
 
-    expect(credentials.set).toHaveBeenCalledWith({ ref: 'DEEPSEEK_API_KEY', value: 'ds-secret' })
+    expect(credentials.set).toHaveBeenCalledWith({ ref: 'OPENROUTER_API_KEY', value: 'or-secret' })
     expect(host.set).not.toHaveBeenCalled()
     await vi.waitFor(() => {
       expect(face.hooks.webSearchCard.getSnapshot()).toMatchObject({ dirty: false, apiKeyConfigured: true })
@@ -451,9 +458,9 @@ describe('WebSearchCardController', () => {
     // A key written on another surface reaches this card only through this signal.
     credentials.describe.mockImplementation(() => Promise.resolve({
       rpcId: 'c-1' as never,
-      result: { ok: true as const, value: { credentials: { DEEPSEEK_API_KEY: { configured: true, writable: true } } } },
+      result: { ok: true as const, value: { credentials: { OPENROUTER_API_KEY: { configured: true, writable: true } } } },
     }))
-    controller.refreshCredential('DEEPSEEK_API_KEY')
+    controller.refreshCredential('OPENROUTER_API_KEY')
 
     await vi.waitFor(() => {
       expect(controller.inject().hooks.webSearchCard.getSnapshot().apiKeyConfigured).toBe(true)
@@ -467,11 +474,11 @@ describe('WebSearchCardController', () => {
     host.publish({ status: 'ready', writable: true, value: { apiKeyEnv: 'SEARCH_KEY' }, user: {} })
     const face = controller.inject()
 
-    face.edit('apiKey', 'ds-secret')
+    face.edit('apiKey', 'or-secret')
     face.save()
     await vi.waitFor(() => { expect(credentials.set).toHaveBeenCalled() })
 
-    expect(credentials.set).toHaveBeenCalledWith({ ref: 'SEARCH_KEY', value: 'ds-secret' })
+    expect(credentials.set).toHaveBeenCalledWith({ ref: 'SEARCH_KEY', value: 'or-secret' })
   })
 
   it('reports a key the Host did not store as a failed save', async () => {
@@ -481,7 +488,7 @@ describe('WebSearchCardController', () => {
     host.publish({ status: 'ready', writable: true, value: {}, user: {} })
     const face = controller.inject()
 
-    face.edit('apiKey', 'ds-secret')
+    face.edit('apiKey', 'or-secret')
     face.save()
 
     await vi.waitFor(() => {
@@ -498,7 +505,7 @@ describe('WebSearchCardController', () => {
     await vi.waitFor(() => { expect(describe).toHaveBeenCalled() })
 
     host.publish({ status: 'ready', writable: true, value: { baseURL: 'https://search.test/v1' }, user: {} })
-    face.edit('apiKey', 'ds-secret')
+    face.edit('apiKey', 'or-secret')
     face.save()
     await vi.waitFor(() => { expect(set).toHaveBeenCalled() })
 
@@ -521,7 +528,7 @@ describe('WebSearchCardController', () => {
     expect(controller.inject().hooks.webSearchCard.getSnapshot().apiKeyConfigured).toBe(false)
   })
 
-  it('saves the endpoint and the search budget together', async () => {
+  it('saves the endpoint, model, engine, and search budget together', async () => {
     const host = stubSettingsScope<WebSearchSettings>()
     acceptWrites(host)
     const credentials = credentialsApi(true)
@@ -530,11 +537,18 @@ describe('WebSearchCardController', () => {
     const face = controller.inject()
 
     face.edit('baseURL', 'https://other.test')
+    face.edit('model', 'openai/gpt-5-mini')
+    face.edit('engine', 'native')
     face.edit('maxUses', '3')
     face.save()
-    await vi.waitFor(() => { expect(host.set).toHaveBeenCalledTimes(2) })
+    await vi.waitFor(() => { expect(host.set).toHaveBeenCalledTimes(4) })
 
-    expect(host.set.mock.calls).toEqual([['baseURL', 'https://other.test'], ['maxUses', 3]])
+    expect(host.set.mock.calls).toEqual([
+      ['baseURL', 'https://other.test'],
+      ['model', 'openai/gpt-5-mini'],
+      ['engine', 'native'],
+      ['maxUses', 3],
+    ])
     expect(credentials.set).not.toHaveBeenCalled()
   })
 })

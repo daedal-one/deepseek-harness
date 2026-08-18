@@ -64,5 +64,5 @@ export const KNOWN_SESSION_EVENT_TYPES: ReadonlySet<string> = new Set([
   'turn/end',
   'turn/start',
   'user/message',
-  'web/deepseek-search-llm-request',
+  'web/openrouter-search-llm-request',
 ])

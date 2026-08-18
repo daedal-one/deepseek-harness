@@ -1,8 +1,6 @@
 - banner:
   - navigation "Session hierarchy":
     - button "Use web_search to search exactly" [disabled]
-  - img
-  - text: Standard mode
   - button "Session log":
     - text: Session log
     - img
@@ -34,8 +32,8 @@
 - button "Commands":
   - img
 - 'button "Access mode, current: Workspace Write"': Workspace Write
-- button "Select model, current DeepSeek-V4-Flash":
-  - text: DeepSeek-V4-Flash
+- button "Select model, current DeepSeek V4 Flash 0731 (Nitro), reasoning effort xhigh":
+  - text: DeepSeek V4 Flash 0731 (Nitro) xhigh
   - img
 - button "0% of context used"
 - button "Send message" [disabled]

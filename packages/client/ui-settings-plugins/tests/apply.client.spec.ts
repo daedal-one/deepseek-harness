@@ -116,7 +116,7 @@ describe('ui-settings-plugins apply', () => {
 
     // A key written on another surface changes no settings section, so this
     // event is the only thing that reaches the card.
-    ctx.remote.$dispatch('credentials/updated', ['DEEPSEEK_API_KEY'])
+    ctx.remote.$dispatch('credentials/updated', ['OPENROUTER_API_KEY'])
 
     await vi.waitFor(() => { expect(describeCredentials).toHaveBeenCalledTimes(1) })
   })

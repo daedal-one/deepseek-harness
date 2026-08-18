@@ -18,4 +18,4 @@ pnpm run demo:cordis
 pnpm run demo:cordis acp
 ```
 
-这两条命令都需要 `DEEPSEEK_API_KEY`。[Cordis 工具参考](../../packages/extensions/tool-cordis/README.md)定义了四类约定：工具参数、存续时间、清理行为和安全性。
+这两条命令都需要 `OPENROUTER_API_KEY`。[Cordis 工具参考](../../packages/extensions/tool-cordis/README.md)定义了四类约定：工具参数、存续时间、清理行为和安全性。

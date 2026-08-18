@@ -8,7 +8,7 @@
 
 只有当某个命名空间既被存活的 Host 插件注册、又被服务给浏览器时，它的卡片才会渲染。未组装该插件的部署——或未向任何客户端服务该命名空间的部署——不会渲染空卡片或禁用卡片，而是什么都不渲染，因此“插件配置”标签页反映的是该部署实际运行的东西。
 
-第一批覆盖 shell 执行器（`bash`）、agent 循环的工具调用并行度（`agent-loop`）以及 DeepSeek 搜索提供方（`web-search-deepseek`）。
+第一批覆盖 shell 执行器（`bash`）、agent 循环的工具调用并行度（`agent-loop`）以及 OpenRouter 搜索提供方（`web-search-openrouter`）。
 
 ## 扩展点
 

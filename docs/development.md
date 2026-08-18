@@ -96,7 +96,7 @@ OPENROUTER_API_KEY=sk-or-...
 OPENROUTER_BASE_URL=https://... # optional
 ```
 
-`OPENROUTER_BASE_URL` is optional and defaults to the public OpenRouter API. Never commit real credentials. Each real-API e2e suite self-skips when its provider key is not set; DeepSeek web-search tests still use `DEEPSEEK_API_KEY` independently.
+`OPENROUTER_BASE_URL` is optional and defaults to the public OpenRouter API. Never commit real credentials. Each real-API e2e suite self-skips when its provider key is not set; OpenRouter web-search tests reuse `OPENROUTER_API_KEY` but make an independent auxiliary request.
 
 ### Git integrations
 

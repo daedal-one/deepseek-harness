@@ -19,7 +19,7 @@ There is also a provider-selection question. Existing `tool-bash` and `tool-fs` 
 Web access is a first-class capability seam following [the capability-seam Agent Note](2026-06-13-capability-seams.md):
 
 1. `@deepseek-ai/dsh-web` (`packages/web/web`) owns `ctx.web`, provider registration, provider selection, shared request/result vocabulary, and web-specific errors.
-2. Provider packages implement concrete backends and register capabilities with `ctx.web`, for example `@deepseek-ai/dsh-web-search-exa`, `@deepseek-ai/dsh-web-search-perplexity`, `@deepseek-ai/dsh-web-search-deepseek`, and `@deepseek-ai/dsh-web-fetch-http`.
+2. Provider packages implement concrete backends and register capabilities with `ctx.web`, for example `@deepseek-ai/dsh-web-search-exa`, `@deepseek-ai/dsh-web-search-perplexity`, `@deepseek-ai/dsh-web-search-openrouter`, and `@deepseek-ai/dsh-web-fetch-http`.
 3. `@deepseek-ai/dsh-tool-web` (`packages/web/tool-web`) owns the model-facing `web_search` and `web_fetch` tool schemas, prompt sections, argument validation, result formatting, and tool-owned presentation over `ctx.web`.
 
 Providers do not register tools. Providers register capabilities. `dsh-tool-web` is the only owner of model-facing names, descriptions, prompt guidance, JSON schemas, and presentation.
@@ -47,7 +47,7 @@ The dependency direction mirrors bash and filesystem:
         consumer                                 interface                       implementation
                                                                  <--depends on--  @deepseek-ai/dsh-web-search-perplexity
                                                                                   implementation
-                                                                 <--depends on--  @deepseek-ai/dsh-web-search-deepseek
+                                                                 <--depends on--  @deepseek-ai/dsh-web-search-openrouter
                                                                                   implementation
                                                                  <--depends on--  @deepseek-ai/dsh-web-fetch-http
                                                                                   implementation
@@ -59,7 +59,7 @@ At runtime, provider packages register capabilities with `ctx.web`; `tool-web` r
 flowchart LR
   exa["@deepseek-ai/dsh-web-search-exa"] -->|registerSearchProvider| web["@deepseek-ai/dsh-web / ctx.web"]
   perplexity["@deepseek-ai/dsh-web-search-perplexity"] -->|registerSearchProvider| web
-  deepseek["@deepseek-ai/dsh-web-search-deepseek"] -->|registerSearchProvider| web
+  openrouter["@deepseek-ai/dsh-web-search-openrouter"] -->|registerSearchProvider| web
   fetchLocal["@deepseek-ai/dsh-web-fetch-http"] -->|registerFetchProvider| web
   toolWeb["@deepseek-ai/dsh-tool-web"] -->|search/fetch| web
   toolWeb -->|ctx.tools.register| webSearch["tool: web_search"]
@@ -139,8 +139,8 @@ The "single provider auto-selects" rule is for tests, demos, and simple deployme
 - id: web-search-perplexity
   name: '@deepseek-ai/dsh-web-search-perplexity'
 
-- id: web-search-deepseek
-  name: '@deepseek-ai/dsh-web-search-deepseek'
+- id: web-search-openrouter
+  name: '@deepseek-ai/dsh-web-search-openrouter'
 
 - id: web-fetch-http
   name: '@deepseek-ai/dsh-web-fetch-http'
