@@ -12,6 +12,9 @@
   ],
   "references": [
     {
+      "path": "../../core/agent-default-model"
+    },
+    {
       "path": "../../../vendor/cordis"
     },
     {

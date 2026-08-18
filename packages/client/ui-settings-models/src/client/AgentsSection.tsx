@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import type { AgentModelsSnapshot } from '@deepseek-ai/dsh-api-remotes/client'
+import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { InjectFace, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { AgentModelsKey } from './agent-locales.ts'
 import css from './AgentsSection.module.css'
 
@@ -8,6 +10,10 @@ type Model = AgentModelsSnapshot['models'][number]
 
 /** Remote calls used by the Agents settings section. */
 export interface AgentsSectionInjected {
+  hooks: {
+    /** Host role-directory revision, bound by the slot renderer. */
+    agentDirectory: SnapshotStore<number>
+  }
   list: () => Promise<AgentModelsSnapshot>
   save: (
     id: Target['id'],
@@ -20,7 +26,8 @@ export interface AgentsSectionInjected {
 }
 
 /** Props assembled by the Settings slot renderer. */
-export type AgentsSectionProps = Partial<AgentsSectionInjected>
+export type AgentsSectionProps =
+  PropsRuntime<'settings.section'> & InjectFace<AgentsSectionInjected>
 
 type ViewState =
   | { readonly status: 'loading' }
@@ -155,23 +162,22 @@ function AgentCard({
 
 /** Render the graphical per-Agent model settings page. */
 export function AgentsSection(props: AgentsSectionProps): ReactNode {
-  const { list, save, reset, t } = props
+  const { list, save, reset, t, useAgentDirectory } = props
+  const directoryRevision = useAgentDirectory(value => value)
   const [request, setRequest] = useState(0)
   const [state, setState] = useState<ViewState>({ status: 'loading' })
   useEffect(() => {
-    if (list === undefined) return
     let current = true
-    setState({ status: 'loading' })
+    setState(previous => previous.status === 'ready' ? previous : { status: 'loading' })
     void list().then(
       (snapshot) => { if (current) setState({ status: 'ready', snapshot }) },
       () => { if (current) setState({ status: 'error' }) },
     )
     return () => { current = false }
-  }, [list, request])
+  }, [directoryRevision, list, request])
   const replace = useCallback((snapshot: AgentModelsSnapshot): void => {
     setState({ status: 'ready', snapshot })
   }, [])
-  if (list === undefined || save === undefined || reset === undefined || t === undefined) return null
   if (state.status === 'loading') return <p className={css.status}>{t('loading')}</p>
   if (state.status === 'error') {
     return (

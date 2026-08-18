@@ -2,6 +2,8 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentModelsSnapshot } from '@deepseek-ai/dsh-api-remotes/client'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-web-react'
 import { AgentsSection } from '../src/client/AgentsSection.tsx'
 import { agentEn } from '../src/client/agent-locales.ts'
 
@@ -43,12 +45,19 @@ const snapshot: AgentModelsSnapshot = {
 }
 
 const t = (key: keyof typeof agentEn): string => agentEn[key]
+const close = (): void => {}
+const unusedHook = (() => { throw new Error('unused global hook') }) as never
+const globalProps = { close, useSessions: unusedHook, useWorkspaces: unusedHook }
+const directory = createSnapshotStore(0)
+const useAgentDirectory = bindSnapshotSelector(directory)
 
 afterEach(cleanup)
 
 describe('AgentsSection', () => {
   it('renders main and named Agent selections from the OpenRouter directory', async () => {
     const { container } = render(<AgentsSection
+      {...globalProps}
+      useAgentDirectory={useAgentDirectory}
       list={() => Promise.resolve(snapshot)}
       save={vi.fn()}
       reset={vi.fn()}
@@ -78,6 +87,8 @@ describe('AgentsSection', () => {
     } satisfies AgentModelsSnapshot
     const save = vi.fn(() => Promise.resolve(saved))
     const { container } = render(<AgentsSection
+      {...globalProps}
+      useAgentDirectory={useAgentDirectory}
       list={() => Promise.resolve(snapshot)}
       save={save}
       reset={vi.fn()}
@@ -106,6 +117,8 @@ describe('AgentsSection', () => {
     } satisfies AgentModelsSnapshot
     const reset = vi.fn(() => Promise.resolve(resetSnapshot))
     const { container } = render(<AgentsSection
+      {...globalProps}
+      useAgentDirectory={useAgentDirectory}
       list={() => Promise.resolve(snapshot)}
       save={vi.fn()}
       reset={reset}
@@ -123,6 +136,8 @@ describe('AgentsSection', () => {
 
   it('disables changes when settings are read-only', async () => {
     const { container } = render(<AgentsSection
+      {...globalProps}
+      useAgentDirectory={useAgentDirectory}
       list={() => Promise.resolve({ ...snapshot, writable: false })}
       save={vi.fn()}
       reset={vi.fn()}
@@ -141,6 +156,8 @@ describe('AgentsSection', () => {
   it('reports a stale write without claiming that it reloaded', async () => {
     const save = vi.fn(() => Promise.reject(new Error('settings revision changed')))
     const { container } = render(<AgentsSection
+      {...globalProps}
+      useAgentDirectory={useAgentDirectory}
       list={() => Promise.resolve(snapshot)}
       save={save}
       reset={vi.fn()}
@@ -152,5 +169,39 @@ describe('AgentsSection', () => {
     fireEvent.click(within(main).getByRole('button', { name: agentEn.apply }))
 
     expect(await screen.findByText(agentEn.stale)).toBeTruthy()
+  })
+
+  it('refetches an open page when the live role directory changes', async () => {
+    const revision = createSnapshotStore(0)
+    const useRevision = bindSnapshotSelector(revision)
+    let current = snapshot
+    const list = vi.fn(() => Promise.resolve(current))
+    render(<AgentsSection
+      {...globalProps}
+      useAgentDirectory={useRevision}
+      list={list}
+      save={vi.fn()}
+      reset={vi.fn()}
+      t={t}
+    />)
+    await screen.findByText('Reviewer')
+
+    current = {
+      ...snapshot,
+      targets: [
+        ...snapshot.targets,
+        {
+          id: 'guru' as never,
+          label: 'Guru',
+          selection: { model: 'model-a', reasoningEffort: 'high' },
+          defaultSelection: { model: 'model-a', reasoningEffort: 'high' },
+          overridden: false,
+        },
+      ],
+    }
+    revision.set(1)
+
+    expect(await screen.findByText('Guru')).toBeTruthy()
+    expect(list).toHaveBeenCalledTimes(2)
   })
 })

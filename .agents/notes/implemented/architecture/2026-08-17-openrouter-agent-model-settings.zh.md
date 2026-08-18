@@ -14,11 +14,11 @@ Status: implemented
 
 **带路由的标识符是安装目录之上的增量 alias。**`modelAliases` 增加一个线上请求 id，同时要求指定安装 provider 目录中的 `catalogModel`。Alias 先继承协议、endpoint、容量、模态、reasoning 方言、支持的 effort map、兼容字段和成本元数据，再应用显式 override。它不能替换安装 id、不能和替换式 `models` 列表共存，也不能指向未知目录条目。因此，随产品交付的 alias `deepseek/deepseek-v4-flash-0731:nitro` 在发送精确 dated Nitro id 的同时保留目录中的 OpenRouter reasoning 协议。
 
-**Agent 模型配置是一份由 lifecycle 管理的目录。**`ctx.agentModels` 固定 provider route，并注册 `main` 以及 `subagent`、`subagent-fork` 等具名贡献者。等价注册按引用计数合并；label 或默认值冲突时立即失败。没有显式默认值的具名 target 在注册时继承 main 的部署默认值，因此之后仅针对 `main` 的用户 override 不会把各自独立配置的角色暗中耦合起来。
+**Agent 模型配置是一份由 lifecycle 管理的目录。**`ctx.agentModels` 固定 provider route，并注册 `main` 以及 `subagent`、`subagent-fork` 等具名贡献者。等价注册按引用计数合并；label 或默认值冲突时立即失败。可见注册或最终移除会发布包含故障隔离的提交后失效通知，remote client 据此重新读取目录。没有显式默认值的具名 target 在注册时继承 main 的部署默认值，因此之后仅针对 `main` 的用户 override 不会把各自独立配置的角色暗中耦合起来。
 
 **选择以角色为单位保持完整，并在之后启动 Agent 时生效。**`agent-models` settings section 为每个稳定角色 id 保存 model 和可选 reasoning effort。Main session 入口和 subagent tool 创建 Agent 时读取当前选择。运行中的 Agent 保留已经 assemble 的选择；持久 `request/header` 事件继续重建每一个模型可见请求。声明式 `AgentOptions.reasoningEffort` 由 agent-loop schema 校验并写入第一个请求，因此选择不会在组合与 dispatch 之间消失。
 
-**Web client 编辑角色，而不是传输 route。**Settings 提供独立的 Agents 页面，背后使用生成的 `agentModels` Remote service。每张角色 card 从精确的 OpenRouter catalog 选择模型，把 reasoning 选择限制在该模型公布的 effort 范围内，通过 settings revision 的 compare-and-swap 保存，并可恢复部署默认值。写入前会解析精确的 provider、model 和 effort；未知角色、不可用模型、不支持的 effort、只读 settings 和过期 revision 都会被拒绝。
+**Web client 编辑角色，而不是传输 route。**Settings 提供独立的 Agents 页面，背后使用生成的 `agentModels` Remote service。页面通过框架绑定的 snapshot source 观察转发的目录失效通知，并在存活 preset 角色变化后重新获取数据。每张角色 card 从精确的 OpenRouter catalog 选择模型，把 reasoning 选择限制在该模型公布的 effort 范围内，通过 settings revision 的 compare-and-swap 保存，并可恢复部署默认值。写入前会解析精确的 provider、model 和 effort；未知角色、不可用模型、不支持的 effort、只读 settings 和过期 revision 都会被拒绝。
 
 **OpenRouter onboarding 留在 provider editor。**首次设置通过共享 credentials service 写入 `OPENROUTER_API_KEY`，并编辑 `llm-pi-ai/providers/openrouter` settings path。模型传输留在 Models 页面；Agent 角色分配留在 Agents 页面。
 

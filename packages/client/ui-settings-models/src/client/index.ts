@@ -7,6 +7,9 @@
  * packages/client/AGENTS.md.
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import { AgentsSection, type AgentsSectionInjected } from './AgentsSection.tsx'
+import { en as agentEn, zh as agentZh, type AgentModelsKey } from './agent-locales.ts'
 // Type-only: pulls the shell's SlotMap merge (the 'settings.section' entry).
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
@@ -36,6 +39,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
     /** The Models page + product-onboarding copy. */
     'settings.models': ModelsKey
+    'settings.agents': AgentModelsKey
   }
 }
 
@@ -63,7 +67,7 @@ export function refreshIfLoaded(controller: ModelsSettingsStore): void {
  */
 export const inject = [
   'slots', 'locale', 'remote', 'remote.credentials', 'remote.llm', 'remote.settings',
-  'settingsScope', 'settingsSchema',
+  'settingsScope', 'settingsSchema', 'remote.agentModels',
 ]
 
 /**
@@ -74,6 +78,8 @@ export const inject = [
  */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-settings-models: copy dictionaries')
+
+  ctx.effect(() => ctx.locale.register('settings.agents', { zh: agentZh, en: agentEn }), 'ui-settings-models: Agent dictionaries')
 
   const schema = createSettingsSchemaOperations(ctx.settingsSchema)
   // Bound once here, where the Remote namespaces are declared in this plugin's
@@ -97,6 +103,24 @@ export function apply(ctx: ClientContext): void {
     schema,
     t,
   })
+  const agentT = ctx.locale.bind('settings.agents') as AgentsSectionInjected['t']
+  const agentDirectory = createSnapshotStore(0)
+  const unwrap = async <Value>(operation: Promise<{ ok: true; value: Value } | {
+    ok: false
+    error: { code: string; message: string }
+  }>): Promise<Value> => {
+    const result = await operation
+    if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`)
+    return result.value
+  }
+  const agentsInjected = (): AgentsSectionInjected => ({
+    hooks: { agentDirectory },
+    list: () => unwrap(ctx.remote.agentModels.list()),
+    save: (id, model, reasoningEffort, revision) =>
+      unwrap(ctx.remote.agentModels.save(id, model, reasoningEffort, revision)),
+    reset: (id, revision) => unwrap(ctx.remote.agentModels.reset(id, revision)),
+    t: agentT,
+  })
   // The scope's own memory mode is what keeps a remote browser process-local,
   // so the store needs no isLoopback branch of its own.
   const welcomeController = new WelcomeNoticeStore(ctx.settingsScope.bind({
@@ -116,11 +140,18 @@ export function apply(ctx: ClientContext): void {
   // follows its settings scope, so it needs no subscription here.
   ctx.effect(() => {
     const refreshModels = (): void => { refreshIfLoaded(controller) }
+    const refreshAll = (): void => {
+      refreshModels()
+      agentDirectory.set(agentDirectory.getSnapshot() + 1)
+    }
     const disposers = [
       ctx.remote.$on('settings/document-updated', () => { refreshModels() }),
       ctx.remote.$on('credentials/reference-updated', refreshModels),
       ctx.remote.$on('llm/adapters-updated', refreshModels),
-      ctx.on('connection/reset', refreshModels),
+      ctx.remote.$on('agent-models/directory-updated', () => {
+        agentDirectory.set(agentDirectory.getSnapshot() + 1)
+      }),
+      ctx.on('connection/reset', refreshAll),
     ]
     return () => {
       welcomeController.dispose()
@@ -139,6 +170,13 @@ export function apply(ctx: ClientContext): void {
       'settings.models.footer': { kind: 'list', scope: 'root' },
     },
   }, ModelsSection))
+  ctx.slots.inject('settings.section', () => ctx.slots.register({
+    name: 'settings.section',
+    id: 'agents',
+    order: 20,
+    label: () => agentT('nav'),
+    inject: agentsInjected,
+  }, AgentsSection))
   ctx.slots.inject('settings.onboarding', () => ctx.slots.register({
     name: 'settings.onboarding',
     id: 'welcome-notice',
