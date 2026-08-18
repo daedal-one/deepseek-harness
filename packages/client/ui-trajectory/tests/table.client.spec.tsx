@@ -184,7 +184,9 @@ describe('TrajectoryTable', () => {
 
     expect(screen.getByText('500 ms')).toBeTruthy()
     expect(screen.getByText('1.00 s')).toBeTruthy()
-    expect(screen.getByText('20.0 tok/s')).toBeTruthy()
+    expect(screen.getByText('13.3 tok/s')).toBeTruthy()
+    expect(screen.getByText('Stream span')).toBeTruthy()
+    expect(screen.getByText('Output rate')).toBeTruthy()
   })
 
   it('shows a tool record Duration as exact milliseconds', () => {

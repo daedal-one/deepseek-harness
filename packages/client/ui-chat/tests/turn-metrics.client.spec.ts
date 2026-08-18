@@ -1,4 +1,4 @@
-// Per-turn latency/throughput fold and the footer figure formatters.
+// Per-turn latency/output-rate fold and the footer figure formatters.
 
 import { describe, expect, it } from 'vitest'
 import type {
@@ -27,33 +27,33 @@ const user = (seq: number): UserMessageNode => ({
 })
 
 describe('assistantStepReading', () => {
-  it('derives ttft, decode time, and output tokens from a fully recorded step', () => {
+  it('derives ttft, request time, and output tokens from a fully recorded step', () => {
     const reading = assistantStepReading(assistant({
       seq: 2, turn: 1, step: 1,
       timing: { stepStartTime: 1_000, firstTokenTime: 1_800, completedTime: 6_800 },
       usage: { outputTokens: 200 },
     }))
-    expect(reading).toEqual({ ttftMs: 800, decodeMs: 5_000, outputTokens: 200 })
+    expect(reading).toEqual({ ttftMs: 800, requestMs: 5_800, outputTokens: 200 })
   })
 
   it('returns nulls when timing is absent', () => {
     const reading = assistantStepReading(assistant({ seq: 2, turn: 1, step: 1, usage: { outputTokens: 5 } }))
-    expect(reading).toEqual({ ttftMs: null, decodeMs: null, outputTokens: 5 })
+    expect(reading).toEqual({ ttftMs: null, requestMs: null, outputTokens: 5 })
   })
 
   it('needs both boundaries for ttft and clamps negative spans to zero', () => {
     expect(assistantStepReading(assistant({
       seq: 2, turn: 1, step: 1,
       timing: { stepStartTime: null, firstTokenTime: 1_800, completedTime: 6_800 },
-    }))).toEqual({ ttftMs: null, decodeMs: 5_000, outputTokens: null })
+    }))).toEqual({ ttftMs: null, requestMs: null, outputTokens: null })
     expect(assistantStepReading(assistant({
       seq: 2, turn: 1, step: 1,
       timing: { stepStartTime: 1_000, firstTokenTime: null, completedTime: 6_800 },
-    }))).toEqual({ ttftMs: null, decodeMs: null, outputTokens: null })
+    }))).toEqual({ ttftMs: null, requestMs: 5_800, outputTokens: null })
     expect(assistantStepReading(assistant({
       seq: 2, turn: 1, step: 1,
       timing: { stepStartTime: 2_000, firstTokenTime: 1_500, completedTime: 1_200 },
-    }))).toEqual({ ttftMs: 0, decodeMs: 0, outputTokens: null })
+    }))).toEqual({ ttftMs: 0, requestMs: 0, outputTokens: null })
   })
 
   it('rejects non-object, missing, and non-finite usage token counts', () => {
@@ -82,8 +82,8 @@ describe('deriveTurnMetrics', () => {
         usage: { outputTokens: 40 },
       }),
     ]
-    // 100 tokens over 5s of decode.
-    expect(deriveTurnMetrics(nodes).get(1)).toEqual({ ttftMs: 1_200, tokensPerSecond: 20 })
+    // 100 tokens over 6.4s of request wall time.
+    expect(deriveTurnMetrics(nodes).get(1)).toEqual({ ttftMs: 1_200, tokensPerSecond: 15.625 })
   })
 
   it('emits ttft without throughput when no step carries usage', () => {
@@ -103,10 +103,21 @@ describe('deriveTurnMetrics', () => {
         usage: { outputTokens: 30 },
       }),
     ]
-    expect(deriveTurnMetrics(nodes).get(1)).toEqual({ tokensPerSecond: 15 })
+    expect(deriveTurnMetrics(nodes).get(1)).toEqual({ tokensPerSecond: 12 })
   })
 
-  it('omits turns with no readings and zero-decode throughput', () => {
+  it('emits output rate without ttft when request timing and usage are complete', () => {
+    const nodes = [assistant({
+      seq: 2,
+      turn: 1,
+      step: 1,
+      timing: { stepStartTime: 1_000, firstTokenTime: null, completedTime: 6_000 },
+      usage: { outputTokens: 50 },
+    })]
+    expect(deriveTurnMetrics(nodes).get(1)).toEqual({ tokensPerSecond: 10 })
+  })
+
+  it('omits turns with no readings and zero-duration output rate', () => {
     const nodes = [
       assistant({ seq: 2, turn: 1, step: 1 }),
       assistant({
@@ -134,8 +145,20 @@ describe('deriveTurnMetrics', () => {
       }),
     ]
     const metrics = deriveTurnMetrics(nodes)
-    expect(metrics.get(1)).toEqual({ ttftMs: 400, tokensPerSecond: 10 })
-    expect(metrics.get(2)).toEqual({ ttftMs: 100, tokensPerSecond: 50 })
+    expect(metrics.get(1)).toEqual({ ttftMs: 400, tokensPerSecond: 10 / 1.4 })
+    expect(metrics.get(2)).toEqual({ ttftMs: 100, tokensPerSecond: 100 / 2.1 })
+  })
+
+  it('measures buffered output over the request instead of the chunk-drain burst', () => {
+    const nodes = [assistant({
+      seq: 2,
+      turn: 1,
+      step: 1,
+      timing: { stepStartTime: 1_000, firstTokenTime: 5_999, completedTime: 6_000 },
+      usage: { outputTokens: 100 },
+    })]
+    // The 1 ms arrival span would claim 100,000 tok/s; the 5 s request reports 20.
+    expect(deriveTurnMetrics(nodes).get(1)).toEqual({ ttftMs: 4_999, tokensPerSecond: 20 })
   })
 })
 

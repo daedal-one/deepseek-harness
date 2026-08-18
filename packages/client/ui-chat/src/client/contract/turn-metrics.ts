@@ -4,11 +4,11 @@ import type {
   AssistantMessageNode, ConversationNode,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 
-/** Latency and decode-throughput readings for one turn's footer. */
+/** Latency and end-to-end output-rate readings for one turn's footer. */
 export interface TurnMetrics {
   /** First-step TTFT in ms; absent when that step carries no recorded timing. */
   ttftMs?: number
-  /** Decode throughput over steps carrying both timing and provider usage. */
+  /** Output tokens per request second over steps carrying both timing and provider usage. */
   tokensPerSecond?: number
 }
 
@@ -16,8 +16,8 @@ export interface TurnMetrics {
 export interface StepReading {
   /** step/start → first token delta, in ms. */
   ttftMs: number | null
-  /** First token delta → final message, in ms. */
-  decodeMs: number | null
+  /** Request start → final message, in ms. */
+  requestMs: number | null
   /** Provider-reported completion tokens. */
   outputTokens: number | null
 }
@@ -35,7 +35,7 @@ function usageOutputTokens(usage: unknown): number | null {
 }
 
 /**
- * Read one assistant node's TTFT, decode wall time, and output tokens.
+ * Read one assistant node's TTFT, request wall time, and output tokens.
  * @param node - A settled assistant node.
  * @returns Per-part readings with `null` for unrecorded values.
  */
@@ -44,16 +44,16 @@ export function assistantStepReading(node: AssistantNode): StepReading {
   const ttftMs = timing !== undefined && timing.stepStartTime !== null && timing.firstTokenTime !== null
     ? Math.max(0, timing.firstTokenTime - timing.stepStartTime)
     : null
-  const decodeMs = timing !== undefined && timing.firstTokenTime !== null
-    ? Math.max(0, timing.completedTime - timing.firstTokenTime)
+  const requestMs = timing !== undefined && timing.stepStartTime !== null
+    ? Math.max(0, timing.completedTime - timing.stepStartTime)
     : null
-  return { ttftMs, decodeMs, outputTokens: usageOutputTokens(node.usage) }
+  return { ttftMs, requestMs, outputTokens: usageOutputTokens(node.usage) }
 }
 
 interface TurnFold {
   firstStep: number
   firstStepTtftMs: number | null
-  decodeMs: number
+  throughputMs: number
   outputTokens: number
   sampled: boolean
 }
@@ -64,8 +64,10 @@ interface TurnFold {
  * TTFT is the turn's lowest-step request-dispatch-to-first-token reading, so
  * it is only meaningful when the turn's start is inside
  * the loaded window (the caller gates on `turnTimings`, which shares that
- * window). Throughput divides summed output tokens by summed decode wall time,
- * counting only steps that carry both.
+ * window). Output rate divides summed output tokens by summed full request wall
+ * time, counting only steps that carry both. Chunk-arrival spans are excluded:
+ * a buffered transport can drain generated chunks much faster than the model
+ * produced them.
  * @param nodes - Snapshot nodes of the loaded window.
  * @returns Turn number → available metrics; turns with none are absent.
  */
@@ -76,14 +78,14 @@ export function deriveTurnMetrics(nodes: readonly ConversationNode[]): Map<numbe
     const reading = assistantStepReading(node)
     let fold = folds.get(node.turn)
     if (fold === undefined) {
-      fold = { firstStep: node.step, firstStepTtftMs: reading.ttftMs, decodeMs: 0, outputTokens: 0, sampled: false }
+      fold = { firstStep: node.step, firstStepTtftMs: reading.ttftMs, throughputMs: 0, outputTokens: 0, sampled: false }
       folds.set(node.turn, fold)
     } else if (node.step < fold.firstStep) {
       fold.firstStep = node.step
       fold.firstStepTtftMs = reading.ttftMs
     }
-    if (reading.decodeMs !== null && reading.outputTokens !== null) {
-      fold.decodeMs += reading.decodeMs
+    if (reading.requestMs !== null && reading.outputTokens !== null) {
+      fold.throughputMs += reading.requestMs
       fold.outputTokens += reading.outputTokens
       fold.sampled = true
     }
@@ -92,7 +94,9 @@ export function deriveTurnMetrics(nodes: readonly ConversationNode[]): Map<numbe
   for (const [turn, fold] of folds) {
     const entry: TurnMetrics = {}
     if (fold.firstStepTtftMs !== null) entry.ttftMs = fold.firstStepTtftMs
-    if (fold.sampled && fold.decodeMs > 0) entry.tokensPerSecond = fold.outputTokens / (fold.decodeMs / 1000)
+    if (fold.sampled && fold.throughputMs > 0) {
+      entry.tokensPerSecond = fold.outputTokens / (fold.throughputMs / 1000)
+    }
     if (entry.ttftMs !== undefined || entry.tokensPerSecond !== undefined) metrics.set(turn, entry)
   }
   return metrics

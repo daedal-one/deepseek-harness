@@ -34,9 +34,9 @@ interface WindowStats {
   /** Steps carrying a recorded TTFT. */
   ttftSteps: number
   /** Summed decode wall time over steps that also report output tokens. */
-  decodeMs: number
+  throughputMs: number
   /** Summed output tokens over the same decode-timed steps. */
-  decodeTokens: number
+  throughputTokens: number
 }
 
 /**
@@ -58,8 +58,8 @@ export function deriveStats(nodes: ChatSnapshot['legacy']['nodes']): WindowStats
   let toolMs = 0
   let ttftMs = 0
   let ttftSteps = 0
-  let decodeMs = 0
-  let decodeTokens = 0
+  let throughputMs = 0
+  let throughputTokens = 0
   for (const node of nodes) {
     if (node.kind === 'tool-result') {
       if (node.callTime !== null) toolMs += Math.max(0, node.time - node.callTime)
@@ -76,12 +76,12 @@ export function deriveStats(nodes: ChatSnapshot['legacy']['nodes']): WindowStats
       ttftMs += reading.ttftMs
       ttftSteps += 1
     }
-    if (reading.decodeMs !== null && reading.outputTokens !== null) {
-      decodeMs += reading.decodeMs
-      decodeTokens += reading.outputTokens
+    if (reading.requestMs !== null && reading.outputTokens !== null) {
+      throughputMs += reading.requestMs
+      throughputTokens += reading.outputTokens
     }
   }
-  return { turns: turns.size, steps, llmMs, toolMs, ttftMs, ttftSteps, decodeMs, decodeTokens }
+  return { turns: turns.size, steps, llmMs, toolMs, ttftMs, ttftSteps, throughputMs, throughputTokens }
 }
 
 /**
@@ -142,9 +142,9 @@ function TimePill({ stats, t, dialog }: {
 }) {
   const { open, setOpen, rootRef, panelRef, pos } = useStatDialog(dialog)
   const counts = t('stats.counts', { turns: stats.turns, steps: stats.steps })
-  const tps = stats.decodeMs > 0
+  const tps = stats.throughputMs > 0
     ? t('message.tokensPerSecond', {
-      tps: formatTokensPerSecond(stats.decodeTokens / (stats.decodeMs / 1_000)),
+      tps: formatTokensPerSecond(stats.throughputTokens / (stats.throughputMs / 1_000)),
     })
     : null
   const label = (
@@ -160,7 +160,7 @@ function TimePill({ stats, t, dialog }: {
   )
   // A window without one timed figure has no dialog rows to show, so the pill
   // stays a plain reading instead of a button opening an empty dialog.
-  if (stats.llmMs <= 0 && stats.toolMs <= 0 && stats.ttftSteps <= 0 && stats.decodeMs <= 0) {
+  if (stats.llmMs <= 0 && stats.toolMs <= 0 && stats.ttftSteps <= 0 && stats.throughputMs <= 0) {
     return (
       <span className={css.anchor}>
         <span className={css.pill}>
@@ -217,11 +217,11 @@ function TimePill({ stats, t, dialog }: {
                 <dd>{formatDuration(stats.ttftMs / stats.ttftSteps, t)}</dd>
               </>
             )}
-            {stats.decodeMs > 0 && (
+            {stats.throughputMs > 0 && (
               <>
                 <dt>{t('stats.dialog.speed')}</dt>
                 <dd>{t('message.tokensPerSecond', {
-                  tps: formatTokensPerSecond(stats.decodeTokens / (stats.decodeMs / 1_000)),
+                  tps: formatTokensPerSecond(stats.throughputTokens / (stats.throughputMs / 1_000)),
                 })}</dd>
               </>
             )}

@@ -1368,14 +1368,13 @@ export async function readPersistedEvents(scaffold: WebScaffold, id: SessionId):
 
 /**
  * Normalize an aria snapshot: uuid, cwd, workspace-basename, duration,
- * decode-throughput, and path-sensitive compaction estimates collapse to
+ * output rate, and path-sensitive compaction estimates collapse to
  * stable tokens.
  *
  * Throughput needs a token for the same reason durations do, and no fixture
  * can supply one: the figure divides a replayed step's output tokens by the
- * wall time the local run took to stream them, so it moves between two runs
- * on one machine (measured 69 → 70 tok/s) and swings wildly on a fast replay
- * (26333 tok/s for a 3 ms stream).
+ * full request wall time, so scheduler and startup variation can still move it
+ * between two otherwise identical runs.
  */
 /**
  * Relative-time buckets rendered by a dated row, in both dictionaries.

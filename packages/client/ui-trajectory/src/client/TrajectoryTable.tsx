@@ -341,21 +341,21 @@ function ttft(metrics: AssistantMetricDetail, t: TrajectoryTranslate): string {
   return formatDurationMs(Math.max(0, metrics.firstTokenTime - metrics.stepStartTime), t)
 }
 
-function generationTime(metrics: AssistantMetricDetail, t: TrajectoryTranslate): string {
+function streamSpan(metrics: AssistantMetricDetail, t: TrajectoryTranslate): string {
   if (!metrics.timingRecorded || metrics.firstTokenTime === null) return t('timing.firstTokenUnavailable')
   if (metrics.completedTime === null) return t('status.pending')
   return formatDurationMs(Math.max(0, metrics.completedTime - metrics.firstTokenTime), t)
 }
 
-function throughput(metrics: AssistantMetricDetail, t: TrajectoryTranslate): string {
+function outputRate(metrics: AssistantMetricDetail, t: TrajectoryTranslate): string {
   if (!metrics.usageProvided) return t('timing.usageUnavailable')
   if (metrics.outputTokens === null) return t('timing.outputTokensUnavailable')
-  if (!metrics.timingRecorded || metrics.firstTokenTime === null) return t('timing.firstTokenUnavailable')
+  if (!metrics.timingRecorded || metrics.stepStartTime === null) return t('timing.stepStartUnavailable')
   if (metrics.completedTime === null) return t('status.pending')
-  const generationSeconds = (metrics.completedTime - metrics.firstTokenTime) / 1_000
-  if (generationSeconds <= 0) return t('timing.durationTooShort')
+  const requestSeconds = (metrics.completedTime - metrics.stepStartTime) / 1_000
+  if (requestSeconds <= 0) return t('timing.durationTooShort')
   return t('unit.tokensPerSecond', {
-    value: (metrics.outputTokens / generationSeconds).toFixed(1),
+    value: (metrics.outputTokens / requestSeconds).toFixed(1),
   })
 }
 
@@ -368,8 +368,8 @@ function AssistantTimingPanel({
       <div><dt>{t('timing.started')}</dt><StartedAtValue timestamp={metrics.stepStartTime} t={t} /></div>
       <div><dt>{t('timing.totalDuration')}</dt><dd>{totalTime(metrics, t)}</dd></div>
       <div><dt>{t('timing.ttft')}</dt><dd>{ttft(metrics, t)}</dd></div>
-      <div><dt>{t('timing.generation')}</dt><dd>{generationTime(metrics, t)}</dd></div>
-      <div><dt>{t('timing.throughput')}</dt><dd>{throughput(metrics, t)}</dd></div>
+      <div><dt>{t('timing.generation')}</dt><dd>{streamSpan(metrics, t)}</dd></div>
+      <div><dt>{t('timing.throughput')}</dt><dd>{outputRate(metrics, t)}</dd></div>
     </dl>
   )
 }
