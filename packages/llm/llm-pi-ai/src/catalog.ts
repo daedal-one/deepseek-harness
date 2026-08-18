@@ -849,8 +849,8 @@ export function resolveRouteModels(
   // schema materializes `[]` for the absent case, and an empty catalog could
   // serve no request anyway, so both mean "serve the installed catalog".
   const configured = request.models ?? []
-  const overrides = request.modelOverrides ?? {}
-  const aliases = request.modelAliases ?? {}
+  const overrides = configured.length > 0 ? {} : request.modelOverrides ?? {}
+  const aliases = configured.length > 0 ? {} : request.modelAliases ?? {}
   const modelErrors = new Map<string, string>()
   // Writes reject missing referents. Stored overrides retain a diagnostic
   // after catalog removal rather than silently disappearing.
