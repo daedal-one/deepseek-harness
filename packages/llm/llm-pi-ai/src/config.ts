@@ -14,7 +14,14 @@
  * @module dsh-llm-pi-ai/config
  */
 
-import type { CacheRetention, ModelThinkingLevel, Provider, ThinkingBudgets, Transport } from '@earendil-works/pi-ai'
+import type {
+  CacheRetention,
+  ModelThinkingLevel,
+  OpenRouterRouting,
+  Provider,
+  ThinkingBudgets,
+  Transport,
+} from '@earendil-works/pi-ai'
 import z from '@deepseek-ai/schemastery'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
@@ -96,9 +103,10 @@ export interface PiAiProviderProfile {
   modelAliases?: Record<string, PiAiModelAlias>
   /**
    * Reasoning-dispatch switches and OpenRouter routing for every
-   * `openai-completions` model on this route; each model's own `compat`
-   * overrides per field. What neither sets keeps the installed catalog
-   * entry's value, then pi-ai's baseURL-derived detection.
+   * `openai-completions` model on this route. Each model's reasoning fields
+   * override per field, while its routing object replaces the route routing
+   * object. What neither sets keeps the installed catalog entry's value, then
+   * pi-ai's baseURL-derived detection.
    */
   compat?: PiAiCompatProfile
   /**
@@ -189,45 +197,56 @@ const thinkingBudgets = z.object({
   high: z.number(),
 })
 
+/** OpenRouter's documented provider-ordering strategies. */
+const routingSorts = ['price', 'throughput', 'latency'] as const
+
+/** OpenRouter's documented provider partitions. */
+const routingPartitions = ['model', 'none'] as const
+
+/** OpenRouter's documented provider quantization filters. */
+const routingQuantizations = [
+  'int4', 'int8', 'fp4', 'fp6', 'fp8', 'fp16', 'bf16', 'fp32', 'unknown',
+] as const
+
 /** A percentile cutoff object (p50/p75/p90/p99) used by routing preferences. */
 const percentileCutoffs = z.object({
-  p50: z.number(),
-  p75: z.number(),
-  p90: z.number(),
-  p99: z.number(),
+  p50: z.number().min(0),
+  p75: z.number().min(0),
+  p90: z.number().min(0),
+  p99: z.number().min(0),
 })
 
 /** One `max_price` entry: a fixed number or a per-million-tokens price string. */
-const price = z.union([z.number(), z.string()])
+const price = z.union([z.number().min(0), z.string().min(1)])
 
 /** An explicit `{ by, partition }` sort object, as an alternative to a bare sort string. */
-const routingSortObject: z<{ by: string; partition: string | null }> = z.object({
-  by: z.string(),
-  partition: z.union([z.string(), z.const(null)]),
+const routingSortObject = z.object({
+  by: z.union(routingSorts).required(),
+  partition: z.union(routingPartitions),
 })
 
 /** OpenRouter provider routing, modeled on pi-ai's `OpenRouterRouting` and sent verbatim as the request `provider` field. */
-const openRouterRouting = z.object({
+const openRouterRouting = z.union([z.object({
   allow_fallbacks: z.boolean(),
   require_parameters: z.boolean(),
   data_collection: z.union(['deny', 'allow']),
   zdr: z.boolean(),
   enforce_distillable_text: z.boolean(),
-  order: z.array(z.string()),
-  only: z.array(z.string()),
-  ignore: z.array(z.string()),
-  quantizations: z.array(z.string()),
-  sort: z.union([z.string(), routingSortObject]),
-  max_price: z.object({
+  order: z.union([z.array(z.string().min(1)).min(1)]),
+  only: z.union([z.array(z.string().min(1)).min(1)]),
+  ignore: z.union([z.array(z.string().min(1)).min(1)]),
+  quantizations: z.union([z.array(z.union(routingQuantizations)).min(1)]),
+  sort: z.union([z.union(routingSorts), routingSortObject]),
+  max_price: z.union([z.object({
     prompt: price,
     completion: price,
     image: price,
     audio: price,
     request: price,
-  }),
-  preferred_min_throughput: z.union([percentileCutoffs, z.number()]),
-  preferred_max_latency: z.union([percentileCutoffs, z.number()]),
-}) as unknown as z<import('@earendil-works/pi-ai').OpenRouterRouting>
+  })]),
+  preferred_min_throughput: z.union([percentileCutoffs, z.number().min(0)]),
+  preferred_max_latency: z.union([percentileCutoffs, z.number().min(0)]),
+})]) as unknown as z<OpenRouterRouting>
 
 const compatProfile: z<PiAiCompatProfile> = z.object({
   thinkingFormat: z.union(SUPPORTED_THINKING_FORMATS),

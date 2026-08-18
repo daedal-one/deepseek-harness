@@ -990,9 +990,10 @@ export interface PiAiProviderProfile {
   modelAliases?: Record<string, PiAiModelAlias>
   /**
    * Reasoning-dispatch switches and OpenRouter routing for every
-   * `openai-completions` model on this route; each model's own `compat`
-   * overrides per field. What neither sets keeps the installed catalog
-   * entry's value, then pi-ai's baseURL-derived detection.
+   * `openai-completions` model on this route. Each model's reasoning fields
+   * override per field, while its routing object replaces the route routing
+   * object. What neither sets keeps the installed catalog entry's value, then
+   * pi-ai's baseURL-derived detection.
    */
   compat?: PiAiCompatProfile
   /**
@@ -1100,9 +1101,10 @@ export type PiAiModelAlias = Omit<PiAiModelProfile, 'id' | 'catalogModel'> & {
 /**
  * Route- or model-level compatibility and OpenRouter routing switches. The
  * reasoning fields are set on the route (its models' default) or per model
- * (winning over the route). OpenRouter routing (`openRouterRouting`) is sent
- * verbatim as the request's `provider` field, so a route can pin provider
- * ordering or throughput routing once instead of suffixing every wire id.
+ * (winning over the route). A model's OpenRouter routing object replaces the
+ * route object; the resolved object is sent verbatim as the request's
+ * `provider` field, so a route can pin provider ordering or throughput routing
+ * once instead of suffixing every wire id.
  *
  * Only the fields pi-ai actually dispatch are offered; the rest of pi-ai's
  * compat surface keeps its baseURL-derived auto-detection. pi-ai types these
@@ -1148,7 +1150,7 @@ type WithheldThinkingFormat = 'chat-template' | 'qwen-chat-template'
 
 Depends on: `Api` (`@earendil-works/pi-ai`) · `CacheRetention` (`@earendil-works/pi-ai`) · `Model` (`@earendil-works/pi-ai`) · `ModelThinkingLevel` (`@earendil-works/pi-ai`) · `OpenAICompletionsCompat` (`@earendil-works/pi-ai`) · `OpenRouterRouting` (`@earendil-works/pi-ai`) · [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts) · `ThinkingBudgets` (`@earendil-works/pi-ai`) · `Transport` (`@earendil-works/pi-ai`)
 
-Source: [`packages/llm/llm-pi-ai/src/config.ts:176`](../packages/llm/llm-pi-ai/src/config.ts)
+Source: [`packages/llm/llm-pi-ai/src/config.ts:184`](../packages/llm/llm-pi-ai/src/config.ts)
 
 <a id="deepseek-aidsh-llm-replay"></a>
 

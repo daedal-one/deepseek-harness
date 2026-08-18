@@ -1,6 +1,7 @@
 # Agent Note: DeepSeek request user and session identity headers
 
 Status: implemented
+Archived: 2026-08-18
 
 English | [中文](2026-08-11-deepseek-request-user-id-header.zh.md)
 

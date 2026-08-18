@@ -1,6 +1,7 @@
 # Agent Note: 以两个 LLM 适配器作为设计验证孪生体
 
 Status: implemented
+Archived: 2026-08-18
 
 [English](2026-06-13-twin-llm-adapters.md) | 中文
 

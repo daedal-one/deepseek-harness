@@ -26,7 +26,7 @@ Status: implemented
 
 ### 目录原子替换
 
-可配置提供方目录跟随 profiles，因此每当一条声明路由出现或离开它都会变化。「撤销旧注册再新建一个」表达不了这件事：注册表拒绝的候选集合——比如一份键为 `deepseek-official` 的 profile，而 `llm-deepseek` 已声明了它——会让本插件的整个目录被撤走、Models 页变空，而且是静默的，因为 settings 变更回调把失败容住了。因此 `registerConfigurableProviders` 改为返回带 `replace(entries)` 的句柄，其「候选集先整体校验」的原子性与 `registerAdapter` 相同，插件改用它。被拒的替换只付出一条诊断；先前的条目继续服务。
+可配置提供方目录跟随 profiles，因此每当一条声明路由出现或离开它都会变化。「撤销旧注册再新建一个」表达不了这件事：如果候选 profile 的键对应另一 adapter 已声明的 route，注册表就会拒绝该候选集；此时本插件的整个目录会被撤走、Models 页变空，而且是静默的，因为 settings 变更回调把失败容住了。因此 `registerConfigurableProviders` 改为返回带 `replace(entries)` 的句柄，其「候选集先整体校验」的原子性与 `registerAdapter` 相同，插件改用它。被拒的替换只付出一条诊断；先前的条目继续服务。
 
 解析失败得响亮，并点名出问题的路由与模型：catalog 未描述的模型会回落到该路由自己的 `defaultContextWindow`／`defaultMaxTokens`，因此只公布 id 的列表也能得到可服务的路由；catalog 未提供的路由需要 `api`、`baseURL` 和非空的 `models` 列表。由于构造出的 `Provider` 是解析结果的一部分，协议或模型出错时最后可用的路由集合会继续服务——与此前坏的 settings 快照的行为完全一致。
 
@@ -65,4 +65,4 @@ pi-ai 的 `Models` 自带一套凭据概念——按提供方 ID 索引的 `Cred
 
 ## Testing
 
-`tests/catalog.spec.ts` 针对本地 mock 服务器端到端覆盖该约定：手工声明的路由带着自己的凭据流向自己的端点、它在可配置提供方目录中的出现、每模型覆盖从已安装 catalog 继承默认值、向 catalog 路由添加模型、带与不带端点覆盖的协议改指、catalog 独有元数据在覆盖后存活、无密钥姿态及其 `Authorization` 标头变通、只走 OAuth 的 catalog 路由用 profile 点名的密钥完成认证而无密钥者保持未配置、改指协议的路由保留其 catalog auth，以及每一种点名路由或模型的解析失败。`tests/catalog.spec.ts` 还钉住了快照与目录两项约定：在途请求即便其路由集在 credential await 期间改变，仍抵达它解析时对应的端点；下一个请求取用新配置；冲突的声明路由让目录保持完好；声明路由的条目随其 profile 出现与离开。`packages/llm/llm/tests/topology.spec.ts` 覆盖 `replace`——拒绝他人已拥有的候选同时保住当前集合、接受对自身条目的替换、允许空集合，以及 dispose 之后失败。`tests/sdk-options.spec.ts` 把 SDK 边界从已移除的 `/compat` 导入改指到协议表的 lazy api 模块，同时钉住「setup 失败以终止性错误分片而非抛出的形式抵达」。twin 的[设计验证角色](2026-06-13-twin-llm-adapters.md)不变。
+`tests/catalog.spec.ts` 针对本地 mock 服务器端到端覆盖该约定：手工声明的路由带着自己的凭据流向自己的端点、它在可配置提供方目录中的出现、每模型覆盖从已安装 catalog 继承默认值、向 catalog 路由添加模型、带与不带端点覆盖的协议改指、catalog 独有元数据在覆盖后存活、无密钥姿态及其 `Authorization` 标头变通、只走 OAuth 的 catalog 路由用 profile 点名的密钥完成认证而无密钥者保持未配置、改指协议的路由保留其 catalog auth，以及每一种点名路由或模型的解析失败。`tests/catalog.spec.ts` 还钉住了快照与目录两项约定：在途请求即便其路由集在 credential await 期间改变，仍抵达它解析时对应的端点；下一个请求取用新配置；冲突的声明路由让目录保持完好；声明路由的条目随其 profile 出现与离开。`packages/llm/llm/tests/topology.spec.ts` 覆盖 `replace`——拒绝他人已拥有的候选同时保住当前集合、接受对自身条目的替换、允许空集合，以及 dispose 之后失败。`tests/sdk-options.spec.ts` 把 SDK 边界从已移除的 `/compat` 导入改指到协议表的 lazy api 模块，同时钉住「setup 失败以终止性错误分片而非抛出的形式抵达」。已安装 catalog 与提供方无关的流式词汇现在由唯一随产品交付的 pi-ai adapter 跨多种提供方协议继续覆盖。

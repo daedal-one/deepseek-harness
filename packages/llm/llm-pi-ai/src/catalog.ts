@@ -186,9 +186,10 @@ export type PiAiReasoningEfforts = Partial<Record<ModelThinkingLevel, string | n
 /**
  * Route- or model-level compatibility and OpenRouter routing switches. The
  * reasoning fields are set on the route (its models' default) or per model
- * (winning over the route). OpenRouter routing (`openRouterRouting`) is sent
- * verbatim as the request's `provider` field, so a route can pin provider
- * ordering or throughput routing once instead of suffixing every wire id.
+ * (winning over the route). A model's OpenRouter routing object replaces the
+ * route object; the resolved object is sent verbatim as the request's
+ * `provider` field, so a route can pin provider ordering or throughput routing
+ * once instead of suffixing every wire id.
  *
  * Only the fields pi-ai actually dispatch are offered; the rest of pi-ai's
  * compat surface keeps its baseURL-derived auto-detection. pi-ai types these
@@ -390,30 +391,6 @@ function resolveModelReasoning(
 }
 
 /**
- * Reverse schemastery's materialization of absent optional fields inside an
- * `OpenRouterRouting`. The config schema is a `z.object` of optional fields,
- * and schemastery fills an omitted nested object or array with its empty
- * default (`order: []`, `max_price: {}`), so an empty routing object —
- * and only that — reads identically whether the profile named routing or not.
- * Dropping those empty values means an absent field asserts nothing on the
- * wire, which is what a deferred-to-default field must do. A completely empty
- * result means the profile set no routing at all.
- * @param routing - the materialized routing object from configuration.
- * @returns the routing with materialized empties removed, or `undefined` when none remained.
- */
-function routingOrDefault(routing: OpenRouterRouting | undefined): OpenRouterRouting | undefined {
-  if (routing === undefined) return undefined
-  const cleaned: OpenRouterRouting = {}
-  for (const [key, value] of Object.entries(routing)) {
-    if (value === undefined || value === null) continue
-    if (Array.isArray(value) && value.length === 0) continue
-    if (typeof value === 'object' && !Array.isArray(value) && Object.keys(value as object).length === 0) continue
-    ;(cleaned as Record<string, unknown>)[key] = value
-  }
-  return Object.keys(cleaned).length === 0 ? undefined : cleaned
-}
-
-/**
  * Resolve one model's compat block from the profile's reasoning switches and
  * OpenRouter routing.
  *
@@ -440,9 +417,7 @@ function resolveModelCompat(
 ): { compat: OpenAICompletionsCompat } | Record<string, never> {
   const thinkingFormat = entry.compat?.thinkingFormat ?? route?.thinkingFormat
   const supportsReasoningEffort = entry.compat?.supportsReasoningEffort ?? route?.supportsReasoningEffort
-  const entryRouting = routingOrDefault(entry.compat?.openRouterRouting)
-  const routeRouting = routingOrDefault(route?.openRouterRouting)
-  const openRouterRouting = entryRouting ?? routeRouting
+  const openRouterRouting = entry.compat?.openRouterRouting ?? route?.openRouterRouting
   if (thinkingFormat === undefined && supportsReasoningEffort === undefined && openRouterRouting === undefined) {
     return {}
   }
@@ -564,7 +539,7 @@ export function resolveRouteModels(request: RouteCatalogRequest): RouteCatalog {
   const routeApi = sharedCatalogApi(defaults)
   const routeCompatDefined = request.compat?.thinkingFormat !== undefined
     || request.compat?.supportsReasoningEffort !== undefined
-    || routingOrDefault(request.compat?.openRouterRouting) !== undefined
+    || request.compat?.openRouterRouting !== undefined
   const seen = new Set<string>()
   const configuredMaxTokens = new Map<string, number>()
   const models = entries.map((entry) => {

@@ -243,12 +243,11 @@ async function collectHost(
  * @param ns - the namespace whose stored section changed.
  * @returns the expected wrapper frame.
  */
-function forwardedSettings(ns: string): HostFrame {
+function forwardedSettings(ns: string): unknown {
   return {
     type: 'host/remote-event',
     event: 'settings/document-updated',
-    // The revision is the Host's own counter, so the matcher is the assertion.
-    args: [ns, expect.any(Number)], // oxlint-disable-line typescript/no-unsafe-assignment
+    args: [ns, expect.any(Number) as unknown],
   }
 }
 

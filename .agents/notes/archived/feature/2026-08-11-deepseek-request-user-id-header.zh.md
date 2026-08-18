@@ -1,6 +1,7 @@
 # Agent Note: DeepSeek 请求用户与会话身份头部
 
 Status: implemented
+Archived: 2026-08-18
 
 [English](2026-08-11-deepseek-request-user-id-header.md) | 中文
 

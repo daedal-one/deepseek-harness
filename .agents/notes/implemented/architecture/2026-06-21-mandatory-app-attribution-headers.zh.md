@@ -6,9 +6,9 @@ Status: implemented
 
 ## 问题
 
-LLM（大语言模型）提供方请求应当标识发出请求的产品。这对提供方侧的技术支持、滥用调查、兼容性调试和流量分析都有价值。在本 Agent Note 之前，harness 只做了部分工作：手写的 DeepSeek 适配器发送了一个手动复制的 `User-Agent` 常量（`packages/llm/llm-deepseek/src/adapter.ts`），而基于 pi-ai 的孪生适配器则完全不发送 harness 自有的头部（`packages/llm/llm-pi-ai/src/adapter.ts`）。因此新适配器可以悄无声息地省略归属标识，而基于库的适配器也可能与手写适配器产生偏差——尽管[孪生适配器 Agent Note](2026-06-13-twin-llm-adapters.md) 的存在正是为了确保两种实现中的提供方约定真实可靠。
+LLM（大语言模型）提供方请求应当标识发出请求的产品。这对提供方侧的技术支持、滥用调查、兼容性调试和流量分析都有价值。在本 Agent Note 之前，harness 只做了部分工作：原有的手写 DeepSeek adapter 发送了一个手动复制的 `User-Agent` 常量，而 [adapter.ts](../../../../packages/llm/llm-pi-ai/src/adapter.ts) 中基于 pi-ai 的 adapter 则完全不发送 harness 自有的 header。因此新 adapter 可以悄无声息地省略归属标识，基于库的 adapter 也可能与历史[孪生 adapter Agent Note](../../archived/architecture/2026-06-13-twin-llm-adapters.md)记录的直接实现产生偏差。
 
-直接触发因素来自 OpenRouter 的[应用归属](https://openrouter.ai/docs/app-attribution)文档。OpenRouter 根据 `HTTP-Referer` 加上用于展示和分类的头部来创建应用页面和排名。这有价值，但它不是 HTTP 标准中的应用身份机制。风险在于：把 OpenRouter 的精确头部集当作通用标准来采纳，然后将提供方特有的头部泄漏到直连 DeepSeek 的请求、未来的 OpenAI/Anthropic/Vertex 适配器、测试服务器或无限期记录未知字段的代理中。
+直接触发因素来自 OpenRouter 的[应用归属](https://openrouter.ai/docs/app-attribution)文档。OpenRouter 根据 `HTTP-Referer` 加上用于展示和分类的 header 来创建应用页面和排名。这有价值，但它不是 HTTP 标准中的应用身份机制。风险在于：把 OpenRouter 的精确 header 集当作通用标准来采纳，然后将提供方特有的 header 泄漏到其他提供方 route、测试服务器或无限期记录未知字段的 proxy 中。
 
 ## 调研
 
@@ -20,11 +20,11 @@ LLM（大语言模型）提供方请求应当标识发出请求的产品。这�
 - **`From` 是标准的，但不适合作为强制默认值。** RFC 9110 第 10.1.2 节将 `From` 定义为负责用户代理的人的电子邮件地址。机器人代理应当发送它以便服务器联系运营者，但非机器人代理出于隐私和安全策略考虑不应在未经用户显式配置的情况下发送。harness 可以后续支持运营者联系方式，但不得凭空捏造或全局强制要求。
 - **请求体中的 `user` 或 `metadata` 字段不是应用归属。** 部分模型 API 暴露稳定的终端用户标识符、请求元数据、标签或项目/账户头部。这些对滥用监控、内部计费、仪表盘或链路追踪有用，但它们要么标识的是终端用户而非产品，要么是提供方特有的 body schema，要么不保证能通过 OpenAI 兼容网关透传。它们不能替代静态的应用身份头部。
 - **SDK 遥测头部标识的是 SDK，而非应用。** 官方和第三方 SDK 常发送库/版本头部。这些帮助 SDK 维护者调试其客户端，但除非应用显式提供产品归属层，否则它们不能标识 harness 作为应用。
-- **pi-ai 有原生支持的头部钩子。** `@earendil-works/pi-ai` 的 `StreamOptions.headers` 将调用方头部最后合并（覆盖提供方默认值），因此基于库的适配器无需包装或上游改动即可满足与手写适配器相同的线路约定。mock 服务器测试套件对两个适配器都断言头部到达了线路。
+- **pi-ai 有原生支持的 header hook。** `@earendil-works/pi-ai` 的 `StreamOptions.headers` 将调用方 header 最后合并（覆盖提供方默认值），因此随产品交付的 adapter 无需包装或上游改动即可满足线路约定。其 mock 服务器测试套件断言 header 到达了线路。
 
 ## 决策
 
-在 LLM 适配器边界，提供方无关的应用归属是强制的，且仅使用标准 `User-Agent` 头部。规则：每个产品级 LLM 适配器在每个提供方 HTTP 请求上发送一个静态、非机密的应用身份，且每个适配器都有测试证明 `User-Agent` 到达了线路（mock 服务器断言收到的头部；对于基于库的适配器，通过库的头部钩子馈入同一个 mock 服务器断言）。这条规则约束应用归属，不约束提供方特有的请求身份；[DeepSeek 请求身份决策](../feature/2026-08-11-deepseek-request-user-id-header.md)另行负责其用户与会话头部。
+在 LLM adapter boundary，提供方无关的应用归属是强制的，且仅使用标准 `User-Agent` header。规则：每个产品级 LLM adapter 在每个提供方 HTTP 请求上发送一个静态、非机密的应用身份，且每个 adapter 都有测试证明 `User-Agent` 到达线路（mock 服务器断言收到的 header；对于基于库的 adapter，通过库的 header hook 馈入同一个 mock 服务器断言）。这条规则约束应用归属，不约束提供方特有的请求身份；当前没有 adapter 向提供方发送逐用户或逐 session 的身份元数据。
 
 OpenRouter 应用归属刻意未实现。`HTTP-Referer`、`X-OpenRouter-Title`、`X-Title` 和 `X-OpenRouter-Categories` 是 OpenRouter 特有的产品展示头部，不是提供方无关的模型请求归属。它们可以后续由 OpenRouter 适配器或显式 OpenRouter 模式提出，附带自己的隐私/产品决策、测试和文档。在此之前，即使请求指向 OpenRouter，也只发送本决策定义的共享 `User-Agent` 归属。
 
@@ -41,11 +41,10 @@ OpenRouter 应用归属刻意未实现。`HTTP-Referer`、`X-OpenRouter-Title`�
 | 目标 | 映射 |
 |---|---|
 | 所有基于 HTTP 的适配器 | `User-Agent: {product}/{version} (+{url})`——括号中的 `+url` 注释符合 RFC 9110 保守的 product/comment 语法。 |
-| 直连 DeepSeek 端点 | `User-Agent` 用于应用归属；`x-deepseek-harness-user-id` 与条件性的 `x-deepseek-harness-session-id` 由 DeepSeek 特有决策作为独立请求身份管理。除非 DeepSeek 文档化了等效约定，否则不发送 OpenRouter 特有头部。 |
 | OpenRouter 端点 | 目前仅 `User-Agent`。本决策下不发送 `HTTP-Referer`、`X-OpenRouter-Title`、`X-Title` 或 `X-OpenRouter-Categories`。 |
 | 未来提供方 | 仅 `User-Agent`，除非后续提供方特有的 Agent Note 接受额外头部。不要类比复用 `HTTP-Referer`。 |
 
-端点检测不在本 Agent Note 范围内，因为此处不接受任何端点特有的映射。如果后续支持 OpenRouter，检测必须是显式的：要么是专门的 OpenRouter 提供方包，要么是显式的 `provider: 'openrouter'` / `attributionTarget: 'openrouter'` 配置，而非任意路径片段或模型名称。
+端点检测不在本 Agent Note 范围内，因为此处不接受任何端点特有的映射。随产品交付的 OpenRouter route 属于显式配置，但本决策仍不添加 OpenRouter 专用 header。后续若加入应用归属功能，必须按显式 provider route 判断，而非依赖任意路径片段或模型名称。
 
 ## 验证
 
@@ -53,7 +52,6 @@ OpenRouter 应用归属刻意未实现。`HTTP-Referer`、`X-OpenRouter-Title`�
 
 - `dsh-llm` 为 `LlmAdapter` 作者文档化了强制的 `User-Agent` 归属约定（`LlmAdapter` JSDoc、包 README，以及 `docs/subsystems/llm-streaming.md` 的适配器约定（adapter contract）章节）。
 - 共享辅助函数（`attributionHeaders` / `userAgent`）从包元数据构建应用身份和标准 `User-Agent` 值，适配器无需手动复制版本常量。
-- `dsh-llm-deepseek` 在每个请求上发送共享的 `User-Agent`，其 mock 服务器套件断言精确值。
 - `dsh-llm-pi-ai` 通过 pi-ai 的 `StreamOptions.headers` 钩子发送相同的 `User-Agent`，其 mock 服务器套件断言精确值。
 - 本决策下没有适配器发送 OpenRouter 特有的归属头部（`HTTP-Referer`、`X-OpenRouter-Title`、`X-Title`、`X-OpenRouter-Categories`）。
 - 没有应用归属字段携带机密、本地路径、会话 id、提示词文本、模型输出、用户邮箱或逐用户的稳定标识符。
@@ -77,6 +75,6 @@ OpenRouter 应用归属刻意未实现。`HTTP-Referer`、`X-OpenRouter-Title`�
 
 **提供方看到流量来自 harness。** 这正是目的，但意味着此前混在通用 SDK 流量中的部署变得可识别。缓解措施：仅发送静态公开产品数据，并允许 fork/白标部署传入自己的 `AppIdentity`。
 
-**不同客户端库的头部支持有差异。** 手写适配器直接设置头部；基于 pi-ai 的适配器依赖 pi-ai 继续尊重 `StreamOptions.headers`（最后合并覆盖提供方默认值）。线路级 mock 服务器测试是守卫：如果 pi-ai 升级后不再投递该头部，套件会变红。这对抽象施加了有益的压力：一个无法设置强制头部的提供方适配器不能完整实现 harness 的 LLM 约定。
+**Header 支持依赖客户端库。** 基于 pi-ai 的 adapter 依赖 pi-ai 持续遵守 `StreamOptions.headers`（最后合并到提供方默认值之上）。线路级 mock 服务器测试是守卫：如果 pi-ai 升级后不再传递该 header，套件会变红。这对抽象层形成了有益压力：无法设置强制 header 的提供方 adapter，无法完整实现 harness 的 LLM 约定。
 
 **OpenRouter 排名尚未受益。** `User-Agent` 是提供方无关的 HTTP 身份的正确基线，但它不会创建 OpenRouter 应用页面或排名，因为 OpenRouter 要求 `HTTP-Referer` 来实现该产品功能。这是有意为之：公开应用市场参与是一个独立的产品决策，不是强制请求归属的前提。

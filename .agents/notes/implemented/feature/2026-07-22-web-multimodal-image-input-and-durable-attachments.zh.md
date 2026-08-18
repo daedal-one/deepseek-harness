@@ -152,7 +152,6 @@ Pi-AI 适配器是首条视觉输入路径：它在请求时解析 `ctx.attachme
 | `packages/attachment/attachment-local` | 私有内容寻址存储、完整光栅解码、完整性校验和配置。 |
 | `packages/llm/llm` | 角色无关的 `ImageBlock` 和输入模态元数据。 |
 | `packages/llm/llm-pi-ai` | 将持久且受支持的图片输入解析为提供方原生内容。 |
-| `packages/llm/llm-deepseek` | 明确拒绝图片内容。 |
 | `packages/compaction/compaction-basic` | 在摘要输入中保留图片，并明确拒绝非文本检查点输出。 |
 | `packages/host/apiproxy` 和 `packages/bundle/base` | 范围狭窄的上传协议、先持久化再追加事件的顺序、会话授权读取、限制和模型前置检查，以及默认 profile 组合。 |
 | `packages/client/connection` 和 `packages/client/runtime` | 有界请求缓冲、协议类型、fixture（测试前置数据）图片、提示词上传、附件读取和持久引用折叠。 |

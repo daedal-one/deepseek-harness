@@ -152,7 +152,6 @@ Malformed base64, unsupported or mismatched media, truncated image payloads, exc
 | `packages/attachment/attachment-local` | Private content-addressed storage, complete raster decoding, integrity verification, and configuration. |
 | `packages/llm/llm` | Role-neutral `ImageBlock` and input-modality metadata. |
 | `packages/llm/llm-pi-ai` | Resolve durable supported image input into native provider content. |
-| `packages/llm/llm-deepseek` | Reject image content explicitly. |
 | `packages/compaction/compaction-basic` | Preserve images in summary input and reject non-text checkpoint output explicitly. |
 | `packages/host/apiproxy` and `packages/bundle/base` | Narrow upload wire, persist-before-event ordering, session-authorized reads, limits and model preflight, plus default profile composition. |
 | `packages/client/connection` and `packages/client/runtime` | Bounded request buffering, wire types, fixture images, prompt uploads, attachment reads, and durable-reference folding. |

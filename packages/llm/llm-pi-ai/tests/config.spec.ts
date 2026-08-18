@@ -39,14 +39,18 @@ describe('reasoning schema boundary', () => {
   it('accepts an OpenRouter routing object on the route', () => {
     type Materialized = { providers: Record<string, { compat?: { openRouterRouting?: unknown } }> }
     const withRouting = routeWith({ compat: { openRouterRouting: { sort: 'throughput' } } })() as Materialized
-    const routing = withRouting.providers['acme-gateway']?.compat?.openRouterRouting as { sort?: unknown }
-    // schemastery fills omitted optional fields with empty defaults; the sort
-    // metric the profile actually named survives.
-    expect(routing?.sort).toBe('throughput')
+    expect(withRouting.providers['acme-gateway']?.compat?.openRouterRouting).toEqual({ sort: 'throughput' })
+    const absent = configWith({})() as Materialized
+    expect(absent.providers['acme-gateway']?.compat?.openRouterRouting).toBeUndefined()
   })
 
-  it('rejects an OpenRouter sort metric outside the offered shapes', () => {
+  it('rejects invalid OpenRouter routing values where configuration is written', () => {
     expect(configWith({ compat: { openRouterRouting: { sort: 42 } } })).toThrow(/expected/)
+    expect(configWith({ compat: { openRouterRouting: { sort: 'random' } } })).toThrow(/expected/)
+    expect(configWith({ compat: { openRouterRouting: { sort: { by: 'throughput', partition: 'random' } } } }))
+      .toThrow(/expected/)
+    expect(configWith({ compat: { openRouterRouting: { quantizations: ['int3'] } } })).toThrow(/expected/)
+    expect(configWith({ compat: { openRouterRouting: { preferred_max_latency: -1 } } })).toThrow(/expected/)
   })
 })
 

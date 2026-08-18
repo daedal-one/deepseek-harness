@@ -8,7 +8,7 @@ English | [中文](2026-08-07-shared-feedback-telemetry-user-id.zh.md)
 
 The OpenTelemetry backend already persisted one anonymous UUID in `$DSH_HOME/.anonymous-user-id`. `/feedback` now needs to report both the receiving session id and a user id so an operator can correlate the acknowledgement with exported records. Duplicating or independently generating that identity would make the reported user meaningless, while importing it from `session-telemetry-otel` would make a direct command depend on an exporter backend and create a dependency cycle when feedback export is mounted by telemetry.
 
-The earlier [anonymous-user-id decision](../feature/2026-07-31-telemetry-anonymous-user-id.md) deliberately kept the helper inside the OTel backend until a second real consumer existed. Feedback became that second consumer. [Direct DeepSeek request identity](../feature/2026-08-11-deepseek-request-user-id-header.md) is the third.
+The earlier [anonymous-user-id decision](../feature/2026-07-31-telemetry-anonymous-user-id.md) deliberately kept the helper inside the OTel backend until a second real consumer existed. Feedback became that second consumer, so the shared package remains justified without coupling identity to a model provider.
 
 ## Decision
 

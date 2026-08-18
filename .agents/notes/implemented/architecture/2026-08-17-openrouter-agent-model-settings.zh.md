@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决定
 
-**pi-ai 是唯一随产品交付的对话模型 adapter，OpenRouter 是固定的部署 route。**Base、Headless、Web、ACP、SDK 和 Python runtime 组合都通过 `llm-pi-ai` 注册 OpenRouter；专用 DeepSeek LLM 包和 route 不存在。Web search 会发出独立的辅助 OpenRouter 请求，因为它实现 Web capability，而不是对话模型传输。
+**pi-ai 是唯一随产品交付的对话模型 adapter，OpenRouter 是固定的部署 route。**Base、Headless、Web、ACP、SDK 和 Python runtime 组合都通过 `llm-pi-ai` 注册 OpenRouter；专用 DeepSeek LLM 包和 route 不存在。仅当 OpenRouter profile 省略 `baseURL` 时，adapter 才从共享且不可变的 launch environment 解析可选的 `OPENROUTER_BASE_URL`，因此组合无需 Loader expression，显式 endpoint 仍然优先。Web search 会发出独立的辅助 OpenRouter 请求，因为它实现 Web capability，而不是对话模型传输。
 
 **带路由的标识符是安装目录之上的增量 alias。**`modelAliases` 增加一个线上请求 id，同时要求指定安装 provider 目录中的 `catalogModel`。Alias 先继承协议、endpoint、容量、模态、reasoning 方言、支持的 effort map、兼容字段和成本元数据，再应用显式 override。它不能替换安装 id、不能和替换式 `models` 列表共存，也不能指向未知目录条目。因此，随产品交付的 alias `deepseek/deepseek-v4-flash-0731:nitro` 在发送精确 dated Nitro id 的同时保留目录中的 OpenRouter reasoning 协议。
 

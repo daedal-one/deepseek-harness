@@ -763,6 +763,11 @@
         "@deepseek-ai/.+"
       ]
     },
+    "packages/bundle/agent-plane": {
+      "ignoreDependencies": [
+        "@deepseek-ai/dsh-agent-presets"
+      ]
+    },
     "packages/bundle/headless": {
       "ignoreDependencies": [
         "@deepseek-ai/dsh-code-runtime-worker-thread"

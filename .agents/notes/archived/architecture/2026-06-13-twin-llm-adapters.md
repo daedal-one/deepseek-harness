@@ -1,6 +1,7 @@
 # Agent Note: Two LLM adapters as a design-verification twin
 
 Status: implemented
+Archived: 2026-08-18
 
 English | [中文](2026-06-13-twin-llm-adapters.zh.md)
 

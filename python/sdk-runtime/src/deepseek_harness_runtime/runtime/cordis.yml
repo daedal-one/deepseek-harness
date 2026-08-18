@@ -21,7 +21,6 @@
     providers:
       openrouter:
         apiKeyEnv: OPENROUTER_API_KEY
-        baseURL: !!js process.env.OPENROUTER_BASE_URL
         modelAliases:
           deepseek/deepseek-v4-flash-0731:nitro:
             catalogModel: deepseek/deepseek-v4-flash

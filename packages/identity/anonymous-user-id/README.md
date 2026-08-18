@@ -16,7 +16,7 @@ This package is a shared library, not a Cordis plugin. Consumers import `getOrCr
 
 ## Model Experience
 
-None. The identifier never enters a model request, prompt, or model-visible content.
+None, as the identifier never enters a model request, prompt, or model-visible content.
 
 #### KV Cache effect
 

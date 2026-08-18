@@ -14,7 +14,6 @@
     providers:
       openrouter:
         apiKeyEnv: OPENROUTER_API_KEY
-        baseURL: !!js process.env.OPENROUTER_BASE_URL
         streamIdleTimeoutMs: 172800000
         models:
           - id: !!js process.env.DSH_MODEL ?? 'deepseek/deepseek-v4-flash-0731:nitro'
