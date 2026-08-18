@@ -25,6 +25,7 @@ import type {
   ModelThinkingLevel,
   OpenAICompletionsCompat,
   OpenAIResponsesCompat,
+  OpenRouterRouting,
   Provider,
   ThinkingLevelMap,
 } from '@earendil-works/pi-ai'
@@ -248,7 +249,7 @@ const COMPLETIONS_COMPAT_GATE = {
   supportsStrictMode: 'offer',
   cacheControlFormat: 'offer',
   supportsLongCacheRetention: 'offer',
-  openRouterRouting: 'withhold',
+  openRouterRouting: 'offer',
   vercelGatewayRouting: 'withhold',
   zaiToolStream: 'withhold',
   supportsOpenAIGrammarTools: 'withhold',
@@ -357,6 +358,8 @@ type OfferedCompatField =
  * switch settable on one is settable on all three.
  */
 export interface PiAiCompatProfile {
+  /** Provider routing sent as the OpenRouter request provider field; openai-completions. */
+  openRouterRouting?: OpenRouterRouting
   /** Whether the endpoint accepts `store`; `openai-completions`. */
   supportsStore?: boolean
   /**
@@ -481,8 +484,23 @@ export type EveryProfileFieldMatchesUpstream = AssertTrue<
  * @param compat - the configured switches, when any.
  * @returns the entries carrying a value, in declaration order.
  */
+/** Normalize optional routing arrays and objects materialized by configuration. */
+function routingOrDefault(routing: OpenRouterRouting | undefined): OpenRouterRouting | undefined {
+  if (routing === undefined) return undefined
+  const cleaned: OpenRouterRouting = {}
+  for (const [key, value] of Object.entries(routing)) {
+    if (value === undefined || value === null) continue
+    if (Array.isArray(value) && value.length === 0) continue
+    if (typeof value === 'object' && !Array.isArray(value) && Object.keys(value as object).length === 0) continue
+    ;(cleaned as Record<string, unknown>)[key] = value
+  }
+  return Object.keys(cleaned).length === 0 ? undefined : cleaned
+}
+
 function configuredCompatEntries(compat: PiAiCompatProfile | undefined): readonly (readonly [string, unknown])[] {
-  return Object.entries(compat ?? {}).flatMap(([field, value]) => {
+  return Object.entries(compat ?? {}).flatMap(([field, rawValue]) => {
+    const value = field === 'openRouterRouting' ? routingOrDefault(rawValue as OpenRouterRouting) : rawValue
+    if (value === undefined) return []
     const empty = typeof value === 'object' && value !== null && !Array.isArray(value)
       && Object.keys(value as object).length === 0
     return empty ? [] : [[field, value] as const]

@@ -15,6 +15,7 @@
     "@deepseek-ai/dsh-acp": "workspace:^",
     "@deepseek-ai/dsh-agent": "workspace:^",
     "@deepseek-ai/dsh-agent-instructions": "workspace:^",
+    "@deepseek-ai/dsh-agent-default-model": "workspace:^",
     "@deepseek-ai/dsh-agent-loop": "workspace:^",
     "@deepseek-ai/dsh-agent-tool-presentation": "workspace:^",
     "@deepseek-ai/dsh-anonymous-user-id": "workspace:^",

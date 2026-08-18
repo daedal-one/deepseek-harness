@@ -240,6 +240,27 @@ describe('PiAiAdapter provider routing', () => {
     expect(server.paths).toEqual(['/v1/responses'])
   })
 
+  it('sends route OpenRouter routing as the request provider field', async () => {
+    const server = await mockServer([{ events: textEvents }])
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, {
+      providers: {
+        'acme-gateway': {
+          apiKeyEnv: 'PI_TEST_KEY',
+          api: 'openai-completions',
+          baseURL: `${server.url}/v1`,
+          compat: { openRouterRouting: { sort: 'throughput' } },
+          models: [{ id: 'acme-large' }],
+        },
+      },
+    })
+    const result = await assemble(ctx, { provider: 'acme-gateway', model: 'acme-large', messages: [] })
+    expect(result.finish).toMatchObject({ kind: 'stop' })
+    const body = server.requests[0] as { provider?: unknown }
+    expect(body.provider).toEqual({ sort: 'throughput' })
+  })
+
   it('resolves attachment and filesystem services mounted after the adapter when dispatching an image', async () => {
     const server = await mockServer([{ status: 401, body: JSON.stringify({ error: { message: 'expected mock failure' } }) }])
     const attachmentId = AttachmentId(`sha256:${'a'.repeat(64)}`)

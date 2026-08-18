@@ -876,12 +876,12 @@ describe('compat switches', () => {
   it('rejects a model-level switch on a protocol that has no such field, naming what it offers', () => {
     expect(() => resolveProfiles({
       anthropic: {
-        models: [{ id: 'claude-sonnet-4-5', compat: { thinkingFormat: 'openai' } }],
+        models: [{ id: 'claude-sonnet-4-5', compat: { openRouterRouting: { sort: 'throughput' } } }],
       },
     })).toThrow(/its api is "anthropic-messages", which does not take it.*exists on openai-completions/s)
   })
 
-  it('rejects route switches no model on the route can take', () => {
+  it('rejects route OpenRouter routing no model on the route can take', () => {
     expect(() => resolveProfiles({
       anthropic: { compat: { thinkingFormat: 'openai' } },
     })).toThrow(/no model on the route speaks a protocol that takes it/)

@@ -254,6 +254,45 @@ const chatTemplateKwarg: z<ChatTemplateKwargValue> = z.union([
     omitWhenOff: z.boolean(),
   }),
 ])
+/** A percentile cutoff object (p50/p75/p90/p99) used by routing preferences. */
+const percentileCutoffs = z.object({
+  p50: z.number(),
+  p75: z.number(),
+  p90: z.number(),
+  p99: z.number(),
+})
+
+/** One `max_price` entry: a fixed number or a per-million-tokens price string. */
+const price = z.union([z.number(), z.string()])
+
+/** An explicit `{ by, partition }` sort object, as an alternative to a bare sort string. */
+const routingSortObject: z<{ by: string; partition: string | null }> = z.object({
+  by: z.string(),
+  partition: z.union([z.string(), z.const(null)]),
+})
+
+/** OpenRouter provider routing, modeled on pi-ai's `OpenRouterRouting` and sent verbatim as the request `provider` field. */
+const openRouterRouting = z.object({
+  allow_fallbacks: z.boolean(),
+  require_parameters: z.boolean(),
+  data_collection: z.union(['deny', 'allow']),
+  zdr: z.boolean(),
+  enforce_distillable_text: z.boolean(),
+  order: z.array(z.string()),
+  only: z.array(z.string()),
+  ignore: z.array(z.string()),
+  quantizations: z.array(z.string()),
+  sort: z.union([z.string(), routingSortObject]),
+  max_price: z.object({
+    prompt: price,
+    completion: price,
+    image: price,
+    audio: price,
+    request: price,
+  }),
+  preferred_min_throughput: z.union([percentileCutoffs, z.number()]),
+  preferred_max_latency: z.union([percentileCutoffs, z.number()]),
+}) as unknown as z<import('@earendil-works/pi-ai').OpenRouterRouting>
 
 const compatProfile: z<PiAiCompatProfile> = z.object({
   supportsStore: z.boolean(),
@@ -282,6 +321,7 @@ const compatProfile: z<PiAiCompatProfile> = z.object({
   forceAdaptiveThinking: z.boolean(),
   allowEmptySignature: z.boolean(),
   supportsStrictTools: z.boolean(),
+  openRouterRouting,
 })
 
 /**
