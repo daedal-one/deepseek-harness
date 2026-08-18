@@ -6,6 +6,10 @@
     { "path": "../../../vendor/cosmokit" },
     { "path": "../../../vendor/cordis" },
     { "path": "../../../vendor/schemastery" },
+    { "path": "../../core/session" },
+    { "path": "../../sandbox/sandbox" },
+    { "path": "../../sandbox/sandbox-policy" },
+    { "path": "../../interaction/user-approval" },
     { "path": "../tool-policy" },
     { "path": "../../core/tools" },
     { "path": "../../runtime-diagnostics/invariants" }

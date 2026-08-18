@@ -62,6 +62,10 @@ async function load(): Promise<Context> {
     '    maxEffects: 8',
     '    rules: []',
     "- name: '@deepseek-ai/dsh-tool-policy-enforcer'",
+    '  config:',
+    '    enforceWhen:',
+    '      sandboxModes: [danger-full-access]',
+    '      approvalPolicies: [ask]',
     '',
   ].join('\n'))
 
@@ -105,6 +109,8 @@ describe('real Loader policy composition', () => {
       { seq: 1, type: 'turn/start', data: { turn: 1 } },
       { seq: 2, type: 'user/message', data: { source: { kind: 'user' }, content: [{ type: 'text', text: 'inspect the host' }] } },
       { seq: 3, type: 'tool/call', data: { callId: CallId('c'), name: 'bash', arguments: '{}' } },
+      { seq: 4, type: 'sandbox/mode', data: { mode: 'danger-full-access' } },
+      { seq: 5, type: 'approval/policy', data: { policy: 'ask' } },
     ]
     const agent = {
       options: { provider: 'acting', model: 'acting-model' },

@@ -12,6 +12,8 @@ Status: implemented
 
 该能力由一个 Service Definition、两个 Service Provider 和一个 Consumer 组成。`dsh-tool-policy` 管理 effect 作用域的命名提供者注册，并评估配置的提供者或所有已注册提供者。多个受支持的裁决按 deny 高于 ask、ask 高于 allow 的顺序保守合并。`dsh-tool-policy-shell` 把配置的工具名和参数名映射为 shell 执行，应用固定检查和有序规则，然后通过 `ctx.llm` 获取有界辅助证据。`dsh-tool-policy-mcp` 对经过审查的 MCP 调用应用精确公开工具规则、可信 subagent principal、禁止的根参数和公开 HTTP(S) URL 检查。`dsh-tool-policy-enforcer` 在 `tools/pre-execute` 转换规范裁决，并把人工决定留给 `ctx.approval`。
 
+部署可以把执行器激活范围限制到持久沙箱值与审批值。[Daedal 权限模式决策](2026-08-18-daedal-tool-policy-permission-mode.md)负责该激活条件及其产品预设。
+
 shell 证据和审批机制由[独立工具策略证据决策](../bug-fix/2026-08-18-independent-tool-policy-evidence.md)负责。意图与命令效果使用分离且并发的模型路由，封闭效果进入确定性宿主策略，请求事件保留重建选择器而不复制原始输入，第一次 ask 直接进入 `ctx.approval`。无效输出、超时、路由不可用或提供者失败仍然失败关闭。调用方取消仍是取消。
 
 MCP 策略从持久且由配置所有的 subagent descriptor 推导子 principal，而不采用模型参数或 persona 文本。URL 检查会拒绝非 HTTP(S) 协议、非公开字面地址，以及完整当前 DNS 结果集中包含非公开地址的主机名。DNS 检查无法固定随后打开的 socket，因此另行实现的 MCP 或浏览器连接仍负责提供方原生网络限制。
