@@ -1,0 +1,55 @@
+# Forge allocates and mounts the executor workspace before calling this service.
+# The only model-visible workspace capabilities come from Forge Intellect.
+
+- id: webserver
+  name: '@deepseek-ai/dsh-host-webserver'
+  config:
+    host: 0.0.0.0
+    port: !!js "Number.parseInt(process.env.DSH_FORGE_ADAPTER_PORT ?? '8090', 10)"
+
+- id: llm-pi-ai
+  name: '@deepseek-ai/dsh-llm-pi-ai'
+  config:
+    providers:
+      openrouter:
+        displayName: OpenRouter
+        apiKeyEnv: OPENROUTER_API_KEY
+        modelAliases:
+          deepseek/deepseek-v4-flash-0731:nitro:
+            catalogModel: deepseek/deepseek-v4-flash
+
+# Managed lifecycle for the per-Agent Forge Intellect stdio process. No shell
+# or subprocess tool is exposed to the model by this registration.
+- id: subprocess
+  name: '@deepseek-ai/dsh-subprocess-local'
+
+- id: agent-spine
+  name: '@deepseek-ai/dsh-agent-spine-demo'
+  config:
+    maxParallelToolCalls: 1
+    persona: You are a Forge coding agent. Durable intent and accountable tools are supplied by Forge.
+    workspaceContext: false
+    skills:
+      enabled: false
+    toolBash: false
+    toolJobs: false
+
+- id: approval
+  name: '@deepseek-ai/dsh-user-approval'
+  config:
+    policy: ask
+
+- id: sessions
+  name: '@deepseek-ai/dsh-session-persistence-jsonl'
+  config:
+    root: !!js process.env.DSH_FORGE_SESSION_ROOT ?? '/state/sessions'
+    compression: zstd
+
+- id: forge-adapter
+  name: '@deepseek-ai/dsh-forge-session-adapter'
+  config:
+    token: !!js process.env.DSH_FORGE_ADAPTER_TOKEN
+    stateFile: !!js process.env.DSH_FORGE_ADAPTER_STATE ?? '/state/adapter.json'
+    intellectCommand: !!js process.env.FORGE_INTELLECT_ACTION_MCP ?? 'forge-intellect-action-mcp'
+    intellectStateRoot: !!js process.env.FORGE_INTELLECT_STATE_ROOT ?? '/state/intellect'
+    intellectGraphDb: !!js process.env.FORGE_INTELLECT_GRAPH_DB ?? '/state/intellect/graph.sqlite'

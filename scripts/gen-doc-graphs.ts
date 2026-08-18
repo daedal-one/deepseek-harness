@@ -474,6 +474,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'The one concrete loop plugin; extension packages depend on dsh-agent events and services, not on this package.',
   },
   {
+    key: 'forgeSessionAdapter',
+    pkg: 'forge-session-adapter',
+    title: 'Forge session protocol adapter',
+    mode: 'core',
+    consumers: [],
+    note: 'Authenticates Forge lifecycle commands, injects the exact accepted Forge Spec render, and creates agents whose model-visible workspace actions come only from Forge Intellect.',
+  },
+  {
     key: 'goals',
     pkg: 'goal',
     title: 'Same-session goal domain',
