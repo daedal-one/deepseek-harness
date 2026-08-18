@@ -527,6 +527,9 @@ importers:
       '@deepseek-ai/dsh-english-output-guard':
         specifier: workspace:*
         version: link:../packages/guard/english-output-guard
+      '@deepseek-ai/dsh-forge-session-adapter':
+        specifier: workspace:*
+        version: link:../packages/integration/forge-session-adapter
       '@deepseek-ai/dsh-fs-e2b':
         specifier: workspace:*
         version: link:../packages/e2b/fs-e2b
@@ -551,6 +554,9 @@ importers:
       '@deepseek-ai/dsh-hooks-codex':
         specifier: workspace:*
         version: link:../packages/hooks/hooks-codex
+      '@deepseek-ai/dsh-host-webserver':
+        specifier: workspace:*
+        version: link:../packages/host/webserver
       '@deepseek-ai/dsh-invariants':
         specifier: workspace:*
         version: link:../packages/runtime-diagnostics/invariants
@@ -5196,6 +5202,58 @@ importers:
       '@deepseek-ai/dsh-invariants':
         specifier: workspace:^
         version: link:../../runtime-diagnostics/invariants
+
+  packages/integration/forge-session-adapter:
+    dependencies:
+      '@deepseek-ai/dsh-atomic-write':
+        specifier: workspace:^
+        version: link:../../util/atomic-write
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:^
+        version: link:../../core/agent
+      '@deepseek-ai/dsh-agent-loop':
+        specifier: workspace:^
+        version: link:../../core/agent-loop
+      '@deepseek-ai/dsh-agent-loop-testkit':
+        specifier: workspace:^
+        version: link:../../test-support/agent-loop-testkit
+      '@deepseek-ai/dsh-host-webserver':
+        specifier: workspace:^
+        version: link:../../host/webserver
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:^
+        version: link:../../llm/llm
+      '@deepseek-ai/dsh-mcp-client':
+        specifier: workspace:^
+        version: link:../../mcp/mcp-client
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:^
+        version: link:../../core/session
+      '@deepseek-ai/dsh-session-persistence':
+        specifier: workspace:^
+        version: link:../../session/session-persistence
+      '@deepseek-ai/dsh-session-persistence-jsonl':
+        specifier: workspace:^
+        version: link:../../session/session-persistence-jsonl
+      '@deepseek-ai/dsh-subprocess-local':
+        specifier: workspace:^
+        version: link:../../subprocess/subprocess-local
+      '@deepseek-ai/dsh-tools':
+        specifier: workspace:^
+        version: link:../../core/tools
+      '@deepseek-ai/dsh-user-approval':
+        specifier: workspace:^
+        version: link:../../interaction/user-approval
 
   packages/interaction/commands:
     dependencies:

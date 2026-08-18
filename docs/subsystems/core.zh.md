@@ -772,6 +772,22 @@ roots(): Agent[]
 
 Source: [`packages/core/agent/src/index.ts:256`](../../packages/core/agent/src/index.ts)
 
+<a id="ctxforgesessionadapter--forgesessionadapter"></a>
+
+### `ctx.forgeSessionAdapter` — `ForgeSessionAdapter`
+
+Forge protocol bridge and owner of all adapter-created agent handles.
+
+```ts cordis-catalog
+/**
+ * Current protocol capability document, also served over HTTP.
+ * @returns The immutable Forge adapter capability declaration.
+ */
+capability(): Record<string, unknown>
+```
+
+Source: [`packages/integration/forge-session-adapter/src/index.ts:171`](../../packages/integration/forge-session-adapter/src/index.ts)
+
 <a id="agent-events"></a>
 
 ### `agent/*` events

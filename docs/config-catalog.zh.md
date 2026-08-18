@@ -631,6 +631,40 @@ export interface ModelRoute {
 
 来源：[`packages/guard/english-output-guard/src/index.ts:37`](../packages/guard/english-output-guard/src/index.ts)
 
+<a id="deepseek-aidsh-forge-session-adapter"></a>
+
+## `@deepseek-ai/dsh-forge-session-adapter`
+
+需要：`agents` · `sessionPersistence` · `tools` · `webServer`
+
+```ts config-catalog
+/** Runtime configuration for the authenticated Forge session bridge. */
+export interface Config {
+  /** Bearer token required on every adapter route. */
+  token: string
+  /** Absolute private JSON file retaining adapter sequencing and idempotency. */
+  stateFile: string
+  /** Route prefix; Forge's shipped registry uses `/v1`. */
+  routePrefix: string
+  /** Maximum accepted JSON request bytes. */
+  maxRequestBytes: number
+  /** Forge Intellect action MCP executable. */
+  intellectCommand: string
+  /** Reviewed launcher arguments placed before action-MCP arguments. */
+  intellectCommandPrefixArgs: string[]
+  /** Private retained ledger root, outside executor workspaces. */
+  intellectStateRoot: string
+  /** Forge Intellect graph database path. */
+  intellectGraphDb: string
+  /** Extra paths hidden from the accountable workspace gateway. */
+  intellectExcludes: string[]
+  /** Timeout for each action-tool call. */
+  intellectToolCallTimeoutMs: number
+}
+```
+
+来源：[`packages/integration/forge-session-adapter/src/index.ts:56`](../packages/integration/forge-session-adapter/src/index.ts)
+
 <a id="deepseek-aidsh-fs-local"></a>
 
 ## `@deepseek-ai/dsh-fs-local`

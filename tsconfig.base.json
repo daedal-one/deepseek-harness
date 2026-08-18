@@ -256,6 +256,7 @@
         "./packages/todo/*/src",
         "./packages/bundle/*/src",
         "./packages/extensions/*/src",
+        "./packages/integration/*/src",
         "./packages/sandbox/*/src",
         "./packages/hooks/*/src",
         "./packages/session/*/src",

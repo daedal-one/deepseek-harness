@@ -593,6 +593,19 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'forgeSessionAdapter',
+    summary: 'Forge protocol bridge and owner of all adapter-created agent handles.',
+    description: 'Forge protocol bridge and owner of all adapter-created agent handles.',
+    methods: [
+      {
+        signature: 'capability(): Record<string, unknown>',
+        description: 'Current protocol capability document, also served over HTTP.',
+        parameters: [],
+        returns: 'The immutable Forge adapter capability declaration.',
+      },
+    ],
+  },
+  {
     key: 'fs',
     summary: 'Abstract filesystem provider.',
     description: 'Abstract filesystem provider. Targets must preserve identity across aliases; reads expose regular UTF-8 text or typed errors, listings are stable and content-free, and mutations are atomic. Optional guards add stale protection without changing the unguarded provider contract.',

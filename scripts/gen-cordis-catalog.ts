@@ -69,6 +69,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   dynamicCordisRunner: 'extensions.md',
   e2b: 'subprocess.md',
   fs: 'filesystem.md',
+  forgeSessionAdapter: 'core.md',
   goals: 'goal.md',
   webServer: 'web-server.md',
   invariants: 'invariants.md',
