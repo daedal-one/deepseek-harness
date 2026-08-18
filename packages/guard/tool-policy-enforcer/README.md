@@ -4,6 +4,8 @@ English | [中文](README.zh.md)
 
 This consumer enforces `ctx.toolPolicy` on `tools/pre-execute`. Unsupported and allowed tools delegate with `next()`; denial short-circuits execution. An `ask` verdict immediately enters the existing approval pipeline, so `ctx.approval` remains the sole owner of the human decision and its durable audit.
 
+`enforceWhen` optionally restricts evaluation to a conjunction of effective `sandbox/mode` and `approval/policy` values. The enforcer folds those values from the calling session's durable events before consulting any provider. An omitted condition preserves unconditional enforcement, and a missing configured value keeps enforcement active because the session cannot establish the configured bypass.
+
 ## Direct approval
 
 The enforcer is stateless and has no retry threshold. Every provider opinion and effective result is recorded as `tool-policy/decision`, including bounded risk, categories, and reason but no copied raw arguments. Policy failure becomes `ask`; caller cancellation is rethrown and remains cancellation. Deterministic provider denials never enter approval.
@@ -18,7 +20,7 @@ The first `ask` opens the existing human approval flow. A grant executes that ex
 
 #### Token effect
 
-Allowed and unsupported calls add no model-visible tokens. Denied or deferred calls add one short tool result to the next request.
+Calls outside `enforceWhen`, allowed calls, and unsupported calls add no model-visible tokens. Denied or deferred calls add one short tool result to the next request.
 
 #### KV Cache effect
 

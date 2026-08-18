@@ -10,13 +10,14 @@ import { PermissionPresetSettingsController } from '../src/client/settings-store
 afterEach(cleanup)
 
 const SCHEMA = {
-  uid: 5,
+  uid: 6,
   refs: {
     1: { type: 'const', value: 'read-only' },
     2: { type: 'const', value: 'workspace-write' },
-    3: { type: 'const', value: 'danger-full-access' },
-    4: { type: 'union', list: [1, 2, 3] },
-    5: { type: 'object', dict: { defaultPreset: 4 } },
+    3: { type: 'const', value: 'policy-reviewed', meta: { description: 'Policy reviewed' } },
+    4: { type: 'const', value: 'danger-full-access' },
+    5: { type: 'union', list: [1, 2, 3, 4] },
+    6: { type: 'object', dict: { defaultPreset: 5 } },
   },
 }
 
@@ -80,6 +81,24 @@ describe('PermissionRow', () => {
     fireEvent.click(button)
     fireEvent.click(screen.getByRole('menuitem', { name: 'Workspace Write' }))
     await screen.findByRole('button', { name: 'Workspace Write' })
+    expect(mutate).toHaveBeenCalledOnce()
+  })
+
+  it('shows a configured policy mode between Workspace Write and Full access without the Full access risk gate', async () => {
+    const mutate = vi.fn(() => Promise.resolve(ok(view('policy-reviewed', 1))))
+    const controller = new PermissionPresetSettingsController({
+      settings: {
+        describe: () => Promise.resolve(ok({ writable: true, hasDocument: false, namespaces: [view('read-only')] })),
+        mutate,
+      } as never,
+    })
+    mount(controller)
+    fireEvent.click(await screen.findByRole('button', { name: 'Read Only' }))
+    const items = screen.getAllByRole('menuitem').map(item => item.textContent)
+    expect(items).toEqual(['Read Only', 'Workspace Write', 'Policy reviewed', 'Full access'])
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Policy reviewed' }))
+    await screen.findByRole('button', { name: 'Policy reviewed' })
+    expect(screen.queryByRole('dialog', { name: 'Enable Full access?' })).toBeNull()
     expect(mutate).toHaveBeenCalledOnce()
   })
 

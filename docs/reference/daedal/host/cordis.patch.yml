@@ -6,6 +6,27 @@
   config:
     default: daedal
 
+# Declaration order is the browser and command-picker order. The middle mode
+# pairs an unconfined file sandbox with an available human approval channel;
+# the enforcer below activates independent policy review only for that pair.
+- id: permission
+  config:
+    presets:
+      read-only:
+        sandbox: read-only
+        approval: ask
+      workspace-write:
+        sandbox: workspace-write
+        approval: ask
+      policy-reviewed:
+        sandbox: danger-full-access
+        approval: ask
+        name: Policy reviewed
+        description: Independently reviews supported shell and MCP calls; uncertain actions ask you.
+      danger-full-access:
+        sandbox: danger-full-access
+        approval: never
+
 - insert:
     - id: daedal-web-fetch-http
       name: '@deepseek-ai/dsh-web-fetch-http'
@@ -485,6 +506,10 @@
 
     - id: daedal-tool-policy-enforcer
       name: '@deepseek-ai/dsh-tool-policy-enforcer'
+      config:
+        enforceWhen:
+          sandboxModes: [danger-full-access]
+          approvalPolicies: [ask]
 
     - id: daedal-memory
       name: '@deepseek-ai/dsh-memory'

@@ -16,6 +16,10 @@ The files contain no credentials or personal data. API keys are referenced by en
 
 Copy `preset/` to `~/.dsh/.agent-presets/daedal/` (the directory name is the preset id) and merge `host/cordis.patch.yml` into the profile's `cordis.patch.yml`. The host composition stays authoritative for registries, sandbox and approval stack, persistence, and the model route; the preset contributes only the agent-plane rows.
 
+## Permission modes
+
+The host patch declares the permission table in UI order: Read Only, Workspace Write, Policy reviewed, and Full access. Policy reviewed uses `danger-full-access` file permissions with the interactive `ask` approval policy, and the tool-policy enforcer runs only for that exact pair. Read Only and Workspace Write retain their file sandbox without auxiliary policy requests; Full access retains `danger-full-access` with approval prompts disabled and bypasses auxiliary policy requests. Policy providers cover the configured shell and scoped MCP calls; tools unsupported by those providers continue under their own enforcement mechanisms.
+
 ## Deployment-specific names
 
 The preset references validators (`daedal-implementer-status`, `daedal-review-verdict`) and principals (`daedal-researcher`, `daedal-browser-reader`, `daedal-browser-operator`, `daedal-crawler`, `daedal-web-debugger`, `daedal-memory-reviewer`) that the deployment registers in its host composition — the result-status validators through [`dsh-subagent-result-status-block`](../../../packages/subagent/subagent-result-status-block/README.md) and the tool-policy principals through the patch's `daedal-tool-policy-*` rows. This repository does not register them; a copy that omits the host patch leaves those names unresolved.

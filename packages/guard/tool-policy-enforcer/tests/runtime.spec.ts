@@ -1,12 +1,13 @@
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { CallId } from '@deepseek-ai/dsh-llm'
+import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolPolicyService, { ToolPolicyProviderId, type ToolPolicyVerdict } from '@deepseek-ai/dsh-tool-policy'
 import ToolRuntime, { defineTool } from '@deepseek-ai/dsh-tools'
 import ApprovalService, { type ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import { describe, expect, it, vi } from 'vitest'
-import { apply } from '../src/index.ts'
+import { apply, shouldEnforce } from '../src/index.ts'
 
 function fakeAgent() {
   const events: Array<Record<string, unknown>> = [{ type: 'turn/start', data: { turn: 1 } }]
@@ -18,6 +19,22 @@ function fakeAgent() {
 }
 
 describe('tool-policy enforcement through ToolRuntime', () => {
+  it('matches configured durable permission values and keeps enforcement when they are absent', () => {
+    const condition = { sandboxModes: ['danger-full-access'], approvalPolicies: ['ask'] } as const
+    const events = (sandbox: string, approval: string): SessionEvent[] => [
+      { type: 'sandbox/mode', data: { mode: sandbox } },
+      { type: 'approval/policy', data: { policy: approval } },
+    ] as SessionEvent[]
+
+    expect(shouldEnforce([], undefined)).toBe(true)
+    expect(shouldEnforce([], condition)).toBe(true)
+    expect(shouldEnforce(events('danger-full-access', 'ask').slice(0, 1), condition)).toBe(true)
+    expect(shouldEnforce(events('danger-full-access', 'ask').slice(1), condition)).toBe(true)
+    expect(shouldEnforce(events('workspace-write', 'ask'), condition)).toBe(false)
+    expect(shouldEnforce(events('danger-full-access', 'ask'), condition)).toBe(true)
+    expect(shouldEnforce(events('danger-full-access', 'never'), condition)).toBe(false)
+  })
+
   it('delegates allow and enters approval on the first ask while denials remain non-approvable', async () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
@@ -57,5 +74,42 @@ describe('tool-policy enforcement through ToolRuntime', () => {
     expect(events.filter(event => event.type === 'approval/asked')).toHaveLength(1)
     expect(events.filter(event => event.type === 'approval/decided')).toHaveLength(1)
     expect(events.filter(event => event.type === 'tool-policy/decision')).toHaveLength(6)
+  })
+
+  it('bypasses providers outside configured permission values', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ApprovalService)
+    await ctx.plugin(ToolRuntime)
+    await ctx.plugin(ToolPolicyService, {})
+    const evaluate = vi.fn(async (): Promise<ToolPolicyVerdict> => ({
+      providerId: ToolPolicyProviderId('fake'), decision: 'deny', risk: 90,
+      categories: [], reason: 'blocked', opinions: [],
+    }))
+    ctx.toolPolicy.register(ToolPolicyProviderId('fake'), { evaluate })
+    apply(ctx, { enforceWhen: { sandboxModes: ['danger-full-access'], approvalPolicies: ['ask'] } })
+    let executions = 0
+    ctx.tools.register(defineTool({
+      name: 'probe', description: 'probe', parameters: {},
+      output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
+      execute: async () => { executions += 1; return 'ran' },
+    }))
+    const { agent, events } = fakeAgent()
+    events.push({ type: 'sandbox/mode', data: { mode: 'workspace-write' } })
+    events.push({ type: 'approval/policy', data: { policy: 'ask' } })
+    const execute = (id: string) => ctx.tools.execute({
+      callId: CallId(id), name: 'probe', arguments: {}, agent,
+      signal: new AbortController().signal,
+    })
+
+    await expect(execute('workspace')).resolves.toMatchObject({ isError: false })
+    expect(evaluate).not.toHaveBeenCalled()
+    events.push({ type: 'sandbox/mode', data: { mode: 'danger-full-access' } })
+    await expect(execute('policy')).resolves.toMatchObject({ isError: true })
+    expect(evaluate).toHaveBeenCalledOnce()
+    events.push({ type: 'approval/policy', data: { policy: 'never' } })
+    await expect(execute('full')).resolves.toMatchObject({ isError: false })
+    expect(evaluate).toHaveBeenCalledOnce()
+    expect(executions).toBe(2)
   })
 })

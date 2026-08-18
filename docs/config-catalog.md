@@ -2697,6 +2697,32 @@ export interface Config {
 
 Source: [`packages/guard/tool-policy/src/index.ts:56`](../packages/guard/tool-policy/src/index.ts)
 
+<a id="deepseek-aidsh-tool-policy-enforcer"></a>
+
+## `@deepseek-ai/dsh-tool-policy-enforcer`
+
+Requires: `tools` · `toolPolicy`
+
+```ts config-catalog
+/** Tool-policy enforcer configuration. */
+export interface Config {
+  /** Optional conjunction over the session's durable permission values. */
+  readonly enforceWhen?: EnforcementCondition
+}
+
+/** Effective permission values for which the enforcer evaluates policy. */
+export interface EnforcementCondition {
+  /** Sandbox modes that activate policy evaluation when configured. */
+  readonly sandboxModes?: readonly SandboxMode[]
+  /** Approval policies that activate policy evaluation when configured. */
+  readonly approvalPolicies?: readonly ApprovalPolicy[]
+}
+```
+
+Depends on: [`ApprovalPolicy`](subsystems/approval.md) · [`SandboxMode`](subsystems/sandbox.md)
+
+Source: [`packages/guard/tool-policy-enforcer/src/index.ts:25`](../packages/guard/tool-policy-enforcer/src/index.ts)
+
 <a id="deepseek-aidsh-tool-policy-mcp"></a>
 
 ## `@deepseek-ai/dsh-tool-policy-mcp`
@@ -3419,7 +3445,6 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-tool-call-timeout-policy` — requires `tools` ([`packages/guard/timeout-policy/src/index.ts`](../packages/guard/timeout-policy/src/index.ts))
 - `@deepseek-ai/dsh-tool-cordis` — requires `tools` · `systemPrompt` · `dynamicCordisRunner` · `cordisInspect` ([`packages/extensions/tool-cordis/src/index.ts`](../packages/extensions/tool-cordis/src/index.ts))
 - `@deepseek-ai/dsh-tool-memory` — requires `memory` · `tools` · `systemPrompt` ([`packages/memory/tool-memory/src/index.ts`](../packages/memory/tool-memory/src/index.ts))
-- `@deepseek-ai/dsh-tool-policy-enforcer` — requires `tools` · `toolPolicy` ([`packages/guard/tool-policy-enforcer/src/index.ts`](../packages/guard/tool-policy-enforcer/src/index.ts))
 - `@deepseek-ai/dsh-tool-subagent-control` — requires `tools` · `subagents` ([`packages/subagent/tool-subagent-control/src/index.ts`](../packages/subagent/tool-subagent-control/src/index.ts))
 - `@deepseek-ai/dsh-user-questions` ([`packages/interaction/user-questions/src/index.ts`](../packages/interaction/user-questions/src/index.ts))
 - `@deepseek-ai/dsh-workspace` — requires `storageDomain` · `sessionPersistence` ([`packages/workspace/workspace/src/index.ts`](../packages/workspace/workspace/src/index.ts))

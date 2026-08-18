@@ -2,17 +2,64 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
+import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
+import { SANDBOX_MODES, effectiveSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
+import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { ToolPolicyProviderId, type ToolPolicyOpinion, type ToolPolicyVerdict } from '@deepseek-ai/dsh-tool-policy'
 import type { PreToolDecision, ToolExecution } from '@deepseek-ai/dsh-tools'
+import type { ApprovalPolicy } from '@deepseek-ai/dsh-user-approval'
+import { APPROVAL_POLICIES, effectiveApprovalPolicy } from '@deepseek-ai/dsh-user-approval'
 
 export const name = 'tool-policy-enforcer'
 export const inject = ['tools', 'toolPolicy']
 
+/** Effective permission values for which the enforcer evaluates policy. */
+export interface EnforcementCondition {
+  /** Sandbox modes that activate policy evaluation when configured. */
+  readonly sandboxModes?: readonly SandboxMode[]
+  /** Approval policies that activate policy evaluation when configured. */
+  readonly approvalPolicies?: readonly ApprovalPolicy[]
+}
+
 /** Tool-policy enforcer configuration. */
-export interface Config {}
+export interface Config {
+  /** Optional conjunction over the session's durable permission values. */
+  readonly enforceWhen?: EnforcementCondition
+}
 
 /** Runtime schema for the stateless enforcer. */
-export const Config: z<Config> = z.object({})
+export const Config: z<Config> = z.object({
+  enforceWhen: z.object({
+    sandboxModes: z.array(z.union(SANDBOX_MODES as SandboxMode[])).min(1),
+    approvalPolicies: z.array(z.union(APPROVAL_POLICIES as ApprovalPolicy[])).min(1),
+  }),
+}) as z<Config>
+
+/**
+ * Decide whether one session matches a configured enforcement condition.
+ * Missing durable values keep enforcement active because they cannot establish
+ * a configured bypass. An omitted condition preserves unconditional behavior.
+ * @param events - session events containing the effective permission values.
+ * @param condition - optional deployment-owned activation restriction.
+ * @returns whether the tool-policy providers must evaluate the call.
+ */
+export function shouldEnforce(
+  events: readonly SessionEvent[],
+  condition: EnforcementCondition | undefined,
+): boolean {
+  if (condition === undefined) return true
+  const sandbox = effectiveSandboxMode(events)
+  const approval = effectiveApprovalPolicy(events)
+  if (condition.sandboxModes !== undefined) {
+    if (sandbox === undefined) return true
+    if (!condition.sandboxModes.includes(sandbox)) return false
+  }
+  if (condition.approvalPolicies !== undefined) {
+    if (approval === undefined) return true
+    if (!condition.approvalPolicies.includes(approval)) return false
+  }
+  return true
+}
 
 function currentTurn(exec: ToolExecution): number {
   const boundary = exec.agent?.session.events.findLast(event => event.type === 'turn/start' || event.type === 'turn/end')
@@ -29,9 +76,10 @@ function appendDecision(exec: ToolExecution, opinion: ToolPolicyOpinion, stage: 
 }
 
 /** Install the policy consumer on `tools/pre-execute`. */
-export function apply(ctx: Context): void {
+export function apply(ctx: Context, config: Config = {}): void {
   const dispose = ctx.on('tools/pre-execute', async (exec, next): Promise<PreToolDecision> => {
     if (exec.agent === undefined) return next()
+    if (!shouldEnforce(exec.agent.session.events, config.enforceWhen)) return next()
     let verdict: ToolPolicyVerdict | undefined
     try {
       verdict = await ctx.toolPolicy.evaluate({
