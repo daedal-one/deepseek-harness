@@ -101,7 +101,7 @@
 
 .cards {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: 10px;
   margin: 0;
@@ -424,11 +424,6 @@
   }
 }
 
-@media (max-width: 680px) {
-  .cards {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
 
 .cardSummary { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .cardDescription { color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }

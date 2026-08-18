@@ -24,6 +24,8 @@ remains authoritative for composition and lifecycle state.
 - {#c-presentation} Every Plugin list card MUST display author, description, and
   version before disclosure, MUST use explicit copy for unavailable fields, and
   MUST include available metadata in local search.
+- {#c-layout} The Plugin catalog MUST render one card per row at every viewport
+  width so each card has the full catalog width for metadata and status labels.
 - {#c-authority} Package metadata lookup MUST NOT cache, replace, or infer Loader
   enablement and Fiber state; every inventory read MUST continue to project
   lifecycle state from the current Loader tree.
