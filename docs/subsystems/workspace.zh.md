@@ -149,6 +149,22 @@ abstract capability(): DirectoryPickerCapability
 
 Source: [`packages/host/directory-picker/src/index.ts:131`](../../packages/host/directory-picker/src/index.ts)
 
+<a id="ctxforgeprojectworkspaces--forgeprojectworkspaces"></a>
+
+### `ctx.forgeProjectWorkspaces` — `ForgeProjectWorkspaces`
+
+Forge-owned catalog reconciler and authenticated HTTP route owner.
+
+```ts cordis-catalog
+/**
+ * Current managed directory paths for invariant inspection.
+ * @returns a stable snapshot of the reconciler-owned paths.
+ */
+managed(): readonly string[]
+```
+
+Source: [`packages/integration/forge-project-workspaces/src/index.ts:188`](../../packages/integration/forge-project-workspaces/src/index.ts)
+
 <a id="ctxworkspaceregistry--workspaceregistry"></a>
 
 ### `ctx.workspaceRegistry` — `WorkspaceRegistry`
