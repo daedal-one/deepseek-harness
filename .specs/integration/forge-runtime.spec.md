@@ -32,4 +32,8 @@ related: [IFC:integration/forge-session-adapter]
 - {#c-compatibility} The shipped composition MUST pin the Forge session, Forge
   Spec, and Forge Intellect protocol versions and fail closed on an unsupported
   combination.
+- {#c-project-workspaces} The Forge Web composition MUST reconcile exactly one
+  managed Harness workspace for each Forge-supplied `ProjectId`, slug, title,
+  and repository, and MUST select only an already reconciled workspace from a
+  Hub deep link; it MUST NOT create an independent Forge project authority.
 :::

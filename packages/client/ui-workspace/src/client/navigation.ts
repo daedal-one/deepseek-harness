@@ -1,5 +1,6 @@
 /** Workspace archive and directory UI capability. */
 
+import { requestedWorkspacePath } from './requested-path.ts'
 import { Service, type Context } from '@deepseek-ai/cordis'
 import type { ClientRemote, DirectoryListing, RemoteFailure } from '@deepseek-ai/dsh-api-remotes/client'
 import type {
@@ -195,6 +196,7 @@ class UiWorkspaceService extends Service implements UiWorkspace {
   }
 
   private watchNavigation(): () => void {
+    const requestedPath = requestedWorkspacePath()
     let initial: 'waiting' | 'connecting' | 'done' = 'waiting'
     const reconcile = (): void => {
       if (this.lifetime.signal.aborted) return
@@ -203,20 +205,24 @@ class UiWorkspaceService extends Service implements UiWorkspace {
       const workspace = this.workspaces.list.getSnapshot()
       const sessions = this.sessions.list.getSnapshot()
       if (workspace.phase !== 'ready' || sessions.phase !== 'ready') return
-      if (sessions.current !== undefined) {
+      if (requestedPath === undefined && sessions.current !== undefined) {
         initial = 'done'
         return
       }
-      const target = recentWorkspace(workspace.items, sessions.byId)
+      const target = requestedPath === undefined
+        ? recentWorkspace(workspace.items, sessions.byId)
+        : workspace.items.find(item => item.path === requestedPath)?.workspaceId
+      if (requestedPath !== undefined && target === undefined) return
       if (target === undefined) {
         initial = 'done'
         return
       }
       initial = 'connecting'
+      const navigation = this.ctx.layout.beginNavigation()
       void this.connectWorkspace(target).then(
         (sessionId) => {
-          if (this.lifetime.signal.aborted) return
-          if (this.sessions.list.getSnapshot().current === undefined) {
+          if (this.lifetime.signal.aborted || navigation.aborted) return
+          if (requestedPath !== undefined || this.sessions.list.getSnapshot().current === undefined) {
             this.sessions.open(sessionId)
           }
           initial = 'done'

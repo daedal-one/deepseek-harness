@@ -755,6 +755,32 @@ export interface Config {
 
 Source: [`packages/context/file-reference-local/src/index.ts:34`](../packages/context/file-reference-local/src/index.ts)
 
+<a id="deepseek-aidsh-forge-project-workspaces"></a>
+
+## `@deepseek-ai/dsh-forge-project-workspaces`
+
+Requires: `webServer` · `workspaceRegistry`
+
+```ts config-catalog
+/** Deployment configuration for the Forge-owned project catalog route. */
+export interface Config {
+  /** Bearer token required by the internal Hub request. */
+  token: string
+  /** Exact HTTP path receiving catalog replacement requests. */
+  routePath: string
+  /** Absolute directory containing only Forge-managed workspaces. */
+  workspaceRoot: string
+  /** Internal Forgejo origin used to clone a registered repository. */
+  forgejoBaseUrl: string
+  /** Forgejo token sent only through the Git child process environment. */
+  forgejoToken: string
+  /** Maximum accepted JSON request bytes. */
+  maxRequestBytes: number
+}
+```
+
+Source: [`packages/integration/forge-project-workspaces/src/index.ts:25`](../packages/integration/forge-project-workspaces/src/index.ts)
+
 <a id="deepseek-aidsh-forge-session-adapter"></a>
 
 ## `@deepseek-ai/dsh-forge-session-adapter`
