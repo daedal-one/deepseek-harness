@@ -27,6 +27,7 @@ export interface PluginInventorySettingsTabInjected {
   presetName: (preset: AgentPresetGroup) => string
 }
 type PluginFiberPhase = PluginInventoryEntry['fiberPhase']
+type PluginStateFilter = 'all' | 'enabled' | 'disabled' | NonNullable<PluginFiberPhase> | 'unobserved'
 
 /** Full component props assembled by the Settings slot renderer. */
 export type PluginInventorySettingsTabProps =
@@ -48,6 +49,18 @@ const PHASE_KEYS = {
   failed: 'failed',
   unloading: 'unloading',
 } satisfies Record<Exclude<PluginFiberPhase, null>, PluginInventoryLocaleKey>
+
+const STATE_FILTER_KEYS = [
+  ['all', 'allStates'],
+  ['enabled', 'enabledTag'],
+  ['disabled', 'disabledTag'],
+  ['active', 'active'],
+  ['pending', 'pending'],
+  ['loading', 'loadingPhase'],
+  ['failed', 'failed'],
+  ['unloading', 'unloading'],
+  ['unobserved', 'unobserved'],
+] as const satisfies readonly (readonly [PluginStateFilter, PluginInventoryLocaleKey])[]
 
 /** Localized accessible label for one root Fiber phase. */
 function phaseLabel(phase: PluginFiberPhase, t: Translate): string {
@@ -73,6 +86,24 @@ function matches(moduleName: string, entryId: string | null, normalizedQuery: st
   if (normalizedQuery.length === 0) return true
   return [moduleName, ...entryId === null ? [] : [entryId]]
     .some(value => value.toLocaleLowerCase().includes(normalizedQuery))
+}
+
+/** Whether an inventory row matches the local catalog query. */
+function matches(entry: Pick<AgentPresetRow, 'enabled' | 'fiberPhase'>, normalizedQuery: string): boolean {
+  if (normalizedQuery.length === 0) return true
+  return [entry.moduleName, entry.entryId, entry.author, entry.description, entry.version]
+    .filter((value): value is string => value !== null)
+    .some(value => value.toLocaleLowerCase().includes(normalizedQuery))
+}
+
+/** Whether an inventory row matches the selected visible state. */
+function matchesState(entry: Pick<AgentPresetRow, 'enabled' | 'fiberPhase'>, filter: PluginStateFilter): boolean {
+  if (filter === 'all') return true
+  if (filter === 'enabled') return entry.enabled === true
+  if (filter === 'disabled') return entry.enabled === false
+  return entry.enabled === true && (filter === 'unobserved'
+    ? entry.fiberPhase === null
+    : entry.fiberPhase === filter)
 }
 
 /** The roster row shown when the preset switcher has no explicit choice. */
@@ -203,6 +234,7 @@ export function PluginInventorySettingsTab({ list, presetName, t }: PluginInvent
   const sectionId = useId()
   const [request, setRequest] = useState(0)
   const [query, setQuery] = useState('')
+  const [stateFilter, setStateFilter] = useState<PluginStateFilter>('all')
   const [expanded, setExpanded] = useState<string | null>(null)
   const [chosenPreset, setChosenPreset] = useState<string | null>(null)
   const [switcherOpen, setSwitcherOpen] = useState(false)
@@ -220,7 +252,7 @@ export function PluginInventorySettingsTab({ list, presetName, t }: PluginInvent
   }, [list, request])
 
   const normalizedQuery = query.trim().toLocaleLowerCase()
-  const searching = normalizedQuery.length > 0
+  const searching = normalizedQuery.length > 0 || stateFilter !== 'all'
   const snapshot = state.status === 'ready' ? state.snapshot : undefined
   const presets = snapshot?.agentPresets ?? []
   const selected = presets.find(preset => preset.id === chosenPreset) ?? fallbackPreset(presets)
@@ -247,8 +279,8 @@ export function PluginInventorySettingsTab({ list, presetName, t }: PluginInvent
     else regularEntries.push(entry)
   }
 
-  const entryMatch = (entry: PluginInventoryEntry): boolean => matches([entry.moduleName, entry.author, entry.description, entry.version].filter(value => value !== null).join(' '), entry.entryId, normalizedQuery)
-  const rowMatch = (row: AgentPresetRow): boolean => matches(row.moduleName, row.entryId, normalizedQuery)
+  const entryMatch = (entry: PluginInventoryEntry): boolean => matches([entry.moduleName, entry.author, entry.description, entry.version].filter(value => value !== null).join(' '), entry.entryId, normalizedQuery) && matchesState(entry, stateFilter)
+  const rowMatch = (row: AgentPresetRow): boolean => matches(row.moduleName, row.entryId, normalizedQuery) && matchesState(row, stateFilter)
   const filteredFailed = failedEntries.filter(entryMatch)
   const filteredRegular = regularEntries.filter(entryMatch)
   const globalCount = filteredFailed.length + filteredRegular.length
@@ -395,17 +427,33 @@ export function PluginInventorySettingsTab({ list, presetName, t }: PluginInvent
       ) : null}
       {snapshot !== undefined ? (
         <div className={css.catalog}>
-          <label className={css.search}>
-            <IconSearchOutline16 aria-hidden="true" />
-            <span className={css.visuallyHidden}>{t('search')}</span>
-            <input
-              type="search"
-              value={query}
-              placeholder={t('search')}
-              aria-label={t('search')}
-              onChange={(event) => { setQuery(event.currentTarget.value) }}
-            />
-          </label>
+          <div className={css.filters}>
+            <label className={css.search}>
+              <IconSearchOutline16 aria-hidden="true" />
+              <span className={css.visuallyHidden}>{t('search')}</span>
+              <input
+                type="search"
+                value={query}
+                placeholder={t('search')}
+                aria-label={t('search')}
+                onChange={(event) => { setQuery(event.currentTarget.value) }}
+              />
+            </label>
+            <label className={css.stateFilter}>
+              <span className={css.visuallyHidden}>{t('filterState')}</span>
+              <select
+                value={stateFilter}
+                aria-label={t('filterState')}
+                onChange={(event) => { setStateFilter(event.currentTarget.value as PluginStateFilter) }}
+              >
+                {STATE_FILTER_KEYS.map(([value, key]) => (
+                  <option key={value} value={value}>{t(key)}</option>
+                ))}
+              </select>
+              <IconChevronDownOutline14 className={css.filterChevron} size={12} aria-hidden="true" />
+            </label>
+          </div>
+
           {entries.length === 0 && presets.length === 0 ? <p className={css.status}>{t('empty')}</p> : null}
           {nothingMatches ? <p className={css.status}>{t('emptySearch')}</p> : null}
 

@@ -4,7 +4,7 @@ type: task
 status: accepted
 summary: Give every Web plugin inventory card the full catalog width.
 owners: [carlo]
-progress: in-progress
+progress: done
 addresses:
   - REQ:ui/plugin-inventory-metadata#c-layout
 labels: [web, plugins, settings, layout]
