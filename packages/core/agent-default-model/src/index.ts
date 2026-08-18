@@ -104,6 +104,15 @@ function sameTarget(left: ResolvedAgentModelTarget, right: ResolvedAgentModelTar
     && left.defaultSelection.reasoningEffort === right.defaultSelection.reasoningEffort
 }
 
+/** Render a listener failure without trusting arbitrary string coercion. */
+function renderThrown(value: unknown): string {
+  try {
+    return String(value)
+  } catch {
+    return '<unrenderable thrown value>'
+  }
+}
+
 /** Convert a complete selection to its provider-free stored form. */
 function stored(selection: ModelSelection): StoredAgentModelSelection {
   return {
@@ -198,6 +207,20 @@ export class AgentModelConfig extends TypertRemoteService {
     })
   }
 
+  /** Notify directory observers without making their refresh work load-bearing. */
+  private notifyDirectoryUpdated(): void {
+    for (const callback of this.ctx.events.dispatch('emit', ['agent-models/directory-updated'])) {
+      try {
+        const returned: unknown = callback()
+        void Promise.resolve(returned).catch((error: unknown) => {
+          this.ctx.logger.warn(`agent-models/directory-updated listener rejected: ${renderThrown(error)}`)
+        })
+      } catch (error: unknown) {
+        this.ctx.logger.warn(`agent-models/directory-updated listener threw: ${renderThrown(error)}`)
+      }
+    }
+  }
+
   /**
    * Register one named Agent target. Equivalent registrations from several
    * Agent scopes coalesce; a conflicting definition fails before either can
@@ -226,6 +249,7 @@ export class AgentModelConfig extends TypertRemoteService {
       existing.count += 1
     } else {
       this.targets.set(target.id, { target: resolved, count: 1 })
+      this.notifyDirectoryUpdated()
     }
     let active = true
     return () => {
@@ -234,7 +258,10 @@ export class AgentModelConfig extends TypertRemoteService {
       const current = this.targets.get(target.id)
       if (current === undefined) return
       current.count -= 1
-      if (current.count === 0) this.targets.delete(target.id)
+      if (current.count === 0) {
+        this.targets.delete(target.id)
+        this.notifyDirectoryUpdated()
+      }
     }
   }
 

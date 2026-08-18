@@ -15,9 +15,8 @@ export const name = 'client-ui-settings-models-invariant'
 export const inject = ['invariants']
 
 /**
- * No runtime invariant: a nav-entry-only section plugin rendering a fixed
- * empty content column — it emits no cordis events and owns no cross-plugin
- * mutable relation.
+ * No runtime invariant: Host invalidations only advance private snapshot
+ * sources; each owning Remote read supplies the authoritative page state.
  */
 const install: InvariantInstaller = () => {}
 

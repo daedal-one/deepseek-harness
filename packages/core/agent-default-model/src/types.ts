@@ -2,6 +2,19 @@
 
 import type { Branded } from '@deepseek-ai/dsh-brand'
 
+declare module '@deepseek-ai/cordis' {
+  interface Events {
+    /**
+     * The live Agent-model role directory gained or lost a visible target.
+     * Consumers re-read the directory after this post-commit notification;
+     * equivalent reference-count changes do not emit. Observer failures are
+     * contained and cannot veto the registry mutation.
+     * @mode emit
+     */
+    'agent-models/directory-updated'(): void
+  }
+}
+
 /** Stable identity of one configurable Agent role. */
 export type AgentModelTargetId = Branded<'AgentModelTargetId'>
 

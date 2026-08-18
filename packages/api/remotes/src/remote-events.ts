@@ -15,6 +15,7 @@
  * else.
  */
 export const API_REMOTE_FORWARDED_EVENTS = [
+  'agent-models/directory-updated',
   'agent-preset/selected',
   'commands/change',
   'credentials/updated',

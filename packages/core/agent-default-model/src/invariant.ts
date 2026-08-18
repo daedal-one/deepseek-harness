@@ -1,9 +1,9 @@
 /**
  * Package-owned invariant companion for persistent Agent model selections.
  *
- * The service owns no independent event relationship: settings registration
- * already validates every mutable value before `currentSelection()` can observe it.
- * The empty installer keeps that absence explicit in composed invariant sets.
+ * Settings registration validates every stored value before `currentSelection()`
+ * can observe it. Directory invalidations carry no independent state: the same
+ * synchronous owner mutates the registry and then publishes the read-again cue.
  *
  * @module @deepseek-ai/dsh-agent-default-model/invariant
  */
@@ -18,7 +18,7 @@ export const name = 'agent-models-invariant'
 /** Services required before the companion can register. */
 export const inject = ['invariants']
 
-/** No runtime invariant: settings validation owns the only mutable-value relationship. */
+/** No runtime invariant: stored values are validated and directory events carry no state. */
 const install: InvariantInstaller = () => {}
 
 /**

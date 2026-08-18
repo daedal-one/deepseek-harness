@@ -8,6 +8,7 @@ This matrix shows which packages dispatch each harness-owned event and which pac
 | Event | Mode | Declared in | Dispatchers | Listeners |
 | --- | --- | --- | --- | --- |
 | `agent-loop/config-start-failed` | `emit` | [`packages/core/agent-loop/src/index.ts:183`](../packages/core/agent-loop/src/index.ts) | [`agent-loop`](../packages/core/agent-loop) (`events.dispatch`) | - |
+| `agent-models/directory-updated` | `emit` | [`packages/core/agent-default-model/src/types.ts:14`](../packages/core/agent-default-model/src/types.ts) | [`agent-default-model`](../packages/core/agent-default-model) (`events.dispatch`) | `apiproxy` |
 | `agent-preset/selected` | `emit` | [`packages/preset/agent-presets/src/types.ts:13`](../packages/preset/agent-presets/src/types.ts) | [`agent-presets`](../packages/preset/agent-presets) (`emit`) | `apiproxy` |
 | `agent/created` | `emit` | [`packages/core/agent/src/runtime-types.ts:161`](../packages/core/agent/src/runtime-types.ts) | [`agent`](../packages/core/agent) (`events.dispatch`) | [`agent-presets`](../packages/preset/agent-presets), [`goal-round-driver`](../packages/goal/goal-round-driver), [`schedule`](../packages/schedule/schedule) |
 | `agent/disposed` | `emit` | [`packages/core/agent/src/runtime-types.ts:170`](../packages/core/agent/src/runtime-types.ts) | [`agent`](../packages/core/agent) (`events.dispatch`) | [`agent-loop`](../packages/core/agent-loop), [`goal-round-driver`](../packages/goal/goal-round-driver), [`subagent`](../packages/subagent/subagent) |

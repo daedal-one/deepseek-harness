@@ -66,6 +66,10 @@ describe('ui-settings-models apply', () => {
     const agents = before.slots.entries('settings.section').find(candidate => candidate.options.id === 'agents')!
     expect(agents.component).toBe(AgentsSection)
     expect(agents.options).toMatchObject({ id: 'agents', order: 20 })
+    const agentsInjected = (
+      agents.inject as unknown as () => import('../src/client/AgentsSection.tsx').AgentsSectionInjected
+    )()
+    expect(agentsInjected.hooks.agentDirectory.getSnapshot()).toBe(0)
     const onboarding = before.slots.entries('settings.onboarding')
     expect(onboarding).toHaveLength(2)
     expect(onboarding.find(entry => entry.options.id === 'welcome-notice')).toMatchObject({
@@ -210,6 +214,22 @@ describe('pushed invalidations', () => {
     const load = vi.spyOn(injected.controller, 'load').mockResolvedValue()
     b.ctx.remote.$dispatch('credentials/updated', ['OPENROUTER_API_KEY'])
     expect(load).toHaveBeenCalledTimes(1)
+  })
+
+  it('publishes Host directory invalidations through the Agents hook source', async () => {
+    const b = await bench()
+    declare(b.slots)
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    const entry = b.slots.entries('settings.section')
+      .find(candidate => candidate.options.id === 'agents')!
+    const injected = (
+      entry.inject as unknown as () => import('../src/client/AgentsSection.tsx').AgentsSectionInjected
+    )()
+
+    b.ctx.remote.$dispatch('agent-models/directory-updated', [])
+    expect(injected.hooks.agentDirectory.getSnapshot()).toBe(1)
+    b.ctx.emit('connection/reset')
+    expect(injected.hooks.agentDirectory.getSnapshot()).toBe(2)
   })
 
   it('routes only the onboarding namespace invalidation into welcome state', async () => {

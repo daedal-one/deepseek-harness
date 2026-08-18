@@ -1,6 +1,6 @@
 /** Per-Agent model settings layered over a real settings provider and LLM catalog. */
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentModelConfig, {
   AGENT_MODELS_SETTINGS_NAMESPACE,
@@ -104,6 +104,15 @@ describe('AgentModelConfig', () => {
   it('registers named roles, coalesces identical owners, and rejects conflicts', async () => {
     const bench = await boot()
     const id = agentModelTargetId('reviewer')
+    const observed: boolean[] = []
+    bench.ctx.on('agent-models/directory-updated', () => {
+      try {
+        bench.models.currentSelection(id)
+        observed.push(true)
+      } catch {
+        observed.push(false)
+      }
+    })
     const target = {
       id,
       label: 'Reviewer',
@@ -112,11 +121,32 @@ describe('AgentModelConfig', () => {
     const first = bench.models.registerTarget(target)
     const second = bench.models.registerTarget(target)
     expect((await bench.models.list()).targets.map(entry => entry.id)).toEqual(['main', 'reviewer'])
+    expect(observed).toEqual([true])
     expect(() => bench.models.registerTarget({ ...target, label: 'Other' })).toThrow(/conflicting definitions/)
+    expect(observed).toEqual([true])
     first()
     expect((await bench.models.list()).targets.map(entry => entry.id)).toEqual(['main', 'reviewer'])
+    expect(observed).toEqual([true])
     second()
     expect((await bench.models.list()).targets.map(entry => entry.id)).toEqual(['main'])
+    expect(observed).toEqual([true, false])
+    await bench.ctx.fiber.dispose()
+  })
+
+  it('contains directory observer failures after each committed mutation', async () => {
+    const bench = await boot()
+    const warn = vi.spyOn(bench.ctx.logger, 'warn').mockImplementation(() => undefined)
+    const later = vi.fn()
+    bench.ctx.on('agent-models/directory-updated', () => { throw new Error('broken observer') })
+    bench.ctx.on('agent-models/directory-updated', later)
+
+    const dispose = bench.models.registerTarget({ id: agentModelTargetId('guru'), label: 'Guru' })
+    expect((await bench.models.list()).targets.map(entry => entry.label)).toEqual(['Main agent', 'Guru'])
+    expect(later).toHaveBeenCalledTimes(1)
+    expect(warn).toHaveBeenCalledWith('agent-models/directory-updated listener threw: Error: broken observer')
+
+    dispose()
+    expect(later).toHaveBeenCalledTimes(2)
     await bench.ctx.fiber.dispose()
   })
 

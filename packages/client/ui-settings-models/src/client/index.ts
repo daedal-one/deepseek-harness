@@ -6,7 +6,7 @@
  * Export discipline:
  * packages/client/AGENTS.md.
  */
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import { createSnapshotStore, type ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-api-remotes/client'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-web-react'
 // Type-only: pulls the shell's SlotMap merge (the 'settings.section' entry).
@@ -95,6 +95,7 @@ export function apply(ctx: ClientContext): void {
     t,
   })
   const agentT = ctx.locale.bind('settings.agents') as AgentsSectionInjected['t']
+  const agentDirectory = createSnapshotStore(0)
   const unwrap = async <Value>(operation: Promise<{ ok: true; value: Value } | {
     ok: false
     error: { code: string; message: string }
@@ -104,6 +105,7 @@ export function apply(ctx: ClientContext): void {
     return result.value
   }
   const agentsInjected = (): AgentsSectionInjected => ({
+    hooks: { agentDirectory },
     list: () => unwrap(ctx.remote.agentModels.list()),
     save: (id, model, reasoningEffort, revision) =>
       unwrap(ctx.remote.agentModels.save(id, model, reasoningEffort, revision)),
@@ -127,6 +129,7 @@ export function apply(ctx: ClientContext): void {
     const refreshAll = (): void => {
       refreshModels()
       refreshWelcomeIfLoaded(welcomeController)
+      agentDirectory.set(agentDirectory.getSnapshot() + 1)
     }
     const disposers = [
       ctx.remote.$on('settings/document-updated', (ns) => {
@@ -135,6 +138,9 @@ export function apply(ctx: ClientContext): void {
       }),
       ctx.remote.$on('credentials/updated', refreshModels),
       ctx.remote.$on('llm/adapters-updated', refreshModels),
+      ctx.remote.$on('agent-models/directory-updated', () => {
+        agentDirectory.set(agentDirectory.getSnapshot() + 1)
+      }),
       ctx.on('connection/reset', refreshAll),
     ]
     return () => { for (const dispose of disposers) dispose() }

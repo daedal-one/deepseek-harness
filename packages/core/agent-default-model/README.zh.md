@@ -8,7 +8,7 @@
 
 - `currentSelection(id?)` 返回主 Agent 或某个已注册角色的有效选择。
 - `optionsFor(id, fallback?)` 应用角色选择，同时保留输出上限等无关 Agent 选项。
-- `registerTarget(target)` 在插件 scope 的生命期内贡献一个具名角色。等价贡献会合并，冲突定义会失败。
+- `registerTarget(target)` 在插件 scope 的生命期内贡献一个具名角色。可见新增或最终移除会发布 `agent-models/directory-updated`；等价贡献会合并且不重复发布变更，冲突定义会失败。
 - `saveSelection(selection)` 在挂载 Settings 提供方时持久化主 Agent 的切换。
 - 生成的 `agentModels.list/save/reset` Remote namespace 为 Settings > Agents 页面提供精确模型元数据与比较并交换 revision。
 
@@ -16,7 +16,7 @@
 
 ## 模型体验
 
-本服务只会改变之后创建的 Agent 所获得的选择，不添加任何提示词内容。
+间接影响，通过之后创建的 Agent 所获得的选择产生；本服务不添加任何提示词内容。
 
 #### KV Cache 影响
 
@@ -25,5 +25,5 @@
 ## 已知限制与暂缓事项
 
 - 提供方路由归部署所有，不能在图形页面中修改。
-- 具名角色只在贡献它们的插件处于挂载状态时显示。
+- 具名角色只在贡献它们的插件处于挂载状态时显示；该存活集合变化时，已打开的客户端会重新读取目录。
 - 没有可写 Settings 提供方时，目录仍可读，但无法持久化变更。

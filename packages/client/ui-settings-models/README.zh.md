@@ -14,7 +14,7 @@ OpenRouter 首次运行卡片与引导对话框精确定址到 `llm-pi-ai.provid
 
 ## Agents 页面
 
-Agents 页面为主 Agent 与当前通过 `ctx.agentModels` 注册的每个具名角色渲染一张卡片。所有卡片都使用部署组合层固定的提供方。每张卡片提供该提供方公布的精确模型与推理强度；保存前，Host 会校验该组合，再将其存到 `agent-models.agents.<id>`；恢复默认值则删除该角色的用户覆盖。
+Agents 页面为主 Agent 与当前通过 `ctx.agentModels` 注册的每个具名角色渲染一张卡片。Preset scope 新增或移除角色时，转发的目录通知会让已打开的页面重新获取数据，因此自定义角色无需重开 Settings 即可出现。所有卡片都使用部署组合层固定的提供方。每张卡片提供该提供方公布的精确模型与推理强度；保存前，Host 会校验该组合，再将其存到 `agent-models.agents.<id>`；恢复默认值则删除该角色的用户覆盖。
 
 变更只在新 Agent 启动时生效。已存在的 Agent 与 Session 保留其日志中的选择。没有可写 Settings 的部署会显示同一份目录，但禁用控件。
 
@@ -24,7 +24,7 @@ Agents 页面为主 Agent 与当前通过 `ctx.agentModels` 注册的每个具�
 
 ## 模型体验
 
-无。这些页面会配置之后的请求，但不添加任何模型可见内容。
+无，因为这些页面只配置之后的请求，不添加任何模型可见内容。
 
 #### KV Cache 影响
 

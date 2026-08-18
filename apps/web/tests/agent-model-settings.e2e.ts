@@ -8,6 +8,7 @@ import { join } from 'node:path'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
+import { agentModelTargetId } from '@deepseek-ai/dsh-agent-default-model'
 import {
   acknowledgeReloadConnectionLoss,
   assertFixtureInventory,
@@ -31,6 +32,7 @@ describe.skipIf(MODE === 'record')('web e2e: graphical per-Agent OpenRouter sett
   let browser: Browser
   let page: Page
   let tripwire: ReturnType<typeof watchConsole>
+  let disposeGuru: (() => void) | undefined
 
   beforeAll(async () => {
     scaffold = await launchWebScaffold({ openRouterMissingCredential: true })
@@ -42,6 +44,7 @@ describe.skipIf(MODE === 'record')('web e2e: graphical per-Agent OpenRouter sett
   }, 120_000)
 
   afterAll(async () => {
+    disposeGuru?.()
     await browser?.close()
     await scaffold?.close()
   })
@@ -64,7 +67,13 @@ describe.skipIf(MODE === 'record')('web e2e: graphical per-Agent OpenRouter sett
     await main.waitFor({ timeout: 15_000 })
     await subagent.waitFor({ timeout: 15_000 })
     await fork.waitFor({ timeout: 15_000 })
-    expect(await settings.getByText('openrouter', { exact: true }).count()).toBe(3)
+    disposeGuru = scaffold.ctx.agentModels.registerTarget({
+      id: agentModelTargetId('guru'),
+      label: 'Guru',
+    })
+    const guru = settings.locator('[data-agent-id="guru"]')
+    await guru.waitFor({ timeout: 15_000 })
+    expect(await settings.getByText('openrouter', { exact: true }).count()).toBe(4)
 
     const initial = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(PAGE_EXPECTED, initial, MODE)
@@ -92,6 +101,7 @@ describe.skipIf(MODE === 'record')('web e2e: graphical per-Agent OpenRouter sett
     await settings.waitFor({ timeout: 10_000 })
     await settings.getByRole('button', { name: '智能体', exact: true }).click()
     await main.waitFor({ timeout: 15_000 })
+    await guru.waitFor({ timeout: 15_000 })
     expect(await model.inputValue()).toBe(BASE_MODEL)
     expect(await reasoning.inputValue()).toBe('high')
 

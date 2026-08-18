@@ -14,7 +14,7 @@ Curated fields include endpoint, route display name and protocol where the catal
 
 ## Agents page
 
-The Agents page renders one card for the main Agent and every named role currently registered through `ctx.agentModels`. All cards use the provider fixed by deployment composition. Each card offers the exact models and reasoning levels advertised by that provider; Apply validates the pair on the Host before storing it under `agent-models.agents.<id>`, and Restore default removes that role's user override.
+The Agents page renders one card for the main Agent and every named role currently registered through `ctx.agentModels`. A forwarded directory notification refetches an open page when a preset scope adds or removes roles, so custom roles appear without reopening Settings. All cards use the provider fixed by deployment composition. Each card offers the exact models and reasoning levels advertised by that provider; Apply validates the pair on the Host before storing it under `agent-models.agents.<id>`, and Restore default removes that role's user override.
 
 Changes apply only when a new Agent starts. Existing Agents and sessions retain their logged selection. A deployment without writable Settings shows the same directory with disabled controls.
 
@@ -24,7 +24,7 @@ The shared onboarding coordinator first shows the versioned internal-testing not
 
 ## Model Experience
 
-None. These pages configure later requests but add no model-visible content.
+None, as these pages configure later requests without adding model-visible content.
 
 #### KV Cache effect
 
