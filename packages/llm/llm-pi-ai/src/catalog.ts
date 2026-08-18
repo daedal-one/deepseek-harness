@@ -484,23 +484,8 @@ export type EveryProfileFieldMatchesUpstream = AssertTrue<
  * @param compat - the configured switches, when any.
  * @returns the entries carrying a value, in declaration order.
  */
-/** Normalize optional routing arrays and objects materialized by configuration. */
-function routingOrDefault(routing: OpenRouterRouting | undefined): OpenRouterRouting | undefined {
-  if (routing === undefined) return undefined
-  const cleaned: OpenRouterRouting = {}
-  for (const [key, value] of Object.entries(routing)) {
-    if (value === undefined || value === null) continue
-    if (Array.isArray(value) && value.length === 0) continue
-    if (typeof value === 'object' && !Array.isArray(value) && Object.keys(value as object).length === 0) continue
-    ;(cleaned as Record<string, unknown>)[key] = value
-  }
-  return Object.keys(cleaned).length === 0 ? undefined : cleaned
-}
-
 function configuredCompatEntries(compat: PiAiCompatProfile | undefined): readonly (readonly [string, unknown])[] {
-  return Object.entries(compat ?? {}).flatMap(([field, rawValue]) => {
-    const value = field === 'openRouterRouting' ? routingOrDefault(rawValue as OpenRouterRouting) : rawValue
-    if (value === undefined) return []
+  return Object.entries(compat ?? {}).flatMap(([field, value]) => {
     const empty = typeof value === 'object' && value !== null && !Array.isArray(value)
       && Object.keys(value as object).length === 0
     return empty ? [] : [[field, value] as const]

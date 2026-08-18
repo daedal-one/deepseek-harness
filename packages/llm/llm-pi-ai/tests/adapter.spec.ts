@@ -240,6 +240,42 @@ describe('PiAiAdapter provider routing', () => {
     expect(server.paths).toEqual(['/v1/responses'])
   })
 
+  it('resolves the OpenRouter endpoint from launch environment below an explicit profile endpoint', async () => {
+    const ambient = await mockServer([{ events: textEvents }])
+    const explicit = await mockServer([{ events: textEvents }])
+    vi.stubEnv('OPENROUTER_BASE_URL', `${ambient.url}/v1`)
+
+    const ambientCtx = new Context()
+    await ambientCtx.plugin(LlmRuntime)
+    await ambientCtx.plugin(LlmPiAi, {
+      providers: {
+        openrouter: {
+          apiKeyEnv: 'PI_TEST_KEY',
+          api: 'openai-completions',
+          models: [{ id: 'acme-large' }],
+        },
+      },
+    })
+    await assemble(ambientCtx, { provider: 'openrouter', model: 'acme-large', messages: [] })
+
+    const explicitCtx = new Context()
+    await explicitCtx.plugin(LlmRuntime)
+    await explicitCtx.plugin(LlmPiAi, {
+      providers: {
+        openrouter: {
+          apiKeyEnv: 'PI_TEST_KEY',
+          api: 'openai-completions',
+          baseURL: `${explicit.url}/v1`,
+          models: [{ id: 'acme-large' }],
+        },
+      },
+    })
+    await assemble(explicitCtx, { provider: 'openrouter', model: 'acme-large', messages: [] })
+
+    expect(ambient.paths).toEqual(['/v1/chat/completions'])
+    expect(explicit.paths).toEqual(['/v1/chat/completions'])
+  })
+
   it('sends route OpenRouter routing as the request provider field', async () => {
     const server = await mockServer([{ events: textEvents }])
     const ctx = new Context()

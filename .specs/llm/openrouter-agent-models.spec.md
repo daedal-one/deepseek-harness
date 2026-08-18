@@ -16,7 +16,7 @@ categorized_under: []
 The dedicated DeepSeek adapter duplicates provider behavior already supplied by pi-ai, while named subagent models remain embedded in preset composition files. Provider credentials and agent role assignments therefore have different configuration surfaces, and routed OpenRouter models can run without an explicit reasoning selection.
 
 :::{requirement id="openrouter-agent-models" level="MUST"}
-- {#c-provider} Shipped compositions MUST use the pi-ai OpenRouter route for conversation-model requests and MUST NOT include the dedicated DeepSeek LLM adapter package or route.
+- {#c-provider} Shipped compositions MUST use the pi-ai OpenRouter route for conversation-model requests, MUST resolve an optional `OPENROUTER_BASE_URL` from the shared launch environment unless the profile declares `baseURL`, and MUST NOT include the dedicated DeepSeek LLM adapter package or route.
 - {#c-catalog} The OpenRouter route MUST retain its installed catalog while allowing an exact dated or routed request identifier to inherit another installed model's complete metadata.
 - {#c-routing} An `openai-completions` route or model MUST be able to declare OpenRouter provider-routing preferences, MUST preserve omitted routing fields as OpenRouter defaults, and MUST send the resolved preferences as the request `provider` field.
 - {#c-directory} The model-settings owner MUST expose the main agent and every live named agent contribution as a lifecycle-safe directory with stable opaque ids, display labels, and deployment defaults; equivalent scoped registrations MUST coalesce, conflicting definitions MUST fail, and visible registration or removal MUST publish a post-commit directory change.

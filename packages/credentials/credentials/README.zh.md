@@ -50,6 +50,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 
 declare const ctx: Context
+declare const refresh: (current: string | undefined) => Promise<string | undefined>
 
 const ref = credentialRef('DEEPSEEK_API_KEY')          // POSIX shell identifier, branded
 const hit = await ctx.credentials.resolve(ref)         // { value, source } | undefined

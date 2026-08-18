@@ -91,7 +91,24 @@ export { supportedProtocols } from './provider.ts'
 export const name = 'llm-pi-ai'
 export const inject = ['llm']
 
+const OPENROUTER_BASE_URL_ENV = 'OPENROUTER_BASE_URL'
 const NS = 'llm-pi-ai'
+
+/**
+ * Apply the launch-time OpenRouter endpoint without creating a dormant route
+ * or shadowing an endpoint set explicitly by the profile.
+ * @param config - the current profile configuration.
+ * @param baseURL - the optional endpoint from the immutable launch environment.
+ * @returns the effective provider map.
+ */
+function providersWithOpenRouterBaseURL(config: Config, baseURL: string | undefined): Config['providers'] {
+  const openrouter = config.providers?.openrouter
+  if (openrouter === undefined || openrouter.baseURL !== undefined || baseURL === undefined) return config.providers
+  return {
+    ...config.providers,
+    openrouter: { ...openrouter, baseURL },
+  }
+}
 
 /**
  * The registry captures these per route; a change here must re-register.
@@ -144,6 +161,7 @@ function directoryEntries(
 
 /** Register one generic pi-ai adapter for all configured provider routes. */
 export function apply(ctx: Context, config: Config): void {
+  const openRouterBaseURL = launchEnvironmentOf(ctx).get(OPENROUTER_BASE_URL_ENV)?.value
   let current: () => Config = () => config
   let lastRaw: Config | undefined
   let memoized: ReadonlyMap<string, ResolvedPiAiProviderProfile> | undefined
@@ -159,7 +177,7 @@ export function apply(ctx: Context, config: Config): void {
   const profiles = (): ReadonlyMap<string, ResolvedPiAiProviderProfile> => {
     const raw = current()
     if (raw === lastRaw && memoized !== undefined) return memoized
-    const next = resolveProfiles(raw.providers, 'deferred')
+    const next = resolveProfiles(providersWithOpenRouterBaseURL(raw, openRouterBaseURL), 'deferred')
     lastRaw = raw
     memoized = next
     return next

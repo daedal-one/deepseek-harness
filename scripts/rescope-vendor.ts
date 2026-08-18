@@ -10,8 +10,10 @@
  * scalar. A match needs a quote (or `name: `) immediately left and the matching
  * quote — optionally after a `/subpath` — immediately right, which excludes
  * `cordis.yml`, the Loader's `cordis:` builtin prefix, `cordis-config-entry`,
- * `@deepseek-ai/dsh-tool-cordis`, and `cordiverse/cordis`, and makes the
- * rewrite idempotent because the scoped name's `cordis` is preceded by `/`.
+ * `@deepseek-ai/dsh-tool-cordis`, and `cordiverse/cordis`. File-local product
+ * tokens protect event namespaces, locale keys, and UI ids that share the
+ * package spelling. The rewrite is idempotent because the scoped name's
+ * `cordis` is preceded by `/`.
  * Markdown follows the rename inside every fence, and in `docs/` prose too:
  * a tutorial that teaches an unresolvable name is wrong, while prose elsewhere
  * records what was true when it was written.
@@ -136,6 +138,55 @@ const GENERIC_SKIPS: readonly GenericSkip[] = [
   { file: 'packages/extensions/ui-cordis/src/client/CordisPanel.tsx', upstream: ['cordis'] },
   { file: 'packages/extensions/ui-cordis/src/client/CordisRunRow.tsx', upstream: ['cordis'] },
   { file: 'packages/extensions/ui-cordis/src/client/locales.ts', upstream: ['cordis'] },
+]
+
+/** One product token that shares a package-name spelling but is not a package reference. */
+interface ProductTokenSkip {
+  readonly file: string
+  readonly upstream: string
+  /** Empty preserves only the bare token; `/` preserves every namespaced token. */
+  readonly subpath: '' | '/'
+}
+
+const CORDIS_EVENT_FILES = [
+  'docs/event-producer-consumer.md',
+  'docs/event-producer-consumer.zh.md',
+  'docs/subsystems/extensions.md',
+  'docs/subsystems/extensions.zh.md',
+  'packages/api/remotes/src/remote-events.ts',
+  'packages/extensions/cordis-client-runner/src/client/index.ts',
+  'packages/extensions/cordis-client-runner/src/client/runtime.ts',
+  'packages/extensions/cordis-client-runner/tests/orchestrator.client.spec.ts',
+  'packages/extensions/cordis-client-runner/tests/plugin.client.spec.ts',
+  'packages/extensions/cordis-host-runner/src/index.ts',
+  'packages/extensions/cordis-host-runner/src/inspect-registry.ts',
+  'packages/extensions/cordis-host-runner/src/types.ts',
+  'packages/extensions/cordis-host-runner/tests/helpers.ts',
+  'packages/extensions/cordis-host-runner/tests/runner.spec.ts',
+  'packages/extensions/cordis-host-runner/tests/versioning.spec.ts',
+  'packages/extensions/tool-cordis/src/api-catalog.ts',
+  'packages/extensions/tool-cordis/src/providers.ts',
+  'packages/extensions/ui-cordis/src/client/index.ts',
+  'packages/extensions/ui-cordis/src/client/inventory.ts',
+  'scripts/rescope-vendor.spec.ts',
+] as const
+
+const CORDIS_ID_FILES = [
+  'packages/client/ui-settings-plugin-inventory/src/client/PluginInventorySettingsTab.tsx',
+  'packages/extensions/ui-cordis/src/client/CordisActionRow.tsx',
+  'packages/extensions/ui-cordis/src/client/CordisDefineRow.tsx',
+  'packages/extensions/ui-cordis/src/client/CordisPanel.tsx',
+  'packages/extensions/ui-cordis/src/client/CordisRunRow.tsx',
+  'packages/extensions/ui-cordis/src/client/index.ts',
+  'packages/extensions/ui-cordis/src/client/locales.ts',
+  'scripts/gen-cordis-catalog.ts',
+  'scripts/rescope-vendor.spec.ts',
+] as const
+
+/** Event namespaces, locale keys, and UI source ids are product protocol data. */
+const PRODUCT_TOKEN_SKIPS: readonly ProductTokenSkip[] = [
+  ...CORDIS_EVENT_FILES.map(file => ({ file, upstream: 'cordis', subpath: '/' as const })),
+  ...CORDIS_ID_FILES.map(file => ({ file, upstream: 'cordis', subpath: '' as const })),
 ]
 
 /** A string that must appear exactly `count` times once the rescope has run. */
@@ -473,11 +524,26 @@ function skipped(file: string, pattern: Pattern): boolean {
   return GENERIC_SKIPS.some(skip => skip.file === file && skip.upstream.includes(pattern.upstream))
 }
 
+/**
+ * Test whether one delimited token is product data that the package codemod must preserve.
+ * @param file - repository-relative file containing the token.
+ * @param upstream - unscoped package-name spelling matched by the generic pass.
+ * @param subpath - optional slash-prefixed suffix captured with that spelling.
+ * @returns Whether the complete token is a protected product identifier.
+ */
+export function isPreservedProductToken(file: string, upstream: string, subpath: string): boolean {
+  return PRODUCT_TOKEN_SKIPS.some(skip => skip.file === file
+    && skip.upstream === upstream
+    && (skip.subpath === '' ? subpath === '' : subpath.startsWith('/')))
+}
+
 function rewriteLine(line: string, file: string, all: readonly Pattern[]): string {
   let out = line
   for (const pattern of all) {
     if (skipped(file, pattern)) continue
-    out = out.replace(pattern.token, (_match, quote: string, subpath: string) => `${quote}${pattern.to}${subpath}${quote}`)
+    out = out.replace(pattern.token, (match, quote: string, subpath: string) => isPreservedProductToken(file, pattern.upstream, subpath)
+      ? match
+      : `${quote}${pattern.to}${subpath}${quote}`)
     out = out.replace(pattern.yamlName, (_match, prefix: string, suffix: string) => `${prefix}${pattern.to}${suffix}`)
   }
   return out
