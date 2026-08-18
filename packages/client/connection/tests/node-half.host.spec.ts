@@ -173,6 +173,8 @@ describe('connection node half', () => {
       'settings.describe', 'settings.openDocument', 'settings.update', 'settings.replace', 'settings.mutate',
       'credentials.describe', 'credentials.set', 'credentials.unset',
       'llm.discoverModels',
+      'llm.providerAuthState', 'llm.startProviderAuth', 'llm.providerAuthStatus',
+      'llm.cancelProviderAuth', 'llm.logoutProviderAuth',
       // A composition names the plugins a session runs: reading one is
       // reconnaissance, and copy/remove/openDocument manage the roster and
       // drive the host desktop.

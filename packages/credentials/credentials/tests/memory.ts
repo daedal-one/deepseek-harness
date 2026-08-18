@@ -8,6 +8,7 @@ import type { CredentialInfo, CredentialRef, ResolvedCredential } from '../src/i
  */
 export class MemoryCredentials extends CredentialProvider {
   private readonly store = new Map<string, string>()
+  private operations: Promise<void> = Promise.resolve()
 
   constructor(ctx: Context, seed: Record<string, string> = {}) {
     super(ctx)
@@ -38,6 +39,23 @@ export class MemoryCredentials extends CredentialProvider {
     this.store.set(ref, value)
     this.ctx.emit('credentials/updated', ref)
     return Promise.resolve()
+  }
+
+  override modify(
+    ref: CredentialRef,
+    update: (current: string | undefined) => Promise<string | undefined>,
+  ): Promise<string | undefined> {
+    const task = this.operations.then(async () => {
+      const current = this.store.get(ref)
+      const next = await update(current)
+      if (next === undefined || next === current) return current
+      if (next.length === 0) throw new Error('memory credentials: an empty value cannot be stored; use unset')
+      this.store.set(ref, next)
+      this.ctx.emit('credentials/updated', ref)
+      return next
+    })
+    this.operations = task.then(() => undefined, () => undefined)
+    return task
   }
 
   override unset(ref: CredentialRef): Promise<void> {

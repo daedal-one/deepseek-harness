@@ -52,7 +52,7 @@ declare module '@deepseek-ai/cordis' {
 }
 
 /**
- * Abstract credential service. Providers implement the four operations over
+ * Abstract credential service. Providers implement the five operations over
  * their source layers; one seam-wide rule binds them all: an empty stored
  * value is absent everywhere — `resolve` skips it, `describe` reports it
  * unconfigured — so a blank never masquerades as a configured secret.
@@ -89,6 +89,21 @@ export abstract class CredentialProvider extends Service {
    * @param value - the non-empty secret value.
    */
   abstract set(ref: CredentialRef, value: string): Promise<void>
+
+  /**
+   * Atomically inspect and replace one writable credential. Calls for the same
+   * reference are serialized across every process sharing the provider store,
+   * so refresh-token rotation cannot race another refresh or a logout. The
+   * callback returns the next non-empty value; `undefined` keeps the current
+   * value unchanged. Use {@link unset} for deletion.
+   * @param ref - the reference to inspect and possibly replace.
+   * @param update - computes a replacement from the effective current value.
+   * @returns the effective value after the serialized operation.
+   */
+  abstract modify(
+    ref: CredentialRef,
+    update: (current: string | undefined) => Promise<string | undefined>,
+  ): Promise<string | undefined>
 
   /**
    * Remove one reference from the provider-managed writable source; removing

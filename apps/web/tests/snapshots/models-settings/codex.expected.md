@@ -44,13 +44,13 @@
     - option "Hugging Face"
     - option "Kimi For Coding"
     - option "MiniMax"
-    - option "MiniMax CN" [selected]
+    - option "MiniMax CN"
     - option "Mistral"
     - option "Moonshot AI"
     - option "Moonshot AI CN"
     - option "NVIDIA"
     - option "OpenAI"
-    - option "OpenAI Codex"
+    - option "OpenAI Codex" [selected]
     - option "OpenCode Zen"
     - option "OpenCode Zen Go"
     - option "Qwen Token Plan"
@@ -64,9 +64,8 @@
     - option "Xiaomi Token Plan SGP"
     - option "Z.AI"
     - option "Z.AI Coding CN"
-  - text: API 密钥
-  - textbox "API 密钥":
-    - /placeholder: 输入 API 密钥，或留空使用环境认证
   - group: 自定义设置
   - button "取消"
   - button "保存"
+  - text: OpenAI (ChatGPT Plus/Pro)
+  - button "使用 OpenAI 登录"

@@ -21,6 +21,7 @@ import { CustomProviderCard } from './CustomProviderCard.tsx'
 import { deriveKeyRef, messageOf, protocolChoices, providerUsable } from './store.ts'
 import type { ModelsSettingsState, ModelsSettingsStore, ProviderRow } from './store.ts'
 import { ProviderEditor, type ProviderEditorProps } from './ProviderEditor.tsx'
+import { ProviderAuthControl } from './ProviderAuthControl.tsx'
 import type { en } from './locales.ts'
 import styles from './ModelsSection.module.css'
 
@@ -58,6 +59,7 @@ interface EditorTarget extends ProviderIdentity {
   credentialRef?: string
   /** The adapter reports this route as one it does not ship (see {@link ProviderEditorProps.declared}). */
   declared?: boolean
+  authMethods?: ProviderEditorProps['authMethods']
 }
 
 /** Values that vary around the shared provider-editor rendering. */
@@ -76,6 +78,7 @@ function renderProviderEditor({ target, ...props }: ProviderEditorRenderProps): 
       displayName={target.displayName}
       settingsPath={target.settingsPath}
       {...target.declared === true ? { declared: true } : {}}
+      {...target.authMethods === undefined ? {} : { authMethods: target.authMethods }}
       {...props}
     />
   )
@@ -150,6 +153,7 @@ function targetOf(row: ProviderRow): EditorTarget {
     // route-level fields only a declared route owns off the card, exactly as
     // it leaves the custom tag off the row.
     ...row.entry.declared === true ? { declared: true } : {},
+    ...row.entry.authMethods === undefined ? {} : { authMethods: row.entry.authMethods },
   }
 }
 
@@ -309,6 +313,8 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
           }
           const open = !adding && editing?.provider === row.entry.provider
           const credentialConfigured = row.credential?.configured === true
+          const oauth = row.entry.authMethods?.find(method =>
+            method.type === 'oauth' && method.authenticated !== undefined)
           const credentialMissing = !credentialConfigured
             && row.apiKeyEnv !== undefined
             && row.credential?.configured === false
@@ -336,6 +342,11 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
                         </span>
                       )
                       : null}
+                  {oauth?.authenticated === true
+                    ? <span className={styles['credentialConfigured']}>{t('accountConnected')}</span>
+                    : oauth === undefined
+                      ? null
+                      : <span className={styles['credentialMissing']}>{t('accountMissing')}</span>}
                 </span>
                 <span className={styles['rowActions']}>
                   <button
@@ -373,6 +384,14 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
                     : null}
                 </span>
               </div>
+              <ProviderAuthControl
+                provider={row.entry.provider}
+                method={oauth}
+                api={api}
+                t={t}
+                readOnly={!state.writable}
+                onChanged={() => { void controller.load() }}
+              />
               {open
                 ? renderProviderEditor({
                   target,
@@ -416,10 +435,20 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
                 hideTitle
                 namespace={addNamespace}
                 settingsPath={addTarget.settingsPath}
+                {...addTarget.authMethods === undefined ? {} : { authMethods: addTarget.authMethods }}
                 api={api}
                 t={t}
                 readOnly={!state.writable}
                 onClose={(changed) => { closeEditor(changed, addTarget) }}
+              />
+              <ProviderAuthControl
+                provider={addTarget.provider}
+                method={addTarget.authMethods?.find(method =>
+                  method.type === 'oauth' && method.authenticated !== undefined)}
+                api={api}
+                t={t}
+                readOnly={!state.writable}
+                onChanged={() => { void controller.load() }}
               />
             </div>
           )

@@ -1,6 +1,6 @@
 // Web e2e scenario: the Models settings page end to end through the real
-// wire — the add card offers the dormant pi-ai catalog, a blank key saves a
-// reference-free profile for provider-native auth, and typing an API key later
+// wire — the add card offers the dormant pi-ai catalog and native Codex account
+// authentication, a blank key saves a reference-free profile for provider-native auth, and typing an API key later
 // stores it write-only under the derived reference (`MINIMAX_CN_API_KEY`)
 // while the settings document records only that reference. Each saved row
 // appears after route topology invalidation without presenting liveness as
@@ -26,6 +26,7 @@ import {
 import { ZH_BROWSER_LOCALE, saveFailureShot } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./snapshots/models-settings', import.meta.url))
+const CODEX_EXPECTED = join(SNAPSHOT_DIR, 'codex.expected.md')
 const EMPTY_EXPECTED = join(SNAPSHOT_DIR, 'empty.expected.md')
 const CONFIGURED_EXPECTED = join(SNAPSHOT_DIR, 'configured.expected.md')
 const DECLARED_EXPECTED = join(SNAPSHOT_DIR, 'declared.expected.md')
@@ -66,6 +67,9 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     // provider is configured yet, so the page is one add button.
     const add = dialog.getByRole('button', { name: '添加提供方' })
     await add.waitFor({ timeout: 10_000 })
+    // OpenRouter is the shipped active route, so it belongs on the Models page
+    // itself and must not be offered again in the dormant-provider picker.
+    await dialog.getByText('OpenRouter', { exact: true }).first().waitFor({ timeout: 10_000 })
     // The button enables once the dormant catalog lands in the join.
     await expect.poll(async () => add.isEnabled(), { timeout: 10_000 }).toBe(true)
     await add.click()
@@ -73,8 +77,20 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     await pick.waitFor({ timeout: 10_000 })
     await expect.poll(async () => pick.locator('option').count(), { timeout: 10_000 }).toBeGreaterThan(30)
     const options = await pick.locator('option').allTextContents()
-    expect(options).toContain('anthropic')
-    expect(options).toContain('minimax-cn')
+    expect(options).toContain('Anthropic')
+    expect(options).toContain('MiniMax CN')
+    expect(options).toContain('OpenAI')
+    expect(options).toContain('OpenAI Codex')
+
+    // The native Codex route uses the provider library's OpenAI account flow,
+    // not an API-key placeholder. This is the assembled Host auth registry,
+    // loopback RPC, and real client plugin rendering one dormant provider.
+    await pick.selectOption('openai-codex')
+    await dialog.getByRole('button', { name: '使用 OpenAI 登录' }).waitFor({ timeout: 10_000 })
+    expect(await dialog.getByRole('textbox', { name: 'API 密钥', exact: true }).count()).toBe(0)
+    const codexSnapshot = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
+    await compareOrRefreshGolden(CODEX_EXPECTED, codexSnapshot, MODE)
+
     await pick.selectOption('minimax-cn')
     await dialog.getByRole('textbox', { name: 'API 密钥', exact: true }).waitFor({ timeout: 10_000 })
     const snapshot = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
@@ -108,8 +124,9 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     const row = dialog.getByText('minimax-cn', { exact: true }).first()
     await row.waitFor({ timeout: 10_000 })
     await dialog.getByText('已保存 minimax-cn。', { exact: true }).waitFor({ timeout: 10_000 })
-    expect(await dialog.getByRole('img', { name: 'API 密钥已配置' }).count()).toBe(0)
-    expect(await dialog.getByRole('img', { name: 'API 密钥缺失' }).count()).toBe(0)
+    const rowCard = dialog.locator('li').filter({ hasText: 'minimax-cn' }).first()
+    expect(await rowCard.getByText('API 密钥已配置', { exact: true }).count()).toBe(0)
+    expect(await rowCard.getByText('API 密钥缺失', { exact: true }).count()).toBe(0)
     const document = await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')
     expect(document).toContain('minimax-cn: {}')
     expect(document).not.toContain('MINIMAX_CN_API_KEY')
@@ -143,7 +160,8 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
       async () => dialog.getByRole('textbox', { name: 'API 密钥', exact: true }).count(),
       { timeout: 10_000 },
     ).toBe(0)
-    await dialog.getByRole('img', { name: 'API 密钥已配置' }).waitFor({ timeout: 10_000 })
+    await dialog.locator('li').filter({ hasText: 'minimax-cn' }).first()
+      .getByText('API 密钥已配置', { exact: true }).waitFor({ timeout: 10_000 })
     await dialog.getByText('已保存 minimax-cn。', { exact: true }).waitFor({ timeout: 10_000 })
     const document = await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')
     expect(document).toContain('minimax-cn:')
@@ -279,7 +297,7 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
 
   it.skipIf(MODE === 'record')('keeps the fixture inventory closed', async () => {
     await assertFixtureInventory(SNAPSHOT_DIR, [
-      'configured.expected.md', 'declared-edit.expected.md', 'declared.expected.md',
+      'codex.expected.md', 'configured.expected.md', 'declared-edit.expected.md', 'declared.expected.md',
       'delete.expected.md', 'empty.expected.md', 'native-delete.expected.md',
     ])
   })

@@ -74,6 +74,7 @@ function scriptedFace(options: {
   discover?: ReturnType<typeof vi.fn>
   mutate?: ReturnType<typeof vi.fn>
   set?: ReturnType<typeof vi.fn>
+  authMethods?: Record<string, Array<{ type: 'api_key' | 'oauth'; name: string; authenticated?: boolean }>>
 } = {}) {
   const providers = options.providers ?? {
     openai: { apiKeyEnv: 'OPENAI_API_KEY', baseURL: 'https://proxy.example/v1' },
@@ -92,10 +93,15 @@ function scriptedFace(options: {
           settingsPath: ['providers', provider],
           active: true,
           declared: options.declaredRoutes?.includes(provider) ?? false,
+          ...options.authMethods?.[provider] === undefined ? {} : { authMethods: options.authMethods[provider] },
         })),
       }))),
       models: vi.fn(() => Promise.resolve(ok({ groups: [], failures: [] }))),
       discoverModels: discover,
+      providerAuthState: vi.fn((payload: { provider: string; method: 'api_key' | 'oauth' }) => {
+        const method = options.authMethods?.[payload.provider]?.find(candidate => candidate.type === payload.method)
+        return Promise.resolve(ok({ authenticated: method?.authenticated ?? false }))
+      }),
     },
     settings: {
       describe: vi.fn(() => Promise.resolve(ok({ writable: true, namespaces: [namespace] }))),
@@ -192,6 +198,18 @@ describe('protocolChoices', () => {
 })
 
 describe('model list editing', () => {
+  it('does not offer an API key field for an OAuth-only installed provider', async () => {
+    await mountSection({
+      providers: { 'openai-codex': {} },
+      authMethods: {
+        'openai-codex': [{ type: 'oauth', name: 'OpenAI account', authenticated: false }],
+      },
+    })
+    openEditor('openai-codex')
+    expect(screen.queryByLabelText(en.keyInput)).toBeNull()
+    expect(screen.getByText(en.accountSignIn)).toBeTruthy()
+  })
+
   it('adds, edits, and removes rows without storing emptied optional fields', async () => {
     const { mutate } = await mountSection()
     openEditor('openai')

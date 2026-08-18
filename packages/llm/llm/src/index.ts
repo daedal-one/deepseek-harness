@@ -6,6 +6,7 @@
  * @module @deepseek-ai/dsh-llm
  */
 
+import { randomUUID } from 'node:crypto'
 import { Context, Service } from '@deepseek-ai/cordis'
 import type {
   GenerateOptions,
@@ -15,6 +16,10 @@ import type {
   LlmModelContext,
   LlmModelDiscoveryRequest,
   LlmModelInfo,
+  LlmAuthOperationSnapshot,
+  LlmProviderAuthenticator,
+  LlmProviderAuthMethod,
+  LlmProviderAuthStatus,
   LlmResolvedModelInfo,
   LlmProviderInfo,
   ModelModality,
@@ -23,7 +28,7 @@ import type {
 import { freezeMessage, type Message } from './message.ts'
 import { resolveRetryPolicy } from './retry-policy.ts'
 import type { ResolvedRetryPolicy } from './retry-policy.ts'
-import type { ProviderRequestId } from './brand.ts'
+import { LlmAuthOperationId, type ProviderRequestId } from './brand.ts'
 import { callConfigEquals, deepFreeze } from './call-config.ts'
 import type { LlmCallConfig, LlmCallConfigAdapterDefaults } from './call-config.ts'
 import { HarnessError, INVALID_CREDENTIAL_CODE } from './error.ts'
@@ -174,8 +179,8 @@ export interface PreparedLlmCall {
 /**
  * Provider-wire adapter for the harness message and stream vocabulary. Register implementations
  * with `ctx.llm.registerAdapter(providers, adapter)`. Every provider HTTP request must include
- * `attributionHeaders()`; prove the headers are added in the wire request or library header hook. The direct-fetch
- * The shipped pi-ai adapter meets this requirement through provider-library header hooks.
+ * `attributionHeaders()`; prove the headers are added in the wire request or library header hook. The shipped
+ * pi-ai adapter meets this requirement through provider-library header hooks.
  */
 export abstract class LlmAdapter {
   /**
@@ -277,9 +282,20 @@ export interface DirectoryRegistrationHandle {
   replace(entries: readonly LlmConfigurableProvider[]): void
 }
 
+/** Maximum completed authentication operations retained for status reads. */
+const AUTH_OPERATION_HISTORY_LIMIT = 64
+
+/** Internal live operation record; snapshots never expose its control objects. */
+interface AuthenticationOperation {
+  snapshot: LlmAuthOperationSnapshot
+  readonly controller: AbortController
+  settle: Promise<void>
+  readonly authenticator: LlmProviderAuthenticator
+}
+
 /**
- * The abstract `llm` service: an adapter registry plus a streaming model-call
- * API, interceptable via the `llm/stream` waterfall.
+ * The abstract `llm` service: adapter and provider-authentication registries
+ * plus a streaming model-call API, interceptable via the `llm/stream` waterfall.
  */
 export class LlmRuntime extends Service {
   private adapters = new Map<string, AdapterRegistration>()
@@ -288,6 +304,8 @@ export class LlmRuntime extends Service {
     string,
     (request: LlmModelDiscoveryRequest) => Promise<readonly LlmDiscoveredModel[]>
   >()
+  private authenticators = new Map<string, Map<LlmProviderAuthMethod, LlmProviderAuthenticator>>()
+  private authOperations = new Map<string, AuthenticationOperation>()
 
   constructor(ctx: Context) {
     super(ctx, 'llm')
@@ -452,7 +470,19 @@ export class LlmRuntime extends Service {
           || detached.some(seen => seen.provider === entry.provider)) {
           throw new LlmError(`configurable provider "${entry.provider}" is already declared`, 'DUPLICATE_DIRECTORY')
         }
-        detached.push({ ...entry, settingsPath: [...entry.settingsPath] })
+        const authMethods = entry.authMethods?.map(method => ({ ...method }))
+        if (authMethods?.some((method, index) => method.name.length === 0
+          || authMethods.findIndex(candidate => candidate.type === method.type) !== index)) {
+          throw new LlmError(
+            `configurable provider "${entry.provider}" has invalid or duplicate authentication methods`,
+            'INVALID_DIRECTORY',
+          )
+        }
+        detached.push({
+          ...entry,
+          settingsPath: [...entry.settingsPath],
+          ...authMethods === undefined ? {} : { authMethods },
+        })
       }
       for (const entry of held) this.directory.delete(entry.provider)
       for (const entry of detached) this.directory.set(entry.provider, entry)
@@ -488,7 +518,184 @@ export class LlmRuntime extends Service {
    * @returns detached directory entries in declaration order.
    */
   listConfigurableProviders(): LlmConfigurableProvider[] {
-    return [...this.directory.values()].map(entry => ({ ...entry, settingsPath: [...entry.settingsPath] }))
+    return [...this.directory.values()].map(entry => ({
+      ...entry,
+      settingsPath: [...entry.settingsPath],
+      ...entry.authMethods === undefined ? {} : { authMethods: entry.authMethods.map(method => ({ ...method })) },
+    }))
+  }
+
+  /**
+   * Register one provider-owned interactive authentication method. The method
+   * is available whether its provider route is active or dormant, so a user
+   * can authenticate before adding the route to settings.
+   * @param provider - provider route the method authenticates.
+   * @param authenticator - provider-owned login, status, and logout behavior.
+   * @returns disposer that aborts and drains this method's live operations.
+   */
+  registerProviderAuthenticator(provider: string, authenticator: LlmProviderAuthenticator): () => void {
+    const dispose = this.ctx.effect(function* (this: LlmRuntime) {
+      if (provider.length === 0 || authenticator.method.name.length === 0) {
+        throw new LlmError('provider authentication needs a non-empty provider and method name', 'INVALID_AUTH')
+      }
+      const methods = this.authenticators.get(provider)
+        ?? new Map<LlmProviderAuthMethod, LlmProviderAuthenticator>()
+      if (methods.has(authenticator.method.type)) {
+        throw new LlmError(
+          `authentication method "${authenticator.method.type}" for provider "${provider}" is already registered`,
+          'DUPLICATE_AUTH',
+        )
+      }
+      methods.set(authenticator.method.type, authenticator)
+      this.authenticators.set(provider, methods)
+      yield async () => {
+        const pending = [...this.authOperations.values()].filter(operation =>
+          operation.snapshot.provider === provider
+          && operation.snapshot.method === authenticator.method.type
+          && operation.snapshot.status === 'pending')
+        for (const operation of pending) operation.controller.abort()
+        await Promise.all(pending.map(operation => operation.settle))
+        const current = this.authenticators.get(provider)
+        current?.delete(authenticator.method.type)
+        if (current?.size === 0) this.authenticators.delete(provider)
+      }
+    }.bind(this), 'llm.registerProviderAuthenticator()')
+    return () => void dispose()
+  }
+
+  /**
+   * Describe every interactive authentication method registered for a route.
+   * @param provider - provider route to inspect.
+   * @returns methods in registration order and their current stored state.
+   */
+  async providerAuthentication(provider: string): Promise<LlmProviderAuthStatus[]> {
+    const methods = this.authenticators.get(provider)
+    if (methods === undefined) return []
+    return Promise.all([...methods.values()].map(async authenticator => ({
+      ...authenticator.method,
+      authenticated: await authenticator.authenticated(),
+    })))
+  }
+
+  /**
+   * Start one provider login without holding the caller open for user action.
+   * @param provider - provider route to authenticate.
+   * @param method - registered interactive method to run.
+   * @returns initial pending snapshot; read later state with {@link authenticationOperation}.
+   */
+  startProviderAuthentication(
+    provider: string,
+    method: LlmProviderAuthMethod,
+  ): LlmAuthOperationSnapshot {
+    const authenticator = this.authenticators.get(provider)?.get(method)
+    if (authenticator === undefined) {
+      throw new LlmError(`provider "${provider}" has no "${method}" authentication method`, 'NO_AUTH')
+    }
+    const concurrent = [...this.authOperations.values()].find(operation =>
+      operation.snapshot.provider === provider
+      && operation.snapshot.method === method
+      && operation.snapshot.status === 'pending')
+    if (concurrent !== undefined) {
+      throw new LlmError(`provider "${provider}" already has a pending "${method}" login`, 'AUTH_IN_PROGRESS')
+    }
+    this.pruneAuthenticationHistory()
+    const id = LlmAuthOperationId(randomUUID())
+    const controller = new AbortController()
+    const operation: AuthenticationOperation = {
+      snapshot: { id, provider, method, status: 'pending' },
+      controller,
+      authenticator,
+      settle: Promise.resolve(),
+    }
+    this.authOperations.set(id, operation)
+    operation.settle = this.runProviderAuthentication(operation)
+    return this.copyAuthenticationSnapshot(operation.snapshot)
+  }
+
+  /** Complete one background login into a bounded terminal snapshot. */
+  private async runProviderAuthentication(operation: AuthenticationOperation): Promise<void> {
+    const { authenticator, controller } = operation
+    try {
+      await authenticator.login(controller.signal, (event) => {
+        if (controller.signal.aborted || operation.snapshot.status !== 'pending') return
+        operation.snapshot = {
+          ...operation.snapshot,
+          authorization: { ...event.authorization },
+        }
+      })
+      operation.snapshot = controller.signal.aborted
+        ? { id: operation.snapshot.id, provider: operation.snapshot.provider, method: operation.snapshot.method, status: 'cancelled' }
+        : { id: operation.snapshot.id, provider: operation.snapshot.provider, method: operation.snapshot.method, status: 'succeeded' }
+    } catch (error) {
+      operation.snapshot = controller.signal.aborted
+        ? { id: operation.snapshot.id, provider: operation.snapshot.provider, method: operation.snapshot.method, status: 'cancelled' }
+        : {
+          id: operation.snapshot.id,
+          provider: operation.snapshot.provider,
+          method: operation.snapshot.method,
+          status: 'failed',
+          error: error instanceof Error ? error.message : String(error),
+        }
+    }
+  }
+
+  /**
+   * Read one authentication operation.
+   * @param id - service-issued operation id.
+   * @returns detached current snapshot.
+   */
+  authenticationOperation(id: LlmAuthOperationId): LlmAuthOperationSnapshot {
+    const operation = this.authOperations.get(id)
+    if (operation === undefined) throw new LlmError(`unknown authentication operation "${id}"`, 'UNKNOWN_AUTH_OPERATION')
+    return this.copyAuthenticationSnapshot(operation.snapshot)
+  }
+
+  /**
+   * Cancel one operation and wait until its provider login has settled.
+   * @param id - service-issued operation id.
+   * @returns detached terminal snapshot.
+   */
+  async cancelProviderAuthentication(id: LlmAuthOperationId): Promise<LlmAuthOperationSnapshot> {
+    const operation = this.authOperations.get(id)
+    if (operation === undefined) throw new LlmError(`unknown authentication operation "${id}"`, 'UNKNOWN_AUTH_OPERATION')
+    if (operation.snapshot.status === 'pending') operation.controller.abort()
+    await operation.settle
+    return this.copyAuthenticationSnapshot(operation.snapshot)
+  }
+
+  /**
+   * Abort pending login before deleting a provider credential, preventing a
+   * late login completion from restoring what logout removed.
+   * @param provider - provider route to log out.
+   * @param method - registered authentication method to clear.
+   */
+  async logoutProvider(provider: string, method: LlmProviderAuthMethod): Promise<void> {
+    const authenticator = this.authenticators.get(provider)?.get(method)
+    if (authenticator === undefined) {
+      throw new LlmError(`provider "${provider}" has no "${method}" authentication method`, 'NO_AUTH')
+    }
+    const pending = [...this.authOperations.values()].filter(operation =>
+      operation.snapshot.provider === provider
+      && operation.snapshot.method === method
+      && operation.snapshot.status === 'pending')
+    for (const operation of pending) operation.controller.abort()
+    await Promise.all(pending.map(operation => operation.settle))
+    await authenticator.logout()
+  }
+
+  /** Detach an operation snapshot, including its nested device authorization. */
+  private copyAuthenticationSnapshot(snapshot: LlmAuthOperationSnapshot): LlmAuthOperationSnapshot {
+    return snapshot.status === 'pending' && snapshot.authorization !== undefined
+      ? { ...snapshot, authorization: { ...snapshot.authorization } }
+      : { ...snapshot }
+  }
+
+  /** Keep every pending operation and only the newest bounded terminal history. */
+  private pruneAuthenticationHistory(): void {
+    const terminal = [...this.authOperations.entries()].filter(([, operation]) => operation.snapshot.status !== 'pending')
+    const excess = terminal.length - AUTH_OPERATION_HISTORY_LIMIT + 1
+    if (excess <= 0) return
+    for (const [id] of terminal.slice(0, excess)) this.authOperations.delete(id)
   }
 
   /**

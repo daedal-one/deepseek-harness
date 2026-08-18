@@ -10,6 +10,9 @@
     - button "插件":
       - img
       - text: 插件
+    - button "智能体":
+      - img
+      - text: 智能体
     - button "Agent 预设":
       - img
       - text: Agent 预设
@@ -21,10 +24,12 @@
   - paragraph: 填入各提供方的 API 密钥即可使用其模型。
   - list:
     - listitem:
-      - text: minimax-cn
-      - img "API 密钥已配置"
+      - text: minimax-cn API 密钥已配置
       - button "编辑 minimax-cn": 编辑
       - button "删除 minimax-cn": 删除
+    - listitem:
+      - text: OpenRouter API 密钥已配置
+      - button "编辑 OpenRouter (openrouter)": 编辑
     - listitem:
       - text: Acme Gateway 自定义
       - button "编辑 Acme Gateway (acme-gateway)": 编辑

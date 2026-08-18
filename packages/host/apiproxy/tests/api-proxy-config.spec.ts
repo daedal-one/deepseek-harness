@@ -90,6 +90,7 @@ class MemorySettings extends SettingsProvider {
 /** In-memory credential provider with an env-shadow double for the rejection path. */
 class MemoryCredentials extends CredentialProvider {
   private readonly values = new Map<string, string>()
+  private operations: Promise<void> = Promise.resolve()
 
   constructor(ctx: ConstructorParameters<typeof CredentialProvider>[0], options?: { shadowed?: string[] }) {
     super(ctx)
@@ -117,6 +118,23 @@ class MemoryCredentials extends CredentialProvider {
     this.values.set(ref, value)
     this.ctx.emit('credentials/updated', ref)
     return Promise.resolve()
+  }
+
+  modify(
+    ref: CredentialRef,
+    update: (current: string | undefined) => Promise<string | undefined>,
+  ): Promise<string | undefined> {
+    const task = this.operations.then(async () => {
+      const current = this.values.get(ref)
+      const next = await update(current)
+      if (next !== undefined && next !== current) {
+        this.values.set(ref, next)
+        this.ctx.emit('credentials/updated', ref)
+      }
+      return next ?? current
+    })
+    this.operations = task.then(() => undefined, () => undefined)
+    return task
   }
 
   unset(ref: CredentialRef): Promise<void> {
@@ -655,6 +673,80 @@ describe('llm domain', () => {
       ],
     }])
     expect(value.failures).toEqual([{ id: 'broken', name: 'Broken', message: 'catalog backend down' }])
+  })
+
+  it('projects account state and carries device login through start, status, and logout', async () => {
+    const ctx = await harness({ configurableProviders: false })
+    ctx.llm.registerConfigurableProviders([{
+      provider: 'openai-codex',
+      displayName: 'OpenAI Codex',
+      settingsNs: 'llm-pi-ai',
+      settingsPath: ['providers', 'openai-codex'],
+      authMethods: [{ type: 'oauth', name: 'OpenAI account' }],
+    }])
+    let authenticated = false
+    const login = Promise.withResolvers<undefined>()
+    ctx.llm.registerProviderAuthenticator('openai-codex', {
+      method: { type: 'oauth', name: 'OpenAI account' },
+      authenticated: () => Promise.resolve(authenticated),
+      login: async (_signal, notify) => {
+        notify({
+          type: 'device-code',
+          authorization: {
+            userCode: 'ABCD-EFGH',
+            verificationUri: 'https://auth.openai.test/device',
+            intervalSeconds: 1,
+          },
+        })
+        await login.promise
+        authenticated = true
+      },
+      logout: () => {
+        authenticated = false
+        return Promise.resolve()
+      },
+    })
+    const api = createApiProxy(ctx, DEFAULTS)
+    expect(expectOk(await api.llm.providers(request({}))).providers[0]).toMatchObject({
+      provider: 'openai-codex',
+      authMethods: [{ type: 'oauth', name: 'OpenAI account' }],
+    })
+    expect(expectOk(await api.llm.providerAuthState(request({
+      provider: 'openai-codex', method: 'oauth',
+    })))).toEqual({ authenticated: false })
+
+    const started = expectOk(await api.llm.startProviderAuth(request({
+      provider: 'openai-codex', method: 'oauth',
+    }))).operation
+    await vi.waitFor(async () => {
+      expect(expectOk(await api.llm.providerAuthStatus(request({ operationId: started.id }))).operation)
+        .toMatchObject({
+          status: 'pending',
+          authorization: { userCode: 'ABCD-EFGH', verificationUri: 'https://auth.openai.test/device' },
+        })
+    })
+    login.resolve(undefined)
+    await vi.waitFor(async () => {
+      expect(expectOk(await api.llm.providerAuthStatus(request({ operationId: started.id }))).operation.status)
+        .toBe('succeeded')
+    })
+    expect(expectOk(await api.llm.providerAuthState(request({
+      provider: 'openai-codex', method: 'oauth',
+    })))).toEqual({ authenticated: true })
+    expectOk(await api.llm.logoutProviderAuth(request({ provider: 'openai-codex', method: 'oauth' })))
+    expect(authenticated).toBe(false)
+  })
+
+  it('maps unknown and cancelled provider-authentication operations onto the wire', async () => {
+    const ctx = await harness()
+    const api = createApiProxy(ctx, DEFAULTS)
+    expect(expectErr(await api.llm.startProviderAuth(request({ provider: 'missing', method: 'oauth' }))).code)
+      .toBe('provider-auth-failed')
+    expect(expectErr(await api.llm.providerAuthState(request({ provider: 'missing', method: 'oauth' }))).code)
+      .toBe('provider-auth-failed')
+    expect(expectErr(await api.llm.providerAuthStatus(request({
+      operationId: '00000000-0000-4000-8000-000000000000',
+    }))).code).toBe('provider-auth-failed')
   })
 
   it('forwards llm/adapters-updated at every topology commit point', async () => {

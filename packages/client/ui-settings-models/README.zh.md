@@ -2,13 +2,13 @@
 
 [English](README.md) | 中文
 
-为 Models 与 Agents Settings 页面提供图形化 OpenRouter 配置，并提供首次运行的 OpenRouter 凭据步骤。客户端插件组合提供方目录、已脱敏 Settings 描述符、凭据状态与生成的 `agentModels` Remote namespace；它绝不接收机密值。
+为 Models 与 Agents Settings 页面提供图形化提供方管理，并提供首次运行的 OpenRouter 凭据步骤。客户端插件组合提供方目录、已脱敏 Settings 描述符、凭据与账户状态，以及生成的 `agentModels` Remote namespace；它绝不接收机密值。
 
 ## Models 页面
 
-Models 页面编辑 `llm-pi-ai` 所有的路由。提供方行使用文字与底色 badge 显示凭据状态，不使用仅颜色指示。主字段是只写 API key 输入；输入的密钥通过 `credentials.set` 存储，`settings.yaml` 只保留引用。profile 未指定密钥引用时，仍可使用提供方原生认证。
+Models 页面编辑 `llm-pi-ai` 所有的路由。提供方行使用文字与底色 badge 显示凭据状态，不使用仅颜色指示。使用 API 密钥的提供方会显示只写密钥输入：输入值通过 `credentials.set` 存储，`settings.yaml` 只保留引用。OpenAI Codex 则显示原生 OpenAI 账户控件。登录会启动设备认证，显示提供方签发的代码与 OpenAI URL，轮询有界后台操作，并支持取消与登出；客户端只接收账户状态和认证元数据，从不接收 token。
 
-OpenRouter 首次运行卡片与引导对话框精确定址到 `llm-pi-ai.providers.openrouter` profile。出现任何可用路由后，它们不再显示。添加卡片也可声明其他 pi-ai 路由，包括已安装目录不认识的 OpenAI 兼容 gateway。
+OpenRouter 首次运行卡片与引导对话框精确定址到 `llm-pi-ai.providers.openrouter` profile。出现任何可用路由后，它们不再显示。添加卡片会提供已安装的 pi-ai 提供方，包括 OpenRouter、OpenAI 与 OpenAI Codex，也可声明已安装目录不认识的 OpenAI 兼容 gateway。
 
 精选字段包括 endpoint，以及目录无法提供时的路由显示名、协议、模型列表与容量。**Fetch available models** 会询问草稿当前显示的 endpoint 并打开选择器；它不会自行写入。每次 Settings 编辑都是针对脱敏分节的路径变更，并携带卡片读取到的 revision，因此并发写方会产生冲突，而不是丢失变更。
 

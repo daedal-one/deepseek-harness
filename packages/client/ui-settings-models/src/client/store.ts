@@ -130,6 +130,27 @@ export class ModelsSettingsStore {
       if (!providersResponse.result.ok) throw new Error(providersResponse.result.error.message)
       if (!settingsResponse.result.ok) throw new Error(settingsResponse.result.error.message)
       providers = providersResponse.result.value.providers
+      const accountMethods = providers.flatMap(entry => (entry.authMethods ?? [])
+        .filter(method => method.type === 'oauth')
+        .map(method => ({ provider: entry.provider, method })))
+      const accountStates = await Promise.all(accountMethods.map(async ({ provider, method }) => {
+        const response = await this.api.llm.providerAuthState({ provider, method: method.type })
+        if (!response.result.ok) throw new Error(response.result.error.message)
+        return { provider, method: method.type, authenticated: response.result.value.authenticated }
+      }))
+      const stateByMethod = new Map(accountStates.map(state => [
+        `${state.provider}\u0000${state.method}`,
+        state.authenticated,
+      ]))
+      providers = providers.map(entry => ({
+        ...entry,
+        ...entry.authMethods === undefined ? {} : {
+          authMethods: entry.authMethods.map((method) => {
+            const authenticated = stateByMethod.get(`${entry.provider}\u0000${method.type}`)
+            return authenticated === undefined ? method : { ...method, authenticated }
+          }),
+        },
+      }))
       writable = settingsResponse.result.value.writable
       views = settingsResponse.result.value.namespaces
     } catch (error) {
@@ -201,8 +222,14 @@ export class ModelsSettingsStore {
  */
 export function providerUsable(row: ProviderRow): boolean {
   if (!row.entry.active) return false
-  if (row.apiKeyEnv === undefined) return true
-  return row.credential?.configured === true
+  const methods = row.entry.authMethods ?? []
+  const oauth = methods.find(method => method.type === 'oauth' && method.authenticated !== undefined)
+  if (oauth?.authenticated === true) return true
+  if (row.apiKeyEnv !== undefined) return row.credential?.configured === true
+  // A managed OAuth-only route is not usable merely because its profile names
+  // no API-key reference: that absence is its normal pre-login state.
+  if (oauth !== undefined && !methods.some(method => method.type === 'api_key')) return false
+  return true
 }
 
 /** First-run onboarding readiness derived only from the shared Models join. */

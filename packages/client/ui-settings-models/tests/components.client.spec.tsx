@@ -17,6 +17,7 @@ import { apiKeyFailure } from '../src/client/apiKey.ts'
 import { deriveKeyRef, ModelsSettingsStore } from '../src/client/store.ts'
 import type { ProviderRow } from '../src/client/store.ts'
 import { en } from '../src/client/locales.ts'
+import { ProviderAuthControl } from '../src/client/ProviderAuthControl.tsx'
 
 afterEach(cleanup)
 
@@ -1375,6 +1376,74 @@ describe('ModelsSection', () => {
       { settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'openai'] },
     )
     expect(failure).toBe('connection lost')
+  })
+})
+
+describe('ProviderAuthControl', () => {
+  it('starts device authorization, presents its code and URL, and cancels it', async () => {
+    const startProviderAuth = vi.fn(() => Promise.resolve(ok({
+      operation: {
+        id: '00000000-0000-4000-8000-000000000001',
+        provider: 'openai-codex',
+        method: 'oauth' as const,
+        status: 'pending' as const,
+        authorization: {
+          userCode: 'ABCD-EFGH',
+          verificationUri: 'https://auth.openai.test/device',
+          intervalSeconds: 60,
+        },
+      },
+    })))
+    const cancelProviderAuth = vi.fn(() => Promise.resolve(ok({
+      operation: {
+        id: '00000000-0000-4000-8000-000000000001',
+        provider: 'openai-codex',
+        method: 'oauth' as const,
+        status: 'cancelled' as const,
+      },
+    })))
+    const api = {
+      llm: {
+        startProviderAuth,
+        providerAuthStatus: vi.fn(),
+        cancelProviderAuth,
+        logoutProviderAuth: vi.fn(),
+      },
+    }
+    render(<ProviderAuthControl
+      provider="openai-codex"
+      method={{ type: 'oauth', name: 'OpenAI account', authenticated: false }}
+      api={api as never}
+      t={t}
+      readOnly={false}
+      onChanged={vi.fn()}
+    />)
+
+    fireEvent.click(screen.getByText(en.accountSignIn))
+    expect(await screen.findByText('ABCD-EFGH')).toBeTruthy()
+    expect(screen.getByText(en.accountOpenVerification).closest('a')?.getAttribute('href'))
+      .toBe('https://auth.openai.test/device')
+    fireEvent.click(screen.getByText(en.accountCancel))
+    await waitFor(() => { expect(cancelProviderAuth).toHaveBeenCalled() })
+    expect(await screen.findByText(en.accountCancelled)).toBeTruthy()
+  })
+
+  it('logs out a connected account and reports the change', async () => {
+    const changed = vi.fn()
+    const logoutProviderAuth = vi.fn(() => Promise.resolve(ok({})))
+    const api = { llm: { logoutProviderAuth } }
+    render(<ProviderAuthControl
+      provider="openai-codex"
+      method={{ type: 'oauth', name: 'OpenAI account', authenticated: true }}
+      api={api as never}
+      t={t}
+      readOnly={false}
+      onChanged={changed}
+    />)
+
+    fireEvent.click(screen.getByText(en.accountSignOut))
+    await waitFor(() => { expect(logoutProviderAuth).toHaveBeenCalledWith({ provider: 'openai-codex', method: 'oauth' }) })
+    expect(changed).toHaveBeenCalledTimes(1)
   })
 })
 

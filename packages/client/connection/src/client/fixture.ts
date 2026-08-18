@@ -2970,6 +2970,31 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       discoverModels: request => ok(request, {
         models: fixtureModelGroups().flatMap(group => group.models.map(model => ({ id: model.id, name: model.name }))),
       }),
+      providerAuthState: request => err(request, {
+        code: 'provider-auth-failed',
+        message: 'fixture mode does not store provider accounts',
+        details: { provider: request.payload.provider },
+      }),
+      startProviderAuth: request => err(request, {
+        code: 'provider-auth-failed',
+        message: 'fixture mode does not run provider account login',
+        details: { provider: request.payload.provider },
+      }),
+      providerAuthStatus: request => err(request, {
+        code: 'provider-auth-failed',
+        message: 'fixture mode has no provider account login operation',
+        details: {},
+      }),
+      cancelProviderAuth: request => err(request, {
+        code: 'provider-auth-failed',
+        message: 'fixture mode has no provider account login operation',
+        details: {},
+      }),
+      logoutProviderAuth: request => err(request, {
+        code: 'provider-auth-failed',
+        message: 'fixture mode does not store provider accounts',
+        details: { provider: request.payload.provider },
+      }),
     },
     respond(message: ClientResponse): Promise<RpcReceipt> {
       // Same routing discipline as the host: rpcId first, then the payload's
@@ -3138,6 +3163,11 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'llm.providers': return this.api.llm.providers(request)
       case 'llm.models': return this.api.llm.models(request)
       case 'llm.discoverModels': return this.api.llm.discoverModels(request, signal)
+      case 'llm.providerAuthState': return this.api.llm.providerAuthState(request)
+      case 'llm.startProviderAuth': return this.api.llm.startProviderAuth(request)
+      case 'llm.providerAuthStatus': return this.api.llm.providerAuthStatus(request)
+      case 'llm.cancelProviderAuth': return this.api.llm.cancelProviderAuth(request)
+      case 'llm.logoutProviderAuth': return this.api.llm.logoutProviderAuth(request)
     }
   }
 

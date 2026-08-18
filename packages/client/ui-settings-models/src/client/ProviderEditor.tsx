@@ -22,7 +22,9 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { CredentialView, IApiClient, SettingsNamespaceView, SettingsPathOpView } from '@deepseek-ai/dsh-api-remotes/client'
+import type {
+  CredentialView, IApiClient, ProviderAuthMethodView, SettingsNamespaceView, SettingsPathOpView,
+} from '@deepseek-ai/dsh-api-remotes/client'
 import {
   deletePath, getPath, hasPath, nodeAtPath, rehydrateSchema, setPath, validateDraft,
 } from '@deepseek-ai/dsh-client-schema-form'
@@ -53,6 +55,8 @@ export interface ProviderEditorProps {
    * override every one of them and the card does not offer it.
    */
   declared?: boolean
+  /** Provider authentication methods; absent keeps the API-key editor posture. */
+  authMethods?: readonly ProviderAuthMethodView[]
   /** The owning namespace view (schema, layers, secrets). */
   namespace: SettingsNamespaceView
   /** Path from the section root to this provider's profile. */
@@ -152,6 +156,8 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
       : 'catalog'
   const fallback = getPath(namespace.value, settingsPath)
   const disabled = props.readOnly || busy
+  const showsApiKey = props.authMethods === undefined
+    || props.authMethods.some(method => method.type === 'api_key')
   const keyRef = refFor(namespace, settingsPath, props.provider)
   // The same schema read the create card makes, so the choices offered here
   // and there cannot drift apart: both come from the adapter's own `Config`.
@@ -163,6 +169,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   )
 
   useEffect(() => {
+    if (!showsApiKey) return () => undefined
     let stale = false
     setKeyState(undefined)
     // The key state is a placeholder hint, not a precondition for editing:
@@ -177,7 +184,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
       () => undefined,
     )
     return () => { stale = true }
-  }, [api.credentials, keyRef])
+  }, [api.credentials, keyRef, showsApiKey])
 
   const stringAt = (source: unknown, key: string): string | undefined => {
     const value = getPath(source, [key])
@@ -229,7 +236,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     const ns = namespace.ns
     // A pi-ai profile names the conventional reference only when this page is
     // about to store a key. Otherwise the provider keeps its native auth path.
-    const next = layout === 'pi-ai' && stringAt(draft, 'apiKeyEnv') === undefined
+    const next = showsApiKey && layout === 'pi-ai' && stringAt(draft, 'apiKeyEnv') === undefined
       && stringAt(fallback, 'apiKeyEnv') === undefined && keyValue.length > 0
       ? setPath(draft, ['apiKeyEnv'], keyRef)
       : draft
@@ -346,7 +353,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     }
     return (
       <>
-        <div className={styles['field']}>
+        {showsApiKey ? <div className={styles['field']}>
           <span className={styles['fieldLabel']}>{t('keyInput')}</span>
           <input
             className={styles['input']}
@@ -362,7 +369,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
             onChange={(event) => { setKeyDraft(event.target.value) }}
           />
           {shownKeyFailure === undefined ? null : <p className={styles['error']}>{t(shownKeyFailure)}</p>}
-        </div>
+        </div> : null}
         {props.credentialOnly === true ? null : <details className={styles['customized']}>
           <summary className={styles['customizedSummary']}>{t('customized')}</summary>
           <div className={styles['customizedBody']}>

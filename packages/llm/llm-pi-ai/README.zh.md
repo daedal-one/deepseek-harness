@@ -10,6 +10,8 @@
 
 按提供方配置凭据、模型 catalog 与部署特定传输设置，并以提供方路由本身为键。`apiKeyEnv` 是按请求解析的凭据*引用*，因此机密不进入该文件。省略它会让该路由处于未认证状态；对已安装 catalog 路由而言，这意味着交给 pi-ai 的提供方原生环境发现。已配置却解析不出任何值的引用则相反，会让请求以 `MISSING_CREDENTIAL` 失败，因为放行下去就会用环境里恰好持有的某个无关密钥完成认证。一条凭据服务该路由下的全部模型。
 
+OpenAI 有两条原生路由。`openai` 使用 OpenAI API，并使用存储在 `OPENAI_API_KEY` 下的密钥；`openai-codex` 使用 pi-ai 的 `openai-codex-responses` 实现，并通过 Models 页面的设备流程授权 OpenAI 账户。Codex 访问 token 与刷新 token 会作为一个内部值存入 `ctx.credentials`，通过原子 `modify` 完成刷新，且永远不会进入设置或客户端响应。登出会在删除账户前等待待处理登录完全结束。
+
 ```yaml
 - id: llm
   name: '@deepseek-ai/dsh-llm-pi-ai'
@@ -83,11 +85,11 @@
 
 ## Catalog 解析
 
-profile 的 `models` 列表是*替换*该路由已安装 catalog，而不是扩充它；省略它（或留空）则原样服务该 catalog。每个条目都会从同 `id` 的已安装模型继承自身未设置的字段，因此把 catalog 路由收窄到两个模型、更正某个容量，或加入一个比已安装 catalog 更新的模型，都是一行编辑——但一旦声明了 `models` 列表，该路由要继续服务的每个模型就都必须出现在其中，条目哪怕只写一个 `id` 也足够。`catalogModel` 可以把同一路由下另一个已安装模型指定为元数据来源，同时让 `id` 继续作为请求协议中的模型标识；空值或未知来源会使配置失败。来源模型的完整字段会先被继承，再由配置字段覆盖，因此推理映射、兼容行为、请求头、定价、输入模态、容量以及未来 pi-ai 版本新增的字段都不会丢失。可配置的条目字段是 `id`、`catalogModel`、`name`、`contextWindow`、`maxTokens`、`reasoningEfforts` 与 `compat`。
+profile 的非空 `models` 列表是*替换*该路由已安装 catalog，而不是扩充它，并且优先于所有配置层的 `modelOverrides` 与 `modelAliases`。省略它（或留空）则原样服务该 catalog。每个条目都会从同 `id` 的已安装模型继承自身未设置的字段，因此把 catalog 路由收窄到两个模型、更正某个容量，或加入一个比已安装 catalog 更新的模型，都是一行编辑——但一旦声明了 `models` 列表，该路由要继续服务的每个模型就都必须出现在其中，条目哪怕只写一个 `id` 也足够。`catalogModel` 可以把同一路由下另一个已安装模型指定为元数据来源，同时让 `id` 继续作为请求协议中的模型标识；空值或未知来源会使配置失败。来源模型的完整字段会先被继承，再由配置字段覆盖，因此推理映射、兼容行为、请求头、定价、输入模态、容量以及未来 pi-ai 版本新增的字段都不会丢失。可配置的条目字段是 `id`、`catalogModel`、`name`、`contextWindow`、`maxTokens`、`reasoningEfforts` 与 `compat`。
 
-`modelOverrides` 无需这份代价就能就地重塑单个已安装 catalog 模型：每个键是一个 catalog 模型 id，每个值可写 `models` 条目接受的同一批字段，只是 id 落在键上，而 catalog 的其余部分原样继续服务——「改一个模型、其余三十七个原样保留」只是一次三行编辑。一条覆盖会成为该 catalog 条目的配置，因此容量、档位与 compat 沿与 `models` 条目相同的路径解析，携带相同的诊断与相同的请求默认值语义。覆盖只在正服务自身 catalog 的 catalog 路由上才有意义：与 `models` 列表并存的一份（该列表本就替换了 catalog）、落在手工声明路由上的一份（其模型已在 `models` 中完整写出），或点名了 catalog 未描述模型的一份，都会被拒绝而非跳过，因为一个静默保持原样的模型，就是一个否则要有人费力追查的笔误。
+`modelOverrides` 无需这份代价就能就地重塑单个已安装 catalog 模型：每个键是一个 catalog 模型 id，每个值可写 `models` 条目接受的同一批字段，只是 id 落在键上，而 catalog 的其余部分原样继续服务——「改一个模型、其余三十七个原样保留」只是一次三行编辑。一条覆盖会成为该 catalog 条目的配置，因此容量、档位与 compat 沿与 `models` 条目相同的路径解析，携带相同的诊断与相同的请求默认值语义。覆盖只在正服务自身 catalog 的 catalog 路由上才有意义：非空 `models` 列表会忽略它们；落在手工声明路由上的覆盖，或点名了 catalog 未描述模型的覆盖，会被拒绝而非跳过，因为一个静默保持原样的模型，就是一个否则要有人费力追查的笔误。
 
-`modelAliases` 会添加请求协议 id，而不替换已安装 catalog。每个字典键都是发送给提供方的 id，必填的 `catalogModel` 则指名要完整继承元数据的已安装条目。这是 OpenRouter `:nitro` 等路由后缀的受支持形式：普通 catalog 模型仍可选，alias 保留推理映射、兼容行为、输入模态与容量。alias 不能与替换型 `models` 列表并存，不能用于没有已安装 catalog 的路由，不能与已安装模型 id 冲突，也不能引用不存在的来源。
+`modelAliases` 会添加请求协议 id，而不替换已安装 catalog。每个字典键都是发送给提供方的 id，必填的 `catalogModel` 则指名要完整继承元数据的已安装条目。这是 OpenRouter `:nitro` 等路由后缀的受支持形式：普通 catalog 模型仍可选，alias 保留推理映射、兼容行为、输入模态与容量。非空 `models` 列表会忽略 alias，包括从组合继承的 alias；除此之外，alias 不能用于没有已安装 catalog 的路由，不能与已安装模型 id 冲突，也不能引用不存在的来源。
 
 ### 按模型的推理（reasoning）档位
 
@@ -144,7 +146,7 @@ profile 的 `models` 列表是*替换*该路由已安装 catalog，而不是扩�
 
 每次解析产出一份**不可变**快照——profiles 加上一个持有各路由所建 `Provider` 的 `createModels()` 集合——每个操作都在自己第一个 `await` 之前整体捕获一份快照。配置变化会构造**新**集合，而不是改动正在被使用的那个：`Models.streamSimple()` 是惰性的，它在流首次被消费时才解析 provider，而那已在 credential await 之后，因此改动共享集合会让一个在旧配置下开始的请求在新配置下结束，或者撞上一个已不存在的 provider。这正是 seam 的每步调用冻结（`llm.prepareCall()`）能贯通到底的原因——回复途中切换模型会在下一步生效，绝不会影响在途的那一步。请求经 `Models.streamSimple()` 抵达提供方。保持 catalog 协议不变的 catalog 路由会**复用**已安装提供方，只替换其模型列表，因为该提供方持有本包无法重建的 API 实现——Bedrock 经由独立入口加载其 Smithy 模块——从零件重建会静默收窄可用提供方的范围。其余路由都由 `createProvider()` 基于 `supportedProtocols()` 背后的协议表构造，表中条目正是 pi-ai 自己的提供方工厂所用的同一批 factory。
 
-凭据绝不进入该集合。harness 在请求抵达 pi-ai 之前经自身 seam 解析路由密钥，并作为请求的 `apiKey` 选项传入，而 pi-ai 将其视为优先级最高的 auth 覆盖；因此 `Models` 不持有任何凭据存储，harness 也保住了自己明确失败的引用语义。没有点名任何凭据的路由会解析为「已配置但无密钥」，把该要求留给协议——那才是它真正所在的位置。
+具名 API 密钥绝不进入该集合。harness 在请求抵达 pi-ai 之前经自身 seam 解析路由密钥，并作为请求的 `apiKey` 选项传入，而 pi-ai 将其视为优先级最高的 auth 覆盖，从而保留明确失败的引用语义。`Models` 只会收到用于提供方原生 OAuth 账户与刷新的凭据存储桥接。没有点名密钥的路由要么通过该存储解析，要么使用其 catalog 提供方的环境发现，否则保持「已配置但无密钥」，把该要求留给协议。
 
 所选模型 descriptor 提供协议实现。这包括原生 API 差异，例如 descriptor 使用 Responses API 而非 Chat Completions 的 OpenAI 模型；harness 适配器不会按模型名称硬编码端点选择。
 
@@ -200,7 +202,7 @@ pi-ai 事件会变为 harness 推理、文本、工具调用、usage 与 finish 
 
 ## 已知限制与暂缓事项
 
-- **仅以 OAuth 认证的提供方不予提供**：pi-ai 的 OAuth 只从*已存储*的 OAuth 凭据解析，而本适配器构造 `Models` 集合时不注入凭据存储、也不运行登录流程，因此这类路由的每个请求都会在发出之前以 `Provider is not configured` 失败。可配置提供方目录因此不列出它们；已安装 catalog 中只有 `openai-codex` 属于此类。settings 文档已经写过的路由仍保留目录条目，配置界面据此可以编辑或删除；`apiKeyEnv` 也仍能用该密钥完成认证——对 Codex 而言那是一个会过期、且这里没有任何环节会去刷新的 token。
+- **交互式 OAuth 仅为 OpenAI Codex 实现**：同时提供 API 密钥的 pi-ai 提供方仍可通过该密钥管理；其他提供方的 OAuth 方法只有在其 prompt 类型具备对应产品控件后才会公开。
 - **提供方自带的凭据发现只读进程环境**：不指定凭据的路由交由 catalog 提供方自行解析，而它探测的是环境变量（`AZURE_OPENAI_API_KEY`、`AWS_PROFILE`、`AWS_ACCESS_KEY_ID` 以及各提供方自己的那一组）。它不读任何本地凭据目录，因此只有 `~/.aws/credentials` 而未导出 `AWS_PROFILE` 会被解析为未配置；由 harness 凭据 seam 保管的值，除非进程环境里也有，否则对它不可见。
 - **settings 能新增或覆盖路由，但不能移除组合路由**：用户层合并在组合 `base` 之上，因此删除 `cordis.yml` 提供的提供方属于组合变更；对该 namespace 执行 `replace` 只会重置用户层。
 - **分层合并对字典键没有删除语义**：settings seam 把组合 `base` 与用户层按键递归合并，因此 base 声明的某个 `reasoningEfforts` 档位、`modelOverrides` 条目或 `compat` 字段，用户层只能覆盖、无法移除——而 `reasoningEfforts` 里缺席本身*就是*语义（「不提供」），于是 base 声明过的档位会一直被提供。只有 `cordis.yml` entry config 为用户层正在编辑的同一模型声明了按模型推理字段才会触发；受支持的姿态是把这些字段留给 settings 文档（shipped 组合以 dormant 方式挂载该适配器），且 `models` 列表是数组、整体替换，这是带内的解决办法。

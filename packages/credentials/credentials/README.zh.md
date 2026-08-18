@@ -22,10 +22,13 @@ const ref = credentialRef('DEEPSEEK_API_KEY')            // POSIX shell identifi
 const hit = await ctx.credentials.resolve(ref)           // { value, source } | undefined
 const info = await ctx.credentials.describe(ref)         // { configured, source?, writable } — never the value
 await ctx.credentials.set(ref, 'sk-…')                   // rejects while a read-only source shadows the ref
+const next = await ctx.credentials.modify(ref, refresh)  // serialized read-modify-write; undefined keeps current
 await ctx.credentials.unset(ref)                         // no-op when absent; same shadowing rule
 ```
 
-`credentials/updated (ref)` 在提供方管理的来源发生已提交变更后触发——`set`、`unset` 或在存储中观察到的外部编辑。进程环境变量的变化不可观测，永不触发。消费方不需要该事件（它们按操作重新解析）；它服务于配置界面刷新「已配置」徽标。它的声明住在 client-safe 的 `./types` 子路径出口，与其点名的 `CredentialRef` 类型同处一处（包根继续 re-export 该类型），于是 Host 编译面之外的消费方读到的正是 Host 发射的那一份签名，而不必再写一遍。
+`modify(ref, update)` 在整个异步回调期间持有一项由提供方定义的事务。共享同一持久存储的各进程会串行执行操作，因此两个 token 刷新不会从同一次陈旧读取出发，同时替换同一个刷新 token；`undefined` 会保留当前值，删除仍通过显式 `unset` 操作完成。
+
+`credentials/updated (ref)` 在提供方管理的来源发生已提交变更后触发——`set`、产生变更的 `modify`、`unset` 或在存储中观察到的外部编辑。进程环境变量的变化不可观测，永不触发。消费方不需要该事件（它们按操作重新解析）；它服务于配置界面刷新「已配置」徽标。它的声明住在 client-safe 的 `./types` 子路径出口，与其点名的 `CredentialRef` 类型同处一处（包根继续 re-export 该类型），于是 Host 编译面之外的消费方读到的正是 Host 发射的那一份签名，而不必再写一遍。
 
 `set`/`unset` 的遮蔽规则有意采用明确报错的方式：当只读来源（本地提供方中即当前进程环境）正在提供该引用时，写入会表面成功而解析仍返回遮蔽值——seam 选择直接拒绝，并通过 `describe().writable` 让界面提前把该引用渲染为只读。
 

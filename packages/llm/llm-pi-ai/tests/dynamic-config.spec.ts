@@ -3,6 +3,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { getBuiltinModels } from '@earendil-works/pi-ai/providers/all'
 import LlmRuntime, { LlmAdapter } from '@deepseek-ai/dsh-llm'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import { LocalCredentialProvider } from '@deepseek-ai/dsh-credentials-local'
@@ -69,10 +70,11 @@ describe('request-level dynamic profiles', () => {
     expect(directory.length).toBeGreaterThan(30)
     expect(directory).toContainEqual({
       provider: 'openai',
-      displayName: 'openai',
+      displayName: 'OpenAI',
       settingsNs: 'llm-pi-ai',
       settingsPath: ['providers', 'openai'],
       declared: false,
+      authMethods: [{ type: 'api_key', name: 'OpenAI API key' }],
     })
     await ctx.settings.update(NS, {
       providers: { deepseek: { apiKeyEnv: 'PI_DYNAMIC_KEY', baseURL: server.url } },
@@ -134,6 +136,69 @@ describe('request-level dynamic profiles', () => {
     await ctx.credentials.set(credentialRef('PI_DYNAMIC_KEY'), 'pk-two')
     await assemble(ctx, { provider: 'deepseek', model: 'deepseek-v4-flash', messages: [] })
     expect(server.headers[1]?.authorization).toBe('Bearer pk-two')
+  })
+
+  it('serves the native OpenAI Codex route with its stored OAuth account', async () => {
+    const dir = await home()
+    const accountId = 'account-from-credential'
+    const claims = Buffer.from(JSON.stringify({
+      'https://api.openai.com/auth': { chatgpt_account_id: accountId },
+    })).toString('base64url')
+    const access = `header.${claims}.signature`
+    const credential = JSON.stringify({
+      type: 'oauth',
+      access,
+      refresh: 'refresh-token',
+      expires: Date.now() + 60_000,
+      accountId,
+    })
+    await writeFile(
+      join(dir, '.credentials.yaml'),
+      `DSH_PI_AI_OPENAI_CODEX_AUTH: ${JSON.stringify(credential)}\n`,
+      { mode: 0o600 },
+    )
+    const item = {
+      type: 'message',
+      id: 'msg_codex_1',
+      role: 'assistant',
+      status: 'completed',
+      content: [{ type: 'output_text', text: 'hello from codex', annotations: [] }],
+    }
+    const response = {
+      id: 'resp_codex_1',
+      status: 'completed',
+      output: [item],
+      usage: {
+        input_tokens: 3,
+        output_tokens: 3,
+        total_tokens: 6,
+        input_tokens_details: { cached_tokens: 0 },
+        output_tokens_details: { reasoning_tokens: 0 },
+      },
+    }
+    const server = await mockServer([{ events: [
+      JSON.stringify({ type: 'response.created', response: { id: response.id } }),
+      JSON.stringify({ type: 'response.output_item.added', output_index: 0, item: { ...item, content: [] } }),
+      JSON.stringify({ type: 'response.output_text.delta', output_index: 0, content_index: 0, delta: 'hello from codex' }),
+      JSON.stringify({ type: 'response.output_item.done', output_index: 0, item }),
+      JSON.stringify({ type: 'response.completed', response }),
+    ] }])
+    const ctx = await boot(dir, {
+      providers: { 'openai-codex': { baseURL: server.url, transport: 'sse' } },
+    })
+    const model = getBuiltinModels('openai-codex')[0]
+    if (model === undefined) throw new Error('OpenAI Codex catalog is empty')
+
+    const result = await assemble(ctx, { provider: 'openai-codex', model: model.id, messages: [] })
+
+    expect(result.message.content).toEqual([{ type: 'text', text: 'hello from codex' }])
+    expect(result.finish).toEqual({ kind: 'stop' })
+    expect(server.paths).toEqual(['/codex/responses'])
+    expect(server.headers[0]).toMatchObject({
+      authorization: `Bearer ${access}`,
+      'chatgpt-account-id': accountId,
+      originator: 'pi',
+    })
   })
 
   it('re-registers routes in place when a captured retry policy changes', async () => {

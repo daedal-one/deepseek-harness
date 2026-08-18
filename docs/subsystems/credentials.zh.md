@@ -47,7 +47,9 @@ interface CredentialInfo {
 
 ## 已提交的变更
 
-`credentials/updated (ref)` 在提供方管理的来源发生已提交变更后发出——`set`、`unset` 或在存储中观察到的外部编辑。进程环境自身的变化不可观测，永不发出事件。消费方不需要该事件（它们按操作重新解析）；它服务于配置界面刷新「已配置」徽标。
+`modify(ref, update)` 是根据当前值推导替换值的原子路径。提供方会让异步回调与共享同一持久存储的所有写方串行执行；`undefined` 保留当前值，删除仍通过显式 `unset` 完成。
+
+`credentials/updated (ref)` 在提供方管理的来源发生已提交变更后发出——`set`、产生变更的 `modify`、`unset` 或在存储中观察到的外部编辑。进程环境自身的变化不可观测，永不发出事件。消费方不需要该事件（它们按操作重新解析）；它服务于配置界面刷新「已配置」徽标。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -61,7 +63,7 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.credentials` — `CredentialProvider` (abstract seam)
 
-Abstract credential service. Providers implement the four operations over their source layers; one seam-wide rule binds them all: an empty stored value is absent everywhere — `resolve` skips it, `describe` reports it unconfigured — so a blank never masquerades as a configured secret.
+Abstract credential service. Providers implement the five operations over their source layers; one seam-wide rule binds them all: an empty stored value is absent everywhere — `resolve` skips it, `describe` reports it unconfigured — so a blank never masquerades as a configured secret.
 
 ```ts cordis-catalog
 /**
@@ -93,6 +95,18 @@ abstract describe(ref: CredentialRef): Promise<CredentialInfo>
 abstract set(ref: CredentialRef, value: string): Promise<void>
 
 /**
+ * Atomically inspect and replace one writable credential. Calls for the same
+ * reference are serialized across every process sharing the provider store,
+ * so refresh-token rotation cannot race another refresh or a logout. The
+ * callback returns the next non-empty value; `undefined` keeps the current
+ * value unchanged. Use {@link unset} for deletion.
+ * @param ref - the reference to inspect and possibly replace.
+ * @param update - computes a replacement from the effective current value.
+ * @returns the effective value after the serialized operation.
+ */
+abstract modify( ref: CredentialRef, update: (current: string | undefined) => Promise<string | undefined>, ): Promise<string | undefined>
+
+/**
  * Remove one reference from the provider-managed writable source; removing
  * an absent reference is a no-op. Rejects while a read-only source shadows
  * the reference, like {@link set}.
@@ -111,13 +125,13 @@ Source: [`packages/credentials/credentials/src/index.ts:60`](../../packages/cred
 
 #### `credentials/updated` — emit
 
-Committed change to a provider-managed credential source: a `set`, an `unset`, or an external edit observed in storage. Ambient process-environment changes are not observable and never emit. Listener failures are contained and logged — a sync throw and an async rejection alike — without changing the committed operation's outcome, except `INVARIANT`-coded failures, which rethrow after every listener ran; that rethrow reaches the emitter only from synchronous listeners, so invariant checks on this event must not be async functions.
+Committed change to a provider-managed credential source: a `set`, a changed `modify`, an `unset`, or an external edit observed in storage. Ambient process-environment changes are not observable and never emit. Listener failures are contained and logged — a sync throw and an async rejection alike — without changing the committed operation's outcome, except `INVARIANT`-coded failures, which rethrow after every listener ran; that rethrow reaches the emitter only from synchronous listeners, so invariant checks on this event must not be async functions.
 
 ```ts cordis-catalog
 /**
- * Committed change to a provider-managed credential source: a `set`, an
- * `unset`, or an external edit observed in storage. Ambient
- * process-environment changes are not observable and never emit. Listener
+ * Committed change to a provider-managed credential source: a `set`, a
+ * changed `modify`, an `unset`, or an external edit observed in storage.
+ * Ambient process-environment changes are not observable and never emit. Listener
  * failures are contained and logged — a sync throw and an async rejection
  * alike — without changing the committed operation's outcome, except
  * `INVARIANT`-coded failures, which rethrow after every listener ran;

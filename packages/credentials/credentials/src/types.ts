@@ -15,9 +15,9 @@ export type CredentialRef = Branded<'CredentialRef'>
 declare module '@deepseek-ai/cordis' {
   interface Events {
     /**
-     * Committed change to a provider-managed credential source: a `set`, an
-     * `unset`, or an external edit observed in storage. Ambient
-     * process-environment changes are not observable and never emit. Listener
+     * Committed change to a provider-managed credential source: a `set`, a
+     * changed `modify`, an `unset`, or an external edit observed in storage.
+     * Ambient process-environment changes are not observable and never emit. Listener
      * failures are contained and logged — a sync throw and an async rejection
      * alike — without changing the committed operation's outcome, except
      * `INVARIANT`-coded failures, which rethrow after every listener ran;

@@ -281,6 +281,21 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
       async discoverModels(request) {
         return { rpcId: request.rpcId, result: { ok: true, value: { models: [] } } }
       },
+      async providerAuthState(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { authenticated: false } } }
+      },
+      async startProviderAuth(request) {
+        return { rpcId: request.rpcId, result: { ok: false, error: { code: 'provider-auth-failed' as const, message: 'stub', details: {} } } }
+      },
+      async providerAuthStatus(request) {
+        return { rpcId: request.rpcId, result: { ok: false, error: { code: 'provider-auth-failed' as const, message: 'stub', details: {} } } }
+      },
+      async cancelProviderAuth(request) {
+        return { rpcId: request.rpcId, result: { ok: false, error: { code: 'provider-auth-failed' as const, message: 'stub', details: {} } } }
+      },
+      async logoutProviderAuth(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: {} } }
+      },
     },
     events: {
       mux: (_request, signal) => stream(muxFrames, signal),

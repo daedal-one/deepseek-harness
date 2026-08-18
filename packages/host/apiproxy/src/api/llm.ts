@@ -10,6 +10,38 @@
 
 import type { RpcRequest, RpcResponse } from './rpc.ts'
 import type { ModelCatalogFailure, ModelProviderGroup } from './sessions.ts'
+import type { LlmProviderAuthMethod } from '@deepseek-ai/dsh-llm'
+
+/** Wire view of one provider authentication method. */
+export interface ProviderAuthMethodView {
+  /** Stable method discriminant. */
+  type: LlmProviderAuthMethod
+  /** Provider-owned display name. */
+  name: string
+  /** Stored state returned only by the loopback-only account-state lookup. */
+  authenticated?: boolean
+}
+
+/** Device authorization information safe to present to a user. */
+export interface ProviderDeviceAuthorizationView {
+  userCode: string
+  verificationUri: string
+  intervalSeconds?: number
+  expiresInSeconds?: number
+}
+
+/** Wire view of one background provider-authentication operation. */
+export type ProviderAuthOperationView =
+  | {
+    id: string
+    provider: string
+    method: LlmProviderAuthMethod
+    status: 'pending'
+    authorization?: ProviderDeviceAuthorizationView
+  }
+  | { id: string; provider: string; method: LlmProviderAuthMethod; status: 'succeeded' }
+  | { id: string; provider: string; method: LlmProviderAuthMethod; status: 'cancelled' }
+  | { id: string; provider: string; method: LlmProviderAuthMethod; status: 'failed'; error: string }
 
 /** Wire view of one configurable provider. */
 export interface ConfigurableProviderView {
@@ -29,6 +61,8 @@ export interface ConfigurableProviderView {
    * surface must treat absence as "unknown", not as "shipped".
    */
   declared?: boolean
+  /** Authentication methods the provider offers, if known. */
+  authMethods?: ProviderAuthMethodView[]
 }
 
 /** Llm-domain unary methods (the map keys llm.* of RpcMethodMap). */
@@ -74,6 +108,31 @@ export interface LlmApi {
     }>,
     signal?: AbortSignal,
   ): Promise<RpcResponse<{ models: DiscoveredModelView[] }>>
+
+  /** Read whether one provider account is authenticated. */
+  providerAuthState(
+    request: RpcRequest<{ provider: string; method: LlmProviderAuthMethod }>,
+  ): Promise<RpcResponse<{ authenticated: boolean }>>
+
+  /** Start a provider-owned interactive login and return immediately. */
+  startProviderAuth(
+    request: RpcRequest<{ provider: string; method: LlmProviderAuthMethod }>,
+  ): Promise<RpcResponse<{ operation: ProviderAuthOperationView }>>
+
+  /** Read one provider-authentication operation. */
+  providerAuthStatus(
+    request: RpcRequest<{ operationId: string }>,
+  ): Promise<RpcResponse<{ operation: ProviderAuthOperationView }>>
+
+  /** Cancel and drain one provider-authentication operation. */
+  cancelProviderAuth(
+    request: RpcRequest<{ operationId: string }>,
+  ): Promise<RpcResponse<{ operation: ProviderAuthOperationView }>>
+
+  /** Cancel pending login and remove one provider credential. */
+  logoutProviderAuth(
+    request: RpcRequest<{ provider: string; method: LlmProviderAuthMethod }>,
+  ): Promise<RpcResponse<{}>>
 }
 
 /** Wire view of one model an interrogated endpoint advertises. */

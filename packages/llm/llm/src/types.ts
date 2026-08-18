@@ -6,7 +6,7 @@
 
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
-import type { CallId, ProviderRequestId, ReasoningEffortId } from './brand.ts'
+import type { CallId, LlmAuthOperationId, ProviderRequestId, ReasoningEffortId } from './brand.ts'
 import type { Message } from './message.ts'
 
 declare module '@deepseek-ai/cordis' {
@@ -184,7 +184,90 @@ export interface LlmConfigurableProvider {
    * from outside.
    */
   declared?: boolean
+  /** Authentication methods the installed provider offers. */
+  authMethods?: readonly LlmProviderAuthMethodInfo[]
 }
+
+/** Provider authentication method understood by configuration surfaces. */
+export type LlmProviderAuthMethod = 'api_key' | 'oauth'
+
+/** Display metadata for one provider authentication method. */
+export interface LlmProviderAuthMethodInfo {
+  /** Stable method discriminant. */
+  type: LlmProviderAuthMethod
+  /** Provider-owned display name. */
+  name: string
+}
+
+/** Device authorization information safe to present to a user. */
+export interface LlmDeviceAuthorization {
+  /** Short code the user enters at the verification page. */
+  userCode: string
+  /** HTTPS page where the user enters {@link userCode}. */
+  verificationUri: string
+  /** Provider-suggested status interval. */
+  intervalSeconds?: number
+  /** Seconds until the code expires. */
+  expiresInSeconds?: number
+}
+
+/** Event an authenticator may publish while login is pending. */
+export type LlmProviderAuthEvent = {
+  /** A device authorization code is ready for the user. */
+  type: 'device-code'
+  /** Device authorization facts, containing no access or refresh token. */
+  authorization: LlmDeviceAuthorization
+}
+
+/** Provider-owned authentication implementation registered with {@link LlmRuntime}. */
+export interface LlmProviderAuthenticator {
+  /** Authentication method implemented by this registration. */
+  method: LlmProviderAuthMethodInfo
+  /**
+   * Report whether a durable credential for this method is configured.
+   * @returns configured state without refreshing the credential.
+   */
+  authenticated(): Promise<boolean>
+  /**
+   * Run one login attempt and persist its resulting credential.
+   * @param signal - cancellation owned by the LLM service.
+   * @param notify - publishes user-presentable progress without credentials.
+   */
+  login(signal: AbortSignal, notify: (event: LlmProviderAuthEvent) => void): Promise<void>
+  /** Remove the durable credential for this authentication method. */
+  logout(): Promise<void>
+}
+
+/** Provider authentication method plus current durable state. */
+export interface LlmProviderAuthStatus extends LlmProviderAuthMethodInfo {
+  /** Whether the provider currently has a stored credential for this method. */
+  authenticated: boolean
+}
+
+/** Common identity carried by every authentication-operation state. */
+interface LlmAuthOperationBase {
+  /** Opaque operation identifier. */
+  id: LlmAuthOperationId
+  /** Provider route being authenticated. */
+  provider: string
+  /** Authentication method being run. */
+  method: LlmProviderAuthMethod
+}
+
+/** Detached state of one provider-authentication operation. */
+export type LlmAuthOperationSnapshot =
+  | LlmAuthOperationBase & {
+    status: 'pending'
+    /** Device authorization once the provider has issued it. */
+    authorization?: LlmDeviceAuthorization
+  }
+  | LlmAuthOperationBase & { status: 'succeeded' }
+  | LlmAuthOperationBase & { status: 'cancelled' }
+  | LlmAuthOperationBase & {
+    status: 'failed'
+    /** Safe provider failure text; credentials are never included. */
+    error: string
+  }
 
 /**
  * One interrogation of a provider endpoint that configuration has not stored

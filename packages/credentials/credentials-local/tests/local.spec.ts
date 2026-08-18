@@ -336,6 +336,7 @@ describe('document writes', () => {
 
     vi.stubEnv('DSH_CRED_TEST', 'shadowing')
     await expect(ctx.credentials.set(KEY, 'next')).rejects.toThrow(/shadowed/)
+    await expect(ctx.credentials.modify(KEY, () => Promise.resolve('next'))).rejects.toThrow(/shadowed/)
     await expect(ctx.credentials.unset(KEY)).rejects.toThrow(/shadowed/)
   })
 
@@ -381,6 +382,37 @@ describe('document writes', () => {
       ctx.credentials.set(OTHER, 'two'),
     ])
     expect(await readFile(path, 'utf8')).toBe('DSH_CRED_TEST: one\nDSH_CRED_OTHER: two\n')
+  })
+
+  it('serializes atomic modifications across provider instances sharing one file', async () => {
+    const dir = await tempDir()
+    const path = join(dir, '.credentials.yaml')
+    await writeCredentials(path, 'DSH_CRED_TEST: "0"\n')
+    const first = await boot({ path, watch: false })
+    const second = await boot({ path, watch: false })
+    const increment = (current: string | undefined): Promise<string> =>
+      Promise.resolve(String(Number(current ?? '0') + 1))
+
+    const results = await Promise.all([
+      first.credentials.modify(KEY, increment),
+      second.credentials.modify(KEY, increment),
+    ])
+
+    expect(results.sort()).toEqual(['1', '2'])
+    const reread = await boot({ path, watch: false })
+    expect(await reread.credentials.resolve(KEY)).toEqual({ value: '2', source: 'file' })
+  })
+
+  it('keeps an atomic modification unchanged when its callback returns undefined', async () => {
+    const dir = await tempDir()
+    const path = join(dir, '.credentials.yaml')
+    await writeCredentials(path, 'DSH_CRED_TEST: stable\n')
+    const ctx = await boot({ path, watch: false })
+    const seen = updates(ctx)
+
+    await expect(ctx.credentials.modify(KEY, () => Promise.resolve(undefined))).resolves.toBe('stable')
+    expect(await readFile(path, 'utf8')).toBe('DSH_CRED_TEST: stable\n')
+    expect(seen).toEqual([])
   })
 
   it('refuses writes after disposal', async () => {

@@ -145,6 +145,7 @@ describe('hand-declared providers', () => {
       // Nothing in the installed catalog answers for this route, which is what
       // configuration surfaces mark as a route this deployment declared.
       declared: true,
+      authMethods: [{ type: 'api_key', name: 'Acme Gateway' }],
     })
     // Membership of the catalog, not of the settings document: a shipped
     // provider carries a stored profile the moment anyone corrects it.
@@ -616,9 +617,8 @@ describe('catalog routes with per-model configuration', () => {
   })
 
   it('leaves an OAuth-only catalog route unconfigured when its profile names no key', () => {
-    // Nothing to add: this adapter resolves credentials through its own seam
-    // and holds no OAuth store, so declaring the provider configured would
-    // trade a truthful refusal for an endpoint's 401.
+    // Profile resolution adds no synthetic key method. The adapter's Models
+    // collection supplies the durable OAuth store at runtime instead.
     const resolved = resolveProfiles({ 'openai-codex': {} })
     expect(resolved.get('openai-codex')?.piProvider.auth.apiKey).toBeUndefined()
   })
@@ -760,25 +760,25 @@ describe('modelOverrides', () => {
     expect(sibling?.maxTokens).toBe(getBuiltinModels('deepseek').find(model => model.id === sibling?.id)?.maxTokens)
   })
 
-  it('refuses every override that lands nowhere instead of skipping it', () => {
+  it('refuses overrides that land nowhere unless an explicit model list replaces them', () => {
     expect(() => resolveProfiles({
       deepseek: { modelOverrides: { 'no-such-model': { name: 'ghost' } } },
     })).toThrow(/which the installed catalog does not describe/)
-    expect(() => resolveProfiles({
+    expect(resolveProfiles({
       'acme-gateway': {
         api: 'openai-completions',
         baseURL: 'https://acme.test',
         models: [{ id: 'm' }],
         modelOverrides: { m: { name: 'renamed' } },
       },
-    })).toThrow(/a declared route spells every model out/)
+    }).get('acme-gateway')?.piProvider.getModels().map(model => model.name)).toEqual(['m'])
     const declaredOnly = deepseekModel()
-    expect(() => resolveProfiles({
+    expect(resolveProfiles({
       deepseek: {
         models: [{ id: declaredOnly.id }],
         modelOverrides: { [declaredOnly.id]: { name: 'renamed' } },
       },
-    })).toThrow(/models already replaces the served catalog/)
+    }).get('deepseek')?.piProvider.getModels().map(model => model.name)).toEqual([declaredOnly.name])
     expect(() => resolveProfiles({
       deepseek: { modelOverrides: { '': { name: 'nameless' } } },
     })).toThrow(/empty model id/)
@@ -825,14 +825,14 @@ describe('modelAliases', () => {
     })
   })
 
-  it('refuses ambiguous, colliding, and unresolvable aliases', () => {
+  it('lets an explicit model list replace aliases and refuses colliding or unresolvable aliases otherwise', () => {
     const base = baseModel()
-    expect(() => resolveProfiles({
+    expect(resolveProfiles({
       openrouter: {
         models: [{ id: base.id }],
         modelAliases: { routed: { catalogModel: base.id } },
       },
-    })).toThrow(/models already replaces the served catalog/)
+    }).get('openrouter')?.piProvider.getModels().map(model => model.id)).toEqual([base.id])
     expect(() => resolveProfiles({
       openrouter: { modelAliases: { [base.id]: { catalogModel: base.id } } },
     })).toThrow(/already an installed model id/)
@@ -1028,30 +1028,21 @@ describe('configurable-provider directory', () => {
     expect(ctx.llm.listConfigurableProviders()).toHaveLength(catalogOnly)
   })
 
-  it('withholds a catalog route this adapter cannot authenticate', async () => {
+  it('offers the native OpenAI Codex account route beside API-key providers', async () => {
     const ctx = await harness({})
     const offered = ctx.llm.listConfigurableProviders().map(entry => entry.provider)
 
-    // `openai-codex` is the one installed provider that authenticates through
-    // OAuth alone. pi-ai resolves OAuth only from a *stored* credential, this
-    // adapter constructs its collection with no credential store, and nothing
-    // here runs a login flow — so every request on such a route fails with
-    // `Provider is not configured` before it goes out. Offering it would put a
-    // provider on the settings page that no amount of configuration can make
-    // work.
-    expect(offered).not.toContain('openai-codex')
-    // A provider that offers OAuth *beside* an api-key method keeps its entry:
-    // the key is a path this adapter can serve.
+    expect(offered).toContain('openai-codex')
     expect(offered).toContain('anthropic')
     expect(offered).toContain('openai')
+    expect(ctx.llm.listConfigurableProviders().find(entry => entry.provider === 'openai-codex'))
+      .toMatchObject({
+        displayName: 'OpenAI Codex',
+        authMethods: [{ type: 'oauth', name: 'OpenAI (ChatGPT Plus/Pro)' }],
+      })
   })
 
-  it('still lists a withheld route a stored profile names, as a catalog route', async () => {
-    // Withholding the offer must not strand a profile someone already stored:
-    // the route keeps its entry so a configuration surface can edit or delete
-    // it, and `declared` still answers catalog membership rather than the
-    // offer, so the page does not mislabel it as a route this deployment
-    // invented.
+  it('adds explicit API-key auth beside Codex OAuth when a stored profile names it', async () => {
     const ctx = await harness({ providers: { 'openai-codex': { apiKeyEnv: KEY_ENV } } })
 
     expect(ctx.llm.listConfigurableProviders()).toContainEqual({
@@ -1060,6 +1051,10 @@ describe('configurable-provider directory', () => {
       settingsNs: 'llm-pi-ai',
       settingsPath: ['providers', 'openai-codex'],
       declared: false,
+      authMethods: [
+        { type: 'api_key', name: 'openai-codex' },
+        { type: 'oauth', name: 'OpenAI (ChatGPT Plus/Pro)' },
+      ],
     })
   })
 })

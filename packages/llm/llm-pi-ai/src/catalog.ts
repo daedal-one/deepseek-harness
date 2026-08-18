@@ -23,6 +23,7 @@ import type {
   Provider,
   ThinkingLevelMap,
 } from '@earendil-works/pi-ai'
+import type { LlmProviderAuthMethodInfo } from '@deepseek-ai/dsh-llm'
 
 /**
  * Pricing for a model the installed catalog does not describe. The harness
@@ -142,23 +143,22 @@ export function catalogProviderIds(): readonly string[] {
 }
 
 /**
- * Whether the installed catalog provider for one route declares an api-key
- * method — the only authentication this adapter obtains on its own.
- *
- * A key is what the harness resolves through its own credential seam and hands
- * pi-ai per request. pi-ai's other method, OAuth, resolves from a *stored*
- * OAuth credential alone: `resolveProviderAuth` has no ambient path for it,
- * this adapter builds its `Models` collection with no credential store, and
- * nothing here runs a login flow. So a provider offering OAuth by itself
- * leaves nothing for this adapter to authenticate with, and the posture such a
- * provider invites — no key configured, credentials discovered by the provider
- * — fails every request with `Provider is not configured`.
- * @param provider - provider route key.
- * @returns whether the catalog provider takes an api key; false for a route
- *   pi-ai does not ship, which the caller answers for separately.
+ * Authentication methods the Harness can manage for one installed provider.
+ * API-key methods use the shared provider editor. OpenAI Codex additionally
+ * uses pi-ai's native device authorization flow; other OAuth implementations
+ * remain unavailable until their prompt vocabulary has a product control.
+ * @param provider - installed provider id.
+ * @returns manageable methods in pi-ai declaration order.
  */
-export function catalogProviderTakesApiKey(provider: string): boolean {
-  return catalogProvider(provider)?.auth.apiKey !== undefined
+export function catalogProviderAuthMethods(provider: string): LlmProviderAuthMethodInfo[] {
+  const catalog = catalogProvider(provider)
+  if (catalog === undefined) return []
+  const methods: LlmProviderAuthMethodInfo[] = []
+  if (catalog.auth.apiKey !== undefined) methods.push({ type: 'api_key', name: catalog.auth.apiKey.name })
+  if (provider === 'openai-codex' && catalog.auth.oauth !== undefined) {
+    methods.push({ type: 'oauth', name: catalog.auth.oauth.name })
+  }
+  return methods
 }
 
 /**
@@ -464,8 +464,14 @@ export function resolveRouteModels(request: RouteCatalogRequest): RouteCatalog {
   // schema materializes `[]` for the absent case, and an empty catalog could
   // serve no request anyway, so both mean "serve the installed catalog".
   const configured = request.models ?? []
-  const overrides = request.modelOverrides ?? {}
-  const aliases = request.modelAliases ?? {}
+  // A non-empty explicit list is the replacement layer. Settings documents
+  // merge recursively, so it can otherwise arrive beside aliases or overrides
+  // inherited from a shipped profile; treating those lower-layer fields as a
+  // conflict makes the whole settings namespace disappear. The same rule
+  // applies within one layer: `models` is the complete served catalog and the
+  // additive catalog fields are ignored.
+  const overrides = configured.length > 0 ? {} : request.modelOverrides ?? {}
+  const aliases = configured.length > 0 ? {} : request.modelAliases ?? {}
   // Every miss is refused, never skipped: an override that lands nowhere is a
   // typo someone would otherwise hunt for in a silently unchanged model.
   for (const [id, override] of Object.entries(overrides)) {
@@ -473,10 +479,6 @@ export function resolveRouteModels(request: RouteCatalogRequest): RouteCatalog {
     if (defaults.size === 0) {
       invalid(provider, `sets modelOverrides for "${id}", but the installed catalog does not describe this route;`
         + ' a declared route spells every model out in its models list')
-    }
-    if (configured.length > 0) {
-      invalid(provider, `sets modelOverrides for "${id}" beside a models list; models already replaces the served`
-        + ' catalog, so declare the fields on its entries')
     }
     if (!defaults.has(id)) {
       invalid(provider, `modelOverrides names "${id}", which the installed catalog does not describe`)
@@ -490,10 +492,6 @@ export function resolveRouteModels(request: RouteCatalogRequest): RouteCatalog {
   }
   for (const [id, alias] of Object.entries(aliases)) {
     if (id.length === 0) invalid(provider, 'has a modelAliases entry with an empty model id')
-    if (configured.length > 0) {
-      invalid(provider, `sets modelAliases for "${id}" beside a models list; models already replaces the served`
-        + ' catalog, so declare the alias there')
-    }
     if (defaults.size === 0) {
       invalid(provider, `sets modelAliases for "${id}", but the installed catalog does not describe this route`)
     }

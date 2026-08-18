@@ -62,3 +62,15 @@ export type ReasoningEffortId = Branded<'ReasoningEffortId'>
 export function ReasoningEffortId(id: string): ReasoningEffortId {
   return id as ReasoningEffortId
 }
+
+/** Correlates one provider-authentication operation across host and client. */
+export type LlmAuthOperationId = Branded<'LlmAuthOperationId'>
+
+/**
+ * Brand a string as an {@link LlmAuthOperationId}.
+ * @param id - the service-issued opaque identifier.
+ * @returns the same string, branded; no validation is performed.
+ */
+export function LlmAuthOperationId(id: string): LlmAuthOperationId {
+  return id as LlmAuthOperationId
+}

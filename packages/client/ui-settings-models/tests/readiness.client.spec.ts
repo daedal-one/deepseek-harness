@@ -64,6 +64,29 @@ describe('providerUsable', () => {
   it('treats a reference-free registered route as provider-native authentication', () => {
     expect(providerUsable(otherRow({ apiKeyEnv: undefined, credential: undefined }))).toBe(true)
   })
+
+  it('requires managed OAuth-only routes to have a connected account', () => {
+    const codex = otherRow({
+      entry: {
+        provider: 'openai-codex',
+        displayName: 'OpenAI Codex',
+        settingsNs: 'llm-pi-ai',
+        settingsPath: ['providers', 'openai-codex'],
+        active: true,
+        authMethods: [{ type: 'oauth', name: 'OpenAI account', authenticated: false }],
+      },
+      apiKeyEnv: undefined,
+      credential: undefined,
+    })
+    expect(providerUsable(codex)).toBe(false)
+    expect(providerUsable({
+      ...codex,
+      entry: {
+        ...codex.entry,
+        authMethods: [{ type: 'oauth', name: 'OpenAI account', authenticated: true }],
+      },
+    })).toBe(true)
+  })
 })
 
 describe('onboardingReadiness', () => {

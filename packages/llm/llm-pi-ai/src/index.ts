@@ -58,17 +58,25 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
 import { assertUsableApiKey, LlmError } from '@deepseek-ai/dsh-llm'
-import type { AdapterRegistrationHandle, DirectoryRegistrationHandle, LlmConfigurableProvider } from '@deepseek-ai/dsh-llm'
+import type {
+  AdapterRegistrationHandle,
+  DirectoryRegistrationHandle,
+  LlmConfigurableProvider,
+  LlmProviderAuthMethodInfo,
+} from '@deepseek-ai/dsh-llm'
 import { deepEqualJson, installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
 import { PiAiAdapter } from './adapter.ts'
-import { catalogProviderIds, catalogProviderTakesApiKey } from './catalog.ts'
+import { catalogProvider, catalogProviderAuthMethods, catalogProviderIds } from './catalog.ts'
 import { assertServiceable, Config, resolveProfiles } from './config.ts'
 import type { ResolvedPiAiProviderProfile } from './config.ts'
+import { HarnessPiCredentialStore } from './credential-store.ts'
 import { discoverModels } from './discovery.ts'
+import { piAiOAuthAuthenticator } from './oauth.ts'
 
 export { PiAiAdapter } from './adapter.ts'
 export type { PiAiAdapterOptions } from './adapter.ts'
 export { Config } from './config.ts'
+export { HarnessPiCredentialStore, piAiCredentialRef } from './credential-store.ts'
 export type {
   PiAiCompatProfile,
   PiAiModality,
@@ -106,15 +114,14 @@ function registrationFacts(profiles: ReadonlyMap<string, ResolvedPiAiProviderPro
 }
 
 /**
- * The configurable-provider directory: every installed catalog route this
- * adapter can authenticate, plus every route the current profiles declare. A
+ * The configurable-provider directory: every installed catalog route with a
+ * manageable authentication method, plus every route the current profiles declare. A
  * hand-declared route has no catalog entry, so without this union it would
  * have no settings address and configuration surfaces could neither show nor
  * edit it.
  *
- * The profile half is unconditional, which is what keeps a route already
- * stored against a withheld provider editable and deletable rather than
- * stranded in the settings document with nothing on the page to remove it.
+ * The profile half is unconditional, which keeps a custom route editable and
+ * deletable even when its provider has no installed catalog authentication.
  * @param profiles - the currently resolved provider profiles.
  * @returns the directory entries in catalog order, declared routes last.
  */
@@ -123,7 +130,11 @@ function directoryEntries(
 ): LlmConfigurableProvider[] {
   const catalog = new Set(catalogProviderIds())
   const entries = new Map<string, LlmConfigurableProvider>()
-  const declare = (provider: string, displayName: string): void => {
+  const declare = (
+    provider: string,
+    displayName: string,
+    authMethods: readonly LlmProviderAuthMethodInfo[],
+  ): void => {
     entries.set(provider, {
       provider,
       displayName,
@@ -133,22 +144,35 @@ function directoryEntries(
       // narrowing a shipped provider's models stores a profile too, and that
       // route is still one pi-ai knows.
       declared: !catalog.has(provider),
+      authMethods: authMethods.map(method => ({ ...method })),
     })
   }
-  // A provider whose only native method is OAuth leaves this adapter nothing
-  // to authenticate with, so offering it would put a card on the settings page
-  // whose own posture — no key, credentials discovered by the provider — fails
-  // every request. Catalog *membership* is unaffected, so `declare` above still
-  // answers what pi-ai ships.
   for (const provider of catalog) {
-    if (catalogProviderTakesApiKey(provider)) declare(provider, provider)
+    const authMethods = catalogProviderAuthMethods(provider)
+    if (authMethods.length > 0) declare(provider, catalogProvider(provider)?.name ?? provider, authMethods)
   }
-  for (const [provider, profile] of profiles) declare(provider, profile.displayName)
+  for (const [provider, profile] of profiles) {
+    const authMethods = catalogProviderAuthMethods(provider)
+    if (profile.apiKeyEnv !== undefined && !authMethods.some(method => method.type === 'api_key')) {
+      authMethods.unshift({ type: 'api_key', name: profile.displayName })
+    }
+    if (authMethods.length === 0) authMethods.push({ type: 'api_key', name: profile.displayName })
+    declare(provider, profile.displayName, authMethods)
+  }
   return [...entries.values()]
 }
 
 /** Register one generic pi-ai adapter for all configured provider routes. */
 export function apply(ctx: Context, config: Config): void {
+  const oauthProviderIds = catalogProviderIds().filter(provider =>
+    catalogProviderAuthMethods(provider).some(method => method.type === 'oauth'))
+  const piCredentials = new HarnessPiCredentialStore(() => ctx.get('credentials'), oauthProviderIds)
+  for (const providerId of oauthProviderIds) {
+    const provider = catalogProvider(providerId)
+    /* v8 ignore next -- the id comes from catalogProviderIds and was filtered through its provider object */
+    if (provider === undefined) continue
+    ctx.llm.registerProviderAuthenticator(providerId, piAiOAuthAuthenticator(provider, piCredentials))
+  }
   let current: () => Config = () => config
   let lastRaw: Config | undefined
   let memoized: ReadonlyMap<string, ResolvedPiAiProviderProfile> | undefined
@@ -201,6 +225,7 @@ export function apply(ctx: Context, config: Config): void {
   const adapter = new PiAiAdapter({
     profiles,
     resolveApiKey,
+    credentials: piCredentials,
     resolveAttachments: () => ctx.get('attachments'),
   })
   // The full installed catalog is configurable from the moment the plugin

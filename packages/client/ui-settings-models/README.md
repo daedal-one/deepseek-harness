@@ -2,13 +2,13 @@
 
 English | [中文](README.zh.md)
 
-Graphical OpenRouter configuration for the Models and Agents settings pages, plus the first-run OpenRouter credential step. The client plugin joins the provider directory, redacted Settings descriptors, credential state, and the generated `agentModels` Remote namespace; it never receives secret values.
+Graphical provider management for the Models and Agents settings pages, plus the first-run OpenRouter credential step. The client plugin joins the provider directory, redacted Settings descriptors, credential and account state, and the generated `agentModels` Remote namespace; it never receives secret values.
 
 ## Models page
 
-The Models page edits routes owned by `llm-pi-ai`. A provider row shows credential state with a text-and-wash badge, never a color-only indicator. The primary field is a write-only API key input; a typed key is stored through `credentials.set`, while `settings.yaml` retains only its reference. Provider-native authentication remains available when a profile names no key reference.
+The Models page edits routes owned by `llm-pi-ai`. A provider row shows credential state with a text-and-wash badge, never a color-only indicator. API-key providers use a write-only key input: the value is stored through `credentials.set`, while `settings.yaml` retains only its reference. OpenAI Codex instead shows its native OpenAI account control. Sign in starts device authorization, displays the provider-issued code and OpenAI URL, polls a bounded background operation, and supports cancellation and sign-out; the client receives account state and authorization metadata, never tokens.
 
-The OpenRouter first-run card and onboarding dialog address the exact `llm-pi-ai.providers.openrouter` profile. They stop appearing once a usable route exists. The add card can declare another pi-ai route, including an OpenAI-compatible gateway the installed catalog does not know.
+The OpenRouter first-run card and onboarding dialog address the exact `llm-pi-ai.providers.openrouter` profile. They stop appearing once a usable route exists. The add card offers installed pi-ai providers including OpenRouter, OpenAI, and OpenAI Codex, and can declare an OpenAI-compatible gateway the installed catalog does not know.
 
 Curated fields include endpoint, route display name and protocol where the catalog cannot supply them, plus the model list and capacities. **Fetch available models** interrogates the endpoint currently in the draft and opens a picker; it does not write anything. Every settings edit is a path mutation against the redacted section and carries the revision the card read, so a concurrent writer causes a conflict instead of losing changes.
 

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import LlmRuntime, { LlmAdapter, LlmError } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmConfigurableProvider, StreamChunk } from '@deepseek-ai/dsh-llm'
+import type { LlmProviderAuthenticator } from '@deepseek-ai/dsh-llm'
 
 class NoopAdapter extends LlmAdapter {
 
@@ -130,6 +131,26 @@ describe('configurable-provider directory', () => {
     expect(ctx.llm.listConfigurableProviders()[0]!.displayName).toBe('OpenAI')
   })
 
+  it('validates and detaches provider authentication metadata', async () => {
+    const ctx = await setup()
+    const source = entry({ authMethods: [{ type: 'oauth', name: 'Account' }] })
+    ctx.llm.registerConfigurableProviders([source])
+    const listed = ctx.llm.listConfigurableProviders()
+    expect(listed[0]?.authMethods).toEqual([{ type: 'oauth', name: 'Account' }])
+    ;(source.authMethods as Array<{ type: 'oauth'; name: string }>)[0]!.name = 'mutated'
+    ;(listed[0]!.authMethods as Array<{ type: 'oauth'; name: string }>)[0]!.name = 'also mutated'
+    expect(ctx.llm.listConfigurableProviders()[0]?.authMethods).toEqual([{ type: 'oauth', name: 'Account' }])
+    expect(() => ctx.llm.registerConfigurableProviders([
+      entry({ provider: 'bad', authMethods: [{ type: 'oauth', name: '' }] }),
+    ])).toThrow(/invalid or duplicate/)
+    expect(() => ctx.llm.registerConfigurableProviders([
+      entry({ provider: 'duplicate', authMethods: [
+        { type: 'oauth', name: 'One' },
+        { type: 'oauth', name: 'Two' },
+      ] }),
+    ])).toThrow(/invalid or duplicate/)
+  })
+
   it('withdraws every entry when the registration disposes', async () => {
     const ctx = await setup()
     const dispose = ctx.llm.registerConfigurableProviders([entry()])
@@ -203,6 +224,100 @@ describe('configurable-provider directory', () => {
     expect(() => ctx.llm.registerConfigurableProviders([entry({ displayName: 'Other' }), entry({ provider: 'unseen' })]))
       .toThrow(/already declared/)
     expect(ctx.llm.listConfigurableProviders()).toHaveLength(1)
+  })
+})
+
+describe('provider authentication', () => {
+  it('publishes device authorization and reaches a bounded success state', async () => {
+    const ctx = await setup()
+    const login = Promise.withResolvers<undefined>()
+    const authenticator: LlmProviderAuthenticator = {
+      method: { type: 'oauth', name: 'Test account' },
+      authenticated: () => Promise.resolve(false),
+      login: async (_signal, notify) => {
+        notify({
+          type: 'device-code',
+          authorization: { userCode: 'ABCD-EFGH', verificationUri: 'https://example.test/device' },
+        })
+        await login.promise
+      },
+      logout: () => Promise.resolve(),
+    }
+    ctx.llm.registerProviderAuthenticator('test', authenticator)
+    await expect(ctx.llm.providerAuthentication('test')).resolves.toEqual([
+      { type: 'oauth', name: 'Test account', authenticated: false },
+    ])
+
+    const started = ctx.llm.startProviderAuthentication('test', 'oauth')
+    await vi.waitFor(() => {
+      expect(ctx.llm.authenticationOperation(started.id)).toMatchObject({
+        status: 'pending',
+        authorization: { userCode: 'ABCD-EFGH', verificationUri: 'https://example.test/device' },
+      })
+    })
+    expect(() => ctx.llm.startProviderAuthentication('test', 'oauth')).toThrow(/already has a pending/)
+    login.resolve(undefined)
+    await vi.waitFor(() => { expect(ctx.llm.authenticationOperation(started.id).status).toBe('succeeded') })
+  })
+
+  it('cancels and drains login before logout can delete its credential', async () => {
+    const ctx = await setup()
+    const login = Promise.withResolvers<undefined>()
+    let stored = false
+    const logout = vi.fn(async () => { stored = false })
+    ctx.llm.registerProviderAuthenticator('test', {
+      method: { type: 'oauth', name: 'Test account' },
+      authenticated: () => Promise.resolve(stored),
+      // Deliberately ignores cancellation until the test releases it. The LLM
+      // service still must not let logout run first and be undone afterward.
+      login: async () => {
+        await login.promise
+        stored = true
+      },
+      logout,
+    })
+    const started = ctx.llm.startProviderAuthentication('test', 'oauth')
+    const loggingOut = ctx.llm.logoutProvider('test', 'oauth')
+    await Promise.resolve()
+    expect(logout).not.toHaveBeenCalled()
+    login.resolve(undefined)
+    await loggingOut
+    expect(logout).toHaveBeenCalledTimes(1)
+    expect(stored).toBe(false)
+    expect(ctx.llm.authenticationOperation(started.id).status).toBe('cancelled')
+  })
+
+  it('aborts and drains a registration operation when its owner disposes', async () => {
+    const ctx = await setup()
+    const aborted = Promise.withResolvers<undefined>()
+    const fiber = ctx.plugin({
+      inject: ['llm'],
+      apply(child: Context) {
+        child.llm.registerProviderAuthenticator('test', {
+          method: { type: 'oauth', name: 'Test account' },
+          authenticated: () => Promise.resolve(false),
+          login: signal => new Promise<void>((_resolve, reject) => {
+            signal.addEventListener('abort', () => {
+              aborted.resolve(undefined)
+              reject(new Error('aborted'))
+            }, { once: true })
+          }),
+          logout: () => Promise.resolve(),
+        })
+      },
+    })
+    await fiber
+    const started = ctx.llm.startProviderAuthentication('test', 'oauth')
+    await fiber.dispose()
+    await aborted.promise
+    expect(ctx.llm.authenticationOperation(started.id).status).toBe('cancelled')
+    await expect(ctx.llm.providerAuthentication('test')).resolves.toEqual([])
+  })
+
+  it('fails loud for unknown methods and operation ids', async () => {
+    const ctx = await setup()
+    expect(() => ctx.llm.startProviderAuthentication('missing', 'oauth')).toThrow(/has no "oauth"/)
+    expect(() => ctx.llm.authenticationOperation('missing' as never)).toThrow(/unknown authentication operation/)
   })
 })
 

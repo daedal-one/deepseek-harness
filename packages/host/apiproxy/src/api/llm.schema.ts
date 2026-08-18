@@ -6,8 +6,15 @@
 import { z } from 'zod'
 import type { RequestPayload, ResponseValue } from './rpc-map.ts'
 import type { Wire } from './rpc.schema.ts'
-import type { ConfigurableProviderView, DiscoveredModelView } from './llm.ts'
+import type { ConfigurableProviderView, DiscoveredModelView, ProviderAuthMethodView } from './llm.ts'
 import { modelCatalogFailureSchema, modelProviderGroupSchema } from './sessions.schema.ts'
+
+/** ProviderAuthMethodView authentication option. */
+export const providerAuthMethodViewSchema = z.object({
+  type: z.enum(['api_key', 'oauth']),
+  name: z.string().min(1),
+  authenticated: z.boolean().optional(),
+}) satisfies z.ZodType<Wire<ProviderAuthMethodView>>
 
 /** ConfigurableProviderView row of llm.providers. */
 export const configurableProviderViewSchema = z.object({
@@ -17,6 +24,7 @@ export const configurableProviderViewSchema = z.object({
   settingsPath: z.array(z.string()),
   active: z.boolean(),
   declared: z.boolean().optional(),
+  authMethods: z.array(providerAuthMethodViewSchema).optional(),
 }) satisfies z.ZodType<Wire<ConfigurableProviderView>>
 
 /** llm.providers request payload. */
@@ -62,3 +70,68 @@ export const llmDiscoverModelsRequestSchema = z.object({
 export const llmDiscoverModelsValueSchema = z.object({
   models: z.array(discoveredModelViewSchema),
 }) satisfies z.ZodType<Wire<ResponseValue<'llm.discoverModels'>>>
+
+/** Provider authentication operation returned by start, status, and cancel. */
+export const providerAuthOperationSchema = z.discriminatedUnion('status', [
+  z.object({
+    id: z.uuid(),
+    provider: z.string().min(1),
+    method: z.enum(['api_key', 'oauth']),
+    status: z.literal('pending'),
+    authorization: z.object({
+      userCode: z.string().min(1),
+      verificationUri: z.url(),
+      intervalSeconds: z.number().positive().optional(),
+      expiresInSeconds: z.number().positive().optional(),
+    }).optional(),
+  }),
+  z.object({
+    id: z.uuid(),
+    provider: z.string().min(1),
+    method: z.enum(['api_key', 'oauth']),
+    status: z.literal('succeeded'),
+  }),
+  z.object({
+    id: z.uuid(),
+    provider: z.string().min(1),
+    method: z.enum(['api_key', 'oauth']),
+    status: z.literal('cancelled'),
+  }),
+  z.object({
+    id: z.uuid(),
+    provider: z.string().min(1),
+    method: z.enum(['api_key', 'oauth']),
+    status: z.literal('failed'),
+    error: z.string(),
+  }),
+])
+
+/** Shared provider/method request. */
+const providerAuthRequestSchema = z.object({
+  provider: z.string().min(1),
+  method: z.enum(['api_key', 'oauth']),
+})
+
+/** Shared operation-id request. */
+const providerAuthOperationRequestSchema = z.object({ operationId: z.uuid() })
+
+/** llm.providerAuthState request payload. */
+export const llmProviderAuthStateRequestSchema = providerAuthRequestSchema satisfies z.ZodType<Wire<RequestPayload<'llm.providerAuthState'>>>
+/** llm.providerAuthState response value. */
+export const llmProviderAuthStateValueSchema = z.object({ authenticated: z.boolean() }) satisfies z.ZodType<Wire<ResponseValue<'llm.providerAuthState'>>>
+/** llm.startProviderAuth request payload. */
+export const llmStartProviderAuthRequestSchema = providerAuthRequestSchema satisfies z.ZodType<Wire<RequestPayload<'llm.startProviderAuth'>>>
+/** llm.startProviderAuth response value. */
+export const llmStartProviderAuthValueSchema = z.object({ operation: providerAuthOperationSchema }) satisfies z.ZodType<Wire<ResponseValue<'llm.startProviderAuth'>>>
+/** llm.providerAuthStatus request payload. */
+export const llmProviderAuthStatusRequestSchema = providerAuthOperationRequestSchema satisfies z.ZodType<Wire<RequestPayload<'llm.providerAuthStatus'>>>
+/** llm.providerAuthStatus response value. */
+export const llmProviderAuthStatusValueSchema = z.object({ operation: providerAuthOperationSchema }) satisfies z.ZodType<Wire<ResponseValue<'llm.providerAuthStatus'>>>
+/** llm.cancelProviderAuth request payload. */
+export const llmCancelProviderAuthRequestSchema = providerAuthOperationRequestSchema satisfies z.ZodType<Wire<RequestPayload<'llm.cancelProviderAuth'>>>
+/** llm.cancelProviderAuth response value. */
+export const llmCancelProviderAuthValueSchema = z.object({ operation: providerAuthOperationSchema }) satisfies z.ZodType<Wire<ResponseValue<'llm.cancelProviderAuth'>>>
+/** llm.logoutProviderAuth request payload. */
+export const llmLogoutProviderAuthRequestSchema = providerAuthRequestSchema satisfies z.ZodType<Wire<RequestPayload<'llm.logoutProviderAuth'>>>
+/** llm.logoutProviderAuth response value. */
+export const llmLogoutProviderAuthValueSchema = z.object({}) satisfies z.ZodType<Wire<ResponseValue<'llm.logoutProviderAuth'>>>

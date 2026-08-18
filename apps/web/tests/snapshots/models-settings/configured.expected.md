@@ -10,6 +10,9 @@
     - button "插件":
       - img
       - text: 插件
+    - button "智能体":
+      - img
+      - text: 智能体
     - button "Agent 预设":
       - img
       - text: Agent 预设
@@ -22,10 +25,12 @@
   - status: 已保存 minimax-cn。
   - list:
     - listitem:
-      - text: minimax-cn
-      - img "API 密钥已配置"
+      - text: minimax-cn API 密钥已配置
       - button "编辑 minimax-cn": 编辑
       - button "删除 minimax-cn": 删除
+    - listitem:
+      - text: OpenRouter API 密钥已配置
+      - button "编辑 OpenRouter (openrouter)": 编辑
   - button "添加提供方":
     - img
     - text: 添加提供方

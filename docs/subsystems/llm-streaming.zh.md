@@ -391,7 +391,115 @@ interface LlmConfigurableProvider {
    * from outside.
    */
   declared?: boolean
+  /** Authentication methods the installed provider offers. */
+  authMethods?: readonly LlmProviderAuthMethodInfo[]
 }
+```
+
+### 提供方认证
+
+认证注册属于提供方适配器，与路由是否活跃无关。状态与操作快照只包含可向用户展示的状态；持久凭据与刷新由认证器持有。
+
+```ts type-equiv
+/** Provider authentication method understood by configuration surfaces. */
+type LlmProviderAuthMethod = 'api_key' | 'oauth'
+```
+
+```ts type-equiv
+/** Display metadata for one provider authentication method. */
+interface LlmProviderAuthMethodInfo {
+  /** Stable method discriminant. */
+  type: LlmProviderAuthMethod
+  /** Provider-owned display name. */
+  name: string
+}
+```
+
+```ts type-equiv
+/** Device authorization information safe to present to a user. */
+interface LlmDeviceAuthorization {
+  /** Short code the user enters at the verification page. */
+  userCode: string
+  /** HTTPS page where the user enters {@link userCode}. */
+  verificationUri: string
+  /** Provider-suggested status interval. */
+  intervalSeconds?: number
+  /** Seconds until the code expires. */
+  expiresInSeconds?: number
+}
+```
+
+```ts type-equiv
+/** Event an authenticator may publish while login is pending. */
+type LlmProviderAuthEvent = {
+  /** A device authorization code is ready for the user. */
+  type: 'device-code'
+  /** Device authorization facts, containing no access or refresh token. */
+  authorization: LlmDeviceAuthorization
+}
+```
+
+```ts type-equiv
+/** Provider-owned authentication implementation registered with {@link LlmRuntime}. */
+interface LlmProviderAuthenticator {
+  /** Authentication method implemented by this registration. */
+  method: LlmProviderAuthMethodInfo
+  /**
+   * Report whether a durable credential for this method is configured.
+   * @returns configured state without refreshing the credential.
+   */
+  authenticated(): Promise<boolean>
+  /**
+   * Run one login attempt and persist its resulting credential.
+   * @param signal - cancellation owned by the LLM service.
+   * @param notify - publishes user-presentable progress without credentials.
+   */
+  login(signal: AbortSignal, notify: (event: LlmProviderAuthEvent) => void): Promise<void>
+  /** Remove the durable credential for this authentication method. */
+  logout(): Promise<void>
+}
+```
+
+```ts type-equiv
+/** Provider authentication method plus current durable state. */
+interface LlmProviderAuthStatus extends LlmProviderAuthMethodInfo {
+  /** Whether the provider currently has a stored credential for this method. */
+  authenticated: boolean
+}
+```
+
+```ts type-equiv
+/** Correlates one provider-authentication operation across host and client. */
+type LlmAuthOperationId = Branded<'LlmAuthOperationId'>
+```
+
+```ts type-equiv
+/** Common identity carried by every authentication-operation state. */
+interface LlmAuthOperationBase {
+  /** Opaque operation identifier. */
+  id: LlmAuthOperationId
+  /** Provider route being authenticated. */
+  provider: string
+  /** Authentication method being run. */
+  method: LlmProviderAuthMethod
+}
+```
+
+```ts type-equiv
+/** Detached state of one provider-authentication operation. */
+type LlmAuthOperationSnapshot =
+  | LlmAuthOperationBase & {
+    status: 'pending'
+    /** Device authorization once the provider has issued it. */
+    authorization?: LlmDeviceAuthorization
+  }
+  | LlmAuthOperationBase & { status: 'succeeded' }
+  | LlmAuthOperationBase & { status: 'cancelled' }
+  | LlmAuthOperationBase & {
+    status: 'failed'
+    /** Safe provider failure text; credentials are never included. */
+    error: string
+  }
 ```
 
 ```ts type-equiv
@@ -660,8 +768,8 @@ interface PreparedLlmCall {
 /**
  * Provider-wire adapter for the harness message and stream vocabulary. Register implementations
  * with `ctx.llm.registerAdapter(providers, adapter)`. Every provider HTTP request must include
- * `attributionHeaders()`; prove the headers are added in the wire request or library header hook. The direct-fetch
- * DeepSeek and library-backed pi-ai adapters meet this contract through different internals.
+ * `attributionHeaders()`; prove the headers are added in the wire request or library header hook. The shipped
+ * pi-ai adapter meets this requirement through provider-library header hooks.
  */
 declare abstract class LlmAdapter {
   /**
@@ -721,7 +829,7 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.llm` — `LlmRuntime`
 
-The abstract `llm` service: an adapter registry plus a streaming model-call API, interceptable via the `llm/stream` waterfall.
+The abstract `llm` service: adapter and provider-authentication registries plus a streaming model-call API, interceptable via the `llm/stream` waterfall.
 
 ```ts cordis-catalog
 /**
@@ -755,6 +863,53 @@ registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): Dire
  * @returns detached directory entries in declaration order.
  */
 listConfigurableProviders(): LlmConfigurableProvider[]
+
+/**
+ * Register one provider-owned interactive authentication method. The method
+ * is available whether its provider route is active or dormant, so a user
+ * can authenticate before adding the route to settings.
+ * @param provider - provider route the method authenticates.
+ * @param authenticator - provider-owned login, status, and logout behavior.
+ * @returns disposer that aborts and drains this method's live operations.
+ */
+registerProviderAuthenticator(provider: string, authenticator: LlmProviderAuthenticator): () => void
+
+/**
+ * Describe every interactive authentication method registered for a route.
+ * @param provider - provider route to inspect.
+ * @returns methods in registration order and their current stored state.
+ */
+async providerAuthentication(provider: string): Promise<LlmProviderAuthStatus[]>
+
+/**
+ * Start one provider login without holding the caller open for user action.
+ * @param provider - provider route to authenticate.
+ * @param method - registered interactive method to run.
+ * @returns initial pending snapshot; read later state with {@link authenticationOperation}.
+ */
+startProviderAuthentication( provider: string, method: LlmProviderAuthMethod, ): LlmAuthOperationSnapshot
+
+/**
+ * Read one authentication operation.
+ * @param id - service-issued operation id.
+ * @returns detached current snapshot.
+ */
+authenticationOperation(id: LlmAuthOperationId): LlmAuthOperationSnapshot
+
+/**
+ * Cancel one operation and wait until its provider login has settled.
+ * @param id - service-issued operation id.
+ * @returns detached terminal snapshot.
+ */
+async cancelProviderAuthentication(id: LlmAuthOperationId): Promise<LlmAuthOperationSnapshot>
+
+/**
+ * Abort pending login before deleting a provider credential, preventing a
+ * late login completion from restoring what logout removed.
+ * @param provider - provider route to log out.
+ * @param method - registered authentication method to clear.
+ */
+async logoutProvider(provider: string, method: LlmProviderAuthMethod): Promise<void>
 
 /**
  * Offer to interrogate provider endpoints on behalf of the settings

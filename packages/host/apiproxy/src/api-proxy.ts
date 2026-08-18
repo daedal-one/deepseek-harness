@@ -12,7 +12,7 @@ import type { Agent, ModelSelection, ModelSelectionRef, AgentOptions, AgentStatu
 import type {} from '@deepseek-ai/dsh-agent-presets/types'
 import { AttachmentError } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
-import { contentHasImage, createUserMessage, freezeMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { contentHasImage, createUserMessage, freezeMessage, LlmAuthOperationId, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { errorChain } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, MessageSource } from '@deepseek-ai/dsh-llm'
 import { isAppendSurfaceEvent, isJsonValue } from '@deepseek-ai/dsh-session'
@@ -3365,6 +3365,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           settingsPath: [...entry.settingsPath],
           active: active.has(entry.provider),
           ...entry.declared === undefined ? {} : { declared: entry.declared },
+          ...entry.authMethods === undefined ? {} : { authMethods: entry.authMethods.map(method => ({ ...method })) },
         }))
         // Routes registered without a directory declaration still appear —
         // they exist and serve models — just with no settings address. No
@@ -3406,6 +3407,76 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             code: 'model-discovery-failed',
             message: error instanceof Error ? error.message : String(error),
             details: { settingsNs, ...baseURL === undefined ? {} : { baseURL } },
+          })
+        }
+      },
+
+      async providerAuthState(request) {
+        const { provider, method } = request.payload
+        try {
+          const status = (await ctx.llm.providerAuthentication(provider))
+            .find(candidate => candidate.type === method)
+          if (status === undefined) throw new Error(`llm: provider "${provider}" has no "${method}" authenticator`)
+          return ok(request, { authenticated: status.authenticated })
+        } catch (error) {
+          return err(request, {
+            code: 'provider-auth-failed',
+            message: error instanceof Error ? error.message : String(error),
+            details: { provider },
+          })
+        }
+      },
+
+      startProviderAuth(request) {
+        const { provider, method } = request.payload
+        try {
+          return Promise.resolve(ok(request, { operation: ctx.llm.startProviderAuthentication(provider, method) }))
+        } catch (error) {
+          return Promise.resolve(err(request, {
+            code: 'provider-auth-failed',
+            message: error instanceof Error ? error.message : String(error),
+            details: { provider },
+          }))
+        }
+      },
+
+      providerAuthStatus(request) {
+        try {
+          return Promise.resolve(ok(request, {
+            operation: ctx.llm.authenticationOperation(LlmAuthOperationId(request.payload.operationId)),
+          }))
+        } catch (error) {
+          return Promise.resolve(err(request, {
+            code: 'provider-auth-failed',
+            message: error instanceof Error ? error.message : String(error),
+            details: {},
+          }))
+        }
+      },
+
+      async cancelProviderAuth(request) {
+        try {
+          const operation = await ctx.llm.cancelProviderAuthentication(LlmAuthOperationId(request.payload.operationId))
+          return ok(request, { operation })
+        } catch (error) {
+          return err(request, {
+            code: 'provider-auth-failed',
+            message: error instanceof Error ? error.message : String(error),
+            details: {},
+          })
+        }
+      },
+
+      async logoutProviderAuth(request) {
+        const { provider, method } = request.payload
+        try {
+          await ctx.llm.logoutProvider(provider, method)
+          return ok(request, {})
+        } catch (error) {
+          return err(request, {
+            code: 'provider-auth-failed',
+            message: error instanceof Error ? error.message : String(error),
+            details: { provider },
           })
         }
       },

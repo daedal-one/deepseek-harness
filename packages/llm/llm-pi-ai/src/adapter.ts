@@ -13,10 +13,11 @@
  * way down: switching models mid-reply takes effect on the next step, never
  * inside the one in flight.
  *
- * Credentials stay outside that collection. The harness resolves a route's key
- * through its own seam and passes it as the request's `apiKey` option, which
- * pi-ai treats as the highest-priority auth override — so `Models` never holds
- * a credential store and the harness keeps its fail-loud reference semantics.
+ * API keys stay outside that collection. The harness resolves a route's named
+ * key through its credential service and passes it as the request's `apiKey`
+ * option, which pi-ai treats as the highest-priority auth override. The
+ * collection receives a credential-store bridge only for provider-native OAuth
+ * accounts and token refresh; settings still hold references rather than values.
  *
  * @module dsh-llm-pi-ai/adapter
  */
@@ -26,6 +27,7 @@ import type {
   Api,
   Model,
   Models,
+  CredentialStore,
   ModelThinkingLevel,
   MutableModels,
   SimpleStreamOptions,
@@ -74,6 +76,8 @@ export interface PiAiAdapterOptions {
    * `MISSING_CREDENTIAL` rather than falling back.
    */
   resolveApiKey: (provider: string, profile: ResolvedPiAiProviderProfile) => Promise<string | undefined>
+  /** Durable account credentials used by provider-native OAuth resolution. */
+  credentials?: CredentialStore
   /** Resolve the optional durable attachment service at request time. */
   resolveAttachments?: () => AttachmentStore | undefined
 }
@@ -199,7 +203,9 @@ export class PiAiAdapter extends LlmAdapter {
   private current(): PiAiSnapshot {
     const profiles = this.config.profiles()
     if (this.snapshot?.profiles === profiles) return this.snapshot
-    const models: MutableModels = createModels()
+    const models: MutableModels = createModels({
+      ...this.config.credentials === undefined ? {} : { credentials: this.config.credentials },
+    })
     for (const profile of profiles.values()) models.setProvider(profile.piProvider)
     this.snapshot = { profiles, models }
     return this.snapshot
