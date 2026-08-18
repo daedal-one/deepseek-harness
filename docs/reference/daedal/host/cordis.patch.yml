@@ -1,0 +1,515 @@
+# Daedal host capabilities shared by Web and headless profiles. Model-facing
+# consumers remain in the selected preset; these rows own process services,
+# durable providers, and scoped authorization hooks.
+
+- id: agent-presets
+  config:
+    default: daedal
+
+- insert:
+    - id: daedal-web-fetch-http
+      name: '@deepseek-ai/dsh-web-fetch-http'
+      config:
+        maxUrlLength: 2048
+        maxResponseBytes: 5000000
+        maxBodyChars: 100000
+        timeoutMs: 30000
+        maxRedirects: 5
+        userAgent: 'daedal/1.0 (+https://github.com/deepseek-ai)'
+
+    - id: daedal-tool-policy
+      name: '@deepseek-ai/dsh-tool-policy'
+      config:
+        providers: [shell, mcp]
+
+    - id: daedal-tool-policy-shell
+      name: '@deepseek-ai/dsh-tool-policy-shell'
+      config:
+        id: shell
+        mappings:
+          - tool: bash
+            commandArgument: command
+            intentArgument: description
+        primary:
+          provider: openrouter
+          model: deepseek/deepseek-v4-flash-0731:nitro
+        secondary:
+          provider: openrouter
+          model: z-ai/glm-5.2:nitro
+        timeoutMs: 30000
+        maxTokens: 512
+        maxCommandChars: 20000
+        maxUserMessageChars: 8000
+        maxIntentChars: 1000
+        maxOutputChars: 4096
+        maxReasonChars: 240
+        maxCategories: 12
+        maxCategoryChars: 40
+        rules:
+          - pattern: 'npx skills find *'
+            decision: allow
+            reason: capability discovery is read-only
+          - pattern: 'npx skills list*'
+            decision: allow
+            reason: installed capability listing is read-only
+          - pattern: 'npm info *'
+            decision: allow
+            reason: package metadata lookup is read-only
+          - pattern: 'npx skills add *'
+            decision: ask
+            reason: installing a capability changes the user environment
+          - pattern: 'npx skills update *'
+            decision: ask
+            reason: updating capabilities changes the user environment
+
+    - id: daedal-tool-policy-mcp
+      name: '@deepseek-ai/dsh-tool-policy-mcp'
+      config:
+        id: mcp
+        rules:
+          - tool: mcp__context7__resolve-library-id
+            decision: allow
+            risk: 5
+            categories: [read-only, documentation]
+            reason: Context7 library resolution is read-only
+            principals: [daedal-researcher]
+            urlArguments: []
+            forbiddenArguments: []
+          - tool: mcp__context7__query-docs
+            decision: allow
+            risk: 5
+            categories: [read-only, documentation]
+            reason: Context7 documentation lookup is read-only
+            principals: [daedal-researcher]
+            urlArguments: []
+            forbiddenArguments: []
+
+          - tool: mcp__agent_browser__agent_browser_open
+            decision: ask
+            risk: 50
+            categories: [browser, network]
+            reason: browser navigation opens an external destination
+            principals: [daedal-browser-reader, daedal-browser-operator]
+            urlArguments: [url]
+            forbiddenArguments: [extraArgs, session, namespace, restore, headed, webgpu, allowedDomains]
+          - tool: mcp__agent_browser__agent_browser_read
+            decision: allow
+            risk: 10
+            categories: [browser, read-only]
+            reason: browser content reading is non-mutating
+            principals: [daedal-browser-reader, daedal-browser-operator]
+            urlArguments: [url]
+            forbiddenArguments: [extraArgs, session, namespace, restore, allowedDomains]
+          - tool: mcp__agent_browser__agent_browser_snapshot
+            decision: allow
+            risk: 5
+            categories: [browser, read-only]
+            reason: accessibility snapshot is non-mutating
+            principals: [daedal-browser-reader, daedal-browser-operator]
+            urlArguments: []
+            forbiddenArguments: [extraArgs, session, namespace, restore, allowedDomains]
+          - tool: mcp__agent_browser__agent_browser_wait_ms
+            decision: allow
+            risk: 5
+            categories: [browser, read-only]
+            reason: waiting does not mutate the page
+            principals: [daedal-browser-reader, daedal-browser-operator]
+            urlArguments: []
+            forbiddenArguments: [extraArgs, session, namespace, restore, allowedDomains]
+          - tool: mcp__agent_browser__agent_browser_wait_for_selector
+            decision: allow
+            risk: 5
+            categories: [browser, read-only]
+            reason: selector waiting does not mutate the page
+            principals: [daedal-browser-reader, daedal-browser-operator]
+            urlArguments: []
+            forbiddenArguments: [extraArgs, session, namespace, restore, allowedDomains]
+          - tool: mcp__agent_browser__agent_browser_wait_for_text
+            decision: allow
+            risk: 5
+            categories: [browser, read-only]
+            reason: text waiting does not mutate the page
+            principals: [daedal-browser-reader, daedal-browser-operator]
+            urlArguments: []
+            forbiddenArguments: [extraArgs, session, namespace, restore, allowedDomains]
+          - tool: mcp__agent_browser__agent_browser_wait_for_load
+            decision: allow
+            risk: 5
+            categories: [browser, read-only]
+            reason: load waiting does not mutate the page
+            principals: [daedal-browser-reader, daedal-browser-operator]
+            urlArguments: []
+            forbiddenArguments: [extraArgs, session, namespace, restore, allowedDomains]
+          - tool: mcp__agent_browser__agent_browser_get_text
+            decision: allow
+            risk: 5
+            categories: [browser, read-only]
+            reason: page text lookup is non-mutating
+            principals: [daedal-browser-reader, daedal-browser-operator]
+            urlArguments: []
+            forbiddenArguments: [extraArgs, session, namespace, restore, allowedDomains]
+          - tool: mcp__agent_browser__agent_browser_get_url
+            decision: allow
+            risk: 5
+            categories: [browser, read-only]
+            reason: current URL lookup is non-mutating
+            principals: [daedal-browser-reader, daedal-browser-operator]
+            urlArguments: []
+            forbiddenArguments: [extraArgs, session, namespace, restore, allowedDomains]
+          - tool: mcp__agent_browser__agent_browser_get_title
+            decision: allow
+            risk: 5
+            categories: [browser, read-only]
+            reason: page title lookup is non-mutating
+            principals: [daedal-browser-reader, daedal-browser-operator]
+            urlArguments: []
+            forbiddenArguments: [extraArgs, session, namespace, restore, allowedDomains]
+          - tool: mcp__agent_browser__agent_browser_tab_list
+            decision: allow
+            risk: 5
+            categories: [browser, read-only]
+            reason: tab listing is non-mutating
+            principals: [daedal-browser-reader, daedal-browser-operator]
+            urlArguments: []
+            forbiddenArguments: [extraArgs, session, namespace, restore, allowedDomains]
+
+          - tool: mcp__agent_browser__agent_browser_click
+            decision: ask
+            risk: 60
+            categories: [browser, mutation]
+            reason: clicking can trigger an external side effect
+            principals: [daedal-browser-operator]
+            urlArguments: []
+            forbiddenArguments: [extraArgs, session, namespace, restore, allowedDomains]
+          - tool: mcp__agent_browser__agent_browser_fill
+            decision: ask
+            risk: 60
+            categories: [browser, mutation]
+            reason: filling a form changes external browser state
+            principals: [daedal-browser-operator]
+            urlArguments: []
+            forbiddenArguments: [extraArgs, session, namespace, restore, allowedDomains]
+          - tool: mcp__agent_browser__agent_browser_type
+            decision: ask
+            risk: 60
+            categories: [browser, mutation]
+            reason: typing changes external browser state
+            principals: [daedal-browser-operator]
+            urlArguments: []
+            forbiddenArguments: [extraArgs, session, namespace, restore, allowedDomains]
+          - tool: mcp__agent_browser__agent_browser_press
+            decision: ask
+            risk: 65
+            categories: [browser, mutation]
+            reason: a key press can submit or change external state
+            principals: [daedal-browser-operator]
+            urlArguments: []
+            forbiddenArguments: [extraArgs, session, namespace, restore, allowedDomains]
+          - tool: mcp__agent_browser__agent_browser_check
+            decision: ask
+            risk: 60
+            categories: [browser, mutation]
+            reason: checking a control changes external browser state
+            principals: [daedal-browser-operator]
+            urlArguments: []
+            forbiddenArguments: [extraArgs, session, namespace, restore, allowedDomains]
+          - tool: mcp__agent_browser__agent_browser_uncheck
+            decision: ask
+            risk: 60
+            categories: [browser, mutation]
+            reason: unchecking a control changes external browser state
+            principals: [daedal-browser-operator]
+            urlArguments: []
+            forbiddenArguments: [extraArgs, session, namespace, restore, allowedDomains]
+          - tool: mcp__agent_browser__agent_browser_select
+            decision: ask
+            risk: 60
+            categories: [browser, mutation]
+            reason: selecting a value changes external browser state
+            principals: [daedal-browser-operator]
+            urlArguments: []
+            forbiddenArguments: [extraArgs, session, namespace, restore, allowedDomains]
+          - tool: mcp__agent_browser__agent_browser_scroll
+            decision: allow
+            risk: 10
+            categories: [browser, local-state]
+            reason: scrolling changes only local view state
+            principals: [daedal-browser-operator]
+            urlArguments: []
+            forbiddenArguments: [extraArgs, session, namespace, restore, allowedDomains]
+          - tool: mcp__agent_browser__agent_browser_close
+            decision: allow
+            risk: 10
+            categories: [browser, local-state]
+            reason: closing the role-owned browser session is local cleanup
+            principals: [daedal-browser-operator]
+            urlArguments: []
+            forbiddenArguments: [all, extraArgs, session, namespace, restore, allowedDomains]
+          - tool: mcp__agent_browser__agent_browser_back
+            decision: allow
+            risk: 10
+            categories: [browser, navigation]
+            reason: back navigation stays inside the isolated role session
+            principals: [daedal-browser-operator]
+            urlArguments: []
+            forbiddenArguments: [extraArgs, session, namespace, restore, allowedDomains]
+          - tool: mcp__agent_browser__agent_browser_forward
+            decision: allow
+            risk: 10
+            categories: [browser, navigation]
+            reason: forward navigation stays inside the isolated role session
+            principals: [daedal-browser-operator]
+            urlArguments: []
+            forbiddenArguments: [extraArgs, session, namespace, restore, allowedDomains]
+          - tool: mcp__agent_browser__agent_browser_reload
+            decision: allow
+            risk: 15
+            categories: [browser, network]
+            reason: reloading repeats the current isolated-page request
+            principals: [daedal-browser-operator]
+            urlArguments: []
+            forbiddenArguments: [extraArgs, session, namespace, restore, allowedDomains]
+          - tool: mcp__agent_browser__agent_browser_tab_new
+            decision: ask
+            risk: 50
+            categories: [browser, network]
+            reason: opening a new tab can navigate to an external destination
+            principals: [daedal-browser-operator]
+            urlArguments: [url]
+            forbiddenArguments: [extraArgs, session, namespace, restore, allowedDomains]
+          - tool: mcp__agent_browser__agent_browser_tab_switch
+            decision: allow
+            risk: 10
+            categories: [browser, local-state]
+            reason: tab switching changes only local role state
+            principals: [daedal-browser-operator]
+            urlArguments: []
+            forbiddenArguments: [extraArgs, session, namespace, restore, allowedDomains]
+          - tool: mcp__agent_browser__agent_browser_tab_close
+            decision: allow
+            risk: 10
+            categories: [browser, local-state]
+            reason: tab closing changes only local role state
+            principals: [daedal-browser-operator]
+            urlArguments: []
+            forbiddenArguments: [extraArgs, session, namespace, restore, allowedDomains]
+
+          - tool: mcp__firecrawl__firecrawl_map
+            decision: allow
+            risk: 20
+            categories: [crawler, read-only]
+            reason: site mapping is a bounded read operation
+            principals: [daedal-crawler]
+            urlArguments: [url]
+            forbiddenArguments: []
+          - tool: mcp__firecrawl__firecrawl_search
+            decision: allow
+            risk: 20
+            categories: [crawler, read-only]
+            reason: crawler search is a read operation
+            principals: [daedal-crawler]
+            urlArguments: []
+            forbiddenArguments: []
+          - tool: mcp__firecrawl__firecrawl_check_crawl_status
+            decision: allow
+            risk: 10
+            categories: [crawler, read-only]
+            reason: crawl status lookup is read-only
+            principals: [daedal-crawler]
+            urlArguments: []
+            forbiddenArguments: []
+          - tool: mcp__firecrawl__firecrawl_extract
+            decision: ask
+            risk: 45
+            categories: [crawler, credits]
+            reason: structured extraction can consume provider credits
+            principals: [daedal-crawler]
+            urlArguments: [urls]
+            forbiddenArguments: []
+          - tool: mcp__firecrawl__firecrawl_agent_status
+            decision: allow
+            risk: 10
+            categories: [crawler, read-only]
+            reason: crawler agent status lookup is read-only
+            principals: [daedal-crawler]
+            urlArguments: []
+            forbiddenArguments: []
+          - tool: mcp__firecrawl__firecrawl_parse
+            decision: allow
+            risk: 20
+            categories: [crawler, read-only]
+            reason: parsing supplied content is non-mutating
+            principals: [daedal-crawler]
+            urlArguments: []
+            forbiddenArguments: []
+          - tool: mcp__firecrawl__firecrawl_scrape
+            decision: ask
+            risk: 50
+            categories: [crawler, credits, network]
+            reason: scraping opens a remote page and can consume provider credits
+            principals: [daedal-crawler]
+            urlArguments: [url]
+            forbiddenArguments: []
+          - tool: mcp__firecrawl__firecrawl_crawl
+            decision: ask
+            risk: 65
+            categories: [crawler, credits, job]
+            reason: a multi-page crawl creates a remote credit-consuming job
+            principals: [daedal-crawler]
+            urlArguments: [url]
+            forbiddenArguments: []
+          - tool: mcp__firecrawl__firecrawl_agent
+            decision: ask
+            risk: 70
+            categories: [crawler, credits, job]
+            reason: a crawler agent creates an autonomous remote job
+            principals: [daedal-crawler]
+            urlArguments: [urls]
+            forbiddenArguments: []
+
+          - tool: mcp__chrome_devtools__get_console_message
+            decision: allow
+            risk: 5
+            categories: [debugger, read-only]
+            reason: console message lookup is read-only
+            principals: [daedal-web-debugger]
+            urlArguments: []
+            forbiddenArguments: []
+          - tool: mcp__chrome_devtools__list_console_messages
+            decision: allow
+            risk: 5
+            categories: [debugger, read-only]
+            reason: console listing is read-only
+            principals: [daedal-web-debugger]
+            urlArguments: []
+            forbiddenArguments: []
+          - tool: mcp__chrome_devtools__list_network_requests
+            decision: allow
+            risk: 5
+            categories: [debugger, read-only]
+            reason: network request listing is read-only
+            principals: [daedal-web-debugger]
+            urlArguments: []
+            forbiddenArguments: []
+          - tool: mcp__chrome_devtools__list_pages
+            decision: allow
+            risk: 5
+            categories: [debugger, read-only]
+            reason: page listing is read-only
+            principals: [daedal-web-debugger]
+            urlArguments: []
+            forbiddenArguments: []
+          - tool: mcp__chrome_devtools__performance_analyze_insight
+            decision: allow
+            risk: 10
+            categories: [debugger, read-only]
+            reason: trace insight analysis is read-only
+            principals: [daedal-web-debugger]
+            urlArguments: []
+            forbiddenArguments: []
+          - tool: mcp__chrome_devtools__select_page
+            decision: allow
+            risk: 10
+            categories: [debugger, local-state]
+            reason: page selection changes only the isolated debugger session
+            principals: [daedal-web-debugger]
+            urlArguments: []
+            forbiddenArguments: []
+          - tool: mcp__chrome_devtools__wait_for
+            decision: allow
+            risk: 5
+            categories: [debugger, read-only]
+            reason: waiting for page text is non-mutating
+            principals: [daedal-web-debugger]
+            urlArguments: []
+            forbiddenArguments: []
+          - tool: mcp__chrome_devtools__get_network_request
+            decision: allow
+            risk: 10
+            categories: [debugger, read-only]
+            reason: network request inspection is diagnostic
+            principals: [daedal-web-debugger]
+            urlArguments: []
+            forbiddenArguments: []
+          - tool: mcp__chrome_devtools__new_page
+            decision: ask
+            risk: 50
+            categories: [debugger, network]
+            reason: creating a debugger page opens an external destination
+            principals: [daedal-web-debugger]
+            urlArguments: [url]
+            forbiddenArguments: []
+          - tool: mcp__chrome_devtools__navigate_page
+            decision: ask
+            risk: 50
+            categories: [debugger, network]
+            reason: debugger navigation opens or repeats an external request
+            principals: [daedal-web-debugger]
+            urlArguments: [url]
+            forbiddenArguments: []
+          - tool: mcp__chrome_devtools__take_snapshot
+            decision: allow
+            risk: 10
+            categories: [debugger, read-only]
+            reason: DOM snapshot is diagnostic and non-mutating
+            principals: [daedal-web-debugger]
+            urlArguments: []
+            forbiddenArguments: [filePath, path]
+          - tool: mcp__chrome_devtools__performance_start_trace
+            decision: ask
+            risk: 35
+            categories: [debugger, profiling]
+            reason: starting a trace changes the debugger session and can be expensive
+            principals: [daedal-web-debugger]
+            urlArguments: []
+            forbiddenArguments: []
+          - tool: mcp__chrome_devtools__performance_stop_trace
+            decision: allow
+            risk: 15
+            categories: [debugger, profiling]
+            reason: stopping the role-owned trace completes local diagnostics
+            principals: [daedal-web-debugger]
+            urlArguments: []
+            forbiddenArguments: []
+          - tool: mcp__chrome_devtools__lighthouse_audit
+            decision: ask
+            risk: 40
+            categories: [debugger, profiling, network]
+            reason: Lighthouse can issue additional page requests and consume resources
+            principals: [daedal-web-debugger]
+            urlArguments: []
+            forbiddenArguments: []
+
+    - id: daedal-tool-policy-enforcer
+      name: '@deepseek-ai/dsh-tool-policy-enforcer'
+      config:
+        threshold: 2
+        ttlMs: 600000
+        maxEntries: 2000
+
+    - id: daedal-memory
+      name: '@deepseek-ai/dsh-memory'
+
+    - id: daedal-memory-sqlite
+      name: '@deepseek-ai/dsh-memory-sqlite'
+      config:
+        path: !!js dshHomePath('memory/daedal.sqlite')
+        retentionDays: 365
+        maxSearchResults: 50
+
+    - id: daedal-memory-reviewer-tools
+      name: '@deepseek-ai/dsh-tool-memory-reviewer'
+      config:
+        reviewerPrincipal: daedal-memory-reviewer
+
+    - id: daedal-implementer-status
+      name: '@deepseek-ai/dsh-subagent-result-status-block'
+      config:
+        validator: daedal-implementer-status
+        kind: implementer-status
+
+    - id: daedal-review-verdict
+      name: '@deepseek-ai/dsh-subagent-result-status-block'
+      config:
+        validator: daedal-review-verdict
+        kind: review-verdict
