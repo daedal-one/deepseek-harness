@@ -26,6 +26,9 @@ remains authoritative for composition and lifecycle state.
   MUST include available metadata in local search.
 - {#c-layout} The Plugin catalog MUST render one card per row at every viewport
   width so each card has the full catalog width for metadata and status labels.
+- {#c-state-filter} The Plugin catalog MUST offer a state filter beside search,
+  MUST cover effective enablement and every visible Cordis phase, and MUST
+  combine the selected state with the local text query.
 - {#c-authority} Package metadata lookup MUST NOT cache, replace, or infer Loader
   enablement and Fiber state; every inventory read MUST continue to project
   lifecycle state from the current Loader tree.

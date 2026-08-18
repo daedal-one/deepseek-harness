@@ -16,6 +16,7 @@ export interface PluginInventorySettingsTabInjected {
 
 type PluginInventoryEntry = PluginInventorySnapshot['entries'][number]
 type PluginFiberPhase = PluginInventoryEntry['fiberPhase']
+type PluginStateFilter = 'all' | 'enabled' | 'disabled' | NonNullable<PluginFiberPhase> | 'unobserved'
 
 /** Full component props assembled by the Settings slot renderer. */
 export type PluginInventorySettingsTabProps =
@@ -35,6 +36,18 @@ const PHASE_KEYS = {
   failed: 'failed',
   unloading: 'unloading',
 } satisfies Record<Exclude<PluginFiberPhase, null>, PluginInventoryLocaleKey>
+
+const STATE_FILTER_KEYS = [
+  ['all', 'allStates'],
+  ['enabled', 'enabledTag'],
+  ['disabled', 'disabledTag'],
+  ['active', 'active'],
+  ['pending', 'pending'],
+  ['loading', 'loadingPhase'],
+  ['failed', 'failed'],
+  ['unloading', 'unloading'],
+  ['unobserved', 'unobserved'],
+] as const satisfies readonly (readonly [PluginStateFilter, PluginInventoryLocaleKey])[]
 
 /** Localized accessible label for one root Fiber phase. */
 function phaseLabel(
@@ -61,11 +74,22 @@ function matches(entry: PluginInventoryEntry, normalizedQuery: string): boolean 
     .some(value => value.toLocaleLowerCase().includes(normalizedQuery))
 }
 
+/** Whether an inventory row matches the selected visible state. */
+function matchesState(entry: PluginInventoryEntry, filter: PluginStateFilter): boolean {
+  if (filter === 'all') return true
+  if (filter === 'enabled') return entry.enabled
+  if (filter === 'disabled') return !entry.enabled
+  return entry.enabled && (filter === 'unobserved'
+    ? entry.fiberPhase === null
+    : entry.fiberPhase === filter)
+}
+
 /** Render the read-only current Loader inventory. */
 export function PluginInventorySettingsTab({ list, t }: PluginInventorySettingsTabProps): ReactNode {
   const catalogId = useId()
   const [request, setRequest] = useState(0)
   const [query, setQuery] = useState('')
+  const [stateFilter, setStateFilter] = useState<PluginStateFilter>('all')
   const [expanded, setExpanded] = useState<PluginInventoryEntry['entryId'] | null>(null)
   const [state, setState] = useState<ViewState>({ status: 'loading' })
 
@@ -81,9 +105,10 @@ export function PluginInventorySettingsTab({ list, t }: PluginInventorySettingsT
   const normalizedQuery = query.trim().toLocaleLowerCase()
   const filteredEntries = useMemo(
     () => state.status === 'ready'
-      ? state.snapshot.entries.filter(entry => matches(entry, normalizedQuery))
+      ? state.snapshot.entries.filter(entry =>
+        matches(entry, normalizedQuery) && matchesState(entry, stateFilter))
       : [],
-    [normalizedQuery, state],
+    [normalizedQuery, state, stateFilter],
   )
 
   useEffect(() => {
@@ -108,17 +133,32 @@ export function PluginInventorySettingsTab({ list, t }: PluginInventorySettingsT
       ) : null}
       {state.status === 'ready' ? (
         <div className={css.catalog}>
-          <label className={css.search}>
-            <IconSearchOutline16 aria-hidden="true" />
-            <span className={css.visuallyHidden}>{t('search')}</span>
-            <input
-              type="search"
-              value={query}
-              placeholder={t('search')}
-              aria-label={t('search')}
-              onChange={(event) => { setQuery(event.currentTarget.value) }}
-            />
-          </label>
+          <div className={css.filters}>
+            <label className={css.search}>
+              <IconSearchOutline16 aria-hidden="true" />
+              <span className={css.visuallyHidden}>{t('search')}</span>
+              <input
+                type="search"
+                value={query}
+                placeholder={t('search')}
+                aria-label={t('search')}
+                onChange={(event) => { setQuery(event.currentTarget.value) }}
+              />
+            </label>
+            <label className={css.stateFilter}>
+              <span className={css.visuallyHidden}>{t('filterState')}</span>
+              <select
+                value={stateFilter}
+                aria-label={t('filterState')}
+                onChange={(event) => { setStateFilter(event.currentTarget.value as PluginStateFilter) }}
+              >
+                {STATE_FILTER_KEYS.map(([value, key]) => (
+                  <option key={value} value={value}>{t(key)}</option>
+                ))}
+              </select>
+              <IconChevronDownOutline14 className={css.filterChevron} size={12} aria-hidden="true" />
+            </label>
+          </div>
           <div className={css.catalogHeading}>
             <h3>{t('catalog')}</h3>
             <span data-plugin-count={filteredEntries.length}>{filteredEntries.length}</span>

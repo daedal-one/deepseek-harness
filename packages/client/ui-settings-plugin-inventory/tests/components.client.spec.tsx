@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PluginInventorySettingsTab } from '../src/client/PluginInventorySettingsTab.tsx'
 import type {
@@ -64,11 +64,13 @@ describe('PluginInventorySettingsTab', () => {
     await act(async () => { deferred.resolve(SNAPSHOT) })
     expect(list).toHaveBeenCalledOnce()
     expect(screen.getByRole('searchbox', { name: en.search })).toBeTruthy()
+    expect(screen.getByRole('combobox', { name: en.filterState })).toBeTruthy()
     expect(screen.getByRole('heading', { name: en.catalog })).toBeTruthy()
     expect(view.container.querySelector('[data-plugin-count]')?.textContent).toBe('7')
-    expect(screen.getAllByRole('listitem')).toHaveLength(7)
-    expect(screen.getAllByText(en.enabledTag)).toHaveLength(6)
-    expect(screen.getByText(en.disabledTag)).toBeTruthy()
+    const inventory = screen.getByRole('list')
+    expect(within(inventory).getAllByRole('listitem')).toHaveLength(7)
+    expect(within(inventory).getAllByText(en.enabledTag)).toHaveLength(6)
+    expect(within(inventory).getByText(en.disabledTag)).toBeTruthy()
     for (const value of [
       'Mounted',
       'Waiting for dependencies',
@@ -77,7 +79,7 @@ describe('PluginInventorySettingsTab', () => {
       'Unloading',
       'Not mounted',
     ]) {
-      expect(screen.getByText(value)).toBeTruthy()
+      expect(within(inventory).getByText(value)).toBeTruthy()
     }
     expect(screen.getByText('Reloads changed Cordis plugins.')).toBeTruthy()
     expect(screen.getByText('Shigma')).toBeTruthy()
@@ -102,9 +104,9 @@ describe('PluginInventorySettingsTab', () => {
     fireEvent.click(screen.getByRole('button', {
       name: 'directory-picker-native, Chooses a workspace directory with the native picker., Author: DeepSeek, Version: 0.1.0-rc.5, Disabled',
     }))
-    expect(screen.getAllByText(en.disabledTag)).toHaveLength(2)
+    expect(within(inventory).getAllByText(en.disabledTag)).toHaveLength(2)
     expect(screen.queryByText(en.cordis)).toBeNull()
-    expect(screen.queryByText(en.unobserved)).toBeNull()
+    expect(within(inventory).queryByText(en.unobserved)).toBeNull()
   })
 
   it('filters by module name, Loader entry id, or package metadata', async () => {
@@ -130,6 +132,48 @@ describe('PluginInventorySettingsTab', () => {
     fireEvent.change(search, { target: { value: 'not-a-plugin' } })
     expect(screen.queryAllByRole('listitem')).toHaveLength(0)
     expect(screen.getByText(en.emptySearch)).toBeTruthy()
+  })
+
+  it('filters locally by configuration or Cordis state and composes with search', async () => {
+    const list = vi.fn(async () => SNAPSHOT)
+    const view = render(<PluginInventorySettingsTab {...props(list)} />)
+    const filter = await screen.findByRole('combobox', { name: en.filterState })
+    const search = screen.getByRole('searchbox', { name: en.search })
+
+    expect(screen.getAllByRole('option').map(option => option.textContent)).toEqual([
+      'All states',
+      'Enabled',
+      'Disabled',
+      'Mounted',
+      'Waiting for dependencies',
+      'Loading',
+      'Mount failed',
+      'Unloading',
+      'Not mounted',
+    ])
+    for (const [value, count] of [
+      ['enabled', 6],
+      ['disabled', 1],
+      ['active', 1],
+      ['pending', 1],
+      ['loading', 1],
+      ['failed', 1],
+      ['unloading', 1],
+      ['unobserved', 1],
+      ['all', 7],
+    ] as const) {
+      fireEvent.change(filter, { target: { value } })
+      expect(screen.queryAllByRole('listitem')).toHaveLength(count)
+      expect(view.container.querySelector('[data-plugin-count]')?.textContent).toBe(String(count))
+    }
+
+    fireEvent.change(filter, { target: { value: 'disabled' } })
+    fireEvent.change(search, { target: { value: 'hmr' } })
+    expect(screen.queryAllByRole('listitem')).toHaveLength(0)
+    expect(screen.getByText(en.emptySearch)).toBeTruthy()
+    fireEvent.change(search, { target: { value: 'directory-picker' } })
+    expect(screen.getAllByRole('listitem')).toHaveLength(1)
+    expect(list).toHaveBeenCalledOnce()
   })
 
   it('shows a generic failure and retries into the empty state', async () => {
