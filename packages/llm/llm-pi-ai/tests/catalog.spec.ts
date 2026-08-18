@@ -907,17 +907,50 @@ describe('reasoning-dispatch compat switches', () => {
     expect(models.get(responses.id)?.compat).toEqual(responses.compat)
   })
 
-  it('rejects a model-level switch on a protocol that has no such field', () => {
+  it('applies route OpenRouter routing to every openai-completions model, entries winning', () => {
+    const models = modelsOf({
+      'acme-gateway': {
+        api: 'openai-completions',
+        baseURL: 'https://acme.test',
+        compat: { openRouterRouting: { sort: 'throughput' } },
+        models: [
+          { id: 'routed-default' },
+          { id: 'routed-odd', compat: { openRouterRouting: { only: ['openai'] } } },
+        ],
+      },
+    }, 'acme-gateway')
+
+    expect(models.get('routed-default')?.compat).toEqual({ openRouterRouting: { sort: 'throughput' } })
+    expect(models.get('routed-odd')?.compat).toEqual({ openRouterRouting: { only: ['openai'] } })
+  })
+
+  it('merges route OpenRouter routing over the catalog entry’s own compat', () => {
+    const catalog = getBuiltinModels('openrouter')
+    const completions = catalog.find(model => model.api === 'openai-completions')
+    if (completions === undefined) throw new Error('openrouter no longer ships a completions model')
+
+    const models = modelsOf({
+      openrouter: {
+        compat: { openRouterRouting: { sort: 'throughput' } },
+        models: [{ id: completions.id }],
+      },
+    }, 'openrouter')
+
+    expect((models.get(completions.id)?.compat as OpenAICompletionsCompat).openRouterRouting)
+      .toEqual({ sort: 'throughput' })
+  })
+
+  it('rejects a model-level OpenRouter routing on a protocol that has no such field', () => {
     expect(() => resolveProfiles({
       anthropic: {
-        models: [{ id: 'claude-sonnet-4-5', compat: { thinkingFormat: 'openai' } }],
+        models: [{ id: 'claude-sonnet-4-5', compat: { openRouterRouting: { sort: 'throughput' } } }],
       },
     })).toThrow(/exist only on openai-completions/)
   })
 
-  it('rejects route switches no model on the route can take', () => {
+  it('rejects route OpenRouter routing no model on the route can take', () => {
     expect(() => resolveProfiles({
-      anthropic: { compat: { thinkingFormat: 'openai' } },
+      anthropic: { compat: { openRouterRouting: { sort: 'throughput' } } },
     })).toThrow(/no model on the route speaks openai-completions/)
   })
 })

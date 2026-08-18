@@ -45,6 +45,11 @@ OpenAI 有两条原生路由。`openai` 使用 OpenAI API，并使用存储在 `
         modelAliases:
           deepseek/deepseek-v4-flash-0731:nitro:
             catalogModel: deepseek/deepseek-v4-flash
+        # Route every openai-completions model through the fastest provider
+        # (OpenRouter's `:nitro` variant) without suffixing any model id.
+        compat:
+          openRouterRouting:
+            sort: throughput
       # Catalog route with one model reshaped in place; the rest of the
       # catalog keeps serving (a models list would replace it instead).
       deepseek:
@@ -85,7 +90,7 @@ OpenAI 有两条原生路由。`openai` 使用 OpenAI API，并使用存储在 `
 
 ## Catalog 解析
 
-profile 的非空 `models` 列表是*替换*该路由已安装 catalog，而不是扩充它，并且优先于所有配置层的 `modelOverrides` 与 `modelAliases`。省略它（或留空）则原样服务该 catalog。每个条目都会从同 `id` 的已安装模型继承自身未设置的字段，因此把 catalog 路由收窄到两个模型、更正某个容量，或加入一个比已安装 catalog 更新的模型，都是一行编辑——但一旦声明了 `models` 列表，该路由要继续服务的每个模型就都必须出现在其中，条目哪怕只写一个 `id` 也足够。`catalogModel` 可以把同一路由下另一个已安装模型指定为元数据来源，同时让 `id` 继续作为请求协议中的模型标识；空值或未知来源会使配置失败。来源模型的完整字段会先被继承，再由配置字段覆盖，因此推理映射、兼容行为、请求头、定价、输入模态、容量以及未来 pi-ai 版本新增的字段都不会丢失。可配置的条目字段是 `id`、`catalogModel`、`name`、`contextWindow`、`maxTokens`、`reasoningEfforts` 与 `compat`。
+profile 的非空 `models` 列表是*替换*该路由已安装 catalog，而不是扩充它，并且优先于所有配置层的 `modelOverrides` 与 `modelAliases`。省略它（或留空）则原样服务该 catalog。每个条目都会从同 `id` 的已安装模型继承自身未设置的字段，因此把 catalog 路由收窄到两个模型、更正某个容量，或加入一个比已安装 catalog 更新的模型，都是一行编辑——但一旦声明了 `models` 列表，该路由要继续服务的每个模型就都必须出现在其中，条目哪怕只写一个 `id` 也足够。`catalogModel` 可以把同一路由下另一个已安装模型指定为元数据来源，同时让 `id` 继续作为请求协议中的模型标识；空值或未知来源会使配置失败。来源模型的完整字段会先被继承，再由配置字段覆盖，因此推理映射、兼容行为、请求头、定价、输入模态、容量以及未来 pi-ai 版本新增的字段都不会丢失。可配置的条目字段是 `id`、`catalogModel`、`name`、`contextWindow`、`maxTokens`、`reasoningEfforts` 与 `compat`；后者可通过可选的 `openRouterRouting` 携带 OpenRouter provider routing。
 
 `modelOverrides` 无需这份代价就能就地重塑单个已安装 catalog 模型：每个键是一个 catalog 模型 id，每个值可写 `models` 条目接受的同一批字段，只是 id 落在键上，而 catalog 的其余部分原样继续服务——「改一个模型、其余三十七个原样保留」只是一次三行编辑。一条覆盖会成为该 catalog 条目的配置，因此容量、档位与 compat 沿与 `models` 条目相同的路径解析，携带相同的诊断与相同的请求默认值语义。覆盖只在正服务自身 catalog 的 catalog 路由上才有意义：非空 `models` 列表会忽略它们；落在手工声明路由上的覆盖，或点名了 catalog 未描述模型的覆盖，会被拒绝而非跳过，因为一个静默保持原样的模型，就是一个否则要有人费力追查的笔误。
 
@@ -97,9 +102,11 @@ profile 的非空 `models` 列表是*替换*该路由已安装 catalog，而不�
 
 该声明会转换为 pi-ai 的 `Model.reasoning` + `thinkingLevelMap`，其中每个档位都被显式决定——未声明的档位一律固定为不支持，而不是留给 pi-ai 自己的默认规则：那套规则并不对称（键缺席对五个基础档位意味着「支持」，对 `xhigh`/`max` 却意味着「不支持」），也本不该要求 profile 作者了解。`off` 是唯一的三态键：不写它，选择器不提供 Off，显式请求 Off 会被拒绝——不点名任何档位的请求仍会在不带该参数的情况下发出，提供方随后做什么是它自己的默认行为；声明而不给值（`off:`），则会提供 Off，选中它时什么也不发送——对 `deepseek` 方言则是一个显式的 `thinking: {type: "disabled"}`——这同时覆盖完全不点名任何档位的请求；声明并给值（`off: none`），该值就会作为档位参数在协议中发送。没有任何写法能把 catalog 映射中的键恢复为「未设置」：这份声明就是对外提供的全部，因此把你要保留的 catalog 档位重述出来。
 
-### 推理分派的 compat 开关
+### 推理分派的 compat 开关与 OpenRouter routing
 
 思考级别如何在协议中传输——单独一个 `reasoning_effort`、DeepSeek 的 `thinking: {type}` 加上档位、z.ai 的 `thinking` 对象，诸如此类——就是 pi-ai 的 `compat.thinkingFormat`，pi-ai 会从端点 URL 猜测它；私有网关的 URL 什么也说明不了，于是说 DeepSeek 方言的网关只会收到 OpenAI 方言的请求，且无从更正。因此 `compat.thinkingFormat` 与 `compat.supportsReasoningEffort` 既可配置在路由上（作为其模型的默认值），也可按模型配置（逐字段胜出），解析顺序为模型 → 路由 → 已安装 catalog 条目 → pi-ai 按 URL 得出的猜测；设置路由级开关会为路由上的每个模型遮蔽 catalog 条目的值，而且除了重述其值，没有任何写法能把某个字段交还给 catalog。`thinkingFormat` 接受 pi-ai 可分派的各种格式，但不含两个 `chat-template` 变体：它们需要的 `chatTemplateKwargs` 本配置并不暴露。两个开关都只存在于 `openai-completions` 上——其余协议的推理形状由协议本身承载——因此在其他协议的模型上设置模型级开关会使解析失败，路由级开关会跳过其他协议的模型，而完全没有 `openai-completions` 模型的路由则会被拒绝。pi-ai compat 面的其余部分（`supportsStore`、`maxTokensField`……）保持自动检测，特意不在此处开放配置。
+
+`compat.openRouterRouting` 携带 OpenRouter 在模型 route 抵达其 endpoint 时解释的 provider routing 偏好，也就是模型 id 追加 `:nitro` 所代表的同一个请求 `provider` 字段。它接受 pi-ai 的 `OpenRouterRouting` 字段集：`sort: throughput` 选择最快 provider，`order`／`only`／`ignore` 约束 provider，`max_price` 限制价格，其余字段控制 fallback、隐私、quantization、吞吐量与延迟。Route 上设置一次即可让其所有 `openai-completions` 模型继承，因此部署可直接使用 catalog model id（例如 `deepseek/deepseek-v4-flash`），无需为每个线上 id 声明 `:nitro` alias。它也可以按 model 设置并替换 route 默认对象，而且只适用于 `openai-completions`；完全没有此类模型的 route 会被拒绝。解析后的 routing 对象会原样作为请求 `provider` 字段发送。
 
 条目与已安装 catalog 都没有给出尺寸的模型，会采用该路由的 `defaultContextWindow`（262,144）与 `defaultMaxTokens`（32,768），因此一份只公布 id 的列表同样能产出可服务的路由。两个回退值本质上都是猜测，这正是它们作为路由字段、供网关服务更小模型的部署一次性更正的原因，而不是埋在适配器里的常量；回退值只用于给模型定尺寸，绝不会变成单次请求上限。
 

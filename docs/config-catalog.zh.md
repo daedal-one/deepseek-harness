@@ -991,10 +991,10 @@ export interface PiAiProviderProfile {
   /** Additive request-wire aliases inheriting complete installed model metadata. */
   modelAliases?: Record<string, PiAiModelAlias>
   /**
-   * Reasoning-dispatch switches for every `openai-completions` model on this
-   * route; each model's own `compat` overrides per field. What neither sets
-   * keeps the installed catalog entry's value, then pi-ai's baseURL-derived
-   * detection.
+   * Reasoning-dispatch switches and OpenRouter routing for every
+   * `openai-completions` model on this route; each model's own `compat`
+   * overrides per field. What neither sets keeps the installed catalog
+   * entry's value, then pi-ai's baseURL-derived detection.
    */
   compat?: PiAiCompatProfile
   /**
@@ -1100,19 +1100,26 @@ export type PiAiModelAlias = Omit<PiAiModelProfile, 'id' | 'catalogModel'> & {
 }
 
 /**
- * Reasoning-dispatch compatibility switches, set on the route (its models'
- * default) or per model (winning over the route). Only the switches pi-ai's
- * reasoning dispatch reads are offered; the rest of pi-ai's compat surface
- * keeps its baseURL-derived auto-detection. pi-ai types both fields only on
- * `OpenAICompletionsCompat` — the other wire protocols define their reasoning
- * fields in the protocol itself — so resolution rejects a model-level switch
- * anywhere else, while a route-level default skips past models it cannot fit.
+ * Route- or model-level compatibility and OpenRouter routing switches. The
+ * reasoning fields are set on the route (its models' default) or per model
+ * (winning over the route). OpenRouter routing (`openRouterRouting`) is sent
+ * verbatim as the request's `provider` field, so a route can pin provider
+ * ordering or throughput routing once instead of suffixing every wire id.
+ *
+ * Only the fields pi-ai actually dispatch are offered; the rest of pi-ai's
+ * compat surface keeps its baseURL-derived auto-detection. pi-ai types these
+ * fields only on `OpenAICompletionsCompat` — the other wire protocols define
+ * their reasoning fields in the protocol itself — so resolution rejects a
+ * model-level switch anywhere else, while a route-level default skips past
+ * models it cannot fit.
  */
 export interface PiAiCompatProfile {
   /** Reasoning parameter format the endpoint expects; absent keeps the catalog entry's, then pi-ai's baseURL-derived guess. */
   thinkingFormat?: PiAiThinkingFormat
   /** Whether the endpoint accepts `reasoning_effort`; absent keeps the catalog entry's, then pi-ai's baseURL-derived guess. */
   supportsReasoningEffort?: boolean
+  /** OpenRouter provider-routing preferences sent as the request body's `provider` field. */
+  openRouterRouting?: OpenRouterRouting
 }
 
 /** One request modality a pi-ai model may accept. */
@@ -1141,7 +1148,7 @@ type PiThinkingFormat = NonNullable<OpenAICompletionsCompat['thinkingFormat']>
 type WithheldThinkingFormat = 'chat-template' | 'qwen-chat-template'
 ```
 
-依赖：`Api`（`@earendil-works/pi-ai`）· `CacheRetention`（`@earendil-works/pi-ai`）· `Model`（`@earendil-works/pi-ai`）· `ModelThinkingLevel`（`@earendil-works/pi-ai`）· `OpenAICompletionsCompat`（`@earendil-works/pi-ai`）· [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts) · `ThinkingBudgets`（`@earendil-works/pi-ai`）· `Transport`（`@earendil-works/pi-ai`）
+依赖：`Api`（`@earendil-works/pi-ai`）· `CacheRetention`（`@earendil-works/pi-ai`）· `Model`（`@earendil-works/pi-ai`）· `ModelThinkingLevel`（`@earendil-works/pi-ai`）· `OpenAICompletionsCompat`（`@earendil-works/pi-ai`）· `OpenRouterRouting`（`@earendil-works/pi-ai`）· [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts) · `ThinkingBudgets`（`@earendil-works/pi-ai`）· `Transport`（`@earendil-works/pi-ai`）
 
 来源：[`packages/llm/llm-pi-ai/src/config.ts:176`](../packages/llm/llm-pi-ai/src/config.ts)
 

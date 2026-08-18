@@ -14,6 +14,8 @@ Status: implemented
 
 **带路由的标识符是安装目录之上的增量 alias。**`modelAliases` 增加一个线上请求 id，同时要求指定安装 provider 目录中的 `catalogModel`。Alias 先继承协议、endpoint、容量、模态、reasoning 方言、支持的 effort map、兼容字段和成本元数据，再应用显式 override。它不能替换安装 id、不能和替换式 `models` 列表共存，也不能指向未知目录条目。因此，随产品交付的 alias `deepseek/deepseek-v4-flash-0731:nitro` 在发送精确 dated Nitro id 的同时保留目录中的 OpenRouter reasoning 协议。
 
+**Provider routing 是兼容元数据，而不是模型身份。**`compat.openRouterRouting` 在 `openai-completions` route 或 model 上携带 OpenRouter provider selection 对象，pi-ai 会把解析后的值作为请求 `provider` 字段发送。Model 级对象替换 route 默认值；省略则保留已安装 catalog 与 OpenRouter 的默认行为。因此，部署无需为每个模型制造 routed alias，也能统一配置吞吐量、延迟、价格、隐私、fallback、provider 或 quantization 偏好。
+
 **Agent 模型配置是一份由 lifecycle 管理的目录。**`ctx.agentModels` 固定 provider route，并注册 `main` 以及 `subagent`、`subagent-fork` 等具名贡献者。等价注册按引用计数合并；label 或默认值冲突时立即失败。可见注册或最终移除会发布包含故障隔离的提交后失效通知，remote client 据此重新读取目录。没有显式默认值的具名 target 在注册时继承 main 的部署默认值，因此之后仅针对 `main` 的用户 override 不会把各自独立配置的角色暗中耦合起来。
 
 **选择以角色为单位保持完整，并在之后启动 Agent 时生效。**`agent-models` settings section 为每个稳定角色 id 保存 model 和可选 reasoning effort。Main session 入口和 subagent tool 创建 Agent 时读取当前选择。运行中的 Agent 保留已经 assemble 的选择；持久 `request/header` 事件继续重建每一个模型可见请求。声明式 `AgentOptions.reasoningEffort` 由 agent-loop schema 校验并写入第一个请求，因此选择不会在组合与 dispatch 之间消失。
@@ -32,5 +34,6 @@ Status: implemented
 
 - **在 pi-ai 旁保留专用 adapter**：为一个 provider 重复请求序列化、retry 集成、catalog 元数据、凭证和图形编辑。
 - **把 `:nitro` 当作不继承元数据的模型**：能发送路由 id，却会丢失正确请求所需的 reasoning 方言和 effort 词汇表。
+- **要求每种 provider 偏好都使用 routing suffix**：无法表达 provider allow/deny 列表、隐私、fallback、价格、延迟或 quantization 规则，还会在整个 catalog 中复制 alias。
 - **只保存一个全局默认模型**：无法表达 main、spawn 和 fork 各自独立的角色选择，也不给具名贡献者提供图形身份。
 - **保存后修改运行中的 Agent**：会让一个 live session 的模型可见行为脱离正常 request-header transition，并把偶发 settings 写入变成 lifecycle event。

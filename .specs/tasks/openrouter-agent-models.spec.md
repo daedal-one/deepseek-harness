@@ -8,6 +8,7 @@ progress: done
 addresses:
   - REQ:llm/openrouter-agent-models#c-provider
   - REQ:llm/openrouter-agent-models#c-catalog
+  - REQ:llm/openrouter-agent-models#c-routing
   - REQ:llm/openrouter-agent-models#c-directory
   - REQ:llm/openrouter-agent-models#c-selection
   - REQ:llm/openrouter-agent-models#c-validation
@@ -22,4 +23,4 @@ assignee: carlo
 
 ## Acceptance
 
-The dedicated DeepSeek LLM package and shipped route are absent; pi-ai owns an active OpenRouter route and its additive routed-model aliases. A settings-backed agent directory applies exact validated OpenRouter selections to the main agent and named subagent starts. A dedicated bilingual Web Settings page edits every live agent entry, and first-run onboarding uses the OpenRouter credential flow. Focused service, subagent, client, composition, snapshot, and browser tests prove the assembled path.
+The dedicated DeepSeek LLM package and shipped route are absent; pi-ai owns an active OpenRouter route, additive routed-model aliases, and route- or model-level provider-routing preferences. A settings-backed agent directory applies exact validated OpenRouter selections to the main agent and named subagent starts. A dedicated bilingual Web Settings page edits every live agent entry, and first-run onboarding uses the OpenRouter credential flow. Focused service, subagent, client, composition, snapshot, and browser tests prove the assembled path.

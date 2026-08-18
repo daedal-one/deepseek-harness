@@ -161,6 +161,8 @@ interface AgentOptions {
   provider?: string
   /** Model id interpreted by the selected provider adapter. */
   model?: string
+  /** Adapter-owned reasoning effort for each conversation-model request. */
+  reasoningEffort?: ReasoningEffortId
   /** Maximum output tokens for each conversation-model request. */
   maxTokens?: number
 }
@@ -419,7 +421,7 @@ async saveSelection(next: ModelSelection): Promise<void>
 @Remote('reset') async reset(id: AgentModelTargetId, expectedRevision: number): Promise<AgentModelsSnapshot>
 ```
 
-Source: [`packages/core/agent-default-model/src/index.ts:166`](../../packages/core/agent-default-model/src/index.ts)
+Source: [`packages/core/agent-default-model/src/index.ts:175`](../../packages/core/agent-default-model/src/index.ts)
 
 <a id="ctxagentpresets--agentpresets"></a>
 
@@ -1102,6 +1104,29 @@ A declarative agent entry failed before it could publish a live agent. Consumers
 ```
 
 Source: [`packages/core/agent-loop/src/index.ts:183`](../../packages/core/agent-loop/src/index.ts)
+
+<a id="agent-models-events"></a>
+
+### `agent-models/*` events
+
+<a id="agent-modelsdirectory-updated--emit"></a>
+
+#### `agent-models/directory-updated` — emit
+
+The live Agent-model role directory gained or lost a visible target. Consumers re-read the directory after this post-commit notification; equivalent reference-count changes do not emit. Observer failures are contained and cannot veto the registry mutation.
+
+```ts cordis-catalog
+/**
+ * The live Agent-model role directory gained or lost a visible target.
+ * Consumers re-read the directory after this post-commit notification;
+ * equivalent reference-count changes do not emit. Observer failures are
+ * contained and cannot veto the registry mutation.
+ * @mode emit
+ */
+'agent-models/directory-updated'(): void
+```
+
+Source: [`packages/core/agent-default-model/src/types.ts:14`](../../packages/core/agent-default-model/src/types.ts)
 
 <a id="agent-preset-events"></a>
 

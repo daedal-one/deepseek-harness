@@ -20,6 +20,7 @@ import type {
   ModelCost,
   ModelThinkingLevel,
   OpenAICompletionsCompat,
+  OpenRouterRouting,
   Provider,
   ThinkingLevelMap,
 } from '@earendil-works/pi-ai'
@@ -183,19 +184,26 @@ export function catalogModels(provider: string): Map<string, Model<Api>> {
 export type PiAiReasoningEfforts = Partial<Record<ModelThinkingLevel, string | null>>
 
 /**
- * Reasoning-dispatch compatibility switches, set on the route (its models'
- * default) or per model (winning over the route). Only the switches pi-ai's
- * reasoning dispatch reads are offered; the rest of pi-ai's compat surface
- * keeps its baseURL-derived auto-detection. pi-ai types both fields only on
- * `OpenAICompletionsCompat` — the other wire protocols define their reasoning
- * fields in the protocol itself — so resolution rejects a model-level switch
- * anywhere else, while a route-level default skips past models it cannot fit.
+ * Route- or model-level compatibility and OpenRouter routing switches. The
+ * reasoning fields are set on the route (its models' default) or per model
+ * (winning over the route). OpenRouter routing (`openRouterRouting`) is sent
+ * verbatim as the request's `provider` field, so a route can pin provider
+ * ordering or throughput routing once instead of suffixing every wire id.
+ *
+ * Only the fields pi-ai actually dispatch are offered; the rest of pi-ai's
+ * compat surface keeps its baseURL-derived auto-detection. pi-ai types these
+ * fields only on `OpenAICompletionsCompat` — the other wire protocols define
+ * their reasoning fields in the protocol itself — so resolution rejects a
+ * model-level switch anywhere else, while a route-level default skips past
+ * models it cannot fit.
  */
 export interface PiAiCompatProfile {
   /** Reasoning parameter format the endpoint expects; absent keeps the catalog entry's, then pi-ai's baseURL-derived guess. */
   thinkingFormat?: PiAiThinkingFormat
   /** Whether the endpoint accepts `reasoning_effort`; absent keeps the catalog entry's, then pi-ai's baseURL-derived guess. */
   supportsReasoningEffort?: boolean
+  /** OpenRouter provider-routing preferences sent as the request body's `provider` field. */
+  openRouterRouting?: OpenRouterRouting
 }
 
 /** One configured model entry: an id plus the catalog fields it overrides. */
@@ -382,7 +390,32 @@ function resolveModelReasoning(
 }
 
 /**
- * Resolve one model's compat block from the profile's reasoning switches.
+ * Reverse schemastery's materialization of absent optional fields inside an
+ * `OpenRouterRouting`. The config schema is a `z.object` of optional fields,
+ * and schemastery fills an omitted nested object or array with its empty
+ * default (`order: []`, `max_price: {}`), so an empty routing object —
+ * and only that — reads identically whether the profile named routing or not.
+ * Dropping those empty values means an absent field asserts nothing on the
+ * wire, which is what a deferred-to-default field must do. A completely empty
+ * result means the profile set no routing at all.
+ * @param routing - the materialized routing object from configuration.
+ * @returns the routing with materialized empties removed, or `undefined` when none remained.
+ */
+function routingOrDefault(routing: OpenRouterRouting | undefined): OpenRouterRouting | undefined {
+  if (routing === undefined) return undefined
+  const cleaned: OpenRouterRouting = {}
+  for (const [key, value] of Object.entries(routing)) {
+    if (value === undefined || value === null) continue
+    if (Array.isArray(value) && value.length === 0) continue
+    if (typeof value === 'object' && !Array.isArray(value) && Object.keys(value as object).length === 0) continue
+    ;(cleaned as Record<string, unknown>)[key] = value
+  }
+  return Object.keys(cleaned).length === 0 ? undefined : cleaned
+}
+
+/**
+ * Resolve one model's compat block from the profile's reasoning switches and
+ * OpenRouter routing.
  *
  * A model switch wins over the route switch; whatever neither sets keeps the
  * installed entry's value, and a field no layer decides falls through to
@@ -407,11 +440,17 @@ function resolveModelCompat(
 ): { compat: OpenAICompletionsCompat } | Record<string, never> {
   const thinkingFormat = entry.compat?.thinkingFormat ?? route?.thinkingFormat
   const supportsReasoningEffort = entry.compat?.supportsReasoningEffort ?? route?.supportsReasoningEffort
-  if (thinkingFormat === undefined && supportsReasoningEffort === undefined) return {}
+  const entryRouting = routingOrDefault(entry.compat?.openRouterRouting)
+  const routeRouting = routingOrDefault(route?.openRouterRouting)
+  const openRouterRouting = entryRouting ?? routeRouting
+  if (thinkingFormat === undefined && supportsReasoningEffort === undefined && openRouterRouting === undefined) {
+    return {}
+  }
   if (api !== 'openai-completions') {
-    if (entry.compat?.thinkingFormat !== undefined || entry.compat?.supportsReasoningEffort !== undefined) {
-      invalid(provider, `model "${entry.id}" sets compat reasoning switches, but its api is "${api}";`
-        + ' thinkingFormat and supportsReasoningEffort exist only on openai-completions')
+    if (entry.compat?.thinkingFormat !== undefined || entry.compat?.supportsReasoningEffort !== undefined
+      || entry.compat?.openRouterRouting !== undefined) {
+      invalid(provider, `model "${entry.id}" sets compat routing switches, but its api is "${api}";`
+        + ' thinkingFormat, supportsReasoningEffort, and openRouterRouting exist only on openai-completions')
     }
     return {}
   }
@@ -427,6 +466,7 @@ function resolveModelCompat(
       ...inherited,
       ...thinkingFormat === undefined ? {} : { thinkingFormat },
       ...supportsReasoningEffort === undefined ? {} : { supportsReasoningEffort },
+      ...openRouterRouting === undefined ? {} : { openRouterRouting },
     },
   }
 }
@@ -524,6 +564,7 @@ export function resolveRouteModels(request: RouteCatalogRequest): RouteCatalog {
   const routeApi = sharedCatalogApi(defaults)
   const routeCompatDefined = request.compat?.thinkingFormat !== undefined
     || request.compat?.supportsReasoningEffort !== undefined
+    || routingOrDefault(request.compat?.openRouterRouting) !== undefined
   const seen = new Set<string>()
   const configuredMaxTokens = new Map<string, number>()
   const models = entries.map((entry) => {
@@ -583,8 +624,8 @@ export function resolveRouteModels(request: RouteCatalogRequest): RouteCatalog {
     }
   })
   if (routeCompatDefined && !models.some(model => model.api === 'openai-completions')) {
-    invalid(provider, 'sets compat reasoning switches, but no model on the route speaks openai-completions;'
-      + ' thinkingFormat and supportsReasoningEffort exist only on that protocol')
+    invalid(provider, 'sets compat routing switches, but no model on the route speaks openai-completions;'
+      + ' thinkingFormat, supportsReasoningEffort, and openRouterRouting exist only on that protocol')
   }
   return { models, configuredMaxTokens }
 }

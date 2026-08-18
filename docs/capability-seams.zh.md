@@ -235,8 +235,8 @@ flowchart LR
   pkg_directory_picker_browse --> svc_directoryPicker
   pkg_directory_picker_native --> svc_directoryPicker
   pkg_e2b --> svc_e2b
-  pkg_forge_session_adapter --> svc_forgeSessionAdapter
   pkg_forge_project_workspaces --> svc_forgeProjectWorkspaces
+  pkg_forge_session_adapter --> svc_forgeSessionAdapter
   pkg_fs --> svc_fs
   pkg_fs_e2b --> svc_fs
   pkg_fs_local --> svc_fs

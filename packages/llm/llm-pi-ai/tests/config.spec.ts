@@ -35,6 +35,19 @@ describe('reasoning schema boundary', () => {
   it('rejects a thinking format outside the offered set', () => {
     expect(configWith({ compat: { thinkingFormat: 'quantum' } })).toThrow(/expected/)
   })
+
+  it('accepts an OpenRouter routing object on the route', () => {
+    type Materialized = { providers: Record<string, { compat?: { openRouterRouting?: unknown } }> }
+    const withRouting = routeWith({ compat: { openRouterRouting: { sort: 'throughput' } } })() as Materialized
+    const routing = withRouting.providers['acme-gateway']?.compat?.openRouterRouting as { sort?: unknown }
+    // schemastery fills omitted optional fields with empty defaults; the sort
+    // metric the profile actually named survives.
+    expect(routing?.sort).toBe('throughput')
+  })
+
+  it('rejects an OpenRouter sort metric outside the offered shapes', () => {
+    expect(configWith({ compat: { openRouterRouting: { sort: 42 } } })).toThrow(/expected/)
+  })
 })
 
 describe('modality schema boundary', () => {
