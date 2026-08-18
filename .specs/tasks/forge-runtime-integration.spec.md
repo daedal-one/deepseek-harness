@@ -13,6 +13,7 @@ addresses:
   - REQ:integration/forge-runtime#c-policy
   - REQ:integration/forge-runtime#c-lifecycle
   - REQ:integration/forge-runtime#c-compatibility
+  - REQ:integration/forge-runtime#c-project-workspaces
 labels: [forge, adapter, forge-spec, forge-intellect, conformance]
 assignee: carlo
 ---
@@ -26,3 +27,6 @@ adapter boots through a real Cordis composition, rejects incompatible or
 unaccountable startup, translates supported commands and durable events, keeps
 idempotent retries side-effect free, and passes a keyless Forge conformance
 scenario with an actual Forge Intellect action provider.
+The Web composition accepts an authenticated Forge project catalog, reconciles
+one managed Workspace per entry, and honors a registered-workspace deep link
+without falling back to a different project.

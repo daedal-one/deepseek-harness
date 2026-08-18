@@ -573,6 +573,47 @@ describe('startInitialSelection', () => {
     stopEmpty()
   })
 
+  it('lets an exact registered-workspace deep link override the restored current session', async () => {
+    const b = bench()
+    b.api.onList = () => Promise.resolve(ok({
+      items: [{ sessionId: sid('s-current'), updatedAt: 1, running: false, blank: false, cwd: '/w/current' }] as never[],
+    }))
+    await b.sessions.refresh()
+    b.sessions.open(sid('s-current'))
+    b.api.onWorkspaceList = () => Promise.resolve(ok({
+      items: [workspace('current', [sid('s-current')]), workspace('target')] as never[],
+    }))
+    b.api.onCreate = () => Promise.resolve(ok({ sessionId: sid('s-target') }))
+    const stop = b.workspaces.startInitialSelection('/w/target')
+    await b.workspaces.refresh()
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(b.api.callsOf('session.create')).toEqual([{ workspaceId: 'target' }])
+    expect(b.sessions.list.getSnapshot().current).toBe('s-target')
+    stop()
+  })
+
+  it('waits for a requested registered path instead of opening another recent project', async () => {
+    const b = bench()
+    b.api.onWorkspaceList = () => Promise.resolve(ok({
+      items: [workspace('recent', [], '2026-01-02T00:00:00.000Z')] as never[],
+    }))
+    b.api.onCreate = () => Promise.resolve(ok({ sessionId: sid('s-target') }))
+    const stop = b.workspaces.startInitialSelection('/w/target')
+    await b.workspaces.refresh()
+    await b.sessions.refresh()
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(b.api.callsOf('session.create')).toEqual([])
+
+    b.api.onWorkspaceList = () => Promise.resolve(ok({
+      items: [workspace('recent'), workspace('target')] as never[],
+    }))
+    await b.workspaces.refresh()
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(b.api.callsOf('session.create')).toEqual([{ workspaceId: 'target' }])
+    expect(b.sessions.list.getSnapshot().current).toBe('s-target')
+    stop()
+  })
+
   it('a failed connect returns to waiting and retries on the next list change', async () => {
     const b = bench()
     b.api.onWorkspaceList = () => Promise.resolve(ok({

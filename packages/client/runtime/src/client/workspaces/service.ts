@@ -117,13 +117,16 @@ export class WorkspaceRuntime implements IWorkspaces {
 
   /**
    * Follow the first complete Workspace/Session baseline and select a default
-   * session exactly once. A restored current session wins; otherwise the most
-   * recent Workspace is connected (reusing or creating its blank session).
+   * session exactly once. An explicitly requested registered path wins over a
+   * restored session; otherwise the restored session or most recent Workspace
+   * wins. A requested path waits for a later workspace projection instead of
+   * falling back to a different project.
    * Later explicit clears stay cleared instead of retriggering this startup
    * policy. A failed connect may retry on the next baseline projection.
+   * @param requestedPath - exact registered Workspace path from a trusted UI deep link.
    * @returns disposer for the baseline subscription; late work cannot navigate after disposal.
    */
-  startInitialSelection(): () => void {
+  startInitialSelection(requestedPath?: string): () => void {
     if (this.initialSelectionStarted) {
       throw new Error('workspaces.startInitialSelection: already started')
     }
@@ -135,16 +138,30 @@ export class WorkspaceRuntime implements IWorkspaces {
       const workspace = this.list.getSnapshot()
       if (!workspace.baselinesReady) return
       const current = this.sessions.list.getSnapshot().current
-      const target = workspace.recentWorkspaceId
-      if (current !== undefined || target === undefined) {
+      const target = requestedPath === undefined
+        ? workspace.recentWorkspaceId
+        : workspace.items.find(item => item.path === requestedPath)?.workspaceId
+      if (requestedPath !== undefined && target === undefined) return
+      if (requestedPath === undefined && (current !== undefined || target === undefined)) {
         state = 'done'
         return
+      }
+      if (target === undefined) {
+        state = 'done'
+        return
+      }
+      if (current !== undefined) {
+        const selected = workspace.items.find(item => item.workspaceId === target)
+        if (selected?.sessionIds.includes(current) === true) {
+          state = 'done'
+          return
+        }
       }
       state = 'connecting'
       void this.connectWorkspace(target).then(
         (sessionId) => {
           if (disposed) return
-          if (this.sessions.list.getSnapshot().current === undefined) {
+          if (requestedPath !== undefined || this.sessions.list.getSnapshot().current === undefined) {
             this.sessions.open(sessionId)
           }
           state = 'done'

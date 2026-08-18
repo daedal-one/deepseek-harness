@@ -121,6 +121,8 @@ flowchart LR
   pkg_agent_spine_demo["agent-spine-demo"]
   pkg_forge_session_adapter["forge-session-adapter"]
   svc_forgeSessionAdapter["ctx.forgeSessionAdapter<br/>Forge session protocol adapter"]
+  pkg_forge_project_workspaces["forge-project-workspaces"]
+  svc_forgeProjectWorkspaces["ctx.forgeProjectWorkspaces<br/>Forge project workspace reconciler"]
   pkg_goal["goal"]
   svc_goals["ctx.goals<br/>Same-session goal domain"]
   pkg_e2b["e2b"]
@@ -234,6 +236,7 @@ flowchart LR
   pkg_directory_picker_native --> svc_directoryPicker
   pkg_e2b --> svc_e2b
   pkg_forge_session_adapter --> svc_forgeSessionAdapter
+  pkg_forge_project_workspaces --> svc_forgeProjectWorkspaces
   pkg_fs --> svc_fs
   pkg_fs_e2b --> svc_fs
   pkg_fs_local --> svc_fs
@@ -467,6 +470,7 @@ flowchart LR
 | `ctx.agentModels` | `core` | [`agent-default-model`](../packages/core/agent-default-model) | - | [`headless`](../packages/bundle/headless), [`host-apiproxy`](../packages/host/apiproxy), [`tool-subagent`](../packages/subagent/tool-subagent) | - | 管理 main 与具名 Agent 模型目录，针对单一部署 provider 校验选择，并通过 settings 分层保存每个 Agent 的用户选择。 |
 | `ctx.agentLoop` | `bundle` | [`agent-loop`](../packages/core/agent-loop) | - | [`agent-spine-demo`](../packages/examples/agent-spine-demo) | - | 唯一的具体循环插件；扩展包依赖 dsh-agent 的事件和服务，而不依赖此包。 |
 | `ctx.forgeSessionAdapter` | `core` | [`forge-session-adapter`](../packages/integration/forge-session-adapter) | - | - | - | 对 Forge 生命周期命令进行认证，注入精确且已接受的 Forge Spec render，并创建 Agent，其模型可见的工作区操作只来自 Forge Intellect。 |
+| `ctx.forgeProjectWorkspaces` | `core` | [`forge-project-workspaces`](../packages/integration/forge-project-workspaces) | - | - | - | 对完整 Forge 项目目录进行认证，物化其托管目录，并在不成为项目权威的前提下对账原生 Workspace 注册表。 |
 | `ctx.goals` | `core` | [`goal`](../packages/goal/goal) | - | - | - | 从会话日志折叠带修订版本的目标状态，并将实时延续激活保留在进程本地。 |
 | `ctx.e2b` | `core` | [`e2b`](../packages/e2b/e2b) | - | [`fs-e2b`](../packages/e2b/fs-e2b), [`subprocess-e2b`](../packages/e2b/subprocess-e2b) | - | 拥有一个共享的 E2B SDK 句柄、远程工作目录和最终沙箱处置，使两个基础 E2B 提供方处于同一个 Linux 运行时中。 |
 | `ctx.subprocess` | `seam` | [`subprocess`](../packages/subprocess/subprocess) | [`subprocess-local`](../packages/subprocess/subprocess-local), [`subprocess-e2b`](../packages/e2b/subprocess-e2b) | [`bash-local`](../packages/shell/bash-local), [`bash-sandbox`](../packages/shell/bash-sandbox), [`terminal-bash`](../packages/terminal/terminal-bash), [`lsp-stdio`](../packages/lsp/lsp-stdio), [`subagent-acp`](../packages/subagent/subagent-acp), [`subagent-codex`](../packages/subagent/subagent-codex), [`subagent-claude-code`](../packages/subagent/subagent-claude-code) | - | Bash 执行器、PTY shell 后端、LSP Host，以及进程外 ACP、Codex 和 Claude Code subagent 后端都通过 ctx.subprocess 执行 spawn；该服务负责进程坐标、进程树／会话生命周期、stdio 处置、终端机制和 kill 升级。 |

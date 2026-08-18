@@ -183,6 +183,9 @@ importers:
       '@deepseek-ai/dsh-english-output-guard':
         specifier: workspace:^
         version: link:../../packages/guard/english-output-guard
+      '@deepseek-ai/dsh-forge-project-workspaces':
+        specifier: workspace:^
+        version: link:../../packages/integration/forge-project-workspaces
       '@deepseek-ai/dsh-fs-local':
         specifier: workspace:^
         version: link:../../packages/fs/fs-local
@@ -5202,6 +5205,25 @@ importers:
       '@deepseek-ai/dsh-invariants':
         specifier: workspace:^
         version: link:../../runtime-diagnostics/invariants
+
+  packages/integration/forge-project-workspaces:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-host-webserver':
+        specifier: workspace:^
+        version: link:../../host/webserver
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-workspace':
+        specifier: workspace:^
+        version: link:../../workspace/workspace
 
   packages/integration/forge-session-adapter:
     dependencies:

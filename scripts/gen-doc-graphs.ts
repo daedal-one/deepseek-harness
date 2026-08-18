@@ -374,6 +374,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Authenticates Forge lifecycle commands, injects the exact accepted Forge Spec render, and creates agents whose model-visible workspace actions come only from Forge Intellect.',
   },
   {
+    key: 'forgeProjectWorkspaces',
+    pkg: 'forge-project-workspaces',
+    title: 'Forge project workspace reconciler',
+    mode: 'core',
+    consumers: [],
+    note: 'Authenticates complete Forge project catalogs, materializes their managed directories, and reconciles the native Workspace registry without becoming project authority.',
+  },
+  {
     key: 'goals',
     pkg: 'goal',
     title: 'Same-session goal domain',

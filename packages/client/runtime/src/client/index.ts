@@ -11,6 +11,7 @@ import { SlotRegistry } from './slots.ts'
 import { SessionRuntime } from './sessions/service.ts'
 import type { SessionListState } from './sessions/service.ts'
 import { WorkspaceRuntime } from './workspaces/service.ts'
+import { requestedWorkspacePath } from './workspaces/path.ts'
 import type { ConversationSnapshot } from './sessions/conversation.ts'
 import type { UseProjection } from './sessions/projection-store.ts'
 import { ConversationEventRegistry } from './conversation/event-registry.ts'
@@ -46,7 +47,7 @@ export type { SessionProvideChannelHost } from './sessions/provide.ts'
 export { createScope } from './agents/scope.ts'
 export type { AgentScopeHandle } from './agents/scope.ts'
 export { DirectoryBrowseError, WorkspaceCreateError, WorkspaceRuntime } from './workspaces/service.ts'
-export { resolveWorkspacePath } from './workspaces/path.ts'
+export { requestedWorkspacePath, resolveWorkspacePath } from './workspaces/path.ts'
 // Contract only: the scope implementation and its Host transport belong to
 // dsh-client-ui-settings (see that package's settings-scope.ts).
 export type {
@@ -198,7 +199,7 @@ export function apply(ctx: Context): void {
   })
   const workspaces = new WorkspaceRuntime(ctx, connection.api, sessions)
   ctx.effect(
-    () => workspaces.startInitialSelection(),
+    () => workspaces.startInitialSelection(requestedWorkspacePath()),
     'runtime: initial Workspace selection',
   )
   const loop = connection.start({
