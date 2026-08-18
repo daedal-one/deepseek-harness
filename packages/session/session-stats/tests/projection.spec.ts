@@ -50,7 +50,8 @@ function appendEmptyAssistantMessage(session: Session, turn: number, step: numbe
 /** The all-zero projection value plus overrides, for exact fold expectations. */
 function totals(overrides: Partial<SessionStatsProjection> = {}): SessionStatsProjection {
   return {
-    turns: 0, steps: 0, llmMs: 0, toolMs: 0, ttftMs: 0, ttftSteps: 0, decodeMs: 0, decodeTokens: 0,
+    turns: 0, steps: 0, llmMs: 0, toolMs: 0, ttftMs: 0, ttftSteps: 0,
+    throughputMs: 0, throughputTokens: 0,
     ...overrides,
   }
 }
@@ -120,7 +121,7 @@ describe('sessionStats projection unit (registry drive)', () => {
     session.append('step/end', { turn: 1, step: 1 })
     session.append('turn/end', { turn: 1, reason: { kind: 'max-tokens' } })
     expect(ctx.sessionProjections.snapshot(session).values.sessionStats)
-      .toMatchObject({ turns: 1, steps: 1, ttftSteps: 0, decodeTokens: 0 })
+      .toMatchObject({ turns: 1, steps: 1, ttftSteps: 0, throughputTokens: 0 })
   })
 
   it('folds steps already in the log when the plugin mounts late (lazy cell build)', async () => {
@@ -168,14 +169,37 @@ describe('sessionStats wall-time fold (controlled timestamps)', () => {
     source: { kind: 'model', provider: 'mock', model: 'mock' },
   })
 
-  it('accrues model, first-token, and decode time from one fully recorded step', () => {
+  it('accrues model, first-token, and output-rate time from one fully recorded step', () => {
     expect(fold([
       at(1_000, 'step/start', { turn: 1, step: 1 }),
       at(1_800, 'assistant/chunk', { turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: 'a' } }),
       at(4_800, 'assistant/message', { turn: 1, step: 1, message, usage: { inputTokens: 10, outputTokens: 60 } }),
       at(4_900, 'step/end', { turn: 1, step: 1 }),
     ])).toEqual(totals({
-      turns: 1, steps: 1, llmMs: 3_800, ttftMs: 800, ttftSteps: 1, decodeMs: 3_000, decodeTokens: 60,
+      turns: 1, steps: 1, llmMs: 3_800, ttftMs: 800, ttftSteps: 1,
+      throughputMs: 3_800, throughputTokens: 60,
+    }))
+  })
+
+  it('measures buffered output over the full request instead of its chunk-arrival burst', () => {
+    expect(fold([
+      at(1_000, 'step/start', { turn: 1, step: 1 }),
+      at(5_999, 'assistant/chunk', { turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: 'answer' } }),
+      at(6_000, 'assistant/message', { turn: 1, step: 1, message, usage: { inputTokens: 10, outputTokens: 100 } }),
+      at(6_100, 'step/end', { turn: 1, step: 1 }),
+    ])).toEqual(totals({
+      turns: 1, steps: 1, llmMs: 5_000, ttftMs: 4_999, ttftSteps: 1,
+      throughputMs: 5_000, throughputTokens: 100,
+    }))
+  })
+
+  it('records output rate without inventing ttft when no token chunk is present', () => {
+    expect(fold([
+      at(1_000, 'step/start', { turn: 1, step: 1 }),
+      at(6_000, 'assistant/message', { turn: 1, step: 1, message, usage: { inputTokens: 10, outputTokens: 50 } }),
+      at(6_100, 'step/end', { turn: 1, step: 1 }),
+    ])).toEqual(totals({
+      turns: 1, steps: 1, llmMs: 5_000, throughputMs: 5_000, throughputTokens: 50,
     }))
   })
 
@@ -258,7 +282,7 @@ describe('sessionStats wall-time fold (controlled timestamps)', () => {
     ])).toEqual(totals({ turns: 1, steps: 1, toolMs: 500 }))
   })
 
-  it('skips decode for an invalid usage report and ignores a duplicate assembled message', () => {
+  it('skips output rate for an invalid usage report and ignores a duplicate assembled message', () => {
     const events = [
       at(1_000, 'step/start', { turn: 1, step: 1 }),
       at(1_400, 'assistant/chunk', { turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: 'a' } }),

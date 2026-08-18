@@ -1,6 +1,6 @@
 /**
  * Function plugin registering the `sessionStats` projection unit: whole-log
- * turn/step counts and LLM/tool/first-token/decode wall times served through
+ * turn/step counts and LLM/tool/first-token/output-rate wall times served through
  * the session-projection seam (registry snapshot, change feed, and every
  * projection carrier), so clients render full-session figures that paging and
  * compaction cannot change. The plugin owns only the fold; delivery is the

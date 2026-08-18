@@ -87,14 +87,16 @@ describe('TrajectoryTable', () => {
     expect(screen.getByText('(tool call only)')).toBeTruthy()
   })
 
-  it('shows assistant timing facts after keyboard selection', () => {
+  it('shows assistant timing facts and full-request output rate after keyboard selection', () => {
     render(<TrajectoryTable turns={TURNS} {...FOLD_PROPS} />)
     fireEvent.keyDown(screen.getByRole('row', { name: /ASSISTANT/ }), { key: 'Enter' })
     fireEvent.click(screen.getByRole('button', { name: 'Request Timing' }))
 
     expect(screen.getByText('500 ms')).toBeTruthy()
     expect(screen.getByText('1.00 s')).toBeTruthy()
-    expect(screen.getByText('20.0 tok/s')).toBeTruthy()
+    expect(screen.getByText('13.3 tok/s')).toBeTruthy()
+    expect(screen.getByText('Stream span')).toBeTruthy()
+    expect(screen.getByText('Output rate')).toBeTruthy()
   })
 
   it('shows a tool record Duration as exact milliseconds', () => {

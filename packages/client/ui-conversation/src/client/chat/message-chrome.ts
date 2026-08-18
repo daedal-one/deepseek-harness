@@ -60,7 +60,7 @@ export function formatLatencySeconds(ms: number): string {
 }
 
 /**
- * Decode-throughput figure: whole tokens from ten up, one decimal below.
+ * End-to-end output-rate figure: whole tokens from ten up, one decimal below.
  * @param tps - Tokens per second.
  * @returns Display number without unit.
  */

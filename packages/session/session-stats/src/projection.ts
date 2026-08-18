@@ -14,11 +14,13 @@
  * (`deriveStats` in dsh-client-ui-conversation, that fold's whole-window
  * fallback role): model time is `step/start` → `assistant/message`, first
  * token is the first non-empty delta chunk and survives an in-step
- * `llm/retry`, decode spans first token → assembled message on steps that
- * also report output tokens, and tool time pairs `tool/call` → `tool/result`
- * by callId. A cancelled step assembles no message, so its partial stream
- * time stays uncounted in every time figure — matching the window, which
- * renders it as an untimed interrupted node.
+ * `llm/retry`, output-rate time spans step start → assembled message on steps
+ * that also report output tokens, and tool time pairs `tool/call` →
+ * `tool/result` by callId. Full request time makes the rate honest for
+ * transports that buffer generated chunks and deliver them in a burst. A
+ * cancelled step assembles no message, so its partial stream time stays
+ * uncounted in every time figure — matching the window, which renders it as an
+ * untimed interrupted node.
  *
  * @module @deepseek-ai/dsh-session-stats/projection
  */
@@ -41,10 +43,10 @@ interface SessionStatsTotals {
   ttftMs: number
   /** Steps carrying a recorded first token. */
   ttftSteps: number
-  /** Summed decode wall time over usage-reporting steps, ms. */
-  decodeMs: number
+  /** Summed request wall time over usage-reporting steps, ms. */
+  throughputMs: number
   /** Summed provider output tokens over the same steps. */
-  decodeTokens: number
+  throughputTokens: number
 }
 
 /**
@@ -69,8 +71,8 @@ const sessionStatsSchema = z.object({
   toolMs: z.number().nonnegative(),
   ttftMs: z.number().nonnegative(),
   ttftSteps: z.number().int().nonnegative(),
-  decodeMs: z.number().nonnegative(),
-  decodeTokens: z.number().nonnegative(),
+  throughputMs: z.number().nonnegative(),
+  throughputTokens: z.number().nonnegative(),
 }).strict()
 
 /**
@@ -96,8 +98,8 @@ export const sessionStatsProjectionDefinition: ProjectionDefinition<'sessionStat
     toolMs: 0,
     ttftMs: 0,
     ttftSteps: 0,
-    decodeMs: 0,
-    decodeTokens: 0,
+    throughputMs: 0,
+    throughputTokens: 0,
     lastTurn: null,
     openStep: null,
     pendingCalls: {},
@@ -129,11 +131,11 @@ export const sessionStatsProjectionDefinition: ProjectionDefinition<'sessionStat
         if (open.firstTokenTime !== null) {
           next.ttftMs += Math.max(0, open.firstTokenTime - open.startTime)
           next.ttftSteps += 1
-          const outputTokens = usageOutputTokens(event.data.usage)
-          if (outputTokens !== null) {
-            next.decodeMs += Math.max(0, event.time - open.firstTokenTime)
-            next.decodeTokens += outputTokens
-          }
+        }
+        const outputTokens = usageOutputTokens(event.data.usage)
+        if (outputTokens !== null) {
+          next.throughputMs += Math.max(0, event.time - open.startTime)
+          next.throughputTokens += outputTokens
         }
         return next
       }
@@ -176,8 +178,8 @@ export const sessionStatsProjectionDefinition: ProjectionDefinition<'sessionStat
     toolMs: state.toolMs,
     ttftMs: state.ttftMs,
     ttftSteps: state.ttftSteps,
-    decodeMs: state.decodeMs,
-    decodeTokens: state.decodeTokens,
+    throughputMs: state.throughputMs,
+    throughputTokens: state.throughputTokens,
   }),
-  stateVersion: 1,
+  stateVersion: 2,
 }

@@ -13,7 +13,7 @@ export type TrajectoryCellKind =
   | 'tool'
   | 'subtool'
 
-/** Recorded inputs needed to derive assistant TTFT and decode throughput. */
+/** Recorded inputs needed to derive assistant TTFT, stream span, and end-to-end output rate. */
 export interface AssistantMetricDetail {
   timingRecorded: boolean
   stepStartTime: number | null

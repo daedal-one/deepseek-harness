@@ -885,10 +885,19 @@ function sessionStatsOf(log: readonly SessionEvent[]): {
   toolMs: number
   ttftMs: number
   ttftSteps: number
-  decodeMs: number
-  decodeTokens: number
+  throughputMs: number
+  throughputTokens: number
 } {
-  const value = { turns: 0, steps: 0, llmMs: 0, toolMs: 0, ttftMs: 0, ttftSteps: 0, decodeMs: 0, decodeTokens: 0 }
+  const value = {
+    turns: 0,
+    steps: 0,
+    llmMs: 0,
+    toolMs: 0,
+    ttftMs: 0,
+    ttftSteps: 0,
+    throughputMs: 0,
+    throughputTokens: 0,
+  }
   let lastTurn: number | null = null
   let openStep: { turn: number; step: number; startTime: number; firstTokenTime: number | null } | null = null
   const pendingCalls = new Map<string, number>()
@@ -909,11 +918,11 @@ function sessionStatsOf(log: readonly SessionEvent[]): {
         if (openStep.firstTokenTime !== null) {
           value.ttftMs += Math.max(0, openStep.firstTokenTime - openStep.startTime)
           value.ttftSteps += 1
-          const outputTokens = event.data.usage?.outputTokens
-          if (typeof outputTokens === 'number' && Number.isFinite(outputTokens) && outputTokens >= 0) {
-            value.decodeMs += Math.max(0, event.time - openStep.firstTokenTime)
-            value.decodeTokens += outputTokens
-          }
+        }
+        const outputTokens = event.data.usage?.outputTokens
+        if (typeof outputTokens === 'number' && Number.isFinite(outputTokens) && outputTokens >= 0) {
+          value.throughputMs += Math.max(0, event.time - openStep.startTime)
+          value.throughputTokens += outputTokens
         }
         openStep = null
         break

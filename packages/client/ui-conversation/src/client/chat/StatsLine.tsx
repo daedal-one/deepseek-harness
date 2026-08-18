@@ -25,10 +25,10 @@ interface WindowStats {
   ttftMs: number
   /** Steps carrying a recorded TTFT. */
   ttftSteps: number
-  /** Summed decode wall time over steps that also report output tokens. */
-  decodeMs: number
-  /** Summed output tokens over the same decode-timed steps. */
-  decodeTokens: number
+  /** Summed request wall time over steps that also report output tokens. */
+  throughputMs: number
+  /** Summed output tokens over the same request-timed steps. */
+  throughputTokens: number
 }
 
 /**
@@ -50,8 +50,8 @@ export function deriveStats(nodes: ConversationSnapshot['nodes']): WindowStats {
   let toolMs = 0
   let ttftMs = 0
   let ttftSteps = 0
-  let decodeMs = 0
-  let decodeTokens = 0
+  let throughputMs = 0
+  let throughputTokens = 0
   for (const node of nodes) {
     if (node.kind === 'tool-result') {
       if (node.callTime !== null) toolMs += Math.max(0, node.time - node.callTime)
@@ -68,12 +68,21 @@ export function deriveStats(nodes: ConversationSnapshot['nodes']): WindowStats {
       ttftMs += reading.ttftMs
       ttftSteps += 1
     }
-    if (reading.decodeMs !== null && reading.outputTokens !== null) {
-      decodeMs += reading.decodeMs
-      decodeTokens += reading.outputTokens
+    if (reading.requestMs !== null && reading.outputTokens !== null) {
+      throughputMs += reading.requestMs
+      throughputTokens += reading.outputTokens
     }
   }
-  return { turns: turns.size, steps, llmMs, toolMs, ttftMs, ttftSteps, decodeMs, decodeTokens }
+  return {
+    turns: turns.size,
+    steps,
+    llmMs,
+    toolMs,
+    ttftMs,
+    ttftSteps,
+    throughputMs,
+    throughputTokens,
+  }
 }
 
 /**
@@ -181,9 +190,9 @@ export const StatsLine = memo(function StatsLine({ useSession, useProjection, t 
     if (stats.ttftSteps > 0) {
       speeds.push(t('stats.ttftAverage', { duration: formatDuration(stats.ttftMs / stats.ttftSteps) }))
     }
-    if (stats.decodeMs > 0) {
+    if (stats.throughputMs > 0) {
       speeds.push(t('stats.tokensPerSecond', {
-        throughput: formatTokensPerSecond(stats.decodeTokens / (stats.decodeMs / 1_000)),
+        throughput: formatTokensPerSecond(stats.throughputTokens / (stats.throughputMs / 1_000)),
       }))
     }
     if (speeds.length > 0) groups.push(speeds.join(' · '))

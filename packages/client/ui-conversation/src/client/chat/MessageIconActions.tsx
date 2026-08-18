@@ -19,7 +19,7 @@ export interface MessageIconActionsProps {
   runMs?: number | undefined
   /** Turn first-step TTFT in ms, appended as `· TTFT 1.2s`; omitted when unrecorded. */
   ttftMs?: number | undefined
-  /** Turn decode throughput, appended as `· 34 tok/s`; omitted when unrecorded. */
+  /** Turn output tokens per request second, appended as `· 34 tok/s`; omitted when unrecorded. */
   tokensPerSecond?: number | undefined
   /** Clock before icons (user) or after (assistant). */
   clock: 'start' | 'end'

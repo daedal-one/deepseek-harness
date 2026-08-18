@@ -315,20 +315,20 @@ function ttft(metrics: AssistantMetricDetail): string {
   return formatDurationMs(Math.max(0, metrics.firstTokenTime - metrics.stepStartTime))
 }
 
-function generationTime(metrics: AssistantMetricDetail): string {
+function streamSpan(metrics: AssistantMetricDetail): string {
   if (!metrics.timingRecorded || metrics.firstTokenTime === null) return 'First token unavailable'
   if (metrics.completedTime === null) return 'Pending'
   return formatDurationMs(Math.max(0, metrics.completedTime - metrics.firstTokenTime))
 }
 
-function throughput(metrics: AssistantMetricDetail): string {
+function outputRate(metrics: AssistantMetricDetail): string {
   if (!metrics.usageProvided) return 'Usage unavailable'
   if (metrics.outputTokens === null) return 'Output tokens unavailable'
-  if (!metrics.timingRecorded || metrics.firstTokenTime === null) return 'First token unavailable'
+  if (!metrics.timingRecorded || metrics.stepStartTime === null) return 'Step start unavailable'
   if (metrics.completedTime === null) return 'Pending'
-  const generationSeconds = (metrics.completedTime - metrics.firstTokenTime) / 1_000
-  if (generationSeconds <= 0) return 'Duration too short'
-  return `${(metrics.outputTokens / generationSeconds).toFixed(1)} tok/s`
+  const requestSeconds = (metrics.completedTime - metrics.stepStartTime) / 1_000
+  if (requestSeconds <= 0) return 'Duration too short'
+  return `${(metrics.outputTokens / requestSeconds).toFixed(1)} tok/s`
 }
 
 function AssistantTimingPanel({ metrics }: { metrics: AssistantMetricDetail }) {
@@ -337,8 +337,8 @@ function AssistantTimingPanel({ metrics }: { metrics: AssistantMetricDetail }) {
       <div><dt>Started</dt><StartedAtValue timestamp={metrics.stepStartTime} /></div>
       <div><dt>Total duration</dt><dd>{totalTime(metrics)}</dd></div>
       <div><dt>TTFT</dt><dd>{ttft(metrics)}</dd></div>
-      <div><dt>Generation</dt><dd>{generationTime(metrics)}</dd></div>
-      <div><dt>Throughput</dt><dd>{throughput(metrics)}</dd></div>
+      <div><dt>Stream span</dt><dd>{streamSpan(metrics)}</dd></div>
+      <div><dt>Output rate</dt><dd>{outputRate(metrics)}</dd></div>
     </dl>
   )
 }

@@ -101,10 +101,10 @@ describe('deriveStats', () => {
     // The window fold's counts are only the fallback for assemblies without
     // the sessionStats projection; the paged window is not an accounting
     // source either, so the fold exposes no billing fields (billing rides the
-    // tokenUsage projection); decodeTokens is a throughput input, not a
+    // tokenUsage projection); throughputTokens is a rate input, not a
     // billed total.
     expect(Object.keys(stats).sort()).toEqual(
-      ['decodeMs', 'decodeTokens', 'llmMs', 'steps', 'toolMs', 'ttftMs', 'ttftSteps', 'turns'],
+      ['llmMs', 'steps', 'throughputMs', 'throughputTokens', 'toolMs', 'ttftMs', 'ttftSteps', 'turns'],
     )
   })
 
@@ -136,7 +136,7 @@ describe('deriveStats', () => {
     expect(stats.toolMs).toBe(3_000)
   })
 
-  it('sums ttft per recorded step and decode throughput inputs per usage-carrying step', () => {
+  it('sums ttft per recorded step and output-rate inputs per usage-carrying step', () => {
     const sampled: AssistantMessageNode = {
       ...assistant(1, 1, { outputTokens: 40 }),
       timing: { stepStartTime: 1_000, firstTokenTime: 1_800, completedTime: 4_800 },
@@ -148,9 +148,9 @@ describe('deriveStats', () => {
     const stats = deriveStats([sampled, ttftOnly, assistant(3, 2)])
     expect(stats.ttftMs).toBe(1_200)
     expect(stats.ttftSteps).toBe(2)
-    // The usage-less step contributes no decode share, keeping the ratio honest.
-    expect(stats.decodeMs).toBe(3_000)
-    expect(stats.decodeTokens).toBe(40)
+    // The usage-less step contributes no duration share, keeping the ratio honest.
+    expect(stats.throughputMs).toBe(3_800)
+    expect(stats.throughputTokens).toBe(40)
   })
 })
 
@@ -174,7 +174,8 @@ describe('StatsLine', () => {
   /** A whole-log sessionStats value: zeros plus overrides. */
   function sessionStats(overrides: Record<string, number>): Record<string, number> {
     return {
-      turns: 0, steps: 0, llmMs: 0, toolMs: 0, ttftMs: 0, ttftSteps: 0, decodeMs: 0, decodeTokens: 0,
+      turns: 0, steps: 0, llmMs: 0, toolMs: 0, ttftMs: 0, ttftSteps: 0,
+      throughputMs: 0, throughputTokens: 0,
       ...overrides,
     }
   }
@@ -236,7 +237,7 @@ describe('StatsLine', () => {
     }
     const { source } = makeSource({ nodes: [timed] })
     const view = render(<StatsLine {...props(source)} />)
-    expect(view.container.textContent).toContain('LLM 3.8s| TTFT avg 0.8s · 20 tok/s')
+    expect(view.container.textContent).toContain('LLM 3.8s| TTFT avg 0.8s · 16 tok/s')
   })
 
   it('takes every stats label from the active locale', () => {
@@ -247,7 +248,7 @@ describe('StatsLine', () => {
     const { source } = makeSource({ nodes: [timed] })
     const view = render(<StatsLine {...props(source)} t={t} />)
     expect(view.container.textContent)
-      .toBe('1 轮 · 1 步| LLM 3.8s| 首 token 平均 0.8s · 20 tok/s| 缓存命中 90%| 输入 100 tok · 输出 5 tok')
+      .toBe('1 轮 · 1 步| LLM 3.8s| 首 token 平均 0.8s · 16 tok/s| 缓存命中 90%| 输入 100 tok · 输出 5 tok')
   })
 
   it('renders without ResizeObserver support', () => {
@@ -346,11 +347,11 @@ describe('StatsLine', () => {
       tokenUsage: USAGE,
       sessionStats: sessionStats({
         turns: 200, steps: 200, llmMs: 100_000, toolMs: 62_000,
-        ttftMs: 1_600, ttftSteps: 2, decodeMs: 3_000, decodeTokens: 60,
+        ttftMs: 1_600, ttftSteps: 2, throughputMs: 3_800, throughputTokens: 60,
       }),
     })} />)
     expect(view.container.textContent).toBe(
-      '200 turns · 200 steps| LLM 1m40s · Tool call 1m2s| TTFT avg 0.8s · 20 tok/s| Cache hit 90%| Input 100 tok · Output 5 tok',
+      '200 turns · 200 steps| LLM 1m40s · Tool call 1m2s| TTFT avg 0.8s · 16 tok/s| Cache hit 90%| Input 100 tok · Output 5 tok',
     )
   })
 
