@@ -1,4 +1,4 @@
-/** The `web-search-deepseek` settings section layered over the composition entry. */
+/** The `web-search-openrouter` settings section layered over the composition entry. */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -6,8 +6,8 @@ import type { Fiber } from '@deepseek-ai/cordis'
 import { SettingsProvider } from '@deepseek-ai/dsh-settings'
 import type { SettingsNamespace } from '@deepseek-ai/dsh-settings'
 import WebRuntime from '@deepseek-ai/dsh-web'
-import * as deepseekPlugin from '@deepseek-ai/dsh-web-search-deepseek'
-import { WEB_SEARCH_DEEPSEEK_SETTINGS_NAMESPACE } from '@deepseek-ai/dsh-web-search-deepseek'
+import * as openrouterPlugin from '@deepseek-ai/dsh-web-search-openrouter'
+import { WEB_SEARCH_OPENROUTER_SETTINGS_NAMESPACE } from '@deepseek-ai/dsh-web-search-openrouter'
 
 /** The smallest real provider: one in-memory document, always writable. */
 class MemorySettings extends SettingsProvider {
@@ -34,15 +34,17 @@ function jsonResponse(body: unknown): Response {
   })
 }
 
-/** The smallest Anthropic-shaped answer the provider accepts — enough to observe the request. */
+/** The smallest cited OpenRouter answer the provider accepts. */
 const ONE_RESULT = {
-  content: [
-    { type: 'text', text: 'ok' },
-    {
-      type: 'web_search_tool_result',
-      content: [{ type: 'web_search_result', url: 'https://a.test', title: 'A' }],
+  choices: [{
+    message: {
+      content: 'ok',
+      annotations: [{
+        type: 'url_citation',
+        url_citation: { url: 'https://a.test', title: 'A' },
+      }],
     },
-  ],
+  }],
 }
 
 async function boot(): Promise<{ ctx: Context; settingsFiber: Fiber; pluginFiber: Fiber }> {
@@ -50,7 +52,7 @@ async function boot(): Promise<{ ctx: Context; settingsFiber: Fiber; pluginFiber
   await ctx.plugin(WebRuntime, {})
   const settingsFiber = ctx.plugin(MemorySettings)
   await settingsFiber.await()
-  const pluginFiber = ctx.plugin(deepseekPlugin, { apiKey: 'ds-key', baseURL: 'https://search.entry.test/v1' })
+  const pluginFiber = ctx.plugin(openrouterPlugin, { apiKey: 'or-key', baseURL: 'https://search.entry.test/v1' })
   await pluginFiber.await()
   return { ctx, settingsFiber, pluginFiber }
 }
@@ -74,12 +76,12 @@ async function searchOnce(ctx: Context): Promise<string> {
   return String((fetchSpy.mock.calls.at(-1)?.[0] as URL | string | undefined) ?? '')
 }
 
-describe('web-search-deepseek settings section', () => {
+describe('web-search-openrouter settings section', () => {
   it('serves a stored endpoint to the next search without re-registering the provider', async () => {
     const bench = await boot()
     expect(await searchOnce(bench.ctx)).toContain('https://search.entry.test/v1')
 
-    await bench.ctx.settings.update(WEB_SEARCH_DEEPSEEK_SETTINGS_NAMESPACE, {
+    await bench.ctx.settings.update(WEB_SEARCH_OPENROUTER_SETTINGS_NAMESPACE, {
       baseURL: 'https://search.stored.test/v1',
     })
 
@@ -89,19 +91,19 @@ describe('web-search-deepseek settings section', () => {
 
   it('keeps the literal key out of every described layer', async () => {
     const bench = await boot()
-    await bench.ctx.settings.update(WEB_SEARCH_DEEPSEEK_SETTINGS_NAMESPACE, { apiKey: 'ds-stored-secret' })
+    await bench.ctx.settings.update(WEB_SEARCH_OPENROUTER_SETTINGS_NAMESPACE, { apiKey: 'or-stored-secret' })
 
     const [descriptor] = bench.ctx.settings.describe({ redactSecrets: true })
-      .filter(row => String(row.ns) === 'web-search-deepseek')
+      .filter(row => String(row.ns) === 'web-search-openrouter')
 
-    expect(JSON.stringify(descriptor)).not.toContain('ds-stored-secret')
+    expect(JSON.stringify(descriptor)).not.toContain('or-stored-secret')
     expect(descriptor?.secrets).toEqual([{ path: ['apiKey'], set: true }])
     await bench.ctx.fiber.dispose()
   })
 
   it('falls back to the composition entry when the settings provider detaches', async () => {
     const bench = await boot()
-    await bench.ctx.settings.update(WEB_SEARCH_DEEPSEEK_SETTINGS_NAMESPACE, {
+    await bench.ctx.settings.update(WEB_SEARCH_OPENROUTER_SETTINGS_NAMESPACE, {
       baseURL: 'https://search.stored.test/v1',
     })
     expect(await searchOnce(bench.ctx)).toContain('https://search.stored.test/v1')
@@ -114,11 +116,11 @@ describe('web-search-deepseek settings section', () => {
 
   it('releases the namespace when the plugin unloads', async () => {
     const bench = await boot()
-    expect(bench.ctx.settings.describe().map(row => String(row.ns))).toContain('web-search-deepseek')
+    expect(bench.ctx.settings.describe().map(row => String(row.ns))).toContain('web-search-openrouter')
 
     await bench.pluginFiber.dispose()
 
-    expect(bench.ctx.settings.describe().map(row => String(row.ns))).not.toContain('web-search-deepseek')
+    expect(bench.ctx.settings.describe().map(row => String(row.ns))).not.toContain('web-search-openrouter')
     await bench.ctx.fiber.dispose()
   })
 })

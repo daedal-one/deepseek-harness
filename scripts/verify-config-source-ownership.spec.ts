@@ -18,7 +18,7 @@ describe('configuration source ownership gate', () => {
     mkdirSync(directory, { recursive: true })
     writeFileSync(
       join(directory, 'cordis.patch.yml'),
-      'config:\n  baseURL: !!js process.env.DEEPSEEK_SEARCH_BASE_URL\n',
+      'config:\n  baseURL: !!js process.env.OPENROUTER_BASE_URL\n',
     )
 
     expect(collectConfigSourceOwnershipViolations(root)).toEqual([

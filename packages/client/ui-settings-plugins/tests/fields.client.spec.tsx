@@ -103,9 +103,9 @@ describe('SecretField', () => {
     )
     const input = screen.getByLabelText('API key')
 
-    fireEvent.change(input, { target: { value: 'ds-secret' } })
+    fireEvent.change(input, { target: { value: 'or-secret' } })
 
-    expect(onEdit).toHaveBeenCalledWith('ds-secret')
+    expect(onEdit).toHaveBeenCalledWith('or-secret')
     expect(input).toHaveProperty('type', 'password')
   })
 
@@ -124,7 +124,7 @@ describe('SecretField', () => {
     rerender(
       <SecretField
         {...secret}
-        text="ds-secret"
+        text="or-secret"
         configured
         stateLabel="A key is configured."
         onEdit={vi.fn()}
@@ -132,7 +132,7 @@ describe('SecretField', () => {
     )
 
     expect(screen.getByText('A key is configured.')).toBeTruthy()
-    expect(screen.getByLabelText('API key')).toHaveProperty('value', 'ds-secret')
+    expect(screen.getByLabelText('API key')).toHaveProperty('value', 'or-secret')
   })
 
   it('disables the control when it is told to', () => {

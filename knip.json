@@ -540,7 +540,7 @@
         "tests/**/*.ts"
       ]
     },
-    "packages/web/web-search-deepseek": {
+    "packages/web/web-search-openrouter": {
       "entry": [
         "tests/**/*.spec.ts",
         "tests/**/*.e2e.ts"

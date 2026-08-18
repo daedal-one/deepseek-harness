@@ -1,7 +1,7 @@
 /**
- * The web-search provider's card: its endpoint, its per-request search budget,
- * and the key — which is written through the credentials domain, never into
- * the settings section, so the literal never rides a response.
+ * The OpenRouter search provider's endpoint, model, engine, request budget,
+ * and credential reference. The key is written through the credentials domain
+ * and never enters a settings response.
  */
 
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -59,6 +59,30 @@ export function WebSearchCard(props: WebSearchCardProps) {
         {...state.baseURL}
         onEdit={(text) => { props.edit('baseURL', text) }}
         onReset={() => { props.resetField('baseURL') }}
+      />
+      <ValueField
+        id="plugin-config-web-search-model"
+        label={t('webSearchModel')}
+        hint={t('webSearchModelHint')}
+        overriddenLabel={t('overridden')}
+        resetLabel={t('reset')}
+        invalidLabel={t('invalidNumber')}
+        disabled={disabled}
+        {...state.model}
+        onEdit={(text) => { props.edit('model', text) }}
+        onReset={() => { props.resetField('model') }}
+      />
+      <ValueField
+        id="plugin-config-web-search-engine"
+        label={t('webSearchEngine')}
+        hint={t('webSearchEngineHint')}
+        overriddenLabel={t('overridden')}
+        resetLabel={t('reset')}
+        invalidLabel={t('invalidNumber')}
+        disabled={disabled}
+        {...state.engine}
+        onEdit={(text) => { props.edit('engine', text) }}
+        onReset={() => { props.resetField('engine') }}
       />
       <ValueField
         id="plugin-config-web-search-max-uses"

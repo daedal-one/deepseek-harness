@@ -6,13 +6,13 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createServer, type IncomingMessage, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { DeepSeekSearchProvider } from '@deepseek-ai/dsh-web-search-deepseek'
+import { OpenRouterSearchProvider } from '@deepseek-ai/dsh-web-search-openrouter'
 
 /** Construct the provider over a fixed options value; production passes a live thunk. */
-import type { DeepSeekSearchProviderOptions } from '@deepseek-ai/dsh-web-search-deepseek'
+import type { OpenRouterSearchProviderOptions } from '@deepseek-ai/dsh-web-search-openrouter'
 
-const searchProvider = (options: DeepSeekSearchProviderOptions): DeepSeekSearchProvider =>
-  new DeepSeekSearchProvider(() => options)
+const searchProvider = (options: OpenRouterSearchProviderOptions): OpenRouterSearchProvider =>
+  new OpenRouterSearchProvider(() => options)
 
 const TEST_API_KEY = 'redirect-test-key'
 const TEST_QUERY = 'private redirect query'
@@ -49,14 +49,14 @@ afterAll(async () => {
   await Promise.all([close(redirectServer), close(targetServer)])
 })
 
-describe('DeepSeekSearchProvider redirect policy', () => {
+describe('OpenRouterSearchProvider redirect policy', () => {
   it.each([301, 302, 303, 307, 308])('rejects HTTP %i before contacting Location', async (status) => {
     targetRequests.length = 0
     const provider = searchProvider({
       apiKey: TEST_API_KEY,
       baseURL: `${redirectOrigin}/${status}`,
-      model: 'deepseek-chat',
-      apiVersion: '2023-06-01',
+      model: 'openrouter-chat',
+      engine: 'auto',
       maxTokens: 32,
       maxUses: 1,
     })
@@ -66,13 +66,12 @@ describe('DeepSeekSearchProvider redirect policy', () => {
     expect(targetRequests).toHaveLength(0)
   })
 
-  it('shows default 307 following forwards the custom credential and POST body', async () => {
+  it('shows default 307 following forwards the private POST body across origins', async () => {
     targetRequests.length = 0
     const body = JSON.stringify({ query: TEST_QUERY })
     await fetch(`${redirectOrigin}/307`, {
       method: 'POST',
       headers: {
-        'x-api-key': TEST_API_KEY,
         'authorization': `Bearer ${TEST_API_KEY}`,
         'content-type': 'application/json',
       },
@@ -81,7 +80,7 @@ describe('DeepSeekSearchProvider redirect policy', () => {
 
     expect(targetRequests).toHaveLength(1)
     expect(targetRequests[0]).toMatchObject({ method: 'POST', body })
-    expect(targetRequests[0]?.headers['x-api-key']).toBe(TEST_API_KEY)
+    expect(targetRequests[0]?.headers['authorization']).toBeUndefined()
   })
 })
 

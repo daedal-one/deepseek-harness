@@ -10,6 +10,9 @@
     - button "插件":
       - img
       - text: 插件
+    - button "智能体":
+      - img
+      - text: 智能体
     - button "Agent 预设":
       - img
       - text: Agent 预设
@@ -38,5 +41,5 @@
           - img
       - listitem:
         - 'button "展开设置: 网页搜索"':
-          - text: 网页搜索 DeepSeek 搜索提供方。
+          - text: 网页搜索 通过 OpenRouter 路由，使用提供方原生或托管检索的搜索。
           - img

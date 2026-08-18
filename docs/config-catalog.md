@@ -3370,34 +3370,6 @@ export interface Config {
 
 Source: [`packages/web/web-fetch-http/src/index.ts:32`](../packages/web/web-fetch-http/src/index.ts)
 
-<a id="deepseek-aidsh-web-search-deepseek"></a>
-
-## `@deepseek-ai/dsh-web-search-deepseek`
-
-Requires: `web`
-
-```ts config-catalog
-/** Plugin config (all optional — `apply` fills env-var and constant defaults). */
-export interface Config {
-  /** Literal DeepSeek API key; prefer {@link apiKeyEnv} so no secret enters configuration files. */
-  apiKey?: string
-  /** Credential reference resolved for each search; defaults to `DEEPSEEK_API_KEY`. */
-  apiKeyEnv?: string
-  /** Anthropic-compatible endpoint base; `/messages` is appended. */
-  baseURL?: string
-  /** Anthropic-format model name. Defaults to `deepseek-v4-flash`. */
-  model?: string
-  /** `anthropic-version` header value. Defaults to `2023-06-01`. */
-  apiVersion?: string
-  /** Upper bound on generated tokens for the Messages request. Defaults to 4096. */
-  maxTokens?: number
-  /** Maximum `web_search` server-tool uses per request. Defaults to 5. */
-  maxUses?: number
-}
-```
-
-Source: [`packages/web/web-search-deepseek/src/index.ts:46`](../packages/web/web-search-deepseek/src/index.ts)
-
 <a id="deepseek-aidsh-web-search-exa"></a>
 
 ## `@deepseek-ai/dsh-web-search-exa`
@@ -3421,6 +3393,37 @@ export interface Config {
 ```
 
 Source: [`packages/web/web-search-exa/src/index.ts:35`](../packages/web/web-search-exa/src/index.ts)
+
+<a id="deepseek-aidsh-web-search-openrouter"></a>
+
+## `@deepseek-ai/dsh-web-search-openrouter`
+
+Requires: `web`
+
+```ts config-catalog
+/** Plugin config (all optional — `apply` fills env-var and constant defaults). */
+export interface Config {
+  /** Literal OpenRouter API key; prefer {@link apiKeyEnv} so no secret enters configuration files. */
+  apiKey?: string
+  /** Credential reference resolved for each search; defaults to `OPENROUTER_API_KEY`. */
+  apiKeyEnv?: string
+  /** OpenRouter endpoint base; `/chat/completions` is appended. */
+  baseURL?: string
+  /** Auxiliary model id. Defaults to `openrouter/auto`. */
+  model?: string
+  /** Search engine. Defaults to `auto`. */
+  engine?: OpenRouterSearchEngine
+  /** Upper bound on generated answer tokens. Defaults to 4096. */
+  maxTokens?: number
+  /** Maximum `web_search` server-tool uses per request. Defaults to 5. */
+  maxUses?: number
+}
+
+/** Search engines accepted by OpenRouter's current server-tool API. */
+export type OpenRouterSearchEngine = 'auto' | 'native' | 'exa' | 'firecrawl' | 'parallel' | 'perplexity'
+```
+
+Source: [`packages/web/web-search-openrouter/src/index.ts:50`](../packages/web/web-search-openrouter/src/index.ts)
 
 <a id="deepseek-aidsh-web-search-perplexity"></a>
 

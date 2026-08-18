@@ -422,27 +422,18 @@
         thresholds: [3, 5, 8]
         argumentsPreviewChars: 500
 
-    # The shared base enables the stable model-facing web_search and web_fetch
-    # tools. The Web app disables this host row and composes both tools per agent
-    # preset; products with a stricter network policy override tool-web. DeepSeek
-    # search resolves the same DEEPSEEK_API_KEY
-    # credential the Models page manages for chat, at each search; its Messages
-    # endpoint is separate from the chat-completions endpoint, so it takes its own
-    # base-URL override. Anonymous fetch accepts only public HTTP(S) destinations,
-    # resolves and validates every destination, and pins every actual connection.
-    # Search is a full auxiliary model request with server-side retrieval, so this
-    # shipped DeepSeek route gets 60s while the provider-neutral tool default
-    # remains 30s.
+    # Search uses the shared OpenRouter credentials. Anonymous fetch validates
+    # and pins public destinations before each request.
     - id: web
       name: '@deepseek-ai/dsh-web'
       config:
-        searchProvider: deepseek-official
+        searchProvider: openrouter
         fetchProvider: http
 
-    - id: web-search-deepseek
-      name: '@deepseek-ai/dsh-web-search-deepseek'
+    - id: web-search-openrouter
+      name: '@deepseek-ai/dsh-web-search-openrouter'
       config:
-        apiKeyEnv: DEEPSEEK_API_KEY
+        apiKeyEnv: OPENROUTER_API_KEY
 
     - id: web-fetch-http
       name: '@deepseek-ai/dsh-web-fetch-http'
