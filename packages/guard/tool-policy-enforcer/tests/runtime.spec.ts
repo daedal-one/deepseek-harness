@@ -4,7 +4,8 @@ import { CallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolPolicyService, { ToolPolicyProviderId, type ToolPolicyVerdict } from '@deepseek-ai/dsh-tool-policy'
 import ToolRuntime, { defineTool } from '@deepseek-ai/dsh-tools'
-import { describe, expect, it } from 'vitest'
+import ApprovalService, { type ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
+import { describe, expect, it, vi } from 'vitest'
 import { apply } from '../src/index.ts'
 
 function fakeAgent() {
@@ -17,14 +18,20 @@ function fakeAgent() {
 }
 
 describe('tool-policy enforcement through ToolRuntime', () => {
-  it('delegates only allow and unsupported, and spends one exact ask opportunity', async () => {
+  it('delegates allow and enters approval on the first ask while denials remain non-approvable', async () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ApprovalService)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(ToolPolicyService, {})
     let current: ToolPolicyVerdict | undefined
     ctx.toolPolicy.register(ToolPolicyProviderId('fake'), { evaluate: async () => current })
-    apply(ctx, { threshold: 2, ttlMs: 1_000, maxEntries: 10 })
+    apply(ctx)
+    const prompted = vi.fn()
+    ctx.on('approval/request', () => {
+      prompted()
+      return Promise.resolve<ApprovalOutcome>('allowed-once')
+    })
     let executions = 0
     ctx.tools.register(defineTool({
       name: 'probe', description: 'probe', parameters: {},
@@ -42,17 +49,13 @@ describe('tool-policy enforcement through ToolRuntime', () => {
     await expect(execute('allow')).resolves.toMatchObject({ isError: false })
     current = { providerId: ToolPolicyProviderId('fake'), decision: 'deny', risk: 90, categories: [], reason: 'blocked', opinions: [] }
     await expect(execute('deny')).resolves.toMatchObject({ isError: true, content: [{ text: 'Error: blocked' }] })
+    expect(prompted).not.toHaveBeenCalled()
     current = { providerId: ToolPolicyProviderId('fake'), decision: 'ask', risk: 60, categories: [], reason: 'review', opinions: [] }
-    await expect(execute('ask-1')).resolves.toMatchObject({
-      isError: true,
-      content: [{ text: 'Error: Policy requires approval. Retry this exact tool call without changing its arguments (attempt 1/2).' }],
-    })
-    await expect(execute('ask-2')).resolves.toMatchObject({ isError: true, content: [{ text: 'Error: review' }] })
-    await expect(execute('ask-3')).resolves.toMatchObject({
-      isError: true,
-      content: [{ text: 'Error: Policy approval opportunity was already spent for this exact tool call in the current turn.' }],
-    })
-    expect(executions).toBe(2)
-    expect(events.filter(event => event.type === 'tool-policy/decision')).toHaveLength(10)
+    await expect(execute('ask')).resolves.toMatchObject({ isError: false })
+    expect(prompted).toHaveBeenCalledOnce()
+    expect(executions).toBe(3)
+    expect(events.filter(event => event.type === 'approval/asked')).toHaveLength(1)
+    expect(events.filter(event => event.type === 'approval/decided')).toHaveLength(1)
+    expect(events.filter(event => event.type === 'tool-policy/decision')).toHaveLength(6)
   })
 })

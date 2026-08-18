@@ -12,7 +12,7 @@ Registrations are effect-owned by provider plugins. Unloading a provider removes
 
 ## Durable events
 
-`tool-policy/classifier-request` records an exact bounded auxiliary request before model dispatch. `tool-policy/decision` records provider and effective outcomes without copying raw arguments already present in `tool/call`. The invariant companion requires both events to follow the matching call in its open turn.
+`tool-policy/classifier-request` records an auxiliary route, purpose, fixed prompt, reconstruction selectors, and bounds before model dispatch. It does not duplicate raw text already stored in `user/message` or arguments already stored in `tool/call`. `tool-policy/decision` records provider and effective outcomes. The invariant companion requires both events to follow the matching call in its open turn and validates any direct-user-message reference.
 
 ## Model Experience
 

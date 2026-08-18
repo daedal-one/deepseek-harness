@@ -12,7 +12,7 @@
 
 ## 持久事件
 
-`tool-policy/classifier-request` 在模型调用前记录完整且有界的辅助请求。`tool-policy/decision` 记录提供者和最终结果，不复制 `tool/call` 已保存的原始参数。不变量伴随插件要求事件位于对应调用之后且处于同一开放轮次。
+`tool-policy/classifier-request` 在模型调用前记录辅助路由、用途、固定提示词、重建选择器和界限。它不会复制 `user/message` 已保存的原始文本或 `tool/call` 已保存的参数。`tool-policy/decision` 记录提供者和最终结果。不变量伴随插件要求事件位于对应调用之后且处于同一开放轮次，并验证直接用户消息引用。
 
 ## 模型体验
 

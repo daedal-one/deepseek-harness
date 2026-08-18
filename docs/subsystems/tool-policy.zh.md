@@ -2,7 +2,7 @@
 
 [English](tool-policy.md) | 中文
 
-工具策略能力在工具主体运行前通过命名提供方评估工具执行。[模型支持的工具策略决策](../../.agents/notes/implemented/feature/2026-08-16-model-backed-tool-policy.md)负责安全依据、分类器升级、精确 MCP 授权和延迟审批；本页记录 [`dsh-tool-policy`](../../packages/guard/tool-policy/src/index.ts) 声明的提供方无关类型与服务 API。
+工具策略能力在工具主体运行前通过命名提供方评估工具执行。[模型支持的工具策略决策](../../.agents/notes/implemented/feature/2026-08-16-model-backed-tool-policy.md)负责提供方接缝和精确 MCP 授权；[独立证据决策](../../.agents/notes/implemented/bug-fix/2026-08-18-independent-tool-policy-evidence.md)负责 shell 证据分离和直接审批。本页记录 [`dsh-tool-policy`](../../packages/guard/tool-policy/src/index.ts) 声明的提供方无关类型与服务 API。
 
 ## 请求与裁决
 
@@ -61,7 +61,7 @@ interface ToolPolicyProvider {
 
 ## 执行与审计
 
-执行 Consumer 在 `tools/pre-execute` 运行：allow 和不支持裁决会委托，deny 会短路，ask 在达到精确调用重试阈值后进入现有审批路径。提供方和最终裁决会持久化，但不重复 `tool/call` 已存储的原始参数；分类器输入会在辅助模型请求前记录。
+执行 Consumer 在 `tools/pre-execute` 运行：allow 和不支持裁决会委托，deny 会短路，第一次 ask 就进入现有审批路径。提供方和最终裁决会持久化，但不重复 `tool/call` 已存储的原始参数。辅助请求在调用前记录固定提示词、重建选择器和界限；独立的意图与命令效果输入仍保留在既有会话事件中。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 

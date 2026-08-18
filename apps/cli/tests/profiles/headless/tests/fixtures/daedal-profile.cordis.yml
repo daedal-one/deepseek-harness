@@ -11,6 +11,9 @@
     - id: cli-mock-llm
       name: './snapshot-fixtures/cli-mock-llm.ts'
 
+    - id: snapshot-approval-allow-once
+      name: './snapshot-fixtures/approval-allow-once.ts'
+
     - id: daedal-snapshot-tool-policy
       name: '@deepseek-ai/dsh-tool-policy'
       config:
@@ -24,7 +27,8 @@
           - tool: bash
             commandArgument: command
             intentArgument: description
-        primary: { provider: cli-mock, model: cli-mock }
+        intent: { provider: cli-mock-intent, model: cli-mock }
+        primary: { provider: cli-mock-primary, model: cli-mock }
         secondary: { provider: cli-mock-secondary, model: cli-mock }
         timeoutMs: 1000
         maxTokens: 128
@@ -32,20 +36,13 @@
         maxUserMessageChars: 1000
         maxIntentChars: 200
         maxOutputChars: 1000
+        maxSummaryChars: 120
         maxReasonChars: 120
-        maxCategories: 4
-        maxCategoryChars: 32
-        rules:
-          - pattern: 'printf CLI_TOOL_ROUND_TRIP'
-            decision: allow
-            reason: deterministic assembled-profile fixture
+        maxEffects: 8
+        rules: []
 
     - id: daedal-snapshot-tool-policy-enforcer
       name: '@deepseek-ai/dsh-tool-policy-enforcer'
-      config:
-        threshold: 2
-        ttlMs: 10000
-        maxEntries: 32
 
     - id: daedal-snapshot-memory
       name: '@deepseek-ai/dsh-memory'

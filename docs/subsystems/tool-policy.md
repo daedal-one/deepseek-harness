@@ -2,7 +2,7 @@
 
 English | [中文](tool-policy.zh.md)
 
-The tool-policy capability evaluates a tool execution through named providers before the tool body runs. The [model-backed tool-policy decision](../../.agents/notes/implemented/feature/2026-08-16-model-backed-tool-policy.md) owns the security rationale, classifier escalation, exact MCP authorization, and delayed approval; this page records the provider-neutral types and service API declared by [`dsh-tool-policy`](../../packages/guard/tool-policy/src/index.ts).
+The tool-policy capability evaluates a tool execution through named providers before the tool body runs. The [model-backed tool-policy decision](../../.agents/notes/implemented/feature/2026-08-16-model-backed-tool-policy.md) owns the provider seam and exact MCP authorization; the [independent evidence decision](../../.agents/notes/implemented/bug-fix/2026-08-18-independent-tool-policy-evidence.md) owns shell evidence separation and direct approval. This page records the provider-neutral types and service API declared by [`dsh-tool-policy`](../../packages/guard/tool-policy/src/index.ts).
 
 ## Requests and verdicts
 
@@ -61,7 +61,7 @@ interface ToolPolicyProvider {
 
 ## Enforcement and audit
 
-The enforcement Consumer runs at `tools/pre-execute`: allow and unsupported verdicts delegate, deny short-circuits, and ask enters the existing approval path after an exact-call retry threshold. Provider and effective decisions are durable without duplicating raw arguments already stored in `tool/call`; classifier inputs are logged before their auxiliary model request.
+The enforcement Consumer runs at `tools/pre-execute`: allow and unsupported verdicts delegate, deny short-circuits, and the first ask enters the existing approval path. Provider and effective decisions are durable without duplicating raw arguments already stored in `tool/call`. Auxiliary requests log fixed prompts plus reconstruction selectors and bounds before dispatch; independent intent and command-effect inputs remain in their existing session events.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 

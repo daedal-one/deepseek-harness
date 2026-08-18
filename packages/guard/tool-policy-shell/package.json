@@ -26,6 +26,7 @@
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
     "@deepseek-ai/dsh-llm": "workspace:^",
+    "@deepseek-ai/dsh-llm-pi-ai": "workspace:^",
     "@deepseek-ai/dsh-session": "workspace:^",
     "@deepseek-ai/dsh-tool-policy": "workspace:^",
     "@deepseek-ai/dsh-invariants": "workspace:^"

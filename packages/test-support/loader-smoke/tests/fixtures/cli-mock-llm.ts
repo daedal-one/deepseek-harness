@@ -37,6 +37,20 @@ class CliMockAdapter extends LlmAdapter {
       yield { type: 'finish', reason: { kind: 'error', failure: { code: 'SERVER', message: 'CLI mock provider failed' } } }
       return
     }
+    if (options.provider === 'cli-mock-intent') {
+      const text = '{"userSummary":"prove the CLI round trip","agentSummary":"prove the CLI round trip","allowedEffects":["local-compute"],"forbiddenEffects":[],"alignment":"aligned"}'
+      yield { type: 'text-delta', index: 0, text }
+      yield { type: 'finish', reason: { kind: 'stop' } }
+      return
+    }
+    if (options.provider === 'cli-mock-primary' || options.provider === 'cli-mock-secondary') {
+      const text = process.env.DSH_CLI_POLICY_ASK === '1'
+        ? '{"effects":["network-read"],"risk":45,"reason":"snapshot requires approval"}'
+        : '{"effects":["local-compute"],"risk":1,"reason":"prints a fixed local string"}'
+      yield { type: 'text-delta', index: 0, text }
+      yield { type: 'finish', reason: { kind: 'stop' } }
+      return
+    }
     const toolResult = options.messages.at(-1)?.content.find(block => block.type === 'tool-result')
     if (toolResult === undefined) {
       const reasoning = 'Inspecting the task before the tool call.'
@@ -85,9 +99,9 @@ class CliMockAdapter extends LlmAdapter {
 export const name = 'cli-mock-llm'
 export const inject = ['llm']
 
-/** Register the keyless `cli-mock` adapter. */
+/** Register the keyless acting and independent policy-review adapters. */
 export function apply(ctx: Context): void {
-  ctx.llm.registerAdapter(['cli-mock', 'cli-mock-secondary'], new CliMockAdapter())
+  ctx.llm.registerAdapter(['cli-mock', 'cli-mock-intent', 'cli-mock-primary', 'cli-mock-secondary'], new CliMockAdapter())
   ctx.on('agent/request', async ({ step }, next) => {
     const config = await next()
     return step === 2 ? { ...config, reasoningEffort: OFF } : config

@@ -1,10 +1,14 @@
-import { describe, expect, it } from 'vitest'
 import { ToolPolicyProviderId } from '@deepseek-ai/dsh-tool-policy'
-import { configuredRuleDecision, gitEscalationDecision, hardSecurityDecision, resolveOpinions } from '../src/index.ts'
+import { describe, expect, it } from 'vitest'
+import { decideEvidence, parseEffectReview, parseIntentReview, type EffectReview, type IntentReview } from '../src/effects.ts'
+import { configuredRuleDecision, gitEscalationDecision, hardSecurityDecision } from '../src/index.ts'
 
-const opinion = (decision: 'allow' | 'ask' | 'deny', risk: number, categories: string[] = []) => ({
-  providerId: ToolPolicyProviderId('route'), decision, risk, categories, reason: 'classified',
+const bounds = { maxEffects: 8, maxSummaryChars: 40, maxReasonChars: 40 }
+const intent = (allowedEffects: IntentReview['allowedEffects'] = []): IntentReview => ({
+  userSummary: 'change workspace', agentSummary: 'change workspace', allowedEffects,
+  forbiddenEffects: ['credential-access'], alignment: 'aligned',
 })
+const effect = (effects: EffectReview['effects'], risk = 10): EffectReview => ({ effects, risk, reason: 'classified effect' })
 
 describe('shell deterministic policy', () => {
   it.each([
@@ -34,11 +38,31 @@ describe('shell deterministic policy', () => {
   })
 })
 
-describe('classifier escalation', () => {
-  it('accepts only a low-risk nonsensitive independent allow', () => {
-    expect(resolveOpinions('shell', opinion('deny', 70), opinion('allow', 49)).decision).toBe('allow')
-    expect(resolveOpinions('shell', opinion('deny', 70, ['secret']), opinion('allow', 1)).decision).toBe('ask')
-    expect(resolveOpinions('shell', opinion('deny', 70), opinion('allow', 50)).decision).toBe('ask')
-    expect(resolveOpinions('shell', opinion('deny', 70), opinion('deny', 90)).decision).toBe('ask')
+describe('independent evidence policy', () => {
+  it('accepts only exact closed result fields and vocabulary', () => {
+    expect(parseIntentReview({
+      userSummary: 'read', agentSummary: 'read', allowedEffects: ['workspace-read'], forbiddenEffects: [], alignment: 'aligned',
+    }, bounds)).toMatchObject({ alignment: 'aligned' })
+    expect(parseIntentReview({
+      userSummary: 'read', agentSummary: 'read', allowedEffects: ['workspace-read'], forbiddenEffects: [], alignment: 'aligned', extra: true,
+    }, bounds)).toBeUndefined()
+    expect(parseEffectReview({ effects: ['invented'], risk: 1, reason: 'x' }, bounds)).toBeUndefined()
+    expect(parseEffectReview({ effects: ['workspace-read'], risk: 1, reason: 'x' }, bounds)).toMatchObject({ effects: ['workspace-read'] })
+  })
+
+  it('allows baseline reads and explicitly requested workspace mutation', () => {
+    expect(decideEvidence(ToolPolicyProviderId('shell'), intent(), effect(['workspace-read']), []).decision).toBe('allow')
+    expect(decideEvidence(ToolPolicyProviderId('shell'), intent(['workspace-write']), effect(['workspace-write']), []).decision).toBe('allow')
+  })
+
+  it('asks for unrequested mutations, restrictions, and sensitive effects', () => {
+    expect(decideEvidence(ToolPolicyProviderId('shell'), intent(), effect(['workspace-write']), []).decision).toBe('ask')
+    expect(decideEvidence(ToolPolicyProviderId('shell'), intent(), effect(['credential-access']), []).decision).toBe('ask')
+    expect(decideEvidence(ToolPolicyProviderId('shell'), intent(), effect(['network-read']), []).decision).toBe('ask')
+  })
+
+  it('reports risk from the selected evidence rather than a failed superseded route', () => {
+    const failed = { providerId: ToolPolicyProviderId('primary'), decision: 'ask' as const, risk: 100, categories: ['invalid-output'], reason: 'bad' }
+    expect(decideEvidence(ToolPolicyProviderId('shell'), intent(), effect(['host-read'], 12), [failed])).toMatchObject({ decision: 'allow', risk: 12 })
   })
 })
