@@ -2699,26 +2699,6 @@ export interface Config {
 
 来源：[`packages/guard/tool-policy/src/index.ts:56`](../packages/guard/tool-policy/src/index.ts)
 
-<a id="deepseek-aidsh-tool-policy-enforcer"></a>
-
-## `@deepseek-ai/dsh-tool-policy-enforcer`
-
-需要：`tools` · `toolPolicy`
-
-```ts config-catalog
-/** Bounds for delayed approval opportunities. */
-export interface Config {
-  /** Identical ask attempts required before human approval is requested. */
-  readonly threshold?: number
-  /** Inactivity lifetime of an unspent or spent key. */
-  readonly ttlMs?: number
-  /** Maximum retained exact-call keys across sessions. */
-  readonly maxEntries?: number
-}
-```
-
-来源：[`packages/guard/tool-policy-enforcer/src/index.ts:12`](../packages/guard/tool-policy-enforcer/src/index.ts)
-
 <a id="deepseek-aidsh-tool-policy-mcp"></a>
 
 ## `@deepseek-ai/dsh-tool-policy-mcp`
@@ -2772,28 +2752,30 @@ export interface Config {
   readonly id: string
   /** Explicit shell-tool and argument mappings handled by this provider. */
   readonly mappings: readonly ShellToolMapping[]
-  /** Primary classifier route for unmatched commands. */
+  /** Independent route that reviews bounded user and acting-model intent. */
+  readonly intent: ClassifierRoute
+  /** Preferred route that classifies direct command effects without raw intent. */
   readonly primary: ClassifierRoute
-  /** Independent classifier route consulted after a primary denial. */
+  /** Independent effect route used when preferred evidence is unavailable or invalid. */
   readonly secondary: ClassifierRoute
-  /** Maximum duration of each classifier request in milliseconds. */
+  /** Maximum duration of each auxiliary request in milliseconds. */
   readonly timeoutMs: number
-  /** Maximum completion tokens requested from each classifier. */
+  /** Maximum completion tokens requested from each auxiliary route. */
   readonly maxTokens: number
-  /** Maximum command length accepted for classification. */
+  /** Maximum command and working-directory length accepted for effect review. */
   readonly maxCommandChars: number
-  /** Maximum latest-user-message length included in classification. */
+  /** Maximum latest direct-user-message length included in intent review. */
   readonly maxUserMessageChars: number
-  /** Maximum agent-stated-intent length included in classification. */
+  /** Maximum acting-model intent length included in intent review. */
   readonly maxIntentChars: number
-  /** Maximum raw classifier-output length accepted for JSON parsing. */
+  /** Maximum raw auxiliary-output length accepted for JSON parsing. */
   readonly maxOutputChars: number
+  /** Maximum sanitized intent-summary length retained in memory. */
+  readonly maxSummaryChars: number
   /** Maximum sanitized reason length retained in a verdict. */
   readonly maxReasonChars: number
-  /** Maximum number of sanitized categories retained in a verdict. */
-  readonly maxCategories: number
-  /** Maximum length of each sanitized category retained in a verdict. */
-  readonly maxCategoryChars: number
+  /** Maximum number of closed effects accepted in one auxiliary result. */
+  readonly maxEffects: number
   /** Ordered deterministic rules whose last matching entry wins. */
   readonly rules: readonly CommandRule[]
 }
@@ -2804,11 +2786,11 @@ export interface ShellToolMapping {
   readonly tool: string
   /** Root argument containing the complete command string. */
   readonly commandArgument: string
-  /** Optional root argument containing the agent's stated intent. */
+  /** Optional root argument containing the acting model's stated intent. */
   readonly intentArgument?: string
 }
 
-/** One auxiliary classifier route. */
+/** One auxiliary review route. */
 export interface ClassifierRoute {
   /** Exact `ctx.llm` provider id. */
   readonly provider: string
@@ -2829,7 +2811,7 @@ export interface CommandRule {
 
 依赖：[`ToolPolicyDecision`](../packages/guard/tool-policy/src/index.ts)
 
-来源：[`packages/guard/tool-policy-shell/src/index.ts:48`](../packages/guard/tool-policy-shell/src/index.ts)
+来源：[`packages/guard/tool-policy-shell/src/index.ts:64`](../packages/guard/tool-policy-shell/src/index.ts)
 
 <a id="deepseek-aidsh-tool-pwsh"></a>
 
@@ -3439,6 +3421,7 @@ export interface Config {
 - `@deepseek-ai/dsh-tool-call-timeout-policy` — 需要 `tools`（[`packages/guard/timeout-policy/src/index.ts`](../packages/guard/timeout-policy/src/index.ts)）
 - `@deepseek-ai/dsh-tool-cordis` — 需要 `tools` · `systemPrompt` · `dynamicCordisRunner` · `cordisInspect`（[`packages/extensions/tool-cordis/src/index.ts`](../packages/extensions/tool-cordis/src/index.ts)）
 - `@deepseek-ai/dsh-tool-memory` — 需要 `memory` · `tools` · `systemPrompt`（[`packages/memory/tool-memory/src/index.ts`](../packages/memory/tool-memory/src/index.ts)）
+- `@deepseek-ai/dsh-tool-policy-enforcer` — 需要 `tools` · `toolPolicy`（[`packages/guard/tool-policy-enforcer/src/index.ts`](../packages/guard/tool-policy-enforcer/src/index.ts)）
 - `@deepseek-ai/dsh-tool-subagent-control` — 需要 `tools` · `subagents`（[`packages/subagent/tool-subagent-control/src/index.ts`](../packages/subagent/tool-subagent-control/src/index.ts)）
 - `@deepseek-ai/dsh-user-questions`（[`packages/interaction/user-questions/src/index.ts`](../packages/interaction/user-questions/src/index.ts)）
 - `@deepseek-ai/dsh-workspace` — 需要 `storageDomain` · `sessionPersistence`（[`packages/workspace/workspace/src/index.ts`](../packages/workspace/workspace/src/index.ts)）

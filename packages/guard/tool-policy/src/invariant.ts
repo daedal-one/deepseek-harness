@@ -21,6 +21,19 @@ function validate(history: readonly SessionEvent[], event: SessionEvent, fail: I
   if (event.type === 'tool-policy/decision' && event.data.toolName !== call.data.name) {
     fail('tool-policy/decision toolName must match its tool/call')
   }
+  if (event.type === 'tool-policy/classifier-request') {
+    const input = event.data.input
+    if ((event.data.purpose === 'intent') !== (input.kind === 'intent')) {
+      fail('tool-policy classifier purpose must match its input selector')
+    }
+    if (input.kind === 'intent' && input.userMessageSeq !== undefined) {
+      const userMessageSeq = input.userMessageSeq
+      const user = history.find(prior => prior.seq === userMessageSeq)
+      if (user?.type !== 'user/message' || user.data.source.kind !== 'user') {
+        fail('tool-policy intent input must reference an earlier direct user message')
+      }
+    }
+  }
   if (event.type === 'tool-policy/decision' && event.data.stage === 'effective') {
     const provider = history.findLast(prior => prior.type === 'tool-policy/decision'
       && prior.data.callId === event.data.callId && prior.data.stage === 'provider')

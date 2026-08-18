@@ -61,6 +61,7 @@ const daedalOverlayPath = fileURLToPath(new URL('./fixtures/daedal-profile.cordi
 const daedalPresetPath = fileURLToPath(new URL('./fixtures/daedal-preset.cordis.yml', import.meta.url))
 const daedalSessionExpected = join(snapshotsDir, 'daedal-profile', 'session.expected.jsonl')
 const cliMockLlmPluginPath = fileURLToPath(new URL('./fixtures/cli-mock-llm.ts', import.meta.url))
+const approvalAllowOncePluginPath = fileURLToPath(new URL('./fixtures/approval-allow-once.ts', import.meta.url))
 const refreshing = process.env.DSH_SNAPSHOT === 'refresh'
 
 interface JsonObject {
@@ -208,6 +209,7 @@ async function prepareCliMockFixture(cwd: string): Promise<void> {
   await mkdir(fixtureDir, { recursive: true })
   await Promise.all([
     copyFile(cliMockLlmPluginPath, join(fixtureDir, 'cli-mock-llm.ts')),
+    copyFile(approvalAllowOncePluginPath, join(fixtureDir, 'approval-allow-once.ts')),
     writeFile(join(fixtureDir, 'package.json'), '{"type":"module"}\n'),
   ])
 }
@@ -270,7 +272,8 @@ describe('headless stream-json snapshots', () => {
       tsconfigPath,
       env: {
         DSH_CLI_DAEDAL: '1',
-        DSH_PERMISSION_MODE: 'danger-full-access',
+        DSH_CLI_POLICY_ASK: '1',
+        DSH_PERMISSION_MODE: 'workspace-write',
         DSH_TELEMETRY_DISABLED: '1',
         NODE_OPTIONS: [process.env.NODE_OPTIONS, '--disable-warning=ExperimentalWarning'].filter(Boolean).join(' '),
       },
@@ -288,6 +291,8 @@ describe('headless stream-json snapshots', () => {
         expect(session).toBe(await readFile(daedalSessionExpected, 'utf8'))
         expect(session).toContain('"agentPreset":"daedal"')
         expect(session).toContain('"type":"tool-policy/decision"')
+        expect(session).toContain('"type":"approval/asked"')
+        expect(session).toContain('"outcome":"allowed-once"')
         expect(session).toContain('The assembled Daedal profile completed its guarded shell round trip.')
       },
     })

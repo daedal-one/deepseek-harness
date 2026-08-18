@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-tool-policy-enforcer",
-  "description": "Tool pre-execution policy and delayed approval consumer",
+  "description": "Tool pre-execution policy and direct approval consumer",
   "version": "0.1.0-rc.5",
   "publishConfig": { "access": "public" },
   "repository": { "type": "git", "url": "git+https://github.com/deepseek-ai/deepseek-harness.git", "directory": "packages/guard/tool-policy-enforcer" },
@@ -33,6 +33,7 @@
     "@deepseek-ai/dsh-tool-policy-shell": "workspace:^",
     "@deepseek-ai/dsh-tool-policy": "workspace:^",
     "@deepseek-ai/dsh-tools": "workspace:^",
+    "@deepseek-ai/dsh-user-approval": "workspace:^",
     "@deepseek-ai/dsh-invariants": "workspace:^"
   }
 }

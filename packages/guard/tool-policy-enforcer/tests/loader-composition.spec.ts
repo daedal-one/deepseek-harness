@@ -19,8 +19,11 @@ let root: string | undefined
 let context: Context | undefined
 
 class AllowAdapter extends LlmAdapter {
-  override async * stream(_options: GenerateOptions): AsyncIterable<StreamChunk> {
-    yield { type: 'text-delta', index: 0, text: '{"decision":"allow","risk":8,"categories":["read"],"reason":"safe"}' }
+  override async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+    const text = options.provider === 'intent'
+      ? '{"userSummary":"inspect","agentSummary":"inspect","allowedEffects":["host-read"],"forbiddenEffects":[],"alignment":"aligned"}'
+      : '{"effects":["host-read"],"risk":8,"reason":"reads host information"}'
+    yield { type: 'text-delta', index: 0, text }
     yield { type: 'finish', reason: { kind: 'stop' } }
   }
 }
@@ -44,21 +47,21 @@ async function load(): Promise<Context> {
     "- name: '@deepseek-ai/dsh-tool-policy-shell'",
     '  config:',
     '    id: shell',
-    '    mappings: [{ tool: bash, commandArgument: command }]',
-    '    primary: { provider: mock, model: classifier }',
-    '    secondary: { provider: mock, model: reviewer }',
+    '    mappings: [{ tool: bash, commandArgument: command, intentArgument: description }]',
+    '    intent: { provider: intent, model: intent-reviewer }',
+    '    primary: { provider: primary, model: effect-classifier }',
+    '    secondary: { provider: secondary, model: effect-reviewer }',
     '    timeoutMs: 1000',
     '    maxTokens: 80',
     '    maxCommandChars: 1000',
     '    maxUserMessageChars: 100',
     '    maxIntentChars: 100',
     '    maxOutputChars: 1000',
+    '    maxSummaryChars: 80',
     '    maxReasonChars: 80',
-    '    maxCategories: 4',
-    '    maxCategoryChars: 20',
+    '    maxEffects: 8',
     '    rules: []',
     "- name: '@deepseek-ai/dsh-tool-policy-enforcer'",
-    '  config: { threshold: 2, ttlMs: 1000, maxEntries: 20 }',
     '',
   ].join('\n'))
 
@@ -91,7 +94,7 @@ describe('real Loader policy composition', () => {
   it('classifies and authorizes through a scripted LLM and real ToolRuntime', { timeout: 60_000 }, async () => {
     const loaded = await load()
     expect([...loaded.loader.entries()].filter(entry => entry.fiber === undefined && !entry.disabled)).toEqual([])
-    loaded.llm.registerAdapter(['mock'], new AllowAdapter())
+    loaded.llm.registerAdapter(['intent', 'primary', 'secondary'], new AllowAdapter())
     let ran = false
     loaded.tools.register(defineTool({
       name: 'bash', description: 'test shell', parameters: {},
@@ -99,19 +102,23 @@ describe('real Loader policy composition', () => {
       execute: async () => { ran = true; return 'ran' },
     }))
     const events: Array<Record<string, unknown>> = [
-      { type: 'turn/start', data: { turn: 1 } },
-      { type: 'tool/call', data: { callId: CallId('c'), name: 'bash', arguments: '{}' } },
+      { seq: 1, type: 'turn/start', data: { turn: 1 } },
+      { seq: 2, type: 'user/message', data: { source: { kind: 'user' }, content: [{ type: 'text', text: 'inspect the host' }] } },
+      { seq: 3, type: 'tool/call', data: { callId: CallId('c'), name: 'bash', arguments: '{}' } },
     ]
-    const agent = { session: {
-      id: 'loader', header: { id: 'loader', cwd: '/work' }, events,
-      append(type: string, data: unknown) { const event = { type, data }; events.push(event); return event },
-    } } as unknown as Agent
+    const agent = {
+      options: { provider: 'acting', model: 'acting-model' },
+      session: {
+        id: 'loader', header: { id: 'loader', cwd: '/work' }, events,
+        append(type: string, data: unknown) { const event = { seq: events.length + 1, type, data }; events.push(event); return event },
+      },
+    } as unknown as Agent
     await expect(loaded.tools.execute({
-      callId: CallId('c'), name: 'bash', arguments: { command: 'uname -a' }, agent,
+      callId: CallId('c'), name: 'bash', arguments: { command: 'uname -a', description: 'inspect the host' }, agent,
       signal: new AbortController().signal,
     })).resolves.toMatchObject({ isError: false })
     expect(ran).toBe(true)
     expect(events.map(event => event.type)).toContain('tool-policy/classifier-request')
-    expect(events.filter(event => event.type === 'tool-policy/decision')).toHaveLength(2)
+    expect(events.filter(event => event.type === 'tool-policy/decision')).toHaveLength(3)
   })
 })

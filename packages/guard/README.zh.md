@@ -8,8 +8,8 @@
 |---|---|---|
 | [`repeat-tool-reminder/`](repeat-tool-reminder/README.md) | 针对重复工具调用的建议性提醒 | 监听工具和 agent 事件 |
 | [`timeout-policy/`](timeout-policy/README.md) | 以部署策略形式设置单次工具调用截止时间 | 注册 `tools/execute` 监听器 |
-| [`tool-policy/`](tool-policy/README.md) | 定义持久化工具策略分类与延迟决策 | `ctx.toolPolicy` |
-| [`tool-policy-shell/`](tool-policy-shell/README.md) | 用确定性规则与有界 LLM 复核分类 shell 意图 | 注册到 `ctx.toolPolicy` |
+| [`tool-policy/`](tool-policy/README.md) | 定义持久化工具策略分类与决策 | `ctx.toolPolicy` |
+| [`tool-policy-shell/`](tool-policy-shell/README.md) | 组合确定性 shell 规则与独立意图和效果证据 | 注册到 `ctx.toolPolicy` |
 | [`tool-policy-mcp/`](tool-policy-mcp/README.md) | 授权精确 MCP 工具面，并拒绝不安全的 URL 或参数值 | 注册到 `ctx.toolPolicy` |
 | [`tool-policy-enforcer/`](tool-policy-enforcer/README.md) | 在执行前强制应用已配置的工具策略 | 注册 `tools/execute` 监听器 |
 | [`english-output-guard/`](english-output-guard/README.md) | 通过可审计翻译器改写目标模型的非英文输出 | 包装 `ctx.llm` stream |

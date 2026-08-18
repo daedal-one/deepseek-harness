@@ -4,7 +4,7 @@
 
 这是面向经过精确审查的 MCP 工具面的确定性 `ctx.toolPolicy` 提供者。每个配置的公开工具名称都会获得一条 `allow`、`ask` 或 `deny` 规则。可选的 principal 允许列表从子 Agent 持久化且由配置所有的 subagent descriptor 中派生授权，因此根 Agent 或其他角色不能通过参数或 persona 文本声明访问权。可选的根级 URL 参数可以是单个 URL 或 URL 数组；每个值都必须使用 HTTP(S)、避开非公开字面地址，并且只能解析到公开地址。可选的禁止参数会在发送 MCP 请求前失败关闭。
 
-该提供者与 `dsh-mcp-client` 的注册时工具和参数投影配合使用。投影阻止未经审查的 schema 到达模型；该提供者通过 `dsh-tool-policy-enforcer` 应用执行时授权和延迟审批。
+该提供者与 `dsh-mcp-client` 的注册时工具和参数投影配合使用。投影阻止未经审查的 schema 到达模型；该提供者通过 `dsh-tool-policy-enforcer` 应用执行时授权和直接审批。
 
 ## 模型体验
 
@@ -12,7 +12,7 @@
 
 #### 模型看到什么
 
-此提供者不添加提示词或工具 schema。当匹配的 MCP 调用未解析为 `allow` 时，`dsh-tool-policy-enforcer` 会呈现拒绝、精确重试或审批反馈。
+此提供者不添加提示词或工具 schema。当匹配的 MCP 调用未解析为 `allow` 时，`dsh-tool-policy-enforcer` 会呈现拒绝或打开审批。
 
 #### Token 影响
 

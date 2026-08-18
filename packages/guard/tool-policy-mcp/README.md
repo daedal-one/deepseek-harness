@@ -4,7 +4,7 @@ English | [中文](README.zh.md)
 
 Deterministic `ctx.toolPolicy` provider for an exact reviewed MCP tool surface. Each configured public tool name receives an `allow`, `ask`, or `deny` rule. An optional principal allowlist derives authorization from the child's durable config-owned subagent descriptor, so a root agent or another role cannot claim access through arguments or persona text. Optional root URL arguments accept one URL or an array of URLs; every value must use HTTP(S), avoid non-public literals, and resolve completely to public addresses. Optional forbidden arguments fail closed before an MCP request is sent.
 
-This provider complements `dsh-mcp-client` registration-time tool and argument projection. Projection prevents unreviewed schemas from reaching the model; this provider applies execution-time authorization and delayed approval through `dsh-tool-policy-enforcer`.
+This provider complements `dsh-mcp-client` registration-time tool and argument projection. Projection prevents unreviewed schemas from reaching the model; this provider applies execution-time authorization and direct approval through `dsh-tool-policy-enforcer`.
 
 ## Model Experience
 
@@ -12,7 +12,7 @@ This provider complements `dsh-mcp-client` registration-time tool and argument p
 
 #### What the model sees
 
-This provider adds no prompt or tool schema. `dsh-tool-policy-enforcer` renders denial, exact-retry, or approval feedback when a matching MCP call does not resolve to `allow`.
+This provider adds no prompt or tool schema. `dsh-tool-policy-enforcer` renders denial or opens approval when a matching MCP call does not resolve to `allow`.
 
 #### Token effect
 

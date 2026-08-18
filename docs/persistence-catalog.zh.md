@@ -864,11 +864,11 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 #### `tool-policy/classifier-request` — log-only
 
 ```ts persistence-catalog
-/** Exact bounded auxiliary classifier request recorded before LLM dispatch. */
+/** Reconstructible bounded auxiliary request recorded before LLM dispatch. */
 'tool-policy/classifier-request': ToolPolicyClassifierRequestEventData
 ```
 
-来源：[`packages/guard/tool-policy/src/types.ts:36`](../packages/guard/tool-policy/src/types.ts)
+来源：[`packages/guard/tool-policy/src/types.ts:54`](../packages/guard/tool-policy/src/types.ts)
 
 <a id="tool-policydecision--log-only"></a>
 
@@ -879,7 +879,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'tool-policy/decision': ToolPolicyDecisionEventData
 ```
 
-来源：[`packages/guard/tool-policy/src/types.ts:38`](../packages/guard/tool-policy/src/types.ts)
+来源：[`packages/guard/tool-policy/src/types.ts:56`](../packages/guard/tool-policy/src/types.ts)
 
 ### `tool-workflow/*`
 

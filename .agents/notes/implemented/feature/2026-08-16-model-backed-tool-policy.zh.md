@@ -1,4 +1,4 @@
-# Agent Note: 模型支持的工具策略与延迟审批
+# Agent Note: 模型支持的工具策略能力
 
 Status: implemented
 
@@ -10,11 +10,9 @@ Status: implemented
 
 ## 决策
 
-该能力由一个 Service Definition、两个 Service Provider 和一个 Consumer 组成。`dsh-tool-policy` 管理 effect 作用域的命名提供者注册，并评估配置的提供者或所有已注册提供者。多个受支持的裁决按 deny 高于 ask、ask 高于 allow 的顺序保守合并。`dsh-tool-policy-shell` 把配置的工具名和参数名映射为 shell 意图，先执行固定硬拒绝和询问检查，再执行最后匹配生效的有序规则，放行小型确定性只读集合，最后通过 `ctx.llm` 发送有界辅助请求。`dsh-tool-policy-mcp` 对经过审查的 MCP 调用应用精确公开工具规则、可信 subagent principal、禁止的根参数和公开 HTTP(S) URL 检查。`dsh-tool-policy-enforcer` 在 `tools/pre-execute` 转换规范裁决，并把人工决定留给 `ctx.approval`。
+该能力由一个 Service Definition、两个 Service Provider 和一个 Consumer 组成。`dsh-tool-policy` 管理 effect 作用域的命名提供者注册，并评估配置的提供者或所有已注册提供者。多个受支持的裁决按 deny 高于 ask、ask 高于 allow 的顺序保守合并。`dsh-tool-policy-shell` 把配置的工具名和参数名映射为 shell 执行，应用固定检查和有序规则，然后通过 `ctx.llm` 获取有界辅助证据。`dsh-tool-policy-mcp` 对经过审查的 MCP 调用应用精确公开工具规则、可信 subagent principal、禁止的根参数和公开 HTTP(S) URL 检查。`dsh-tool-policy-enforcer` 在 `tools/pre-execute` 转换规范裁决，并把人工决定留给 `ctx.approval`。
 
-主分类器以零温度和严格 JSON 格式运行，其完整有界请求在调用前持久化。主分类器拒绝后获取独立配置的次意见；仅当次意见为风险低于 50 的 allow，且双方都不带敏感或破坏类别时才可覆盖。无效输出、超时、路由不可用或提供者失败都变成 ask。调用方取消仍是取消。
-
-Ask 使用进程内状态，以会话、持久轮次、工具名和规范化精确参数为键。第一次相同请求会被拒绝并收到精确重试指导。达到配置阈值时，一次性机会在返回 ask 前被消费，因此批准、拒绝和取消都不能让它在同一轮复用。持久决策不包含原始参数，因为 `tool/call` 已拥有这些数据。
+shell 证据和审批机制由[独立工具策略证据决策](../bug-fix/2026-08-18-independent-tool-policy-evidence.md)负责。意图与命令效果使用分离且并发的模型路由，封闭效果进入确定性宿主策略，请求事件保留重建选择器而不复制原始输入，第一次 ask 直接进入 `ctx.approval`。无效输出、超时、路由不可用或提供者失败仍然失败关闭。调用方取消仍是取消。
 
 MCP 策略从持久且由配置所有的 subagent descriptor 推导子 principal，而不采用模型参数或 persona 文本。URL 检查会拒绝非 HTTP(S) 协议、非公开字面地址，以及完整当前 DNS 结果集中包含非公开地址的主机名。DNS 检查无法固定随后打开的 socket，因此另行实现的 MCP 或浏览器连接仍负责提供方原生网络限制。
 
@@ -32,4 +30,4 @@ MCP 策略从持久且由配置所有的 subagent descriptor 推导子 principal
 
 ## 后果
 
-已知破坏性和凭据操作无需模型延迟即可失败，部署规则保持可配置，不确定操作以失败关闭方式进入现有审计审批路径，切换分类提供者无需重写策略。经过审查的 MCP 工具使用同一裁决和审批流水线，而不信任模型声明的角色。未匹配的非平凡 shell 调用增加一次辅助请求，主分类器拒绝时再增加一次。延迟机会不会跨进程重启；持久决策和审批事件会保留。MCP URL 检查减少直接访问私有网络的风险，但提供方建立连接前仍存在 DNS 重绑定间隔。
+已知破坏性和凭据操作无需模型延迟即可失败，部署规则保持可配置，不确定操作以失败关闭方式进入现有审计审批路径，切换复核提供者无需重写策略。经过审查的 MCP 工具使用同一裁决和审批流水线，而不信任模型声明的角色。shell 提供者通常并发运行两个辅助请求，只在证据未解决时增加次效果请求；解析只读命令不使用请求。持久决策和审批事件跨进程重启保留，且没有进程内重试状态。MCP URL 检查减少直接访问私有网络的风险，但提供方建立连接前仍存在 DNS 重绑定间隔。
