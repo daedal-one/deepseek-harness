@@ -78,6 +78,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   fileUploads: 'attachment.md',
   fileReferences: 'session-reference.md',
   fs: 'filesystem.md',
+  forgeProjectWorkspaces: 'workspace.md',
   forgeSessionAdapter: 'core.md',
   goals: 'goal.md',
   inspector: 'extensions.md',
