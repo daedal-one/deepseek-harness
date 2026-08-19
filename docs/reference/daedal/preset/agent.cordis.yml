@@ -331,7 +331,7 @@
         backgroundMode: one-shot
         agentOptions:
           provider: openrouter
-          model: qwen/qwen3-27b
+          model: qwen/qwen3.8-27b
           maxTokens: 65536
         persona: !!js "process.getBuiltinModule('node:fs').readFileSync(new URL('roles/implementer-common.md', baseUrl), 'utf8').trim() + '\\n\\n' + ((text) => text.slice(text.indexOf('\\n---\\n', 4) + 5).trim())(process.getBuiltinModule('node:fs').readFileSync(new URL('roles/coder.md', baseUrl), 'utf8'))"
         toolFilter:
