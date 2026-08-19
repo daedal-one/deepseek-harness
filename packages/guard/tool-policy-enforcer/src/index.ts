@@ -27,12 +27,16 @@ export interface Config {
   readonly enforceWhen?: EnforcementCondition
 }
 
+const enforcementCondition = z.object({
+  sandboxModes: z.array(z.union(SANDBOX_MODES as SandboxMode[])).min(1),
+  approvalPolicies: z.array(z.union(APPROVAL_POLICIES as ApprovalPolicy[])).min(1),
+})
+
 /** Runtime schema for the stateless enforcer. */
 export const Config: z<Config> = z.object({
-  enforceWhen: z.object({
-    sandboxModes: z.array(z.union(SANDBOX_MODES as SandboxMode[])).min(1),
-    approvalPolicies: z.array(z.union(APPROVAL_POLICIES as ApprovalPolicy[])).min(1),
-  }),
+  // The union wrapper keeps an omitted property absent instead of constructing
+  // the nested object's empty array defaults.
+  enforceWhen: z.union([enforcementCondition]),
 }) as z<Config>
 
 /**

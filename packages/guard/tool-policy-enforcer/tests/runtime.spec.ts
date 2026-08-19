@@ -7,7 +7,7 @@ import ToolPolicyService, { ToolPolicyProviderId, type ToolPolicyVerdict } from 
 import ToolRuntime, { defineTool } from '@deepseek-ai/dsh-tools'
 import ApprovalService, { type ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import { describe, expect, it, vi } from 'vitest'
-import { apply, shouldEnforce } from '../src/index.ts'
+import { apply, Config, shouldEnforce } from '../src/index.ts'
 
 function fakeAgent() {
   const events: Array<Record<string, unknown>> = [{ type: 'turn/start', data: { turn: 1 } }]
@@ -19,6 +19,14 @@ function fakeAgent() {
 }
 
 describe('tool-policy enforcement through ToolRuntime', () => {
+  it('accepts an omitted activation condition but rejects explicit empty lists', () => {
+    expect(Config({})).toEqual({})
+    expect(() => Config({ enforceWhen: { sandboxModes: [] } }))
+      .toThrow(/sandboxModes/)
+    expect(() => Config({ enforceWhen: { approvalPolicies: [] } }))
+      .toThrow(/approvalPolicies/)
+  })
+
   it('matches configured durable permission values and keeps enforcement when they are absent', () => {
     const condition = { sandboxModes: ['danger-full-access'], approvalPolicies: ['ask'] } as const
     const events = (sandbox: string, approval: string): SessionEvent[] => [

@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-18-daedal-tool-policy-permission-mode.md
-2026-08-18-daedal-tool-policy-permission-mode.md: 5a5c852ddff7324f013131d06d0612d3b21ba52a
-2026-08-18-daedal-tool-policy-permission-mode.zh.md: 9a5b547ddab8b24f86d12a22828ff4b0fe6ab221
+2026-08-18-daedal-tool-policy-permission-mode.md: 1251f82c17cda8d3721a9efed2856dfbf3eb6bd3
+2026-08-18-daedal-tool-policy-permission-mode.zh.md: 9b4c82d53cf4ba22ecece7dd8ca1366e27ab6b7c
