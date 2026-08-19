@@ -35,7 +35,7 @@ afterEach(async () => {
   root = undefined
 })
 
-async function load(): Promise<Context> {
+async function load(configureEnforcer = true): Promise<Context> {
   root = await mkdtemp(join(tmpdir(), 'dsh-tool-policy-loader-'))
   const configPath = join(root, 'cordis.yml')
   await writeFile(configPath, [
@@ -62,10 +62,12 @@ async function load(): Promise<Context> {
     '    maxEffects: 8',
     '    rules: []',
     "- name: '@deepseek-ai/dsh-tool-policy-enforcer'",
-    '  config:',
-    '    enforceWhen:',
-    '      sandboxModes: [danger-full-access]',
-    '      approvalPolicies: [ask]',
+    ...(configureEnforcer ? [
+      '  config:',
+      '    enforceWhen:',
+      '      sandboxModes: [danger-full-access]',
+      '      approvalPolicies: [ask]',
+    ] : []),
     '',
   ].join('\n'))
 
@@ -95,6 +97,11 @@ async function load(): Promise<Context> {
 }
 
 describe('real Loader policy composition', () => {
+  it('loads an omitted enforcer config for unconditional enforcement', async () => {
+    const loaded = await load(false)
+    expect([...loaded.loader.entries()].filter(entry => entry.fiber === undefined && !entry.disabled)).toEqual([])
+  })
+
   it('classifies and authorizes through a scripted LLM and real ToolRuntime', { timeout: 60_000 }, async () => {
     const loaded = await load()
     expect([...loaded.loader.entries()].filter(entry => entry.fiber === undefined && !entry.disabled)).toEqual([])

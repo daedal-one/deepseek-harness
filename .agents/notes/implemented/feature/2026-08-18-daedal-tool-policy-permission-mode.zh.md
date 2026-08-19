@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决策
 
-`dsh-tool-policy-enforcer` 接受可选的 `enforceWhen` 条件，对 `sandbox/mode` 与 `approval/policy` 进行合取。它会在评估提供方之前，从调用会话的持久事件中折叠已配置的值。省略条件会为现有组合保留无条件执行。缺少已配置值时仍会执行，因为值缺失无法确认绕过条件成立。
+`dsh-tool-policy-enforcer` 接受可选的 `enforceWhen` 条件，对 `sandbox/mode` 与 `approval/policy` 进行合取。它会在评估提供方之前，从调用会话的持久事件中折叠已配置的值。配置 schema 会将省略的条件保留为缺失状态，以执行无条件策略，并要求每个已配置值列表均非空。缺少持久值时仍会执行，因为值缺失无法确认绕过条件成立。
 
 Daedal 宿主补丁按展示顺序拥有四项权限表：`read-only`、`workspace-write`、`policy-reviewed` 与 `danger-full-access`。`policy-reviewed` 等于 `danger-full-access + ask`；执行器仅选择这一组合。现有权限投影与 Settings schema 会把新选项传给两个浏览器选择器，因此 UI 无需 Daedal 专用分支。Full access 仍是唯一受[现有显式风险确认](2026-07-31-gui-full-access-confirmation.md)保护的选项。
 

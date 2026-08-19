@@ -10,7 +10,7 @@ Mounting Daedal's [model-backed tool-policy capability](2026-08-16-model-backed-
 
 ## Decision
 
-`dsh-tool-policy-enforcer` accepts an optional `enforceWhen` conjunction over `sandbox/mode` and `approval/policy`. It folds the configured values from the calling session's durable events before provider evaluation. An omitted condition preserves unconditional enforcement for existing compositions. A missing configured value keeps enforcement active because absence cannot establish a bypass.
+`dsh-tool-policy-enforcer` accepts an optional `enforceWhen` conjunction over `sandbox/mode` and `approval/policy`. It folds the configured values from the calling session's durable events before provider evaluation. The configuration schema preserves an omitted condition as absent for unconditional enforcement and requires every configured value list to be non-empty. A missing durable value keeps enforcement active because absence cannot establish a bypass.
 
 The Daedal host patch owns a four-entry permission table in presentation order: `read-only`, `workspace-write`, `policy-reviewed`, and `danger-full-access`. `policy-reviewed` is `danger-full-access + ask`; the enforcer selects only that pair. The existing permission projection and Settings schema carry the new option to both browser selectors, so the UI needs no Daedal-specific branch. Full access remains the only option behind the [existing explicit risk acknowledgement](2026-07-31-gui-full-access-confirmation.md).
 
