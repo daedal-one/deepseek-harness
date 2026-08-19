@@ -51,7 +51,7 @@ describe('ToolPolicyService', () => {
 })
 
 describe('tool-policy durable invariants', () => {
-  it('accepts a reconstructible intent request and rejects invalid selectors', async () => {
+  it('accepts a reconstructible intent handoff and rejects invalid selectors', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(InvariantRegistry)
@@ -61,30 +61,21 @@ describe('tool-policy durable invariants', () => {
     const user = session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'inspect' }], source: { kind: 'user' },
     }), { surfaceOp: 'append' })
+    const request = session.append('tool-policy/classifier-request', {
+      turn: 1,
+      providerId: ToolPolicyProviderId('intent-context:mock/reviewer'),
+      route: { provider: 'mock', model: 'reviewer' },
+      purpose: 'intent-context',
+      input: { kind: 'intent-context', userMessageSeqs: [user.seq], maxUserMessageChars: 100 },
+      request: { system: 'fixed', temperature: 0, maxTokens: 10, timeoutMs: 100 },
+    })
+    const context = session.append('tool-policy/intent-context', {
+      turn: 1, requestSeq: request.seq, userMessageSeq: user.seq,
+      providerId: ToolPolicyProviderId('intent-context:mock/reviewer'),
+      allowedEffects: ['workspace-read'], forbiddenEffects: [], summary: 'inspect',
+    })
     const callId = CallId('call')
     session.append('tool/call', { turn: 1, step: 1, callId, name: 'bash', arguments: '{}' })
-    expect(() => {
-      session.append('tool-policy/classifier-request', {
-        turn: 1,
-        callId,
-        providerId: ToolPolicyProviderId('intent:mock/reviewer'),
-        route: { provider: 'mock', model: 'reviewer' },
-        purpose: 'intent',
-        input: { kind: 'intent', userMessageSeq: user.seq, maxUserMessageChars: 100, maxIntentChars: 100 },
-        request: { system: 'fixed', temperature: 0, maxTokens: 10 },
-      })
-    }).not.toThrow()
-    expect(() => {
-      session.append('tool-policy/classifier-request', {
-        turn: 1,
-        callId,
-        providerId: ToolPolicyProviderId('intent:mock/reviewer'),
-        route: { provider: 'mock', model: 'reviewer' },
-        purpose: 'intent',
-        input: { kind: 'intent', userMessageSeq: 999, maxUserMessageChars: 100, maxIntentChars: 100 },
-        request: { system: 'fixed', temperature: 0, maxTokens: 10 },
-      })
-    }).toThrow(/earlier direct user message/)
     expect(() => {
       session.append('tool-policy/classifier-request', {
         turn: 1,
@@ -92,8 +83,32 @@ describe('tool-policy durable invariants', () => {
         providerId: ToolPolicyProviderId('effect:mock/reviewer'),
         route: { provider: 'mock', model: 'reviewer' },
         purpose: 'effect-primary',
-        input: { kind: 'intent', maxUserMessageChars: 100, maxIntentChars: 100 },
-        request: { system: 'fixed', temperature: 0, maxTokens: 10 },
+        input: {
+          kind: 'effect', commandArgument: 'command', intentArgument: 'description', intentContextSeq: context.seq,
+          maxCommandChars: 100, maxIntentChars: 100,
+        },
+        request: { system: 'fixed', temperature: 0, maxTokens: 10, timeoutMs: 100 },
+      })
+    }).not.toThrow()
+    expect(() => {
+      session.append('tool-policy/classifier-request', {
+        turn: 1,
+        providerId: ToolPolicyProviderId('intent-context:mock/reviewer'),
+        route: { provider: 'mock', model: 'reviewer' },
+        purpose: 'intent-context',
+        input: { kind: 'intent-context', userMessageSeqs: [999], maxUserMessageChars: 100 },
+        request: { system: 'fixed', temperature: 0, maxTokens: 10, timeoutMs: 100 },
+      })
+    }).toThrow(/earlier direct user messages/)
+    expect(() => {
+      session.append('tool-policy/classifier-request', {
+        turn: 1,
+        callId,
+        providerId: ToolPolicyProviderId('effect:mock/reviewer'),
+        route: { provider: 'mock', model: 'reviewer' },
+        purpose: 'effect-primary',
+        input: { kind: 'intent-context', userMessageSeqs: [user.seq], maxUserMessageChars: 100 },
+        request: { system: 'fixed', temperature: 0, maxTokens: 10, timeoutMs: 100 },
       })
     }).toThrow(/purpose must match/)
   })

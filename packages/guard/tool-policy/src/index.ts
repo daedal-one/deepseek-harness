@@ -5,6 +5,7 @@ import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { CallId } from '@deepseek-ai/dsh-llm'
+import type { Session } from '@deepseek-ai/dsh-session'
 import type {} from './types.ts'
 export type * from './types.ts'
 
@@ -46,8 +47,16 @@ export interface ToolPolicyRequest {
   readonly signal: AbortSignal
 }
 
+/** Session facts supplied before an enforced turn is likely to execute a tool. */
+export interface ToolPolicyPrewarmRequest {
+  readonly session: Session
+  readonly signal: AbortSignal
+}
+
 /** One implementation of policy for a subset of tools. */
 export interface ToolPolicyProvider {
+  /** Start optional reusable preparation without delaying the calling session event. */
+  prewarm?(request: ToolPolicyPrewarmRequest): Promise<void>
   /** Evaluate a supported tool, or return `undefined` without side effects when unsupported. */
   evaluate(request: ToolPolicyRequest): Promise<ToolPolicyVerdict | undefined>
 }
@@ -95,6 +104,16 @@ export class ToolPolicyService extends Service {
       active = false
       if (this.providers.get(id) === provider) this.providers.delete(id)
     }
+  }
+
+  /**
+   * Start reusable preparation in every selected provider that supports it.
+   * @param request - session and cancellation for this prewarm opportunity.
+   * @returns when every selected provider's preparation has settled.
+   */
+  async prewarm(request: ToolPolicyPrewarmRequest): Promise<void> {
+    await Promise.all(this.selectedProviders().map(provider =>
+      provider.prewarm === undefined ? Promise.resolve() : provider.prewarm(request)))
   }
 
   /**

@@ -1,4 +1,4 @@
-import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -14,6 +14,8 @@ async function fixture(): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), 'dsh-policy-read-'))
   directories.push(directory)
   await writeFile(join(directory, 'input.txt'), 'keep\nskip\n', 'utf8')
+  await mkdir(join(directory, 'docs'))
+  await writeFile(join(directory, 'docs', 'input.md'), 'English only\n', 'utf8')
   return directory
 }
 
@@ -25,12 +27,28 @@ describe('deterministic read parser', () => {
     await expect(isDeterministicRead("sed -n '1,2p' input.txt", cwd)).resolves.toBe(true)
     await expect(isDeterministicRead('ls -la', cwd)).resolves.toBe(true)
     await expect(isDeterministicRead('rg --files --hidden .', cwd)).resolves.toBe(true)
+    await expect(isDeterministicRead('uname -a', cwd)).resolves.toBe(true)
+    await expect(isDeterministicRead("awk 'NR == 1 { print }' input.txt", cwd)).resolves.toBe(true)
+  })
+
+  it('accepts a compound workspace scan with literal status output and discarded diagnostics', async () => {
+    const cwd = await fixture()
+    const command = [
+      `cd ${cwd}`,
+      'echo "=== scan ==="',
+      "grep -rlP '[\\x{4e00}-\\x{9fff}]' --include='*.md' . 2>/dev/null | head -40",
+      'echo "=== done ==="',
+    ].join('\n')
+    await expect(isDeterministicRead(command, cwd)).resolves.toBe(true)
   })
 
   it.each([
     'cat $(pwd)/input.txt',
     'cat input.txt > output.txt',
     'cat input.txt; touch output.txt',
+    'cat input.txt && touch output.txt',
+    'echo safe; curl https://example.com',
+    'cd ..; cat input.txt',
     'tail -f input.txt',
     'grep skip -R .',
     'ls -RL .',

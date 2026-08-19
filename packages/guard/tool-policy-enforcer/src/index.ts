@@ -81,6 +81,19 @@ function appendDecision(exec: ToolExecution, opinion: ToolPolicyOpinion, stage: 
 
 /** Install the policy consumer on `tools/pre-execute`. */
 export function apply(ctx: Context, config: Config = {}): void {
+  const lifetime = new AbortController()
+  const disposePrewarm = ctx.on('session/event', (session, event) => {
+    const directUser = event.type === 'user/message' && event.data.source.kind === 'user'
+    const permissionChanged = event.type === 'sandbox/mode'
+      || event.type === 'approval/policy'
+    if (!directUser && !permissionChanged) return
+    queueMicrotask(() => {
+      if (lifetime.signal.aborted || !shouldEnforce(session.events, config.enforceWhen)) return
+      void ctx.toolPolicy.prewarm({ session, signal: lifetime.signal }).catch((_prewarmFailure: unknown) => {
+        // Evaluation reports missing preparation through its ordinary fail-closed verdict.
+      })
+    })
+  })
   const dispose = ctx.on('tools/pre-execute', async (exec, next): Promise<PreToolDecision> => {
     if (exec.agent === undefined) return next()
     if (!shouldEnforce(exec.agent.session.events, config.enforceWhen)) return next()
@@ -111,5 +124,9 @@ export function apply(ctx: Context, config: Config = {}): void {
     appendDecision(exec, verdict, 'effective', 'ask')
     return { kind: 'ask', reason: verdict.reason }
   })
-  ctx.effect(() => dispose, 'tool-policy-enforcer listener')
+  ctx.effect(() => () => {
+    lifetime.abort(new Error('tool-policy enforcer disposed'))
+    disposePrewarm()
+    dispose()
+  }, 'tool-policy-enforcer listeners')
 }

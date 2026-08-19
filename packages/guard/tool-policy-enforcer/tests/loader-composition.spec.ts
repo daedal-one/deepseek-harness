@@ -34,9 +34,9 @@ class AllowAdapter extends LlmAdapter {
   }
 
   override async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
-    const text = options.provider === 'intent'
-      ? '{"userSummary":"inspect","agentSummary":"inspect","allowedEffects":["host-read"],"forbiddenEffects":[],"alignment":"aligned"}'
-      : '{"effects":["host-read"],"risk":8,"reason":"reads host information"}'
+    const text = options.system?.startsWith('Derive authorization context')
+      ? 'local-compute\n-\nprint a local value'
+      : 'aligned;local-compute'
     yield { type: 'text-delta', index: 0, text }
     yield { type: 'finish', reason: { kind: 'stop' } }
   }
@@ -63,16 +63,16 @@ async function load(configureEnforcer = true): Promise<Context> {
     '    id: shell',
     '    mappings: [{ tool: bash, commandArgument: command, intentArgument: description }]',
     '    intent: { provider: intent, model: intent-reviewer, reasoningEffort: minimal }',
-    '    primary: { provider: primary, model: effect-classifier }',
+    '    primary: { provider: intent, model: intent-reviewer, reasoningEffort: minimal }',
     '    secondary: { provider: secondary, model: effect-reviewer }',
-    '    timeoutMs: 1000',
+    '    decisionTimeoutMs: 2000',
+    '    intentContextTimeoutMs: 5000',
     '    maxTokens: 80',
     '    maxCommandChars: 1000',
     '    maxUserMessageChars: 100',
     '    maxIntentChars: 100',
     '    maxOutputChars: 1000',
     '    maxSummaryChars: 80',
-    '    maxReasonChars: 80',
     '    maxEffects: 8',
     '    rules: []',
     "- name: '@deepseek-ai/dsh-tool-policy-enforcer'",
@@ -128,7 +128,7 @@ describe('real Loader policy composition', () => {
     }))
     const events: Array<Record<string, unknown>> = [
       { seq: 1, type: 'turn/start', data: { turn: 1 } },
-      { seq: 2, type: 'user/message', data: { source: { kind: 'user' }, content: [{ type: 'text', text: 'inspect the host' }] } },
+      { seq: 2, type: 'user/message', data: { source: { kind: 'user' }, content: [{ type: 'text', text: 'print a local value' }] } },
       { seq: 3, type: 'tool/call', data: { callId: CallId('c'), name: 'bash', arguments: '{}' } },
       { seq: 4, type: 'sandbox/mode', data: { mode: 'danger-full-access' } },
       { seq: 5, type: 'approval/policy', data: { policy: 'ask' } },
@@ -141,7 +141,7 @@ describe('real Loader policy composition', () => {
       },
     } as unknown as Agent
     await expect(loaded.tools.execute({
-      callId: CallId('c'), name: 'bash', arguments: { command: 'uname -a', description: 'inspect the host' }, agent,
+      callId: CallId('c'), name: 'bash', arguments: { command: 'printf loader', description: 'print a local value' }, agent,
       signal: new AbortController().signal,
     })).resolves.toMatchObject({ isError: false })
     expect(ran).toBe(true)
