@@ -866,7 +866,7 @@ Source: [`packages/core/session/src/types.ts:291`](../packages/core/session/src/
 'tool-policy/classifier-request': ToolPolicyClassifierRequestEventData
 ```
 
-Source: [`packages/guard/tool-policy/src/types.ts:58`](../packages/guard/tool-policy/src/types.ts)
+Source: [`packages/guard/tool-policy/src/types.ts:73`](../packages/guard/tool-policy/src/types.ts)
 
 <a id="tool-policydecision--log-only"></a>
 
@@ -877,7 +877,18 @@ Source: [`packages/guard/tool-policy/src/types.ts:58`](../packages/guard/tool-po
 'tool-policy/decision': ToolPolicyDecisionEventData
 ```
 
-Source: [`packages/guard/tool-policy/src/types.ts:60`](../packages/guard/tool-policy/src/types.ts)
+Source: [`packages/guard/tool-policy/src/types.ts:77`](../packages/guard/tool-policy/src/types.ts)
+
+<a id="tool-policyintent-context--log-only"></a>
+
+#### `tool-policy/intent-context` — log-only
+
+```ts persistence-catalog
+/** Validated user-intent context passed to later effect classifiers. */
+'tool-policy/intent-context': ToolPolicyIntentContextEventData
+```
+
+Source: [`packages/guard/tool-policy/src/types.ts:75`](../packages/guard/tool-policy/src/types.ts)
 
 ### `tool-workflow/*`
 

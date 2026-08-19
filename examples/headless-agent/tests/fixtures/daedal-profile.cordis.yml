@@ -46,17 +46,17 @@
           - tool: bash
             commandArgument: command
             intentArgument: description
-        intent: { provider: cli-mock-intent, model: cli-mock }
-        primary: { provider: cli-mock-primary, model: cli-mock }
+        intent: { provider: cli-mock-intent, model: cli-mock, reasoningEffort: minimal }
+        primary: { provider: cli-mock-intent, model: cli-mock, reasoningEffort: minimal }
         secondary: { provider: cli-mock-secondary, model: cli-mock }
-        timeoutMs: 1000
-        maxTokens: 128
+        decisionTimeoutMs: 2000
+        intentContextTimeoutMs: 5000
+        maxTokens: 80
         maxCommandChars: 1000
         maxUserMessageChars: 1000
         maxIntentChars: 200
         maxOutputChars: 1000
         maxSummaryChars: 120
-        maxReasonChars: 120
         maxEffects: 8
         rules: []
 

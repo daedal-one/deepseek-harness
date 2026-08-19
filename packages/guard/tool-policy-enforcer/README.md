@@ -6,6 +6,8 @@ This consumer enforces `ctx.toolPolicy` on `tools/pre-execute`. Unsupported and 
 
 `enforceWhen` optionally restricts evaluation to a conjunction of effective `sandbox/mode` and `approval/policy` values. The enforcer folds those values from the calling session's durable events before consulting any provider. An omitted condition preserves unconditional enforcement, and a missing configured value keeps enforcement active because the session cannot establish the configured bypass.
 
+When an enforced session accepts a direct user message, the enforcer calls `ctx.toolPolicy.prewarm()` without delaying event publication. Permission changes also offer a prewarm opportunity for the latest direct message. Provider preparation is optional and fail-closed evaluation remains authoritative; calls outside `enforceWhen` do not start preparation.
+
 ## Direct approval
 
 The enforcer is stateless and has no retry threshold. Every provider opinion and effective result is recorded as `tool-policy/decision`, including bounded risk, categories, and reason but no copied raw arguments. Policy failure becomes `ask`; caller cancellation is rethrown and remains cancellation. Deterministic provider denials never enter approval.

@@ -53,6 +53,7 @@ export const KNOWN_SESSION_EVENT_TYPES: ReadonlySet<string> = new Set([
   'todo/write',
   'tool-policy/classifier-request',
   'tool-policy/decision',
+  'tool-policy/intent-context',
   'tool-workflow/agent-end',
   'tool-workflow/agent-start',
   'tool-workflow/run-end',

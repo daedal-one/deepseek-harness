@@ -5,33 +5,47 @@ import { tmpdir } from 'node:os'
 import { isAbsolute, relative, resolve } from 'node:path'
 
 type Pipeline = string[][]
+type CommandList = Pipeline[]
+
+interface ReadValidation {
+  readonly cwd: string
+}
 
 function within(root: string, candidate: string): boolean {
   const path = relative(root, candidate)
   return path === '' || (!path.startsWith('..') && !isAbsolute(path))
 }
 
-async function safePath(value: string, cwd: string): Promise<boolean> {
+async function safePath(value: string, validation: ReadValidation): Promise<boolean> {
   if (value === '-') return true
-  const absolute = resolve(cwd, value)
+  const absolute = resolve(validation.cwd, value)
   try {
-    const [workspace, temporary, candidate] = await Promise.all([realpath(cwd), realpath(tmpdir()), realpath(absolute)])
+    const [workspace, temporary, candidate] = await Promise.all([realpath(validation.cwd), realpath(tmpdir()), realpath(absolute)])
     return within(workspace, candidate) || within(temporary, candidate)
   } catch {
     return false
   }
 }
 
-function parsePipeline(command: string): Pipeline | undefined {
-  const stages: Pipeline = [[]]
+function parseCommandList(command: string): CommandList | undefined {
+  const commands: CommandList = []
+  let stages: Pipeline = [[]]
   let token = ''
   let tokenStarted = false
+  let requiresCommand = false
   let quote: "'" | '"' | undefined
   const pushToken = (): void => {
     if (!tokenStarted) return
     stages.at(-1)?.push(token)
     token = ''
     tokenStarted = false
+  }
+  const pushCommand = (): boolean => {
+    pushToken()
+    if (stages.at(-1)?.length === 0) return false
+    commands.push(stages)
+    stages = [[]]
+    return true
   }
   for (let index = 0; index < command.length; index += 1) {
     const char = command.charAt(index)
@@ -42,8 +56,28 @@ function parsePipeline(command: string): Pipeline | undefined {
       tokenStarted = true
       continue
     }
-    if (char === "'" || char === '"') { quote = char; tokenStarted = true; continue }
+    if (char === "'" || char === '"') { quote = char; tokenStarted = true; requiresCommand = false; continue }
+    if (char === '\n' || char === '\r' || char === ';') {
+      if (stages.at(-1)?.length === 0 && !tokenStarted) {
+        if (stages.length > 1 || char === ';') return undefined
+        continue
+      }
+      if (!pushCommand()) return undefined
+      continue
+    }
     if (/\s/u.test(char)) { pushToken(); continue }
+    if (!tokenStarted && command.startsWith('2>/dev/null', index)) {
+      const after = command.charAt(index + '2>/dev/null'.length)
+      if (after.length > 0 && !/[\s|;&]/u.test(after)) return undefined
+      index += '2>/dev/null'.length - 1
+      continue
+    }
+    if (char === '&') {
+      if (command[index + 1] !== '&' || !pushCommand()) return undefined
+      requiresCommand = true
+      index += 1
+      continue
+    }
     if (char === '|') {
       if (command[index + 1] === '|') return undefined
       pushToken()
@@ -51,40 +85,45 @@ function parsePipeline(command: string): Pipeline | undefined {
       stages.push([])
       continue
     }
-    if (/[;&<>`$()*?\[\]{}\\!#\n\r]/u.test(char)) return undefined
+    if (/[<>`$()*?\[\]{}\\!#]/u.test(char)) return undefined
     token += char
     tokenStarted = true
+    requiresCommand = false
   }
   if (quote !== undefined) return undefined
-  pushToken()
-  return stages.at(-1)?.length === 0 ? undefined : stages
+  if (requiresCommand) return undefined
+  if (stages.at(-1)?.length === 0 && !tokenStarted) return commands.length === 0 || stages.length > 1 ? undefined : commands
+  return pushCommand() ? commands : undefined
 }
 
 const catFlags = new Set([
   '-A', '--show-all', '-b', '--number-nonblank', '-e', '-E', '--show-ends', '-n', '--number', '-s', '--squeeze-blank', '-t', '-T', '--show-tabs', '-u', '-v', '--show-nonprinting',
 ])
 const grepBooleanFlags = new Set([
-  '-a', '-b', '-c', '-E', '-F', '-h', '-H', '-i', '-I', '-l', '-L', '-n', '-o', '-P', '-q', '-s', '-v', '-w', '-x', '--binary-files=text', '--count', '--extended-regexp', '--files-with-matches', '--files-without-match', '--fixed-strings', '--ignore-case', '--line-number', '--no-filename', '--only-matching', '--perl-regexp', '--quiet', '--silent', '--text', '--word-regexp', '--invert-match', '--line-regexp',
+  '-a', '-b', '-c', '-E', '-F', '-h', '-H', '-i', '-I', '-l', '-L', '-n', '-o', '-P', '-q', '-r', '-s', '-v', '-w', '-x', '--binary-files=text', '--count', '--extended-regexp', '--files-with-matches', '--files-without-match', '--fixed-strings', '--ignore-case', '--line-number', '--no-filename', '--only-matching', '--perl-regexp', '--quiet', '--recursive', '--silent', '--text', '--word-regexp', '--invert-match', '--line-regexp',
 ])
 const grepValueFlags = new Set(['-A', '-B', '-C', '-e', '--after-context', '--before-context', '--context', '--max-count', '-m'])
+const grepFilterFlags = new Set(['--include', '--exclude', '--exclude-dir'])
 
-async function validatePaths(values: readonly string[], cwd: string): Promise<boolean> {
-  return (await Promise.all(values.map(value => safePath(value, cwd)))).every(Boolean)
+async function validatePaths(values: readonly string[], validation: ReadValidation): Promise<boolean> {
+  return (await Promise.all(values.map(value => safePath(value, validation)))).every(Boolean)
 }
 
-async function safeCat(args: readonly string[], cwd: string): Promise<boolean> {
+async function safeCat(args: readonly string[], validation: ReadValidation): Promise<boolean> {
   const paths = args.filter(arg => !catFlags.has(arg))
   if (paths.some(arg => arg.startsWith('-') && arg !== '-')) return false
-  return validatePaths(paths, cwd)
+  return validatePaths(paths, validation)
 }
 
-async function safeGrep(args: readonly string[], cwd: string): Promise<boolean> {
+async function safeGrep(args: readonly string[], validation: ReadValidation): Promise<boolean> {
   let patternSeen = false
   const paths: string[] = []
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]
     if (arg === undefined) return false
-    if (!patternSeen && (grepBooleanFlags.has(arg) || /^-[abchHiIlLnoqsvwExF]+$/u.test(arg))) continue
+    if (grepBooleanFlags.has(arg) || /^-[abchHiIlLnoqsvwExFPr]+$/u.test(arg)) continue
+    if (grepFilterFlags.has(arg)) { index += 1; if (args[index] === undefined) return false; continue }
+    if (/^--(?:include|exclude|exclude-dir)=.+$/u.test(arg)) continue
     if (!patternSeen && grepValueFlags.has(arg)) {
       index += 1
       if (args[index] === undefined) return false
@@ -95,7 +134,7 @@ async function safeGrep(args: readonly string[], cwd: string): Promise<boolean> 
     if (!patternSeen && arg === '-f') {
       index += 1
       const path = args[index]
-      if (path === undefined || !(await safePath(path, cwd))) return false
+      if (path === undefined || !(await safePath(path, validation))) return false
       patternSeen = true
       continue
     }
@@ -104,10 +143,10 @@ async function safeGrep(args: readonly string[], cwd: string): Promise<boolean> 
     if (arg.startsWith('-') && arg !== '-') return false
     paths.push(arg)
   }
-  return patternSeen && validatePaths(paths, cwd)
+  return patternSeen && validatePaths(paths, validation)
 }
 
-async function safeHeadOrTail(name: string, args: readonly string[], cwd: string): Promise<boolean> {
+async function safeHeadOrTail(name: string, args: readonly string[], validation: ReadValidation): Promise<boolean> {
   const paths: string[] = []
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]
@@ -118,10 +157,10 @@ async function safeHeadOrTail(name: string, args: readonly string[], cwd: string
     if (arg.startsWith('-') && arg !== '-') return false
     paths.push(arg)
   }
-  return validatePaths(paths, cwd)
+  return validatePaths(paths, validation)
 }
 
-async function safeSort(args: readonly string[], cwd: string): Promise<boolean> {
+async function safeSort(args: readonly string[], validation: ReadValidation): Promise<boolean> {
   const booleanFlags = new Set([
     '-b', '--ignore-leading-blanks', '-d', '--dictionary-order', '-f', '--ignore-case',
     '-g', '--general-numeric-sort', '-h', '--human-numeric-sort', '-i', '--ignore-nonprinting',
@@ -144,23 +183,23 @@ async function safeSort(args: readonly string[], cwd: string): Promise<boolean> 
     if (arg.startsWith('-') && arg !== '-') return false
     paths.push(arg)
   }
-  return validatePaths(paths, cwd)
+  return validatePaths(paths, validation)
 }
 
-async function safeLs(args: readonly string[], cwd: string): Promise<boolean> {
+async function safeLs(args: readonly string[], validation: ReadValidation): Promise<boolean> {
   if (args.some(arg => ['--dereference', '--recursive'].includes(arg) || /^-[^-]*[LR]/u.test(arg))) return false
-  return validatePaths(args.filter(arg => !arg.startsWith('-')), cwd)
+  return validatePaths(args.filter(arg => !arg.startsWith('-')), validation)
 }
 
-async function safeWc(args: readonly string[], cwd: string): Promise<boolean> {
+async function safeWc(args: readonly string[], validation: ReadValidation): Promise<boolean> {
   const flags = new Set([
     '-c', '--bytes', '-m', '--chars', '-l', '--lines', '-L', '--max-line-length', '-w', '--words',
   ])
   if (args.some(arg => arg.startsWith('-') && arg !== '-' && !flags.has(arg) && !/^-[cmlLw]+$/u.test(arg))) return false
-  return validatePaths(args.filter(arg => !arg.startsWith('-')), cwd)
+  return validatePaths(args.filter(arg => !arg.startsWith('-')), validation)
 }
 
-async function safeSed(args: readonly string[], cwd: string): Promise<boolean> {
+async function safeSed(args: readonly string[], validation: ReadValidation): Promise<boolean> {
   let quiet = false
   let scriptSeen = false
   const paths: string[] = []
@@ -184,10 +223,17 @@ async function safeSed(args: readonly string[], cwd: string): Promise<boolean> {
     if (arg.startsWith('-') && arg !== '-') return false
     paths.push(arg)
   }
-  return quiet && scriptSeen && validatePaths(paths, cwd)
+  return quiet && scriptSeen && validatePaths(paths, validation)
 }
 
-async function safeRgFiles(args: readonly string[], cwd: string): Promise<boolean> {
+async function safeAwk(args: readonly string[], validation: ReadValidation): Promise<boolean> {
+  const [program, ...paths] = args
+  if (program === undefined || !/^NR\s*==\s*\d+\s*\{\s*print\s*\}$/u.test(program)) return false
+  if (paths.some(path => path.startsWith('-'))) return false
+  return validatePaths(paths, validation)
+}
+
+async function safeRgFiles(args: readonly string[], validation: ReadValidation): Promise<boolean> {
   if (args[0] !== '--files') return false
   const booleanFlags = new Set(['--hidden', '--no-hidden', '--no-ignore', '--no-ignore-dot', '--no-ignore-exclude', '--no-ignore-files', '--no-ignore-global', '--no-ignore-parent', '--one-file-system', '-0', '--null'])
   const valueFlags = new Set(['-g', '--glob', '--iglob', '-t', '--type', '-T', '--type-not'])
@@ -201,39 +247,67 @@ async function safeRgFiles(args: readonly string[], cwd: string): Promise<boolea
     if (arg.startsWith('-') && arg !== '-') return false
     paths.push(arg)
   }
-  return validatePaths(paths, cwd)
+  return validatePaths(paths, validation)
 }
 
-async function safeStage(stage: readonly string[], cwd: string): Promise<boolean> {
+async function safeStage(stage: readonly string[], validation: ReadValidation): Promise<boolean> {
   const [name, ...args] = stage
   switch (name) {
     case 'pwd': return args.length === 0
-    case 'cat': return safeCat(args, cwd)
-    case 'grep': return safeGrep(args, cwd)
+    case 'echo': return true
+    case 'uname': return args.every(arg => /^-[asnrvmpio]+$/u.test(arg)
+      || ['--all', '--kernel-name', '--nodename', '--kernel-release', '--kernel-version', '--machine', '--processor', '--hardware-platform', '--operating-system'].includes(arg))
+    case 'awk': return safeAwk(args, validation)
+    case 'cat': return safeCat(args, validation)
+    case 'grep': return safeGrep(args, validation)
     case 'head':
-    case 'tail': return safeHeadOrTail(name, args, cwd)
-    case 'sort': return safeSort(args, cwd)
-    case 'ls': return safeLs(args, cwd)
-    case 'sed': return safeSed(args, cwd)
-    case 'rg': return safeRgFiles(args, cwd)
+    case 'tail': return safeHeadOrTail(name, args, validation)
+    case 'sort': return safeSort(args, validation)
+    case 'ls': return safeLs(args, validation)
+    case 'sed': return safeSed(args, validation)
+    case 'rg': return safeRgFiles(args, validation)
     case 'uniq': {
       const operands = args.filter(arg => !arg.startsWith('-'))
-      return operands.length <= 1 && validatePaths(operands, cwd)
+      return operands.length <= 1 && validatePaths(operands, validation)
     }
-    case 'wc': return safeWc(args, cwd)
+    case 'wc': return safeWc(args, validation)
     default: return false
   }
 }
 
+async function safeWorkingDirectory(stage: readonly string[], cwd: string): Promise<boolean> {
+  if (stage.length !== 2 || stage[0] !== 'cd' || stage[1] === undefined) return false
+  try {
+    const [workspace, target] = await Promise.all([realpath(cwd), realpath(resolve(cwd, stage[1]))])
+    return target === workspace
+  } catch {
+    return false
+  }
+}
+
+async function classifyDeterministicRead(
+  command: string,
+  cwd: string,
+): Promise<boolean> {
+  const commands = parseCommandList(command.trim())
+  if (commands === undefined) return false
+  const validation: ReadValidation = { cwd }
+  for (const pipeline of commands) {
+    if (pipeline.length === 1 && pipeline[0]?.[0] === 'cd') {
+      if (!(await safeWorkingDirectory(pipeline[0], cwd))) return false
+      continue
+    }
+    if (!(await Promise.all(pipeline.map(stage => safeStage(stage, validation)))).every(Boolean)) return false
+  }
+  return true
+}
+
 /**
- * Recognize a deliberately small pipeline grammar whose stages can only read
- * resolved workspace or platform-temporary paths and write to stdout.
+ * Recognize a bounded command whose stages only read resolved workspace or temporary paths and write to stdout.
  * @param command - exact shell command.
  * @param cwd - authoritative session workspace.
- * @returns whether every parsed stage is in the deterministic read-only set.
+ * @returns whether every parsed stage stays in the baseline read scope.
  */
 export async function isDeterministicRead(command: string, cwd: string): Promise<boolean> {
-  const pipeline = parsePipeline(command.trim())
-  if (pipeline === undefined) return false
-  return (await Promise.all(pipeline.map(stage => safeStage(stage, cwd)))).every(Boolean)
+  return classifyDeterministicRead(command, cwd)
 }

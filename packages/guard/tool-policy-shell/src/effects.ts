@@ -28,27 +28,23 @@ export type ShellEffect = typeof SHELL_EFFECTS[number]
 /** Relationship between the user's request and the acting model's stated intent. */
 export type IntentAlignment = 'aligned' | 'unclear' | 'conflicting'
 
-/** Bounded independent interpretation of user and acting-model intent. */
+/** Bounded independent context derived only from direct user messages. */
 export interface IntentReview {
-  readonly userSummary: string
-  readonly agentSummary: string
+  readonly summary: string
   readonly allowedEffects: readonly ShellEffect[]
   readonly forbiddenEffects: readonly ShellEffect[]
-  readonly alignment: IntentAlignment
 }
 
-/** Bounded command-effect evidence produced without raw intent. */
+/** Bounded command-effect and acting-intent evidence produced from sanitized user context. */
 export interface EffectReview {
   readonly effects: readonly ShellEffect[]
-  readonly risk: number
-  readonly reason: string
+  readonly alignment: IntentAlignment
 }
 
 /** Bounds applied after parsing untrusted auxiliary output. */
 export interface EvidenceBounds {
   readonly maxEffects: number
   readonly maxSummaryChars: number
-  readonly maxReasonChars: number
 }
 
 const effectSet = new Set<string>(SHELL_EFFECTS)
@@ -84,19 +80,16 @@ function effectsOf(value: unknown, bounds: EvidenceBounds): ShellEffect[] | unde
 export function parseIntentReview(value: unknown, bounds: EvidenceBounds): IntentReview | undefined {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
   const record = value as Record<string, unknown>
-  if (!exactKeys(record, ['userSummary', 'agentSummary', 'allowedEffects', 'forbiddenEffects', 'alignment'])) return undefined
-  if (typeof record['userSummary'] !== 'string' || typeof record['agentSummary'] !== 'string') return undefined
-  if (!['aligned', 'unclear', 'conflicting'].includes(String(record['alignment']))) return undefined
+  if (!exactKeys(record, ['summary', 'allowedEffects', 'forbiddenEffects'])) return undefined
+  if (typeof record['summary'] !== 'string') return undefined
   const allowedEffects = effectsOf(record['allowedEffects'], bounds)
   const forbiddenEffects = effectsOf(record['forbiddenEffects'], bounds)
   if (allowedEffects === undefined || forbiddenEffects === undefined) return undefined
   if (allowedEffects.some(effect => forbiddenEffects.includes(effect))) return undefined
   return {
-    userSummary: boundedText(record['userSummary'], bounds.maxSummaryChars),
-    agentSummary: boundedText(record['agentSummary'], bounds.maxSummaryChars),
+    summary: boundedText(record['summary'], bounds.maxSummaryChars),
     allowedEffects,
     forbiddenEffects,
-    alignment: record['alignment'] as IntentAlignment,
   }
 }
 
@@ -109,16 +102,11 @@ export function parseIntentReview(value: unknown, bounds: EvidenceBounds): Inten
 export function parseEffectReview(value: unknown, bounds: EvidenceBounds): EffectReview | undefined {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
   const record = value as Record<string, unknown>
-  if (!exactKeys(record, ['effects', 'risk', 'reason'])) return undefined
+  if (!exactKeys(record, ['effects', 'alignment'])) return undefined
   const effects = effectsOf(record['effects'], bounds)
   if (effects === undefined || effects.length === 0) return undefined
-  if (!Number.isInteger(record['risk']) || (record['risk'] as number) < 0 || (record['risk'] as number) > 100) return undefined
-  if (typeof record['reason'] !== 'string') return undefined
-  return {
-    effects,
-    risk: record['risk'] as number,
-    reason: boundedText(record['reason'], bounds.maxReasonChars),
-  }
+  if (!['aligned', 'unclear', 'conflicting'].includes(String(record['alignment']))) return undefined
+  return { effects, alignment: record['alignment'] as IntentAlignment }
 }
 
 /**
@@ -128,19 +116,27 @@ export function parseEffectReview(value: unknown, bounds: EvidenceBounds): Effec
  * @returns a bounded opinion for durable policy audit.
  */
 export function intentOpinion(providerId: ToolPolicyProviderId, review: IntentReview): ToolPolicyOpinion {
-  const decision = review.alignment === 'conflicting' ? 'ask' : 'allow'
-  const risk = review.alignment === 'conflicting' ? 100 : review.alignment === 'unclear' ? 40 : 0
   return {
     providerId,
-    decision,
-    risk,
+    decision: 'allow',
+    risk: 0,
     categories: [
-      `intent:${review.alignment}`,
       ...review.allowedEffects.map(effect => `allows:${effect}`),
       ...review.forbiddenEffects.map(effect => `forbids:${effect}`),
     ],
-    reason: `intent reviewer found ${review.alignment} agent intent`,
+    reason: 'independent user intent context is available',
   }
+}
+
+function effectRisk(review: EffectReview): number {
+  if (review.alignment === 'conflicting' || review.effects.includes('destructive')) return 100
+  if (review.alignment === 'unclear') return 40
+  if (review.effects.some(effect => [
+    'credential-access', 'process-control', 'privileged', 'external-mutation', 'outside-workspace-write',
+  ].includes(effect))) return 80
+  if (review.effects.some(effect => ['workspace-delete', 'network-read'].includes(effect))) return 60
+  if (review.effects.some(effect => ['workspace-write', 'outside-workspace-read'].includes(effect))) return 30
+  return 5
 }
 
 /**
@@ -150,8 +146,11 @@ export function intentOpinion(providerId: ToolPolicyProviderId, review: IntentRe
  * @returns a bounded opinion for durable policy audit.
  */
 export function effectOpinion(providerId: ToolPolicyProviderId, review: EffectReview): ToolPolicyOpinion {
-  const decision = review.effects.every(effect => baselineAllowed.has(effect)) ? 'allow' : 'ask'
-  return { providerId, decision, risk: review.risk, categories: [...review.effects], reason: review.reason }
+  const decision = review.alignment === 'conflicting' || !review.effects.every(effect => baselineAllowed.has(effect)) ? 'ask' : 'allow'
+  return {
+    providerId, decision, risk: effectRisk(review), categories: [`intent:${review.alignment}`, ...review.effects],
+    reason: `effect classifier found ${review.alignment} acting intent`,
+  }
 }
 
 function verdict(
@@ -180,10 +179,9 @@ export function decideEvidence(
   effect: EffectReview,
   opinions: readonly ToolPolicyOpinion[],
 ): ToolPolicyVerdict {
-  const intentRisk = intent.alignment === 'conflicting' ? 100 : intent.alignment === 'unclear' ? 40 : 0
-  const risk = Math.max(intentRisk, effect.risk)
+  const risk = effectRisk(effect)
   const categories = [...new Set(opinions.flatMap(opinion => opinion.categories))]
-  if (intent.alignment === 'conflicting') {
+  if (effect.alignment === 'conflicting') {
     return verdict(providerId, 'ask', risk, categories, "agent-stated intent conflicts with the user's request", opinions)
   }
   const forbidden = effect.effects.filter(item => intent.forbiddenEffects.includes(item))
@@ -195,7 +193,7 @@ export function decideEvidence(
     return verdict(providerId, 'ask', risk, categories, `approval required for effects: ${sensitive.join(', ')}`, opinions)
   }
   const unrequested = effect.effects.filter(item => intentRequired.has(item) && !intent.allowedEffects.includes(item))
-  if (unrequested.length > 0 || (effect.effects.some(item => intentRequired.has(item)) && intent.alignment !== 'aligned')) {
+  if (unrequested.length > 0 || (effect.effects.some(item => intentRequired.has(item)) && effect.alignment !== 'aligned')) {
     return verdict(providerId, 'ask', risk, categories, `command effect was not independently established as requested: ${unrequested.join(', ') || 'intent unclear'}`, opinions)
   }
   return verdict(providerId, 'allow', risk, categories, 'independent intent and command-effect evidence permits this command', opinions)

@@ -9,6 +9,7 @@ import {
 } from '@deepseek-ai/dsh-llm'
 
 const HIGH = ReasoningEffortId('high')
+const MINIMAL = ReasoningEffortId('minimal')
 const OFF = ReasoningEffortId('off')
 
 /** Keyless headless-agent adapter: one real bash call followed by a final answer. */
@@ -21,6 +22,7 @@ class CliMockAdapter extends LlmAdapter {
       reasoning: {
         efforts: [
           { id: OFF, name: 'Off' },
+          { id: MINIMAL, name: 'Minimal' },
           { id: HIGH, name: 'High' },
         ],
         defaultEffort: HIGH,
@@ -33,16 +35,16 @@ class CliMockAdapter extends LlmAdapter {
       yield { type: 'finish', reason: { kind: 'error', failure: { code: 'SERVER', message: 'CLI mock provider failed' } } }
       return
     }
-    if (options.provider === 'cli-mock-intent') {
-      const text = '{"userSummary":"prove the CLI round trip","agentSummary":"prove the CLI round trip","allowedEffects":["local-compute"],"forbiddenEffects":[],"alignment":"aligned"}'
+    if (options.provider === 'cli-mock-intent' && options.system?.startsWith('Derive authorization context')) {
+      const text = 'local-compute\n-\nprove the CLI round trip'
       yield { type: 'text-delta', index: 0, text }
       yield { type: 'finish', reason: { kind: 'stop' } }
       return
     }
-    if (options.provider === 'cli-mock-primary' || options.provider === 'cli-mock-secondary') {
+    if (options.provider === 'cli-mock-intent' || options.provider === 'cli-mock-primary' || options.provider === 'cli-mock-secondary') {
       const text = process.env.DSH_CLI_POLICY_ASK === '1'
-        ? '{"effects":["network-read"],"risk":45,"reason":"snapshot requires approval"}'
-        : '{"effects":["local-compute"],"risk":1,"reason":"prints a fixed local string"}'
+        ? 'aligned;network-read'
+        : 'aligned;local-compute'
       yield { type: 'text-delta', index: 0, text }
       yield { type: 'finish', reason: { kind: 'stop' } }
       return

@@ -2695,7 +2695,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/guard/tool-policy/src/index.ts:56`](../packages/guard/tool-policy/src/index.ts)
+Source: [`packages/guard/tool-policy/src/index.ts:65`](../packages/guard/tool-policy/src/index.ts)
 
 <a id="deepseek-aidsh-tool-policy-enforcer"></a>
 
@@ -2782,8 +2782,10 @@ export interface Config {
   readonly primary: ClassifierRoute
   /** Independent effect route used when preferred evidence is unavailable or invalid. */
   readonly secondary: ClassifierRoute
-  /** Maximum duration of each auxiliary request in milliseconds. */
-  readonly timeoutMs: number
+  /** Maximum wall time for the complete model-reviewed decision in milliseconds. */
+  readonly decisionTimeoutMs: number
+  /** Maximum wall time for user-intent preparation outside tool execution. */
+  readonly intentContextTimeoutMs: number
   /** Maximum completion tokens requested from each auxiliary route. */
   readonly maxTokens: number
   /** Maximum command and working-directory length accepted for effect review. */
@@ -2792,12 +2794,10 @@ export interface Config {
   readonly maxUserMessageChars: number
   /** Maximum acting-model intent length included in intent review. */
   readonly maxIntentChars: number
-  /** Maximum raw auxiliary-output length accepted for JSON parsing. */
+  /** Maximum raw auxiliary-output length accepted for evidence parsing. */
   readonly maxOutputChars: number
   /** Maximum sanitized intent-summary length retained in memory. */
   readonly maxSummaryChars: number
-  /** Maximum sanitized reason length retained in a verdict. */
-  readonly maxReasonChars: number
   /** Maximum number of closed effects accepted in one auxiliary result. */
   readonly maxEffects: number
   /** Ordered deterministic rules whose last matching entry wins. */
@@ -2837,7 +2837,7 @@ export interface CommandRule {
 
 Depends on: [`ToolPolicyDecision`](../packages/guard/tool-policy/src/index.ts)
 
-Source: [`packages/guard/tool-policy-shell/src/index.ts:66`](../packages/guard/tool-policy-shell/src/index.ts)
+Source: [`packages/guard/tool-policy-shell/src/index.ts:67`](../packages/guard/tool-policy-shell/src/index.ts)
 
 <a id="deepseek-aidsh-tool-pwsh"></a>
 

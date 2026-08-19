@@ -6,13 +6,13 @@ English | [中文](README.zh.md)
 
 ## Service
 
-`evaluate(request)` supplies immutable tool identity, JSON arguments, the calling agent, and cancellation. Every selected provider runs in parallel. Unsupported providers return `undefined`; one supported verdict passes through, while overlapping verdicts combine conservatively as `deny` over `ask` over `allow`, with maximum risk and merged bounded categories and opinions. Providers own tool-specific interpretation and must preserve caller cancellation.
+`prewarm(request)` offers the session and cancellation to each selected provider's optional preparation hook. `evaluate(request)` supplies immutable tool identity, JSON arguments, the calling agent, and cancellation. Every selected provider runs in parallel. Unsupported providers return `undefined`; one supported verdict passes through, while overlapping verdicts combine conservatively as `deny` over `ask` over `allow`, with maximum risk and merged bounded categories and opinions. Providers own tool-specific interpretation and must preserve caller cancellation.
 
 Registrations are effect-owned by provider plugins. Unloading a provider removes it without retaining a stale implementation.
 
 ## Durable events
 
-`tool-policy/classifier-request` records an auxiliary route, purpose, fixed prompt, reconstruction selectors, and bounds before model dispatch. It does not duplicate raw text already stored in `user/message` or arguments already stored in `tool/call`. `tool-policy/decision` records provider and effective outcomes. The invariant companion requires both events to follow the matching call in its open turn and validates any direct-user-message reference.
+`tool-policy/classifier-request` records an auxiliary route, purpose, fixed prompt, reconstruction selectors, and bounds before model dispatch. `tool-policy/intent-context` records bounded validated context that a later classifier receives. Neither duplicates raw text already stored in `user/message` or arguments already stored in `tool/call`. `tool-policy/decision` records provider and effective outcomes. The invariant companion validates the user-message-to-context-to-tool-call chain and requires tool-time requests and decisions to belong to the current open turn.
 
 ## Model Experience
 

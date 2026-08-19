@@ -3,12 +3,11 @@ import { describe, expect, it } from 'vitest'
 import { decideEvidence, parseEffectReview, parseIntentReview, type EffectReview, type IntentReview } from '../src/effects.ts'
 import { configuredRuleDecision, gitEscalationDecision, hardSecurityDecision } from '../src/index.ts'
 
-const bounds = { maxEffects: 8, maxSummaryChars: 40, maxReasonChars: 40 }
+const bounds = { maxEffects: 8, maxSummaryChars: 40 }
 const intent = (allowedEffects: IntentReview['allowedEffects'] = []): IntentReview => ({
-  userSummary: 'change workspace', agentSummary: 'change workspace', allowedEffects,
-  forbiddenEffects: ['credential-access'], alignment: 'aligned',
+  summary: 'change workspace', allowedEffects, forbiddenEffects: ['credential-access'],
 })
-const effect = (effects: EffectReview['effects'], risk = 10): EffectReview => ({ effects, risk, reason: 'classified effect' })
+const effect = (effects: EffectReview['effects'], alignment: EffectReview['alignment'] = 'aligned'): EffectReview => ({ effects, alignment })
 
 describe('shell deterministic policy', () => {
   it.each([
@@ -41,13 +40,13 @@ describe('shell deterministic policy', () => {
 describe('independent evidence policy', () => {
   it('accepts only exact closed result fields and vocabulary', () => {
     expect(parseIntentReview({
-      userSummary: 'read', agentSummary: 'read', allowedEffects: ['workspace-read'], forbiddenEffects: [], alignment: 'aligned',
-    }, bounds)).toMatchObject({ alignment: 'aligned' })
+      summary: 'read', allowedEffects: ['workspace-read'], forbiddenEffects: [],
+    }, bounds)).toMatchObject({ summary: 'read' })
     expect(parseIntentReview({
-      userSummary: 'read', agentSummary: 'read', allowedEffects: ['workspace-read'], forbiddenEffects: [], alignment: 'aligned', extra: true,
+      summary: 'read', allowedEffects: ['workspace-read'], forbiddenEffects: [], extra: true,
     }, bounds)).toBeUndefined()
-    expect(parseEffectReview({ effects: ['invented'], risk: 1, reason: 'x' }, bounds)).toBeUndefined()
-    expect(parseEffectReview({ effects: ['workspace-read'], risk: 1, reason: 'x' }, bounds)).toMatchObject({ effects: ['workspace-read'] })
+    expect(parseEffectReview({ effects: ['invented'], alignment: 'aligned' }, bounds)).toBeUndefined()
+    expect(parseEffectReview({ effects: ['workspace-read'], alignment: 'aligned' }, bounds)).toMatchObject({ effects: ['workspace-read'] })
   })
 
   it('allows baseline reads and explicitly requested workspace mutation', () => {
@@ -65,6 +64,6 @@ describe('independent evidence policy', () => {
 
   it('reports risk from the selected evidence rather than a failed superseded route', () => {
     const failed = { providerId: ToolPolicyProviderId('primary'), decision: 'ask' as const, risk: 100, categories: ['invalid-output'], reason: 'bad' }
-    expect(decideEvidence(ToolPolicyProviderId('shell'), intent(), effect(['host-read'], 12), [failed])).toMatchObject({ decision: 'allow', risk: 12 })
+    expect(decideEvidence(ToolPolicyProviderId('shell'), intent(), effect(['host-read']), [failed])).toMatchObject({ decision: 'allow', risk: 5 })
   })
 })

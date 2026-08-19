@@ -25,18 +25,24 @@ meaningful operations need attributable independent evidence before execution.
 - {#c-fast-path} Fixed security decisions, deployment rules, and a conservative
   parsed subset of workspace and temporary-file reads MUST resolve without an
   auxiliary model request.
-- {#c-independence} Unmatched commands MUST obtain an intent review from a model
-  route distinct from the acting agent and command-effect route; the intent
-  review MUST see bounded user and agent-stated intents but MUST NOT see the
-  command, while effect analysis MUST see the command and working directory but
-  MUST NOT see either raw intent.
+- {#c-independence} Unmatched commands MUST obtain a bounded user-intent context
+  from a model route distinct from the acting agent. The context review MUST see
+  only direct user messages and MUST be reusable across calls for the same
+  latest message. Command-effect review MUST receive that short context, the
+  acting model's stated intent, the command, and working directory, but no raw
+  user message. Deployments MAY use the same provider and model for both
+  separately dispatched requests.
 - {#c-effects} Auxiliary results MUST use bounded, validated effect categories;
   deterministic host policy MUST own the effective allow, ask, or
   deny decision and MUST fail closed on missing, malformed, or conflicting
   evidence.
-- {#c-latency} Independent intent and effect requests MUST run concurrently,
-  share in-flight exact inputs, and use a further independent opinion only
-  when the primary effect route returns no valid evidence.
+- {#c-latency} Intent context review MUST start when an enforced session accepts
+  a direct user message, share in-flight exact inputs, and remain outside the
+  tool-time decision budget. Tool-time review MUST make one primary request and
+  use a further independent opinion only when it returns no valid evidence. One
+  configured deadline MUST bound the tool-time request and fallback; the Daedal
+  policy-reviewed profile MUST target sub-second completion and cap the wait at
+  2 seconds.
 - {#c-approval} A genuine ask decision MUST enter the existing approval service
   on its first occurrence; approval MUST NOT require a model to repeat an exact
   tool call, and deterministic denials MUST remain unapprovable.
