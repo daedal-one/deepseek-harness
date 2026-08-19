@@ -26,4 +26,4 @@ The preset references validators (`daedal-implementer-status`, `daedal-review-ve
 
 ## Model routes
 
-Each role names its own OpenRouter route. The `coder` role runs `qwen/qwen3-27b`; the persona template resolves `{{model}}` from the agent's route. The english-output-guard translates drift with a separate translator route, and the memory extractor and tool-policy classifiers route independently of the roles.
+Each role names its own OpenRouter route. The `coder` role runs `qwen/qwen3.8-27b`; the persona template resolves `{{model}}` from the agent's route. The english-output-guard translates drift with a separate translator route, and the memory extractor and tool-policy classifiers route independently of the roles.
