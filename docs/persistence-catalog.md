@@ -866,7 +866,7 @@ Source: [`packages/core/session/src/types.ts:291`](../packages/core/session/src/
 'tool-policy/classifier-request': ToolPolicyClassifierRequestEventData
 ```
 
-Source: [`packages/guard/tool-policy/src/types.ts:54`](../packages/guard/tool-policy/src/types.ts)
+Source: [`packages/guard/tool-policy/src/types.ts:58`](../packages/guard/tool-policy/src/types.ts)
 
 <a id="tool-policydecision--log-only"></a>
 
@@ -877,7 +877,7 @@ Source: [`packages/guard/tool-policy/src/types.ts:54`](../packages/guard/tool-po
 'tool-policy/decision': ToolPolicyDecisionEventData
 ```
 
-Source: [`packages/guard/tool-policy/src/types.ts:56`](../packages/guard/tool-policy/src/types.ts)
+Source: [`packages/guard/tool-policy/src/types.ts:60`](../packages/guard/tool-policy/src/types.ts)
 
 ### `tool-workflow/*`
 

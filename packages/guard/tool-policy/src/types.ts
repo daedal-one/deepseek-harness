@@ -1,4 +1,4 @@
-import type { CallId } from '@deepseek-ai/dsh-llm'
+import type { CallId, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { ToolPolicyDecision, ToolPolicyProviderId } from './index.ts'
 
 /** Purpose of one auxiliary tool-policy request. */
@@ -24,7 +24,11 @@ export interface ToolPolicyClassifierRequestEventData {
   readonly turn: number
   readonly callId: CallId
   readonly providerId: ToolPolicyProviderId
-  readonly route: { readonly provider: string; readonly model: string }
+  readonly route: {
+    readonly provider: string
+    readonly model: string
+    readonly reasoningEffort?: ReasoningEffortId
+  }
   readonly purpose: ToolPolicyClassifierPurpose
   readonly input: ToolPolicyClassifierInput
   readonly request: {

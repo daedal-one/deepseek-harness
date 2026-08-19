@@ -59,7 +59,7 @@ const baselineAllowed = new Set<ShellEffect>([
   'process-read',
   'temporary-write',
 ])
-const intentRequired = new Set<ShellEffect>(['workspace-write', 'workspace-delete'])
+const intentRequired = new Set<ShellEffect>(['workspace-write', 'workspace-delete', 'outside-workspace-read'])
 
 function boundedText(value: string, limit: number): string {
   return value.replace(/[\u0000-\u001f\u007f]/gu, ' ').trim().slice(0, limit)
@@ -196,7 +196,7 @@ export function decideEvidence(
   }
   const unrequested = effect.effects.filter(item => intentRequired.has(item) && !intent.allowedEffects.includes(item))
   if (unrequested.length > 0 || (effect.effects.some(item => intentRequired.has(item)) && intent.alignment !== 'aligned')) {
-    return verdict(providerId, 'ask', risk, categories, `workspace mutation was not independently established as requested: ${unrequested.join(', ') || 'intent unclear'}`, opinions)
+    return verdict(providerId, 'ask', risk, categories, `command effect was not independently established as requested: ${unrequested.join(', ') || 'intent unclear'}`, opinions)
   }
   return verdict(providerId, 'allow', risk, categories, 'independent intent and command-effect evidence permits this command', opinions)
 }

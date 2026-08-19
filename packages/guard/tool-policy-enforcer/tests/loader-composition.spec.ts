@@ -6,7 +6,14 @@ import { Context } from '@deepseek-ai/cordis'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import LlmRuntime, { CallId, LlmAdapter, type GenerateOptions, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, {
+  CallId,
+  LlmAdapter,
+  ReasoningEffortId,
+  type GenerateOptions,
+  type LlmResolvedModelInfo,
+  type StreamChunk,
+} from '@deepseek-ai/dsh-llm'
 import SessionStore from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolPolicyService from '@deepseek-ai/dsh-tool-policy'
@@ -19,6 +26,13 @@ let root: string | undefined
 let context: Context | undefined
 
 class AllowAdapter extends LlmAdapter {
+  override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
+    return Promise.resolve({
+      provider, id: model, name: model,
+      reasoning: { efforts: [{ id: ReasoningEffortId('minimal'), name: 'Minimal' }] },
+    })
+  }
+
   override async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
     const text = options.provider === 'intent'
       ? '{"userSummary":"inspect","agentSummary":"inspect","allowedEffects":["host-read"],"forbiddenEffects":[],"alignment":"aligned"}'
@@ -48,7 +62,7 @@ async function load(configureEnforcer = true): Promise<Context> {
     '  config:',
     '    id: shell',
     '    mappings: [{ tool: bash, commandArgument: command, intentArgument: description }]',
-    '    intent: { provider: intent, model: intent-reviewer }',
+    '    intent: { provider: intent, model: intent-reviewer, reasoningEffort: minimal }',
     '    primary: { provider: primary, model: effect-classifier }',
     '    secondary: { provider: secondary, model: effect-reviewer }',
     '    timeoutMs: 1000',

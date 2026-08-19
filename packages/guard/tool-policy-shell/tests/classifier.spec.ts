@@ -1,6 +1,13 @@
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import LlmRuntime, { CallId, LlmAdapter, type GenerateOptions, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, {
+  CallId,
+  LlmAdapter,
+  ReasoningEffortId,
+  type GenerateOptions,
+  type LlmResolvedModelInfo,
+  type StreamChunk,
+} from '@deepseek-ai/dsh-llm'
 import ToolPolicyService from '@deepseek-ai/dsh-tool-policy'
 import { describe, expect, it } from 'vitest'
 import { apply, type Config } from '../src/index.ts'
@@ -22,6 +29,13 @@ class RoutedAdapter extends LlmAdapter {
 
   constructor(private readonly outputs: Readonly<Record<string, readonly string[]>>, private readonly delayMs = 0) { super() }
 
+  override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
+    return Promise.resolve({
+      provider, id: model, name: model,
+      reasoning: { efforts: [{ id: ReasoningEffortId('minimal'), name: 'Minimal' }] },
+    })
+  }
+
   override async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
     this.seen.push(options)
     this.active += 1
@@ -36,7 +50,12 @@ class RoutedAdapter extends LlmAdapter {
   }
 }
 
-function makeConfig(timeoutMs = 50, intent: Config['intent'] = { provider: 'intent', model: 'i-model' }): Config {
+function makeConfig(
+  timeoutMs = 50,
+  intent: Config['intent'] = {
+    provider: 'intent', model: 'i-model', reasoningEffort: 'minimal',
+  },
+): Config {
   return {
     id: 'shell',
     mappings: [{ tool: 'bash', commandArgument: 'command', intentArgument: 'description' }],
@@ -98,13 +117,16 @@ describe('shell classifier dispatch', () => {
     await expect(evaluate(ctx, agent)).resolves.toMatchObject({ decision: 'allow', risk: 10 })
     expect(adapter.maxActive).toBe(2)
     expect(adapter.seen).toEqual(expect.arrayContaining([
-      expect.objectContaining({ provider: 'intent', model: 'i-model', temperature: 0, maxTokens: 80 }),
+      expect.objectContaining({
+        provider: 'intent', model: 'i-model', reasoningEffort: 'minimal', temperature: 0, maxTokens: 80,
+      }),
       expect.objectContaining({ provider: 'primary', model: 'p-model', temperature: 0, maxTokens: 80 }),
     ]))
     const requests = events.filter(event => event.type === 'tool-policy/classifier-request')
     expect(requests).toHaveLength(2)
     expect(requests[0]?.data).toMatchObject({
-      purpose: 'intent', input: { kind: 'intent', userMessageSeq: 2, intentArgument: 'description', maxUserMessageChars: 100, maxIntentChars: 100 },
+      purpose: 'intent', route: { reasoningEffort: 'minimal' },
+      input: { kind: 'intent', userMessageSeq: 2, intentArgument: 'description', maxUserMessageChars: 100, maxIntentChars: 100 },
     })
     expect(requests[1]?.data).toMatchObject({
       purpose: 'effect-primary', input: { kind: 'effect', commandArgument: 'command', maxCommandChars: 1_000 },
@@ -123,6 +145,22 @@ describe('shell classifier dispatch', () => {
     const { agent } = fakeAgent()
     await expect(evaluate(ctx, agent)).resolves.toMatchObject({ decision: 'allow', risk: 10 })
     expect(adapter.seen.map(item => item.provider)).toEqual(expect.arrayContaining(['intent', 'primary', 'secondary']))
+  })
+
+  it('accepts one whole-response JSON fence and rejects commentary around it', async () => {
+    const fenced = await setup(new RoutedAdapter({
+      intent: [`\`\`\`json\n${INTENT_ALLOW}\n\`\`\``],
+      primary: [`\`\`\`json\n${EFFECT_ALLOW}\n\`\`\``],
+    }))
+    await expect(evaluate(fenced, fakeAgent().agent)).resolves.toMatchObject({ decision: 'allow' })
+
+    const commentary = await setup(new RoutedAdapter({
+      intent: [`Here is the result:\n\`\`\`json\n${INTENT_ALLOW}\n\`\`\``],
+      primary: [EFFECT_ALLOW],
+    }))
+    const verdict = await evaluate(commentary, fakeAgent().agent)
+    expect(verdict?.decision).toBe('ask')
+    expect(verdict?.categories).toContain('invalid-output')
   })
 
   it('does not use secondary evidence to override a validated sensitive effect', async () => {

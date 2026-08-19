@@ -2820,6 +2820,8 @@ export interface ClassifierRoute {
   readonly provider: string
   /** Provider-owned model id used for the auxiliary request. */
   readonly model: string
+  /** Optional provider-neutral reasoning effort for this auxiliary request. */
+  readonly reasoningEffort?: string
 }
 
 /** Ordered glob-like deployment rule. Last matching rule wins. */
@@ -2835,7 +2837,7 @@ export interface CommandRule {
 
 Depends on: [`ToolPolicyDecision`](../packages/guard/tool-policy/src/index.ts)
 
-Source: [`packages/guard/tool-policy-shell/src/index.ts:64`](../packages/guard/tool-policy-shell/src/index.ts)
+Source: [`packages/guard/tool-policy-shell/src/index.ts:66`](../packages/guard/tool-policy-shell/src/index.ts)
 
 <a id="deepseek-aidsh-tool-pwsh"></a>
 

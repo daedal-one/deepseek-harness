@@ -53,10 +53,12 @@ describe('independent evidence policy', () => {
   it('allows baseline reads and explicitly requested workspace mutation', () => {
     expect(decideEvidence(ToolPolicyProviderId('shell'), intent(), effect(['workspace-read']), []).decision).toBe('allow')
     expect(decideEvidence(ToolPolicyProviderId('shell'), intent(['workspace-write']), effect(['workspace-write']), []).decision).toBe('allow')
+    expect(decideEvidence(ToolPolicyProviderId('shell'), intent(['outside-workspace-read']), effect(['outside-workspace-read']), []).decision).toBe('allow')
   })
 
   it('asks for unrequested mutations, restrictions, and sensitive effects', () => {
     expect(decideEvidence(ToolPolicyProviderId('shell'), intent(), effect(['workspace-write']), []).decision).toBe('ask')
+    expect(decideEvidence(ToolPolicyProviderId('shell'), intent(['host-read']), effect(['outside-workspace-read']), []).decision).toBe('ask')
     expect(decideEvidence(ToolPolicyProviderId('shell'), intent(), effect(['credential-access']), []).decision).toBe('ask')
     expect(decideEvidence(ToolPolicyProviderId('shell'), intent(), effect(['network-read']), []).decision).toBe('ask')
   })
