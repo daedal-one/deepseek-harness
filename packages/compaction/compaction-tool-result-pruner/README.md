@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-compaction-tool-result-pruner
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 `dsh-compaction-tool-result-pruner` keeps oversized tool output from filling the context window. Once a compaction trigger qualifies, it replaces over-budget text with a bounded head, a short "middle pruned" marker, and a bounded tail; below-pressure conversations remain unchanged. The complete original result remains in the session log for exact replay and inspection. Trimming makes no model call and may relieve enough token pressure to skip summarization. Character budgets only approximate token use; the token meter determines whether pressure was relieved.

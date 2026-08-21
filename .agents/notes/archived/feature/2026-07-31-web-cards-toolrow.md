@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-07
 
-English | [中文](2026-07-31-web-cards-toolrow.zh.md)
-
 ## Problem
 
 The Web client grew five card render intents over successive PRs — terminal, diff, read, search, web — each landing as a keyed toolview registrant under `packages/client/ui-conversation/src/client/toolviews/`. They diverged in two ways the earlier PRs each acknowledged but deferred:

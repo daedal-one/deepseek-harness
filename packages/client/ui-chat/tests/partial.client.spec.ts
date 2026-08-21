@@ -26,25 +26,25 @@ describe('PartialAccumulator', () => {
 
   it('accumulates text deltas, starting from empty when prev is missing or another kind', () => {
     const acc = new PartialAccumulator(1, 0)
-    acc.push(chunk({ type: 'text-delta', index: 0, text: '无 start ' })) // prev missing
-    acc.push(chunk({ type: 'text-delta', index: 0, text: '也累积' }))
-    expect(acc.toPartial().blocks).toEqual([{ kind: 'text', text: '无 start 也累积' }])
-    acc.push(chunk({ type: 'reasoning-delta', index: 0, text: '换型重起' })) // prev is text → restart
-    expect(acc.toPartial().blocks).toEqual([{ kind: 'reasoning', text: '换型重起' }])
+    acc.push(chunk({ type: 'text-delta', index: 0, text: 'no start ' })) // prev missing
+    acc.push(chunk({ type: 'text-delta', index: 0, text: 'still accumulates' }))
+    expect(acc.toPartial().blocks).toEqual([{ kind: 'text', text: 'no start still accumulates' }])
+    acc.push(chunk({ type: 'reasoning-delta', index: 0, text: 'restart after switch' })) // prev is text → restart
+    expect(acc.toPartial().blocks).toEqual([{ kind: 'reasoning', text: 'restart after switch' }])
   })
 
   it('accumulates reasoning deltas on the reasoning lane', () => {
     const acc = new PartialAccumulator(1, 0)
     acc.push(chunk({ type: 'block-start', index: 0, blockType: 'reasoning' }))
-    acc.push(chunk({ type: 'reasoning-delta', index: 0, text: '思' }))
-    acc.push(chunk({ type: 'reasoning-delta', index: 0, text: '考' }))
-    expect(acc.toPartial().blocks).toEqual([{ kind: 'reasoning', text: '思考' }])
+    acc.push(chunk({ type: 'reasoning-delta', index: 0, text: 'th' }))
+    acc.push(chunk({ type: 'reasoning-delta', index: 0, text: 'inking' }))
+    expect(acc.toPartial().blocks).toEqual([{ kind: 'reasoning', text: 'thinking' }])
   })
 
   it('continues from a materialized history prefix', () => {
-    const acc = new PartialAccumulator(1, 0, [{ kind: 'text', text: '已有' }])
-    acc.push(chunk({ type: 'text-delta', index: 0, text: '增量' }))
-    expect(acc.toPartial().blocks).toEqual([{ kind: 'text', text: '已有增量' }])
+    const acc = new PartialAccumulator(1, 0, [{ kind: 'text', text: 'existing ' }])
+    acc.push(chunk({ type: 'text-delta', index: 0, text: 'appended' }))
+    expect(acc.toPartial().blocks).toEqual([{ kind: 'text', text: 'existing appended' }])
   })
 
   it('folds tool-call deltas: first id pins callId, late name overrides, argsRaw concatenates', () => {
@@ -58,9 +58,9 @@ describe('PartialAccumulator', () => {
 
   it('replaces the accumulated block wholesale on block-end', () => {
     const acc = new PartialAccumulator(1, 0)
-    acc.push(chunk({ type: 'text-delta', index: 0, text: '中间态' }))
-    acc.push(chunk({ type: 'block-end', index: 0, block: { type: 'text', text: '定稿全文' } }))
-    expect(acc.toPartial().blocks).toEqual([{ kind: 'text', text: '定稿全文' }])
+    acc.push(chunk({ type: 'text-delta', index: 0, text: 'interim state' }))
+    acc.push(chunk({ type: 'block-end', index: 0, block: { type: 'text', text: 'finalized full text' } }))
+    expect(acc.toPartial().blocks).toEqual([{ kind: 'text', text: 'finalized full text' }])
   })
 
   it('returns false (no notification) for usage/finish/unknown variants and keeps blocks', () => {
@@ -76,12 +76,12 @@ describe('PartialAccumulator', () => {
   it('compacts sparse indexes into a dense render-order array', () => {
     const acc = new PartialAccumulator(1, 0)
     acc.push(chunk({ type: 'block-start', index: 2, blockType: 'text' }))
-    acc.push(chunk({ type: 'text-delta', index: 2, text: '先到的高位' }))
+    acc.push(chunk({ type: 'text-delta', index: 2, text: 'higher index first' }))
     acc.push(chunk({ type: 'block-start', index: 0, blockType: 'reasoning' }))
     const { blocks } = acc.toPartial()
     expect(blocks).toHaveLength(2) // no undefined holes
     expect(blocks[0]).toEqual({ kind: 'reasoning', text: '' })
-    expect(blocks[1]).toEqual({ kind: 'text', text: '先到的高位' })
+    expect(blocks[1]).toEqual({ kind: 'text', text: 'higher index first' })
   })
 
   it('keeps the snapshot reference stable without changes and swaps it once per mutation', () => {

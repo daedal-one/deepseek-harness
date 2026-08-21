@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-04-session-open-performance-gate.zh.md)
-
 ## Problem
 
 The Session format v2 rollout changed two paths whose cost scales with model output: the JSONL backend migrates and publishes a released-v0 log, and the Client folds each settled reply's embedded compact stream. Neither path had an executable performance check, so first open grew from about 35 ms to about 5 s on a 127,400-event synthetic log (and from about 0.3 s to 26 s on a 575,000-chunk real log, with 2.7 GB peak RSS and heap exhaustion under a 512 MB limit), while Client fold grew linearly with streamed deltas instead of compact records; these regressions reached master unnoticed.

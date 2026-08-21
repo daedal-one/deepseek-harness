@@ -39,7 +39,7 @@ describe('tool-terminal rendering', () => {
 
   it('bounds complete UTF-8 results while retaining terminal metadata when it fits', () => {
     const send = renderSend({
-      viewport: `prefix-${'界'.repeat(40)}`,
+      viewport: `prefix-${'é'.repeat(40)}`,
       waitReason: 'stdin_read',
       sessionStatus: { kind: 'running' },
       truncated: false,

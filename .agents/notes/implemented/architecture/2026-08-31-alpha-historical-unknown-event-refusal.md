@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-31-alpha-historical-unknown-event-refusal.zh.md)
-
 ## Problem
 
 Equal-version Session reading can safely skip an unknown event only when its producer marked the envelope `ignorable: true`. A cardinality-preserving migration has a stricter obligation: it must prove that every preserved payload remains semantically valid in the target generation. An unknown JSON payload may contain Session sequence numbers, lifecycle facts, or model-visible state that compile-time brands cannot discover.

@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-05-patch-plugin-file-urls.zh.md)
-
 ## Problem
 
 Node ESM interprets a Windows drive prefix as a URL scheme and treats filename fragments as URL syntax. Passing filesystem paths directly to plugin imports therefore fails for Windows absolute paths and filenames containing `#` or `%`.

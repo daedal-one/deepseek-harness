@@ -1,7 +1,5 @@
 # @deepseek-ai/dsh-subagent-result-status-block
 
-English | [中文](README.zh.md)
-
 Role-aware completed-result validation for one-shot subagents. Each plugin instance registers a named validator on `ctx.subagents`; a [`dsh-tool-subagent`](../tool-subagent/README.md) instance selects it through `resultValidation`. Unconfigured delegation tools are unchanged.
 
 `implementer-status` checks the imported Daedal completion fields (`Status`, `Confidence`, `Spec issues`, `Deviations`, `Files`, `Verification`, `Commit`, and `Warnings`). Guru `PLAN` and `ADVERSARIAL` reports are exempt because they use their own verdict protocol. When the child is in-process, successful `write`, `edit`, and `str_replace_editor` events corroborate `Files:`; a mutated path omitted from the status block produces a warning.

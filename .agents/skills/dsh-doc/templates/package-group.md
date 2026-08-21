@@ -16,8 +16,6 @@ kind: "package-group"
 ```markdown
 # <group>/ — <one-line subject>
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Three to five sentences and at most 100 `wc -w`-style words: what the family provides, what a reader can DO with it, which package owns which half, and the main boundary. Apply the [Summary voice rules](../SKILL.md#voice-rules).

@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-05-package-manifest-types.zh.md)
-
 ## Problem
 
 External packages need Harness manifest types without depending on boot or client implementations. Keeping declarations beside individual readers obscures the complete configuration API and lets overlapping fields diverge.

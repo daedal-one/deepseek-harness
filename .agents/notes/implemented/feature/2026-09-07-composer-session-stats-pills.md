@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-07-composer-session-stats-pills.zh.md)
-
 ## Problem
 
 The session stats strip under the composer (`StatsLine`, ui-chat, mounted on `conversation.composer.dock`) rendered every figure as one resident text line: turn/step counts, LLM and tool wall times, TTFT/TPS averages, and compact token totals with cache-hit share. The line crowded as figures accumulated, exact token counts appeared nowhere (the `ResizeObserver`-measured hover tooltip only restated the same compact line when it truncated), and the flat text gave no grouping — time figures and billing figures read as one undifferentiated row. An in-page A/B against a two-pill variant settled the direction: the pills won on scannability and on giving each figure family a home.

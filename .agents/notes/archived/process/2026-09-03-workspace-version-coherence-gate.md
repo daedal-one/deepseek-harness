@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-09-03-workspace-version-coherence-gate.zh.md)
-
 ## Problem
 
 The dsh release sequence shares one version across its publishable members (`packages/` non-experimental members and `apps/*`), every private dsh package, and the workspace root; `release:dsh` writes that version, and the release lane's `verifyVersions` fails when the publishable members diverge. The always-run static lane enforced the same rule only for `packages/*`: a manifest named `@deepseek-ai/dsh-*` under `apps/`, or the root-named CLI manifest `@deepseek-ai/dsh`, carried the shared version with no static check of its own, and only the release lane's pack job (`release:verify`, `verify-npm-install-layout`) noticed a drift there.

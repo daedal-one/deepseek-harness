@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-agent-default-model
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 `dsh-agent-default-model` gives newly created agents a shared default provider and model when their sessions do not specify one. Use it to choose the starting model once for all supported agent entry points, including `dsh --profile headless`. When settings are available, users can override the configured selection, including reasoning effort, and saved changes apply to subsequent reads. The default is process-wide; per-session model selection remains the responsibility of the entry point that creates the agent.

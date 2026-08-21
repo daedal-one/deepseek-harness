@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-hooks-codex
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 `dsh-hooks-codex` runs command hooks from an existing Codex `hooks.json` during agent runs, so prompt and tool gates work without being rewritten. It supports five Codex hook points: session start, prompt submission, before and after tool execution, and stop. Hooks can block prompts or tool calls with model-visible reasons, add conversation context, or force another agent step. Choose this package to reuse Codex command hooks in the harness; use a native plugin for behavior outside this supported subset.

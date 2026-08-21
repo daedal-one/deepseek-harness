@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-llm
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Use `@deepseek-ai/dsh-llm` to stream model calls through configured provider adapters, discover models, and resolve model capabilities and call defaults. Every dispatched request remains reconstructable from the session log. Requests are deep-frozen before dispatch, so extensions and adapters can read them but cannot rewrite them. Each stream is one provider attempt: provider-specific translation stays with its adapter, while the optional `@deepseek-ai/dsh-llm-retry` package re-runs failed requests. Streams always end with a terminal result, so callers can handle success, failure, and cancellation consistently.

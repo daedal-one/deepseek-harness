@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-09-cancel-superseded-ci.zh.md)
-
 ## Problem
 
 Validation of an obsolete PR revision or master commit consumes runner capacity without establishing the newest revision’s status. Unconditional aggregate verdicts and coverage-history uploads can also keep cancelled runs doing bookkeeping. Preserving older post-merge runs favors historical completion over current validation, especially on the shared self-hosted pools.

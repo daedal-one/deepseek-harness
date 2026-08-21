@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-08-21-headless-reasoning-progress.zh.md)
-
 ## Problem
 
 The one-shot headless runner waits for complete Agent quiescence before printing the final Assistant text. Reasoning-capable providers expose reasoning through live `agent/assistant-stream` chunk frames and the final durable settlement, but a long reasoned response leaves the terminal silent if the runner observes only settled history. The final answer must remain the only stdout payload so command substitution and other consumers keep a stable result channel.

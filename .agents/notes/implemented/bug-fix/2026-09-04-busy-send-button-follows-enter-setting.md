@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-04-busy-send-button-follows-enter-setting.zh.md)
-
 ## Problem
 
 The Web composer offers one user-facing choice for submitting while the agent is running: the `ui-conversation.busyEnter` setting selects Queue or Steer. [Running drafts take the primary Send action](../../archived/bug-fix/2026-08-20-running-draft-primary-send.md) (archived) gave a running draft a pointer Send button, deliberately kept it off the preference to avoid an invisible mode on a button labeled only Send, and routed every click through the public `InputActions.submit()` face, which `SessionInputShell.actions` fixes to `'queue'`. A user who chose Steer in Settings got Steer from Enter and Queue from the button beside the same draft, with the button labeled only "Send message". Nothing in the composer explained the divergence, and the Settings row's title and description named only the Enter key, so the setting looked broken rather than deliberately partial.

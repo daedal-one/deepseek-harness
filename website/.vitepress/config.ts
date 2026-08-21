@@ -45,7 +45,7 @@ interface GuideModuleLink {
  */
 interface GuideModules {
   /** Guide sidebar collection for the locale. */
-  guide: 'zh-guide' | 'en-guide'
+  guide: 'guide'
   /** Development module link. */
   develop: GuideModuleLink
   /** Reference module link. */
@@ -56,18 +56,11 @@ interface GuideModules {
  * Guide-module facts keyed by locale, giving every module label and collection
  * one home shared by the navigation bar and the guide sidebar.
  */
-const guideModules = {
-  root: {
-    guide: localeCollections.root[0],
-    develop: { label: '开发', collection: localeCollections.root[1] },
-    reference: { label: '参考', collection: localeCollections.root[2] },
-  },
-  en: {
-    guide: localeCollections.en[0],
-    develop: { label: 'Development', collection: localeCollections.en[1] },
-    reference: { label: 'Reference', collection: localeCollections.en[2] },
-  },
-} satisfies Record<DocsLocale, GuideModules>
+const guideModules = { root: {
+  guide: localeCollections.root[0],
+  develop: { label: 'Development', collection: localeCollections.root[1] },
+  reference: { label: 'Reference', collection: localeCollections.root[2] },
+} } satisfies Record<DocsLocale, GuideModules>
 
 /**
  * Guide sidebar with direct links into the first development and reference pages.
@@ -95,7 +88,7 @@ function guideSidebar(locale: DocsLocale): DefaultTheme.SidebarItem[] {
  */
 function moduleNav(locale: DocsLocale): DefaultTheme.NavItem[] {
   const { develop, reference } = guideModules[locale]
-  const routePrefix = locale === 'root' ? '' : '/en'
+  const routePrefix = ''
   return [
     { text: develop.label, link: landingLink(locale, develop.collection), activeMatch: `^${routePrefix}/develop/` },
     { text: reference.label, link: landingLink(locale, reference.collection), activeMatch: `^${routePrefix}/reference/` },
@@ -158,33 +151,6 @@ function escapeVueInterpolation(html: string): string {
 const sharedTheme: Pick<DefaultTheme.Config, 'search' | 'socialLinks' | 'editLink'> = {
   search: {
     provider: 'local',
-    options: {
-      locales: {
-        root: {
-          translations: {
-            button: {
-              buttonText: '搜索文档',
-              buttonAriaLabel: '搜索文档',
-            },
-            modal: {
-              displayDetails: '显示详细列表',
-              resetButtonTitle: '清除搜索',
-              backButtonTitle: '关闭搜索',
-              noResultsText: '未找到相关结果',
-              footer: {
-                selectText: '选择',
-                selectKeyAriaLabel: '回车键',
-                navigateText: '切换',
-                navigateUpKeyAriaLabel: '上方向键',
-                navigateDownKeyAriaLabel: '下方向键',
-                closeText: '关闭',
-                closeKeyAriaLabel: 'Esc 键',
-              },
-            },
-          },
-        },
-      },
-    },
   },
   socialLinks: [
     { icon: 'github', link: 'https://github.com/deepseek-ai/deepseek-harness' },
@@ -196,7 +162,7 @@ const sharedTheme: Pick<DefaultTheme.Config, 'search' | 'socialLinks' | 'editLin
       if (typeof editSource !== 'string') throw new Error('Projected documentation page has no editSource frontmatter.')
       return `https://github.com/deepseek-ai/deepseek-harness/edit/master/${editSource}`
     },
-    text: '在 GitHub 上编辑此页',
+    text: 'Edit this page on GitHub',
   },
 }
 
@@ -206,7 +172,7 @@ const base = process.env.DOCS_BASE ?? '/'
 /** Site identity shared by the VitePress configuration and the llms.txt index. */
 const siteIdentity = {
   title: 'DeepSeek Harness',
-  description: '用于构建 Agent Harness 的插件化 SDK',
+  description: 'Plugin-based SDK for building agent harnesses',
 }
 
 /**
@@ -311,61 +277,7 @@ export default withMermaid({
   srcDir: '.generated',
   cacheDir: '.cache',
   outDir: '.dist',
-  locales: {
-    root: {
-      label: '简体中文',
-      lang: 'zh-CN',
-      themeConfig: {
-        siteTitle: siteTitle('技术预览'),
-        nav: [
-          { text: '入门', link: landingLink('root', guideModules.root.guide), activeMatch: '^/guide/' },
-          ...moduleNav('root'),
-        ],
-        sidebar: {
-          '/guide/': guideSidebar('root'),
-          '/develop/': sidebar('root', 'zh-develop'),
-          '/reference/': sidebar('root', 'zh-reference'),
-        },
-        outline: { label: '本页目录' },
-        docFooter: { prev: '上一篇', next: '下一篇' },
-        darkModeSwitchLabel: '外观',
-        lightModeSwitchTitle: '切换到浅色主题',
-        darkModeSwitchTitle: '切换到深色主题',
-        sidebarMenuLabel: '菜单',
-        returnToTopLabel: '返回顶部',
-        langMenuLabel: '切换语言',
-        skipToContentLabel: '跳至内容',
-      },
-    },
-    en: {
-      label: 'English',
-      lang: 'en-US',
-      link: '/en/',
-      themeConfig: {
-        siteTitle: siteTitle('Preview'),
-        nav: [
-          { text: 'Guide', link: landingLink('en', guideModules.en.guide), activeMatch: '^/en/guide/' },
-          ...moduleNav('en'),
-        ],
-        sidebar: {
-          '/en/guide/': guideSidebar('en'),
-          '/en/develop/': sidebar('en', 'en-develop'),
-          '/en/reference/': sidebar('en', 'en-reference'),
-        },
-        editLink: {
-          pattern: ({ frontmatter }: PageData) => {
-            const data: unknown = frontmatter
-            const editSource: unknown = typeof data === 'object' && data !== null ? Reflect.get(data, 'editSource') : undefined
-            if (typeof editSource !== 'string') throw new Error('Projected documentation page has no editSource frontmatter.')
-            return `https://github.com/deepseek-ai/deepseek-harness/edit/master/${editSource}`
-          },
-          text: 'Edit this page on GitHub',
-        },
-        outline: { label: 'On this page' },
-        docFooter: { prev: 'Previous', next: 'Next' },
-      },
-    },
-  },
+  lang: 'en-US',
   vite: {
     // `srcDir` puts the Vite root inside the disposable generated tree, whose
     // own `public/` no tracked asset can live in.
@@ -410,5 +322,17 @@ export default withMermaid({
     },
   },
   mermaid: {},
-  themeConfig: sharedTheme,
+  themeConfig: {
+    ...sharedTheme,
+    siteTitle: siteTitle('Preview'),
+    nav: [
+      { text: 'Guide', link: landingLink('root', guideModules.root.guide), activeMatch: '^/guide/' },
+      ...moduleNav('root'),
+    ],
+    sidebar: {
+      '/guide/': guideSidebar('root'),
+      '/develop/': sidebar('root', 'develop'),
+      '/reference/': sidebar('root', 'reference'),
+    },
+  },
 })

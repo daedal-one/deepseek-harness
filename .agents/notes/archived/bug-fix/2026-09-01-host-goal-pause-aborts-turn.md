@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-09-01-host-goal-pause-aborts-turn.zh.md)
-
 ## Problem
 
 Clicking "pause goal" in the Web UI moved the goal to `paused` and disarmed automatic continuation, but the model turn already running kept going. The model could keep acting and call `update_goal resume` inside that same turn, immediately undoing the pause, so a manual pause had no real control over goal execution.

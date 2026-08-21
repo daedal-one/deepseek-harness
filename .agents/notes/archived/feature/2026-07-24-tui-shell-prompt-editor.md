@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-04
 
-English | [中文](2026-07-24-tui-shell-prompt-editor.zh.md)
-
 ## Problem
 
 The upstream pi-tui editor always renders horizontal frame rows. That presentation separates input from the transcript but occupies two terminal rows and does not resemble the command-oriented input used by shells.

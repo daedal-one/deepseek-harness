@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-09-01-web-superellipse-corner-smoothing.zh.md)
-
 ## Problem
 
 Every rounded surface in the web client — cards, composer, buttons, popovers — draws its corners as plain circular arcs, which read as visibly harder than the smooth (squircle-like) corners current desktop chat UIs ship. That smoothness comes from CSS `corner-shape: superellipse(1.5)` applied behind an `@supports` guard, not from larger radii or masking tricks; utility-class implementations attach it to every rounded-corner class except full-round. This client has no utility classes: `border-radius` values are px literals spread across CSS Modules in every client package, so there is no single class list to attach the property to, and full-round shapes (`border-radius: 50%` circles, 999px pills) must keep circular arcs — a superellipse deforms a circle into a squircle, so a border-drawn spinner would visibly wobble, and it squares off capsule ends.

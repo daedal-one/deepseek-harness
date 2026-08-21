@@ -23,13 +23,13 @@ afterEach(cleanup)
 const ROSTER_READY: AgentPresetSettingsState = {
   status: 'ready',
   error: null,
-  options: [{ id: 'standard', trust: 'system', name: '标准模式' }, { id: 'mine', trust: 'user' }],
+  options: [{ id: 'standard', trust: 'system', name: 'Standard mode' }, { id: 'mine', trust: 'user' }],
 }
 
 const SEAT_READY: AgentPresetSeatState = {
   current: 'standard',
   options: [
-    { id: 'standard', trust: 'system', name: '标准模式', description: '完整的编码 agent。' },
+    { id: 'standard', trust: 'system', name: 'Standard mode', description: 'A complete coding agent.' },
     { id: 'mine', trust: 'user' },
   ],
   busy: false,

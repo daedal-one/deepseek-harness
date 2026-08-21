@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-08-08-bounded-session-persistence-write-batching.zh.md)
-
 ## Problem
 
 One agent step can emit several durable events in a short interval: request metadata, one Assistant settlement, tool lifecycles, plugin facts, and execution boundaries. Scheduling a provider append as soon as an idle queue receives one event can therefore produce many small durable appends. Each JSONL append creates and syncs a Zstandard frame or raw suffix.

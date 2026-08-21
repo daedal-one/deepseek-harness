@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-07-prebuilt-system-primitives.zh.md)
-
 ## Problem
 
 The JSONL writer's `fs-ext` dependency compiled a NAN addon during consumer installation. Native compiler availability and Node module ABI changes therefore affected ordinary installs, including Node 26. The repository already maintained the Landlock launcher and its per-platform publication workflow.

@@ -105,26 +105,26 @@ describe('copying a preset', () => {
   })
 
   it('keeps the source description but never its name or order', async () => {
-    await seedPreset(userRoot, 'source', { metadata: 'name: 源模式\ndescription: 只做检索。\norder: 1\n' })
+    await seedPreset(userRoot, 'source', { metadata: 'name: source mode\ndescription: retrieval only.\norder: 1\n' })
 
     await ctx.agentPresets.copy('source', 'mine')
 
     // Two rows presenting identically is how a roster stops being a chooser,
     // and the shipped set's declared order is not the copy's to claim.
     const metadata = await readFile(join(userRoot, 'mine', METADATA_FILE), 'utf8')
-    expect(metadata).toContain('description: 只做检索。')
+    expect(metadata).toContain('description: retrieval only.')
     expect(metadata).not.toContain('name:')
     expect(metadata).not.toContain('order:')
     expect((await ctx.agentPresets.list()).find(preset => preset.id === 'mine'))
-      .toMatchObject({ description: '只做检索。' })
+      .toMatchObject({ description: 'retrieval only.' })
   })
 
   it('stores the display name the author supplied', async () => {
-    await ctx.agentPresets.copy('standard', 'mine', '我的模式')
+    await ctx.agentPresets.copy('standard', 'mine', 'my mode')
 
-    expect(await readFile(join(userRoot, 'mine', METADATA_FILE), 'utf8')).toContain('name: 我的模式')
+    expect(await readFile(join(userRoot, 'mine', METADATA_FILE), 'utf8')).toContain('name: my mode')
     expect((await ctx.agentPresets.list()).find(preset => preset.id === 'mine'))
-      .toMatchObject({ name: '我的模式' })
+      .toMatchObject({ name: 'my mode' })
   })
 
   it('publishes no metadata file when there is nothing to publish', async () => {

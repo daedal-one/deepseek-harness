@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-06-environment-prompt-suffix.zh.md)
-
 ## Problem
 
 The local Web URL, Harness checkout path, and session cwd differ across users and machines. Placing those facts before reusable tool instructions makes otherwise identical prompts diverge near their beginning, limiting the prefix available for same-model cache reuse. The model-name introduction identifies the agent and can remain early.

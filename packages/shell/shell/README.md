@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-shell
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Use `ctx.shell` to run foreground shell commands with bounded output or start background processes that return a handle immediately. A profile can select local or sandboxed Bash or PowerShell execution without changing callers. Resolve each request before execution to make the working directory, timeout, and output limits explicit. Command completion, nonzero exits, timeouts, and caller aborts return results; only infrastructure failures reject, while the `bash` and `pwsh` tools own model-visible rendering and sandbox guidance.

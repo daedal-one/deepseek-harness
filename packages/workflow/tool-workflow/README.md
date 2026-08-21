@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-tool-workflow
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 `dsh-tool-workflow` lets a model run a JavaScript orchestration script that delegates work to many subagents and returns the script's final JSON value. Use it only when the user explicitly requests a workflow or large multi-agent orchestration; use plain subagent calls for one or two delegations. The parent turn waits until every delegated task settles, and cancellation or abnormal completion returns an error rather than partial success. Deployments can rename the tool and cap rendered result text through `toolName` and `maxResultChars`.

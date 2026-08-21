@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-sandbox-policy
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Use this package to apply one file-effect policy to every confined bash, filesystem, and terminal call. Deployments choose a default mode and fallback workspace root, while each session can switch modes independently. Session choices survive restart, and all enforcing capabilities use the same mode and workspace for a call. Before each model request, the model receives the effective policy and workspace without an inventory of mounted capabilities.

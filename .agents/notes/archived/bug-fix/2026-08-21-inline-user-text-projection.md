@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-08-21-inline-user-text-projection.zh.md)
-
 ## Problem
 
 Two display gaps in sent user text, both older than the Lexical composer. The user-bubble decorator (`projectUserText`, then private to `MessageItem`) split one message into plain runs and reference chips, but rendered every plain run through the block-level `MessageText` div — so a decorated single-line message broke into one line per run, and the single space between two adjacent tokens rendered as a whole blank line. Separately, the queue dock's read-only row printed `row.preview` verbatim, so a queued message carrying a chip showed the wire session form `@[查看并分析图片](dsh-session:InNlc3Npb24t…)` — the model-facing text, unreadable as a preview. The logged model text was correct in both cases (verified against the session log bytes); both defects were presentation only.

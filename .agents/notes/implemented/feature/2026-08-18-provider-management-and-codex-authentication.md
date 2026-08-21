@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-18-provider-management-and-codex-authentication.zh.md)
-
 ## Problem
 
 The configurable-provider directory must describe providers that are available to add even when no route is active. Provider settings also have to remain serviceable when a user replaces a composition-supplied model catalog. A recursively merged user `models` list beside inherited `modelAliases` or `modelOverrides` made the whole settings section invalid, which withdrew its provider directory and left active routes such as OpenRouter without a management row.

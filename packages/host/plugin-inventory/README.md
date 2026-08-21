@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-host-plugin-inventory
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Clients can call `pluginInventory/list` to display the host’s current plugins in load order, including each entry’s identifier, module specifier, effective enablement, and live phase. Deployments with an agent-preset roster also report each preset’s metadata, health, and flattened plugin composition; without a roster, preset data is absent. Each response is a point-in-time, read-only snapshot for display and diagnostics: it cannot mutate plugins and provides no history, provenance, or change subscription.

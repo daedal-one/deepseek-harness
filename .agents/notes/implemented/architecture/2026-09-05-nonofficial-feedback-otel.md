@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-05-nonofficial-feedback-otel.zh.md)
-
 ## Problem
 
 Feedback needs the session context it describes and a delivery path independent of the model provider or a later model request. Ordinary activity must not authorize uploads. Inherited feedback must not count as a child Session's consent.

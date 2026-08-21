@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-08-21-session-log-read-intent.zh.md)
-
 ## Problem
 
 An all-purpose `Session.events` accessor hides an array-sized copy behind every read after an append. The full frozen snapshot can be cached, but streaming invalidates that cache for every new event, so a caller that only needs the log length or one event can repeatedly copy millions of references. Making the return value immutable does not require every read intent to pay that cost; event immutability is owned separately by the [source-owned session immutability decision](2026-06-11-dev-invariants-over-deep-readonly.md).

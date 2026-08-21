@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-07-31-capability-neutral-sandbox-policy-context.zh.md)
-
 ## Problem
 
 The current-policy context originally mirrored runtime composition through separate enforced-family and escalatable-family registries. Six backend, tool, and example call sites contributed `filesystem`, `bash`, or `terminal`; the policy service retained token sets for independent disposal, intersected and ordered the two registries, invalidated prompt assemblies on every lifecycle change, and tested every family combination.

@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-03-resume-headers-do-not-repeat-system-prompts.zh.md)
-
 ## Problem
 
 Forking a Session copies the source history into the child. The child's first model request then records a `request/header` with reason `resume`, even when its system field is identical to the preceding copied header. Chat treated every resume header as a new display point, so continuing the fork showed a second `System prompt` row and suggested that the system prompt had been injected twice. The provider request still carried the system field once; the duplicate existed only in Chat presentation.

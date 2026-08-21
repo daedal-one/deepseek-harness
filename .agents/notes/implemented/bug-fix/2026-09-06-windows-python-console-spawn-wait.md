@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-06-windows-python-console-spawn-wait.zh.md)
-
 ## Problem
 
 The installed Python `dsh.exe` console command intermittently exits with Windows access violation `0xc0000005` before initializing a profile. Its smoke assertion omitted the process status and reported only empty streams. A [native faulthandler probe](https://github.com/deepseek-harness/deepseek-harness/actions/runs/34030851888) captures the fault in Python 3.10 `os._execvpe`, called by the runtime console entry, rather than in the bundled Node executable. Direct executable controls pass.

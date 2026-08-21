@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-system-prompt
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 `dsh-system-prompt` lets agents receive one ordered system prompt and the available tool schemas for each model step. Use it to add prompt sections, dynamic runtime facts, reusable variables, or tool schemas, or to control the fixed harness identity, deployment persona, runtime context, and model-facing tool order. Agent-scoped contributions override same-named global defaults without affecting other agents. Invalid complete-prompt combinations and unresolved variables fail assembly instead of sending a malformed prompt.

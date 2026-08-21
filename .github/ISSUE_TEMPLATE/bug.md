@@ -1,6 +1,6 @@
 ---
 name: Bug
-about: 记录现有预期行为的失效
+about: Log a regression of current expected behavior
 type: Bug
 ---
 

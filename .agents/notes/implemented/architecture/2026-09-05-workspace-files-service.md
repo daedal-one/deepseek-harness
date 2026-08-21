@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-05-workspace-files-service.zh.md)
-
 ## Problem
 
 The Web client needs to look at files inside a session's workspace from a browser that may not be on the Host machine: a file the agent produced, the path a `read` tool row names, later a file tree and previews of files that are neither small nor text. The one endpoint that read a workspace file over the wire lived on the Session Controller as `workspace-file.ts`, beside session lifecycle it had nothing to do with. It returned a whole file under one total byte cap, so a large log could not be looked at even in part and a binary could not be looked at at all; it had no `stat`, no listing, and no change signal, so a preview could not learn that the agent had rewritten the file without re-reading it; and its result named the file by a Host `url`, a spelling nothing on the Client used as an address.

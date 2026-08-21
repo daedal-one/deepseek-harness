@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-05-session-reference-spill-reuse.zh.md)
-
 ## Problem
 
 A bounded cross-session preview can omit whole messages or most of a retained message. A model that sees only the preview needs an accurate account of the omission and a way to inspect the captured text, without treating another session's instructions as current authority. Rereading the source later would not recover the same observation when the source advances or compacts.

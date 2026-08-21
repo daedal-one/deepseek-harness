@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-08
 
-English | [中文](2026-08-03-explicit-config-dsh-entrypoint.zh.md)
-
 ## Problem
 
 Bare `dsh` selected a product TUI implicitly. That made one command own terminal lifecycle, session identity and resume handoff, onboarding, source-workspace shortcuts, guided upgrade sessions, personal config watching, and a large app-level PTY and transcript snapshot suite. The default also hid the actual composition boundary: `--config` was an optional third layer over a TUI overlay rather than the deployment definition a raw launcher needs.

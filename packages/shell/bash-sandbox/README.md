@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-bash-sandbox
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Use `dsh-bash-sandbox` to run each Bash command with file-access confinement instead of the harness process's full authority. Results report the selected mode, denied file operations, and whether the runner fully enforced that mode. If no runner can enforce a confined mode, the command fails with `SANDBOX_UNAVAILABLE` rather than running unconfined. Choose it when deployments need file isolation; network access and process visibility remain outside its guarantees.

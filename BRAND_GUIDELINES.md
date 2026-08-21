@@ -1,7 +1,5 @@
 # DeepSeek Harness Brand Asset Usage Guidelines
 
-English | [中文](BRAND_GUIDELINES.zh.md)
-
 To maintain the long\-term healthy development of the DeepSeek Harness ecosystem, avoid user confusion, and facilitate the retrieval and identification of related resources, we have established these specifications and hope that everyone will adhere to them:
 
 - In your project's descriptive text, you may use "DeepSeek Harness" to truthfully and accurately describe your project's relationship with DeepSeek Harness, for example, "built on DeepSeek Harness" or "compatible with DeepSeek Harness\." Such descriptions comply with license requirements and help users understand your project's positioning\.

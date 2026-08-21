@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-07-26
 
-English | [中文](2026-07-22-installer-in-repo-skip-clone.zh.md)
-
 ## Problem
 
 `scripts/install.sh` is written for the `curl ... | sh` path: it clones the harness into `~/.dsh/source`, then installs, links, and launches. Contributors who already have a checkout and run the same script directly (`sh scripts/install.sh`) got a second, unrelated clone at `~/.dsh/source` — installing and linking a different tree than the one they were working in, with no way to exercise the local script against the local source.

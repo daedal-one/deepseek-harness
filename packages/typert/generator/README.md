@@ -5,8 +5,6 @@ kind: "package-library"
 
 # @deepseek-ai/dsh-typert-generator
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 `dsh-typert-generator` lets maintainers turn public TypeScript types into build artifacts and compiler-independent models. Packages opt in through the `./typert` and optional `./client/typert` exports, and generation rejects declarations, publish lists, Remote exports, or Zod projections that it cannot represent correctly. Repository builds can emit executable schemas and matching declarations, while tools can call `WorkspaceAnalyzer` for inspection or catalog generation without publishing artifacts. Generation runs only at build time and never in a live agent session.

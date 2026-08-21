@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-08
 
-English | [中文](2026-09-08-web-explicit-file-delivery.zh.md)
-
 ## Problem
 
 Workspace links read live paths, so edits or deletion can invalidate a final deliverable. Files created through shell commands also lack first-party editor mutation records. Delivery needs an explicit operation and saved bytes without expanding Session ZIP exports.

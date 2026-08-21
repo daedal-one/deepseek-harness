@@ -1,7 +1,5 @@
 # Message Feedback
 
-English | [中文](feedback.zh.md)
-
 [`@deepseek-ai/dsh-message-feedback`](../../packages/feedback/message-feedback) owns editable feedback for individual assistant messages. The canonical Session log stores `feedback/message-put` and `feedback/message-delete`; the immutable Session-level remark remains `feedback/record`, owned by [`@deepseek-ai/dsh-command-feedback`](../../packages/feedback/command-feedback) together with the `FeedbackCategory` taxonomy both kinds of feedback file under. All three are log-only events that never enter model context.
 
 Source: [`packages/feedback/message-feedback/src/types.ts`](../../packages/feedback/message-feedback/src/types.ts)

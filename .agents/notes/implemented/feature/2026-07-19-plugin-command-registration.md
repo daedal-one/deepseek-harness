@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-07-19-plugin-command-registration.zh.md)
-
 ## Problem
 
 The TUI owns slash commands. Keeping command names, help text, autocomplete, dispatch, and cancellation inside the adapter makes every new command a TUI edit and prevents optional plugins from contributing commands. Treating slash input as an ordinary model prompt is also unsafe: a user-visible direct action can unexpectedly consume tokens or let the model reinterpret an unknown command.

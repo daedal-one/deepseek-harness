@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-07-26
 
-English | [中文](2026-07-23-trajectory-step-cell.zh.md)
-
 ## Problem
 
 The trajectory tab needs a reusable step row and turn-list chrome that can show expanded assistant blocks, own-duration times, Message token columns, and in-flight work. Without folding session event times into conversation nodes and expanding blocks into cells, the UI cannot match the product chrome.

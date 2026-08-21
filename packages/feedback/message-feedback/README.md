@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-message-feedback
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 This service records positive or negative ratings, an optional category from the fixed feedback taxonomy, and optional verbatim notes for finalized assistant messages. The canonical Session log owns every creation, edit, and deletion; `list`, `put`, and `delete` expose current feedback without constructing or waking an Agent. Feedback is log-only and does not enter model history.

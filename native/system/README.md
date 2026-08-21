@@ -4,8 +4,6 @@ kind: "package-library"
 ---
 # @deepseek-ai/node-addon-system
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Use the Linux `landlock-run` executable to confine subprocesses, or the `./flock` entry to acquire a POSIX write lock. Platform packages contain the precompiled binaries; consumer installation never builds native code. Landlock policy and Session lifecycle remain with callers.

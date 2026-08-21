@@ -5,8 +5,6 @@ kind: "package-group"
 
 # schedule/ — Session-local reminders
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 The schedule group lets an agent create, list, and cancel reminders for the current conversation. Reminders can run after a delay, at an absolute time, or on a fixed interval; when due, they arrive as ordinary messages in that conversation. They survive restarts, but never leave the session or send email, SMS, or push notifications. The group's package provides reminder management and delivery. Optional browser packages show the current reminder catalog and mark conversations with known active reminders; those indicators reflect cached state and may lag the running session.

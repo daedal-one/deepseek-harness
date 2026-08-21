@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-06-pr-ci-runner-temporary-storage.zh.md)
-
 ## Problem
 
 The Linux failover pool runs multiple runner instances on one VM. PR coverage and snapshot processes use the operating-system temporary directory for transformed modules and fixtures. Files outside the runner's temporary directory escape its job cleanup, including when cancellation prevents process-level disposal. Exhausting that shared directory makes unrelated PRs fail before tests execute.

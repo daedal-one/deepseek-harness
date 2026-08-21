@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-02-system-prompt-as-surface-node.zh.md)
-
 ## Problem
 
 A system prompt held outside the surface has a different durable representation from every other message the model reads. Conversation messages are surface events (`user/message`, `assistant/message`, `tool/result`) folded in seq order by `Session.deriveMessages()`; a prompt stored as a `system` field of the log-only `request/header` snapshot has to be prepended by each serializer as wire message 0. The [reconstructable-requests Agent Note](2026-07-05-reconstructable-requests.md) made both halves durable, but that layout leaves one model-visible fact with two homes: the surface owns the messages, the header owns the message in front of them.

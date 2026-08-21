@@ -5,8 +5,6 @@ kind: "package-library"
 
 # @deepseek-ai/dsh-timeout
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 `dsh-timeout` lets callers apply bounded deadlines to work, distinguish local timeout from upstream cancellation, and monitor streamed reads for inactivity. `clampTimeout` fills a missing hint from a backend default, caps it at the allowed maximum, and rejects invalid values before work starts. `deadline` combines the chosen timeout with upstream cancellation in one signal, while the caller remains responsible for actually stopping its process, socket, or task. `idleWatchdog` counts only time spent waiting for provider reads, and zero remains reserved for backend-owned untimed work rather than public configuration.

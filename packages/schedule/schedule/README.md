@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-schedule
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Schedule lets you ask the model for durable reminders that return as ordinary follow-up messages in the same conversation. Create one-time reminders for a delay or absolute time, repeat them at fixed intervals, list pending reminders, and cancel them. Reminders survive restarts, but delivery requires a live root agent: closed sessions keep reminders overdue until resumed. Delivery never uses email, SMS, push, or browser notifications. Enable the Schedule overlay to expose the reminder tools and active-reminder catalog; sidebar alarms are best-effort indicators of known active reminders, not proof that reminder delivery is currently running.

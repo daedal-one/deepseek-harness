@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-07
 
-English | [中文](2026-07-30-web-details-default-closed.zh.md)
-
 ## Problem
 
 The transient layout store initialized details to its 360px contract width. The first connected Session and every full reload therefore reserved a right column before the user selected any detail content. Chat tool rows deliberately remain inline and do not open details, while Trajectory rows open the panel when an event is selected, so an open layout default did not represent an active detail selection.

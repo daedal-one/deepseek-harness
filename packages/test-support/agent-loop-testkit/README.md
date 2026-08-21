@@ -5,8 +5,6 @@ kind: "package-library"
 
 # @deepseek-ai/dsh-agent-loop-testkit
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Use `dsh-agent-loop-testkit` to give AgentLoop tests the standard prerequisites and a production loop driver without repeating setup. The harness creates real Agents and exposes Inbox input claiming for tests of durable events, recovery, notifications, and claim behavior. For consumer tests that need only queue editing, choose the process-local Inbox stub; choose the fail-fast Inbox when pending input must never be touched. Tests still own adapters, optional plugins, load order, and context disposal, and the package adds no model-visible behavior.

@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-08-23-python-sdk-dsh-profile-runtime.zh.md)
-
 ## Problem
 
 The Python SDK distributed a private Node application that booted a complete external `cordis.yml`, while every other supported application entered through `dsh` profiles. That exception duplicated environment loading, configuration ownership, plugin resolution, shutdown, artifact names, and test paths. It also made SDK customization an all-or-nothing application tree: a caller replacing one plugin had to own the JSON-RPC server and every unrelated deployment row.

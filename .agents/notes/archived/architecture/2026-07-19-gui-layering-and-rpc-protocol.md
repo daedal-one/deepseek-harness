@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-27
 
-English | [中文](2026-07-19-gui-layering-and-rpc-protocol.zh.md)
-
 > Division of labor: this document = the layering model + the channel-independent RPC protocol; the protocol's Web implementation combines HTTP uplink with the [WebSocket downlink carrier](2026-08-04-websocket-downlink-carrier.md), while the browser object layer is in the [web client architecture note](2026-07-19-gui-web-client-architecture.md).
 
 ## Problem
@@ -87,11 +85,11 @@ The two existing applications preserve the division: the Web application mounts 
 The sections from here down are the protocol body carried by the front layer (`dsh-host-apiproxy`). The wire has exactly four message kinds (the four quadrants) — the Web carriage in the right column is only an example; swapping the carrier (in-process/IPC) leaves the quadrants unchanged:
 
 ```
-                 client 发起                      server 发起
+                 client-initiated                server-initiated
   request   ① ClientRequest                 ③ ServerRequest
-            （POST /api/<method> body）      （WebSocket message：session 事件、审批/问答 requested）
+            (POST /api/<method> body)      (WebSocket message: session events, approval/question requested)
   response  ② ServerResponse                ④ ClientResponse
-            （该 POST 的 HTTP 应答体）        （POST /api/respond body，回填 ③ 的 rpcId）
+            (that POST's HTTP response)    (POST /api/respond body, filling ③'s rpcId)
 ```
 
 ### Wire full forms: a four-member named discriminated union (`api/rpc.ts`)
@@ -127,10 +125,11 @@ Method parameter/return structures **live only in the interface method signature
 
 ```ts ignore-check
 export interface RpcMethodMap {
-  'session.list': SessionsApi['list']        // map key 即 wire 路径段
-  // …其余方法同形登记，全集见 api/rpc-map.ts
+  'session.list': SessionsApi['list']        // map key is the wire path segment
+  // …remaining methods registered likewise; the full set lives in api/rpc-map.ts
 }
-// 派生泛型（穿透窄形取业务类型；实际声明带 K extends keyof RpcMethodMap 约束）
+// Derived generic (pierces the narrow forms to business types; the real declaration
+// carries the K extends keyof RpcMethodMap constraint)
 export type RequestPayload<K> = Parameters<RpcMethodMap[K]>[0]['payload']
 export type ResponseValue<K> =
   Awaited<ReturnType<RpcMethodMap[K]>> extends RpcResponse<infer T> ? T : never

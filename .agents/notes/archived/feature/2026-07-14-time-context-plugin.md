@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-07-26
 
-English | [中文](2026-07-14-time-context-plugin.zh.md)
-
 ## Problem
 
 The dynamic system-prompt storage and refresh decision in this record is superseded by [Durable per-step time context](2026-07-16-durable-per-step-time-context.md). The opt-in package, zoned formatting, and validation remain; the follow-up owns the current model-visible and durability contract.

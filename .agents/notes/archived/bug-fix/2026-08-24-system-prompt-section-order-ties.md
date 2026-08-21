@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-25
 
-English | [中文](2026-08-24-system-prompt-section-order-ties.zh.md)
-
 ## Problem
 
 `SystemPromptRegistry` sorts sections by `order` with a stable sort, so equal orders render in plugin-activation order. `tool:cordis` and `tool:workflow` both declared `order: 115`, while their activation order varies between clean platform compositions. ACP and SDK snapshot replays could therefore assemble the same sections in a different order from their committed `system-prompt.expected.md` files.

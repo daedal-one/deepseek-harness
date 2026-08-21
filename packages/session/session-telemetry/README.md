@@ -5,8 +5,6 @@ kind: "package-library"
 
 # @deepseek-ai/dsh-session-telemetry
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Session telemetry lets deployments send ordered copies of session activity for reporting while preserving the canonical session log. Deployments choose one reporting backend and can redact each outbound copy before delivery; without redaction rules, captured data leaves the process unchanged. The handoff is non-blocking, so reporting does not delay session processing. Delivery is best effort, and queued records may be lost if the process crashes.

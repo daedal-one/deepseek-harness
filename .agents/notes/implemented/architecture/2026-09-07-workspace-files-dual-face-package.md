@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-07-workspace-files-dual-face-package.zh.md)
-
 ## Problem
 
 The workspace file service and its browser resource provider evolve together, but their compiler graph contained reverse dependencies on Remote assembly and Sidebar UI. Splitting the packages avoided the cycles while separating ownership of the wire protocol from its Client model. A Host-only package with a types-only Client compiler entry also lacks the `dsh.client` and `./client` declarations that distinguish runtime exports in Client catalog analysis.

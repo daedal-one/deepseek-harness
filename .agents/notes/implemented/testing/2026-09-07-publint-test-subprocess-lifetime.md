@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-07-publint-test-subprocess-lifetime.zh.md)
-
 ## Problem
 
 The publint script tests have a five-second synchronous subprocess deadline below the Windows coverage lane's existing 90-second test and hook budgets. Captured Windows failures report null status in both the valid and invalid JavaScript/CSS cases; the valid case takes 5028 ms. Those logs omit the subprocess error and signal, so they do not establish ETIMEDOUT. The deadline mismatch is a shared test defect, not evidence that a product change caused the failures.

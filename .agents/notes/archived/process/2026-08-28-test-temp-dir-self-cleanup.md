@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-08-28-test-temp-dir-self-cleanup.zh.md)
-
 ## Problem
 
 Test processes create `/tmp/dsh-*` directories with `mkdtemp(join(tmpdir(), 'dsh-*'))` and leave them behind. On the self-hosted Linux CI host (32 runner instances sharing one `/tmp`) the residue exhausted the root partition's inode capacity twice (issue #3134, 2026-08-13 and 2026-08-26). The machine-side `dsh-tmp-sweep` timer and the CI lane sweep (kept, unmerged, on branch `fix/ci-tmp-residue-cleanup`) remove residue after the fact but leave the producing defect in place. Human review of #3233 (2026-08-28) rejected the sweep: unit tests must clean up the directories they create instead.

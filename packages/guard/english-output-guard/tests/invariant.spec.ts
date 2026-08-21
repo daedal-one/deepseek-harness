@@ -23,7 +23,7 @@ function requestData() {
     system: 'translate',
     messages: [createUserMessage({ source: { kind: 'plugin' as const, plugin: 'test' }, content: [{ type: 'text' as const, text: 'DATA' }] })],
     maxTokens: 100,
-    blocks: [{ index: 0, type: 'text' as const, content: '中文' }],
+    blocks: [{ index: 0, type: 'text' as const, content: 'Hello' }],
   }
 }
 

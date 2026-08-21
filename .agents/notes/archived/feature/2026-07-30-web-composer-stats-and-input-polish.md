@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-07
 
-English | [中文](2026-07-30-web-composer-stats-and-input-polish.zh.md)
-
 ## Problem
 
 The web composer footer showed a single joined stats string (cache/tokens/turns/steps) in its own stack row, visually detached from the input card and missing the design's duration and token-split details. The input zone itself had accumulated per-entry spacing hacks: dock strips carried their own margins, the sticky seat sat on a solid fill that clipped the transcript hard, the back-to-bottom control cleared the composer by a hardcoded offset that broke as the draft grew, and the goal and todo strips disagreed on surface color and column width.

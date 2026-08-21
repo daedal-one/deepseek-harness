@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-user-approval
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Use this package to require a one-shot decision before a sensitive tool action proceeds. The `ask` policy sends each request to the deployment's human or machine answerers; `never` rejects it without prompting. Missing or failed answerers return `unavailable`, so the action fails closed, and an approval applies only to that request. Every request and outcome is recorded in the requesting session's audit log. The model sees the resulting tool outcome and current policy, but not the human permission UI or audit events.

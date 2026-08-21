@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-03-opt-in-reasoning-chunk-browser-stress.zh.md)
-
 ## Problem
 
 Long reasoning streams continuously produce large numbers of process-local `assistant/live-chunk` updates before one durable settlement. Each update must remain ordered and be folded into the Assistant Definition to preserve live completeness, while the settlement embeds the exact stream for replay; React, however, needs only the current accumulated result, not every intermediate state within one browser frame.

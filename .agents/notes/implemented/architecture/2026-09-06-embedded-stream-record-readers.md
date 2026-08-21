@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-06-embedded-stream-record-readers.zh.md)
-
 ## Problem
 
 Session format v2 embeds each model attempt's compact stream (`AssistantStreamRecord[]`: packed `text-chunks`, `reasoning-chunks`, and `tool-call-chunks` runs plus timestamped raw `chunk` records) in `assistant/message` and `assistant/attempt`. Consumers that folded those settlements called `expandAssistantStream()` first; it materializes the complete per-member array, so a consumer that needs one fact (`find` on the first token, the last usage chunk, a joined text, one block-end) paid O(members) allocation and time: about two objects per member on top of the compact form.

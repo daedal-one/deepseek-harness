@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-07-26
 
-English | [中文](2026-07-23-demo-web-builds-client-bundles.zh.md)
-
 ## Problem
 
 `dsh web` serves each web-client plugin's bundle from `GET /plugins/<id>/client.js`, resolving the path from the package's `exports["./client"]` (`lib/client.js`). Those bundles are produced only by the root `pnpm run build` (`tsc -b` then the per-package `tsdown.client.ts` configs); the Vite `build:web` step builds the frontend shell alone. `demo:web` and the README's Web UI instructions ran only `build:web`, so on a checkout without a prior full build every plugin bundle 404s, the client loader marks every plugin failed, and the boot screen shows "Failed to load plugins". The frontend shell built fine, hiding the missing artifact behind a runtime browser failure.

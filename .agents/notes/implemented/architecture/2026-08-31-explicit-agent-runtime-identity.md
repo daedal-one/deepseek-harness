@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-31-explicit-agent-runtime-identity.zh.md)
-
 ## Problem
 
 An Agent's Cordis Context owns registrations and their cleanup. Agent identity instead selects the Session, runtime owner, event subject, authority decision, or wire identity for one operation. A reverse Agent property on Context made those two facts appear interchangeable: a caller could choose a Context for effect ownership and accidentally let that choice determine domain identity.

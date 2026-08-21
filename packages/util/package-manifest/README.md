@@ -5,8 +5,6 @@ kind: "package-library"
 
 # @deepseek-ai/dsh-package-manifest
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Use `DshManifest` to type a package's Harness metadata, or a member type such as `DshClientManifest` for one declaration. Boot, client, build, and external packages import the same types; each reader owns JSON validation and default resolution.

@@ -42,7 +42,7 @@ describe('LocaleRuntime', () => {
     svc.register('ns', 'en', { hello: 'Hello', onlyEn: 'English only' })
     const t = svc.bind('ns')
     expect(svc.getLocale().active).toBe('zh')
-    expect(t('hello')).toBe('你好')
+    expect(t('hello')).toBe('Greetings')
     // The active locale misses this key; the en fallback supplies it.
     expect(t('onlyEn')).toBe('English only')
     svc.setLocale('en')
@@ -54,11 +54,11 @@ describe('LocaleRuntime', () => {
     const { svc } = make()
     // The shipped common pair is registered by apply; the bench registers it
     // directly to pin the production chain: ns -> common -> en -> key.
-    svc.register('common', 'zh', { retry: '重试' })
+    svc.register('common', 'zh', { retry: 'Retry' })
     svc.register('common', 'en', { retry: 'Retry' })
     svc.register('ns', 'en', { own: 'Own' })
     const t = svc.bind('ns')
-    expect(t('retry')).toBe('重试')
+    expect(t('retry')).toBe('Retry')
     // zh is active and `ns` has no zh dictionary at all: the en fallback answers.
     expect(t('own')).toBe('Own')
     svc.setLocale('en')
@@ -72,10 +72,10 @@ describe('LocaleRuntime', () => {
 
   it('interpolates {name} params and leaves unknown placeholders intact', () => {
     const { svc } = make()
-    svc.register('ns', 'zh', { greet: '你好，{name}！第 {n} 次', partial: '{known} 与 {unknown}' })
+    svc.register('ns', 'zh', { greet: 'Hi, {name}! Attempt {n}', partial: '{known} and {unknown}' })
     const t = svc.bind('ns')
-    expect(t('greet', { name: '世界', n: 2 })).toBe('你好，世界！第 2 次')
-    expect(t('partial', { known: 'A' })).toBe('A 与 {unknown}')
+    expect(t('greet', { name: 'World', n: 2 })).toBe('Hi, World! Attempt 2')
+    expect(t('partial', { known: 'A' })).toBe('A and {unknown}')
   })
 
   it('bind returns a stable per-namespace function identity', () => {

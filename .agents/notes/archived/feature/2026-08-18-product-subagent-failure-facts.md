@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-21
 
-English | [中文](2026-08-18-product-subagent-failure-facts.zh.md)
-
 ## Problem
 
 The [Claude Code and Codex product providers](2026-08-04-claude-code-and-codex-subagent-backends.md) receive structured product failures, but a published run historically flattened most of them to the shared `error` stop reason. Product logs retained detail that the foreground parent and a [one-shot background Job](2026-08-12-product-subagent-one-shot-background-tasks.md) could not use to distinguish a product limit, an execution failure, or an early process exit.

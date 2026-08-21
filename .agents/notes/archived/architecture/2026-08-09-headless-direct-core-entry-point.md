@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-08-09-headless-direct-core-entry-point.zh.md)
-
 ## Problem
 
 The `headless` product contract is one local task with final assistant text on stdout, a success-sensitive exit code, no listening port, and the stderr reasoning projection owned by [headless reasoning progress](../feature/2026-08-21-headless-reasoning-progress.md). A composition containing Workspace Host services, browser RPC, HTTP, the Web runtime, or browser plugins contradicts that contract and makes local completion depend on an unrelated transport tree.

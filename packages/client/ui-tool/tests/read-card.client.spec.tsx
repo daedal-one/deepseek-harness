@@ -234,7 +234,7 @@ describe('ReadRow keyed toolview', () => {
     expect(view.getAllByText('src/a.ts').length).toBe(2)
     expect(view.container.querySelector('[data-read]')).not.toBeNull()
     expect(contentTexts(view.container)).toContain('export const a = 1')
-    expect(view.getByText('显示 3 / 180 行')).toBeTruthy()
+    expect(view.getByText('Showing 3 / 180 lines')).toBeTruthy()
     // Collapse back in place: the card unmounts, the summary link returns.
     toggleRow(view)
     expect(view.container.querySelector('[data-read]')).toBeNull()

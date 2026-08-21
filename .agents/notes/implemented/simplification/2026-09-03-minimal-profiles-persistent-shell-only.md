@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-03-minimal-profiles-persistent-shell-only.zh.md)
-
 ## Problem
 
 The shipped Web `minimal` preset and standalone `sdk-minimal` profile exposed `str_replace_editor` beside their persistent shell. The editor added a second file-mutation interface and its complete schema to every minimal model request, although the shell already provides file inspection and mutation. It also required a dedicated `fs-local` service that no other row in either minimal composition consumed.

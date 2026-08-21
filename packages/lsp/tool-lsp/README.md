@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-tool-lsp
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 `dsh-tool-lsp` lets a model navigate code through one read-only `lsp` tool: open a symbol's definition, find references and implementations, or read hover documentation. Requests use one-based UTF-16 line and character positions. Navigation results are bounded, grouped by file, and labeled when locations are omitted or text is truncated; hover results are normalized and distinguish missing information from errors. The package requires a configured LSP provider and a session workspace root. Choose it when textual search is ambiguous or a change needs precise symbol relationships; ordinary navigation should continue to use `search` and `read`.

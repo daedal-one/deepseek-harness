@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-02-project-local-issue-planning-fields.zh.md)
-
 ## Problem
 
 The Issue lifecycle workflow needs structured planning metadata, but organization Issue fields require a separate GitHub App permission from organization Projects. A workflow token with Project write access can read and update Project custom fields while GitHub rejects Issue-field reads, so using both storage systems makes one policy depend on two independently administered permission sets.

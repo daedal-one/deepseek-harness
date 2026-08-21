@@ -32,7 +32,7 @@ function world(overrides: Partial<Win32FolderDialog> = {}, coInit = 0): FakeWorl
     setOptions: vi.fn(() => 0),
     setTitle: vi.fn(() => 0),
     show: vi.fn(() => 0),
-    resultPath: vi.fn(() => ({ hr: 0, path: 'C:\\picked\\目录' })),
+    resultPath: vi.fn(() => ({ hr: 0, path: 'C:\\picked\\directory' })),
     release: vi.fn(),
     ...overrides,
   }
@@ -55,7 +55,7 @@ describe('runFolderDialog', () => {
   it('sequences DPI, STA, options, title, show, result extraction, and apartment teardown', () => {
     const { bindings, dpi, pressAlt, dialog, uninitialize } = world()
     const showing = vi.fn()
-    expect(runFolderDialog(bindings, 'Pick', showing)).toBe('C:\\picked\\目录')
+    expect(runFolderDialog(bindings, 'Pick', showing)).toBe('C:\\picked\\directory')
     expect(dpi).toHaveBeenCalledOnce()
     expect(uninitialize).toHaveBeenCalledOnce()
     expect(dialog.release.mock.invocationCallOrder[0]).toBeLessThan(uninitialize.mock.invocationCallOrder[0] as number)
@@ -81,7 +81,7 @@ describe('runFolderDialog', () => {
 
   it('accepts the S_FALSE re-entry HRESULT from CoInitializeEx', () => {
     const { bindings } = world({}, 1)
-    expect(runFolderDialog(bindings, 'Pick', vi.fn())).toBe('C:\\picked\\目录')
+    expect(runFolderDialog(bindings, 'Pick', vi.fn())).toBe('C:\\picked\\directory')
   })
 
   it('throws on a failing CoInitializeEx without creating a dialog or uninitializing', () => {

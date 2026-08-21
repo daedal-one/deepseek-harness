@@ -1,7 +1,5 @@
 # Safety
 
-English | [中文](SAFETY.zh.md)
-
 ## Experimental status
 
 DeepSeek Harness is experimental developer-preview software. It has not undergone a security audit and must not be treated as secure or production-ready.

@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-05-shared-client-control-primitives.zh.md)
-
 ## Problem
 
 Client feature plugins compose through slots and never import one another's values, so `@deepseek-ai/dsh-client-ui-primitives` is their only channel for sharing a React component. A control that grows inside one feature package is invisible to the next package that needs the same thing, and copying its markup and CSS is the cheapest move available. Three families had diverged that way. A 36×20 toggle switch existed only inside `ui-settings-plugins`. Read-only capsule badges were declared five separate times across `ui-agent-preset`, `ui-settings-plugins`, and `ui-settings-plugin-inventory`, with two different corner radii and separately authored palettes. A plugin-phase status dot was reimplemented in `ui-settings-plugin-inventory` next to the shared `StateDot` it duplicates.

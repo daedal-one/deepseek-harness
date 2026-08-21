@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-08-06-resolved-theme-color-metadata.zh.md)
-
 ## Problem
 
 The web client can resolve its theme independently of the operating-system preference, so a single manifest `theme_color` or media-qualified static metadata can disagree with an explicit Light or Dark selection. Browser chrome around an installed or ordinary page then need not match the app surface even though the layout presenter already owns the resolved document palette.

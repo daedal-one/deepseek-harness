@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-agent-presets
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Use `dsh-agent-presets` to give each session the tools, prompt sections, and skills named by one preset's `agent.cordis.yml`. One process can run sessions with different presets while keeping their state separate. The preset list combines shipped definitions with configured and user roots, reports why a preset cannot start, and can create a local preset by copying an existing one. Deployments and users can choose defaults; only an empty session may switch presets. Treat every authored preset as trusted configuration because it grants the capabilities of the plugins it selects.

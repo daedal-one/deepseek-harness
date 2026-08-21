@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-08-27-persistence-export-and-pre-release-trims.zh.md)
-
 ## Problem
 
 The session-persistence seam is moving to a handle-based API with cross-process ownership (open/read/append/flush/close per session). Before that swap, the old seam carried surfaces the new design drops or replaces, each with its own consumers and tests: a consumer-facing path query (`locate`), a capability-flagged verbatim read (`supportsRawArtifacts` + `readRaw`), ~300 lines of same-version legacy event-shape migration in the coordinator, and a `locate`-based size gate for the session list's cold blank probe. Removing them inside the seam swap would bloat an already large change; removing them first shrinks the core swap to the seam itself.

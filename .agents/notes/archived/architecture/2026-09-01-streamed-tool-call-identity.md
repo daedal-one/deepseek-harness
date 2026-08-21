@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-09-01-streamed-tool-call-identity.zh.md)
-
 ## Problem
 
 The DeepSeek SSE translator assigned `id` and `name` on every tool-call delta that carried the field, so a continuation delta repeating either as an empty string erased the identity established by the call's first delta. The assembled block reached the loop with an empty name, which the tool registry refuses as `unknown tool ""`, leaving the affected models unable to run any tool. Gateways that fill those fields with `null` erased the identity the same way, and `WireToolCallDelta` declared both as `string | undefined`, keeping the observed `null` out of the compiler's reach.

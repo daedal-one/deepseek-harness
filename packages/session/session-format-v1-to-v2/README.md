@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-session-format-v1-to-v2
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 `dsh-session-format-v1-to-v2` converts a released-v1 Session into the released-v2 event model through one stateful event stage. It consumes top-level `assistant/chunk` events, embeds their exact timed stream in the matching `assistant/message`, and records an `assistant/attempt` when a failed, retried, cancelled, or stream-error attempt reached settlement without a surface message. The edge densely remaps surviving events and every declared same-Session sequence reference, while the v2 codec stores one event per row and derives the inherited cut from a tagged `session/end-seed` marker.

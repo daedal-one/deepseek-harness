@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-api-workspace-files
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Use this package to preview files readable through a Session's filesystem from the web client. It reads UTF-8 text by page, reads bounded byte windows or complete files, resolves related files from a base file's directory, and reports file metadata. File reads may target paths outside the workspace; directory listing and instrumented filesystem observations remain workspace-scoped. The service exposes no mutation operation.

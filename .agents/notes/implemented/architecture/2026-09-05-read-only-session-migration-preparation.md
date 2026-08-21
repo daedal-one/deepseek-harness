@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-05-read-only-session-migration-preparation.zh.md)
-
 ## Problem
 
 The stateful Stage pipeline makes historical Decode and migration bounded and fast, but a serial persistence open still performs encode, sync, Worker verification, publication, and committed reopen before returning either handle kind. A read-only consumer therefore waits for about 2.2 seconds of work that it does not need and mutates storage merely to display history.

@@ -21,7 +21,7 @@ describe('preset display copy', () => {
   })
 
   it('keeps file metadata for user and unknown system presets', () => {
-    const fileCopy = { name: '我的标准', description: '团队自己的 preset。' }
+    const fileCopy = { name: 'My standard', description: 'The team\'s own preset.' }
 
     expect(presetDisplayText({ id: 'standard', trust: 'user', ...fileCopy }, translate(en)))
       .toEqual(fileCopy)

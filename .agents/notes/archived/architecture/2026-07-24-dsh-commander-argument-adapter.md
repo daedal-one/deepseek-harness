@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-07-26
 
-English | [中文](2026-07-24-dsh-commander-argument-adapter.zh.md)
-
 ## Problem
 
 The `dsh` CLI entry (`apps/cli`) parsed argv in three hand-rolled idioms that did not compose and gave no `--help`/`--version`. `bin.ts` dispatched by raw inspection — `argv[0] === 'web'`, then `argv.includes('-p') || argv.includes('--prompt')`, else TUI — which is positional-blind: a prompt flag or a config path in the wrong position could misroute the mode, and `argv.includes('-p')` could not tell a real flag from an incidental token. `headless.ts` and `web.ts` each ran their own `node:util` `parseArgs` with inline host/port validation, and `dsh-app-boot` carried `parseResumeArg`, a ~30-line bespoke scanner reimplementing flag/`=`-form/value/repeat handling for `--resume`. Usage was a single hardcoded `usage: dsh -p "task"` line; there was no version flag and no rendered help.

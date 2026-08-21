@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-05-sidebar-tab-types-and-navigation.zh.md)
-
 ## Problem
 
 The [docking surface](../feature/2026-09-04-right-sidebar-docking-infrastructure.md) gives the right Sidebar panes, tabs, and floating panels, but a pane full of tabs is only useful if other plugins can put content into them. That needs three contracts the surface itself does not define: how a plugin declares a kind of tab and the addresses it can show, how any caller — a produced-file chip in the conversation, a row in a file tree, a plugin's own button — asks the Sidebar to show something, and what a tab's body may rely on at runtime. Each contract is a public face that plugins shipped from outside this repository will write against, so each has to be settled before those plugins exist: a renamed field, a changed enum value, or a different address grammar afterwards breaks every one of them.

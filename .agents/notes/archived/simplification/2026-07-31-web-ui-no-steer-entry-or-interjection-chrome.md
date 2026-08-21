@@ -3,11 +3,9 @@
 Status: implemented
 Archived: 2026-08-07
 
-English | [中文](2026-07-31-web-ui-no-steer-entry-or-interjection-chrome.zh.md)
-
 ## Problem
 
-Mid-turn steering is a host/agent-loop capability (`mode:'steer'`, a durable `user/message`). The Web product already locked the composer while a turn runs and never shipped a queue/steer menu, yet the client still threaded `'queue' | 'steer'` through the input machine, `conversation.send`, and locale keys, and rendered consumed steering as a badged 「插话」/「Interjection」 bubble. That left a half-built UI surface: an unused submit mode, a product label for a gesture users cannot perform, and e2e goldens that pinned chrome the product does not own.
+Mid-turn steering is a host/agent-loop capability (`mode:'steer'`, a durable `user/message`). The Web product already locked the composer while a turn runs and never shipped a queue/steer menu, yet the client still threaded `'queue' | 'steer'` through the input machine, `conversation.send`, and locale keys, and rendered consumed steering as a badged `Interjection` bubble. That left a half-built UI surface: an unused submit mode, a product label for a gesture users cannot perform, and e2e goldens that pinned chrome the product does not own.
 
 ## Decision
 

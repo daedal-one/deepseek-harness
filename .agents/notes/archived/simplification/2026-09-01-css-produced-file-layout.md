@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-09-01-css-produced-file-layout.zh.md)
-
 ## Problem
 
 The produced-files row duplicated every candidate chip in a hidden probe tree, synchronously read computed styles and element geometry in a layout effect, and repeated those reads whenever the row or a probe resized. That machinery existed only to choose how many labels fit on one line. Its forced layout work cost more than exact width-dependent chip counts were worth.

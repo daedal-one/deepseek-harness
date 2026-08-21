@@ -5,8 +5,6 @@ kind: "package-library"
 
 # @deepseek-ai/dsh-llm-mock-server
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 This package gives tests and demos a scriptable OpenAI-compatible HTTP/SSE endpoint, so they can exercise model-provider failures and successes without a provider key. Each accepted `/chat/completions` request consumes the next scripted behavior, including resets, stalls, malformed chunks, rate limits, server errors, completions, and tool calls. Test authors can run it with `pnpm run mock:llm` or call `startMockLlmServer`, which returns captured requests for assertions. Seeded `random` behavior supports reproducible mixed-failure stress runs.

@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-04
 
-English | [中文](2026-07-27-tool-card-single-row-fields-inline.zh.md)
-
 ## Problem
 
 A tool card's title, description, cwd, and pending `$ <command>` echo are each one logical row. The bash tool sets the card title (and description) directly from the model's command and description, which for a multi-line bash script contain real newlines. These fields were escaped with `displayText`, which deliberately preserves `\n` as structural layout. A multi-line title therefore broke onto extra terminal rows that the card's line accounting did not reserve, so the title's later lines overwrote the description, the output, or the editor's steering hint — the card rendered as garbled, overlapping text. Removing the gutter bar (see the [copyable-transcript note](../simplification/2026-07-27-copyable-transcript-no-gutter-bar.md)) made the collision visible because those rows no longer sat behind a per-line prefix.

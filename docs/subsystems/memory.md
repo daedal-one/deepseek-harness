@@ -1,7 +1,5 @@
 # Durable reviewed memory
 
-English | [中文](memory.zh.md)
-
 The memory capability stores evidence-backed statements across sessions without treating extracted model output as accepted fact. The [durable reviewed-memory decision](../../.agents/notes/implemented/feature/2026-08-16-durable-reviewed-memory.md) owns scope isolation, review authority, approval, and extraction timing; this page records the provider-neutral data and service API from [`packages/memory/memory/src/types.ts`](../../packages/memory/memory/src/types.ts).
 
 ## Identity, scope, and provenance

@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-08-sidebar-last-tab-close-rules.zh.md)
-
 ## Problem
 
 The settle planner guarantees the docked surface is never empty: closing the last tab reseeds the current default page. That guarantee made the last tab's close control a dead end in both directions. Closing the guide standing alone put the same guide straight back — a control that does nothing. Closing any other lone tab left the user with a column showing only the default page — after "close the last thing", an expanded panel with nothing in it is not what the gesture meant. The guide's chip also drew a hover capsule and a context menu whose only item was that no-op close.

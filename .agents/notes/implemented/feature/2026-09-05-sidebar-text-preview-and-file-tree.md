@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-05-sidebar-text-preview-and-file-tree.zh.md)
-
 ## Problem
 
 The right Sidebar's [docking infrastructure](2026-09-04-right-sidebar-docking-infrastructure.md) and its [tab type registry](../architecture/2026-09-05-sidebar-tab-types-and-navigation.md) give a plugin a place to register a tab type, but a surface with no types is an empty column. Three questions had to be answered by shipped code before anyone else could register a type: what a new pane shows before it holds content, how a file the agent produced or read is looked at without leaving the product, and how a reader finds a file the conversation never mentioned. The answers also had to demonstrate the type authoring model end to end — a static definition, a body in a keyed seat, a Slot store and inject face for the type's own state, `useResource` for live data behind an address — so that a type written outside `ui-sidebar-right` has a worked template rather than a contract alone.

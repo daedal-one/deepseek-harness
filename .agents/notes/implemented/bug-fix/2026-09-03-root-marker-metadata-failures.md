@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-03-root-marker-metadata-failures.zh.md)
-
 ## Problem
 
 Project-root discovery probes each configured marker while walking upward from the session working directory. Treating every resolve or stat failure as a missing marker lets a permission, I/O, or provider failure continue into an ancestor project and load unrelated workspace instructions. The discovery result must distinguish confirmed absence from unavailable metadata.

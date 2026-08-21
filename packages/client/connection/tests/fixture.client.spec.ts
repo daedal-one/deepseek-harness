@@ -630,7 +630,7 @@ describe('createFixtureApi', () => {
   it('searches current message text with literal unicode61-style token phrases', async () => {
     const api = createFixtureApi()
     const signal = new AbortController().signal
-    const phrase = await api.sessions.search(req({ query: 'FIXTURE 历史消息' }), signal)
+    const phrase = await api.sessions.search(req({ query: 'FIXTURE HISTORY MESSAGE' }), signal)
     expect(phrase.result).toMatchObject({
       ok: true,
       value: {
@@ -639,7 +639,7 @@ describe('createFixtureApi', () => {
       },
     })
     if (!phrase.result.ok) throw new Error('search failed')
-    expect(phrase.result.value.items[0]?.snippet).toContain('fixture 历史消息')
+    expect(phrase.result.value.items[0]?.snippet).toContain('fixture history message')
 
     timing().appendUser(
       'fx-alpha',
@@ -668,7 +668,7 @@ describe('createFixtureApi', () => {
       ok: true,
       value: { items: [], hasMore: false },
     })
-    const reasoningOnly = await api.sessions.search(req({ query: '思考过程' }), signal)
+    const reasoningOnly = await api.sessions.search(req({ query: 'Thought process' }), signal)
     expect(reasoningOnly.result).toEqual({
       ok: true,
       value: { items: [], hasMore: false },
@@ -862,7 +862,7 @@ describe('createFixtureApi', () => {
     expect(list.result.value.items.some(s => s.sessionId === createdId)).toBe(true)
   })
 
-  it('prompt replays a full streamed turn and cancel mid-replay freezes with (已中断)', async () => {
+  it('prompt replays a full streamed turn and cancel mid-replay freezes with (interrupted)', async () => {
     const api = createFixtureApi()
     const created = await api.sessions.create(req({}))
     if (!created.result.ok) throw new Error('create failed')
@@ -941,11 +941,11 @@ describe('createFixtureApi', () => {
     const framesPromise = collectValues(api.sessionRemote.follow(id, abort.signal), abort,
       frames => frames.some(frame => frame.type === 'event' && frame.event.type === 'turn/end'))
     await new Promise(resolve => setTimeout(resolve, 10))
-    await api.sessions.prompt(req({ sessionId: id, mode: 'queue' as const, content: [{ type: 'text' as const, text: '短' }] }))
-    await api.sessions.prompt(req({ sessionId: id, mode: 'steer' as const, content: [{ type: 'text' as const, text: '插话' }] }))
+    await api.sessions.prompt(req({ sessionId: id, mode: 'queue' as const, content: [{ type: 'text' as const, text: 'short' }] }))
+    await api.sessions.prompt(req({ sessionId: id, mode: 'steer' as const, content: [{ type: 'text' as const, text: 'interject' }] }))
     const frames = await framesPromise
     const types = frames.flatMap(frame => frame.type === 'event' ? [frame.event.type] : [])
-    expect(JSON.stringify(frames)).toContain('插话')
+    expect(JSON.stringify(frames)).toContain('interject')
     expect(types.at(-1)).toBe('turn/end') // steer did not restart the turn
   })
 
@@ -1005,7 +1005,7 @@ describe('createFixtureApi', () => {
     // steer while idle + a non-text content block (covers the '' arm of the text join).
     await api.sessions.prompt(req({
       sessionId: created.result.value.sessionId, mode: 'steer' as const,
-      content: [{ type: 'text' as const, text: '短' }, { type: 'image', data: 'x' } as never],
+      content: [{ type: 'text' as const, text: 'short' }, { type: 'image', data: 'x' } as never],
     }))
     const frames = await framesPromise
     const types = frames.flatMap(frame => frame.type === 'event' ? [frame.event.type] : [])
@@ -1242,9 +1242,9 @@ describe('createFixtureApi', () => {
     const blank = await api.sessions.rename(req({ sessionId: sid('fx-alpha'), title: '   ' }))
     expect(blank.result).toMatchObject({ ok: false, error: { code: 'session/title-invalid', details: { sessionId: 'fx-alpha' } } })
 
-    const renamed = await api.sessions.rename(req({ sessionId: sid('fx-alpha'), title: '  重命名  ' }))
+    const renamed = await api.sessions.rename(req({ sessionId: sid('fx-alpha'), title: '  Renamed  ' }))
     if (!renamed.result.ok) throw new Error('rename failed')
-    expect(renamed.result.value.title).toBe('重命名')
+    expect(renamed.result.value.title).toBe('Renamed')
     const acceptedSeq = renamed.result.value.seq
     // The response seq addresses the appended title event (the client plane
     // has no session/title in its event union — titles ride the projection —
@@ -1254,7 +1254,7 @@ describe('createFixtureApi', () => {
     const appended = historyEvents(history.result.value.records).find(event => event.seq === acceptedSeq)
     expect(appended).toMatchObject({
       type: 'session/title',
-      data: { title: '重命名', messageSeqs: [], source: { kind: 'user' } },
+      data: { title: 'Renamed', messageSeqs: [], source: { kind: 'user' } },
     })
     const followed = await followPromise
     expect(followed.some(frame => frame.type === 'event'
@@ -1530,8 +1530,8 @@ describe('createFixtureApi', () => {
     const gapIterator = api.sessionRemote.follow(sid('fx-alpha'), gapAbort.signal)[Symbol.asyncIterator]()
     const opening = await gapIterator.next()
     if (opening.done || opening.value.type !== 'snapshot') throw new Error('follow opening snapshot missing')
-    hooks.appendSilent('fx-alpha', '静默丢帧')
-    hooks.appendUser('fx-alpha', '正常直播')
+    hooks.appendSilent('fx-alpha', 'silent frame drop')
+    hooks.appendUser('fx-alpha', 'normal live stream')
     await expect(gapIterator.next()).rejects.toThrow(/stream skipped seq/)
 
     // Reopening replaces the window with a complete snapshot containing both durable events.
@@ -1554,7 +1554,7 @@ describe('createFixtureApi', () => {
       expect(events.some(event => JSON.stringify(event.data).includes('静默丢帧'))).toBe(true)
       expect(events.some(event => JSON.stringify(event.data).includes('正常直播'))).toBe(true)
     })
-    hooks.appendTitle('fx-alpha', 'Fixture 修订标题')
+    hooks.appendTitle('fx-alpha', 'Fixture revised title')
     hooks.beginModelRetry('fx-alpha')
     hooks.scheduleModelRetry('fx-alpha')
     hooks.completeModelRetry('fx-alpha')
@@ -1621,7 +1621,7 @@ describe('createFixtureApi', () => {
           ? [frame.frame.chunk.text]
           : []
       ))
-      expect(deltas).toEqual(['推理', '推理', `\n${marker}`])
+      expect(deltas).toEqual(['reasoning', 'reasoning', `\n${marker}`])
     } finally {
       abort.abort()
       vi.useRealTimers()

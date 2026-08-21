@@ -5,8 +5,6 @@ kind: "package-library"
 
 # @deepseek-ai/dsh-output-retention
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Use `dsh-output-retention` to cap the items or text a tool returns to a model while reporting what was omitted. `ItemRetainer` keeps an ordered head window and can report an exact omitted-item count; `TextRetainer` keeps head, tail, or head-and-tail byte windows without returning invalid UTF-8 cuts. `formatRetentionNotice` adds a consistent omission clause while each tool supplies its own recovery guidance. Grouping, line numbering, spill files, and provider errors remain tool responsibilities; consumers import this library directly rather than loading it through `cordis.yml`.

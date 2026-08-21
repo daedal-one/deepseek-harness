@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-spill-policy
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Mount this package when oversized plain-text tool results should stay out of model context. Results above `maxInlineBytes` become a bounded head/tail preview with a locator and retrieval guidance, while the full text remains available through the configured spill backend. Spill failures leave the original result visible, and omitting `maxInlineBytes` disables the policy. The same limit bounds durable `run_code` sub-call log copies without changing the value returned to the program.

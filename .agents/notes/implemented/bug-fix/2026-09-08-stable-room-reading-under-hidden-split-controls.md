@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-08-stable-room-reading-under-hidden-split-controls.zh.md)
-
 ## Problem
 
 The dockkit room rule measures each pane's tab strip after every commit to decide whether an equal split leaves two working halves. With `hideSplitWhenBlocked`, a width-blocked pane unmounts its split control — and the unmount changes the very strip the rule measured: the strip sheds the control's 28px box plus its 4px gap, the fixed part shrinks, and the same pane reads as fitting again. Remounting the control reverses the reading. Across a roughly 32px band of pane widths the two states alternate inside nested layout effects until React stops the update loop (error #185); the slot runtime catches the crash and unmounts the Sidebar's entry while the column still records itself expanded, so neither the panel nor the header's collapsed-only expand button renders. A grip drag on a squeezed viewport sweeps the panel through that band, which presented as the whole sidebar vanishing with no way back in.

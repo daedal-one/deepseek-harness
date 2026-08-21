@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-08-23-python-sdk-windows-x64-runtime.zh.md)
-
 ## Problem
 
 The Python SDK runtime distribution needs a Windows carrier without creating another application entrypoint or weakening the installed-wheel evidence used by the existing native targets. Windows executable names, Python wheel tags, ConPTY addons, ripgrep sidecars, shell composition, virtual environments, and process launch rules differ from Linux and macOS. Claiming Windows from cross-platform unit tests or from a non-Windows executable would leave the artifact selected by `pip` unproved.

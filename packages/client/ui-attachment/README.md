@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-client-ui-attachment
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 This package renders everything the conversation UI shows about attachments: one ordered draft rail under the composer, a full-viewport drop invitation, durable images in Chat, Trajectory, and Tool results, and a lightbox for the original image. Attachment data, upload state, image loading, and callbacks come from the declared slot owners. Choose it for the DeepSeek Chat-style attachment experience.

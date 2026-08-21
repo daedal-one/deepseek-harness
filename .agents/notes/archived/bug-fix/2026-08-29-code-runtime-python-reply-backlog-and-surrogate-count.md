@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-08-29-code-runtime-python-reply-backlog-and-surrogate-count.zh.md)
-
 ## Problem
 
 A further review round on the CPython subprocess backend (packages/experimental/code-runtime-python) surfaced two unbounded-allocation findings. First, `replyQueue` had no bound: a child that never reads fd 3 keeps the reply pipe full forever, so the drain loop waits on `drain` while every call frame it keeps sending resolves a binding and queues another reply — the backlog (and the binding results it pins) grows until the wall clock. Second, `_json_str_cost` counted lone surrogates with `_SURROGATE.findall(folded)`, which materializes one single-character string per surrogate: a surrogate-dense completion value near the budget (each surrogate serializes to six bytes, so a budget-sized value holds millions of them) allocates millions of objects before the meter returns, defeating the meter's own contract of counting without building.

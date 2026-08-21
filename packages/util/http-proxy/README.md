@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-http-proxy
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Use this package to apply one outbound HTTP proxy policy to Harness requests that use Node's built-in `fetch`, including LLM, web-search, and HTTP MCP traffic. The launcher reads standard proxy environment variables once, and ordinary `fetch` callers require no extra imports or changes. Local loopback traffic stays direct, while unsupported proxy URLs are reported and skipped for the affected scheme. Public helpers let callers route transports with their own proxy settings, prepare child-process environments, or clear proxy variables for isolated replays.

@@ -1,7 +1,5 @@
 # Client Resources
 
-English | [中文](client-resources.zh.md)
-
 The client resource model turns an address into live data for any Web Client component. [`dsh-client-resources`](../../packages/client/resources/README.md) provides the `ctx.resources` service and the `useResource` global standard hook; a package that owns a kind of content registers one **provider** for its **protocol**, and a component reads the content's current state by **address** without importing the owner's runtime. The right Sidebar's tabs are the model's first consumer ([Right Sidebar](sidebar-right.md)); the decision record is the [client resource model Agent Note](../../.agents/notes/implemented/architecture/2026-09-05-client-resource-model.md).
 
 This page is the developer reference: how to write an address, how to register a provider, how to read a resource, what the states and failures mean, and how the model holds and releases a resource.

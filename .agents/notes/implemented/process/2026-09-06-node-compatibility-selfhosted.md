@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-06-node-compatibility-selfhosted.zh.md)
-
 ## Problem
 
 The Node 22.19, 24.9, and 26 compatibility jobs consume hosted Linux minutes even when the repository has selected its existing self-hosted Linux pool. Moving version installers onto a persistent shared machine can create tool-directory collisions and accumulate generated cache files outside runner cleanup.

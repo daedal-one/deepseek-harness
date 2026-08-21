@@ -1,7 +1,5 @@
 # @deepseek-ai/dsh-web-search-openrouter
 
-English | [中文](README.zh.md)
-
 An [OpenRouter](https://openrouter.ai)-backed `WebSearchProvider` for the harness [web capability](../web/README.md). It sends an auxiliary Chat Completions request with OpenRouter's `openrouter:web_search` server tool and maps the answer plus standardized URL citations into `WebSearchResult`.
 
 This implementation package registers into `ctx.web`; it does not own that service or register a model-facing tool. It resolves the OpenRouter credential for each search, records the secret-free auxiliary request in the initiating Agent session, and calls OpenRouter directly without depending on `ctx.llm`.

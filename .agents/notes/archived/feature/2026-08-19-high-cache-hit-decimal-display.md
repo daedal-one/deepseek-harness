@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-22
 
-English | [中文](2026-08-19-high-cache-hit-decimal-display.zh.md)
-
 ## Problem
 
 The Web conversation stats line rounded every non-empty cache-hit ratio to an integer. Once the actual ratio passed 99%, the display hid further progress, and a ratio of at least 99.5% appeared as 100% even while uncached input or cache writes remained.

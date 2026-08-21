@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-22
 
-English | [中文](2026-08-06-plan-narrow-viewport-regression.zh.md)
-
 ## Problem
 
 The external report dsh-external/issues#107 (clustered internally as deepseek-harness#1406) measured that at viewports between 760px and 850px the plan control and the model selector overlapped, with the model selector covering the plan control's click area so plan mode could not be left by mouse at 800×720. Its acceptance list asked for a browser regression test asserting that the plan center hit-tests to the plan button.

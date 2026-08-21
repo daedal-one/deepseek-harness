@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-07
 
-English | [中文](2026-07-30-sidebar-resize-without-visible-pill.zh.md)
-
 ## Problem
 
 The AppFrame exposed identical floating pills on both column borders. The left pill added unnecessary visual weight beside primary navigation, but the sidebar's resize interaction remains useful.

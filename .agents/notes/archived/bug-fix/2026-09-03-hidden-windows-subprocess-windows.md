@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-09-03-hidden-windows-subprocess-windows.zh.md)
-
 ## Problem
 
 The local subprocess provider can run under a GUI or service host with no visible console. Windows creates a new visible window for a child process when the host does not supply one, so an ordinary command or a `taskkill` helper can flash and take focus even though the harness has no user-facing terminal for that process.

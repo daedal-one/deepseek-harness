@@ -5,8 +5,6 @@ kind: "package-group"
 
 # interaction/ — the human-collaboration plane
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 The `interaction/` group covers the ways a person can guide a running agent. Use slash commands for immediate actions that do not require a model round trip, one-shot approvals for sensitive operations, permission presets to choose sandbox and approval behavior together, and questions when the agent needs information or a decision. Interactive applications expose these capabilities to people; automation handles its own approvals through ACP. The package map below distinguishes each capability and links to its full behavior and configuration.

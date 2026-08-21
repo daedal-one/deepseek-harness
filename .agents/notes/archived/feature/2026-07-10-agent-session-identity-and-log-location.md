@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-07-10-agent-session-identity-and-log-location.zh.md)
-
 ## Problem
 
 An agent can identify its workspace through `session.header.cwd`, but a model using bash cannot reliably identify the session that owns the call. Resume, forks, and concurrent parent/child agents make any ambient guess unreliable, while future plugins may need to expose other harness-owned environment facts to shell commands.

@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-08-feedback-dialog-and-categories.zh.md)
-
 ## Problem
 
 The Web client had two disconnected feedback paths with no visible outcome. `/feedback <text>` recorded a Session remark and rendered an acknowledgement row in the transcript; the Like/Dislike pair recorded a rating at once, with a note popover anchored under the row for free text. Neither path told the user what was submitted or where it went, neither collected a category, and a Dislike, the case in which a user is most willing to explain, asked nothing. Issue #3515 and the design doc for it ask for one dialog reachable from the composer menu, from a bare `/feedback`, and from Dislike, with seven fixed categories, an optional description, a success toast, and a filled glyph for a recorded rating, while Like keeps recording at once.

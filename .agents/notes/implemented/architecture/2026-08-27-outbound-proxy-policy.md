@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-27-outbound-proxy-policy.zh.md)
-
 ## Problem
 
 Node's built-in `fetch` ignores `HTTP_PROXY` and `HTTPS_PROXY`. Every other tool a developer runs — curl, git, npm, pip — honours them, so a user behind a proxy exports the variables once and expects everything to follow. The harness did not: `setGlobalDispatcher`, `ProxyAgent`, and `EnvHttpProxyAgent` appeared zero times across `packages/` and `apps/`, so the model request, every web search, `web_fetch`, MCP over HTTP, the OTLP exporter, and the E2B SDK all connected directly, silently, with no diagnostic anywhere.

@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-25-promote-open-anywhere-plugin.zh.md)
-
 ## Problem
 
 The community plugin `@dsh-plugins/open-anywhere` (gitlab.deepseek.com/Ciyou/dsh-open-anywhere) adds a Session-header "Open In..." split button that opens the session's workspace directory in Finder, Cursor, VS Code, Xcode, a Git GUI, or a terminal. It shipped as hand-authored `lib/` JavaScript installed through `dsh plugin add`: untyped, untested, calling `node:child_process` directly, hand-rolling its own dropdown and style tag, carrying a browser-side DSH-version gate against rc6–rc8, and probing `process.argv` to guess the running dsh version. Users wanted the feature as a shipped part of the Web profile, which the bundle-install path cannot give it — and the external form violates nearly every repository convention (locale-owned copy, per-file coverage, wire-boundary validation, capability seams for host commands).

@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-04
 
-English | [中文](2026-08-03-tui-long-session-render-costs.zh.md)
-
 ## Problem
 
 On a long resumed session (196k events, 2.2k steps, 1.8k tool cards) the TUI took ~12 s to render the transcript and ~800 ms to echo one keystroke. Profiling attributed both to the render path, not to session load (zstd + parse + surface seed is ~1.7 s):

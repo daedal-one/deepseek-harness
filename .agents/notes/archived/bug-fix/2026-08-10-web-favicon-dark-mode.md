@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-10
 
-English | [中文](2026-08-10-web-favicon-dark-mode.zh.md)
-
 ## Problem
 
 `apps/web/public/favicon.svg` paints the DeepSeek mark solid black (`fill="#000"`), and `index.html` declares only that single SVG icon. Under an OS or browser dark color scheme the tab strip is dark too, so the black mark is effectively invisible. Safari versions before 26 do not render SVG favicons, so their users get no tab icon in any scheme.

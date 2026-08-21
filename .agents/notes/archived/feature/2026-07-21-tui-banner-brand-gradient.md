@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-07-26
 
-English | [中文](2026-07-21-tui-banner-brand-gradient.zh.md)
-
 ## Problem
 
 The TUI startup banner rendered the product name `DEEPSEEK` in the palette's flat accent color, which carries no brand identity and does not resemble the wordmark on deepseek.com. The request was to make the banner match the site logo's blue gradient specifically — not to recolor the rest of the coding harness.

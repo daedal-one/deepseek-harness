@@ -5,8 +5,6 @@ kind: "package-group"
 
 # packages/e2b
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 The E2B family lets agents read and edit files, run shell commands, and use terminals inside one remote Linux sandbox instead of on the host machine. It keeps filesystem work separate from command and terminal execution while both use the same sandbox. Existing shell, terminal, and language-server features continue to work without E2B-specific tools. The harness, model calls, and session state remain local; the sandbox is ephemeral, experimental, and absent from shipped compositions by default.

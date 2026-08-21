@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-fs-local
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Use `dsh-fs-local` to read, list, atomically write, and edit files on the host filesystem. Relative paths resolve from a configurable base directory, while absolute paths and parent traversal remain unrestricted. Paths and symlinks that reach the same file share one identity. Writes preserve file permissions, and optional version guards reject stale overwrites. Choose this package for direct host access; use `fs-sandbox` for confined mutations or `fs-e2b` for files in a remote execution world.

@@ -5,8 +5,6 @@ kind: "package-library"
 
 # @deepseek-ai/dsh-client-test-runtime
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 `dsh-client-test-runtime` lets browser feature specs exercise production slot, store, rendering, update, and disposal behavior in jsdom without reimplementing the UI runtime. Test authors can publish typed Session, Workspace, projection, and Conversation fixtures, query slot-local DOM roots, and script Remote replies or failures. Missing services, unstubbed session behavior, and unexpected file uploads fail at the call site, while disposal is idempotent. Use it only from in-repository browser-oriented Vitest suites through `devDependencies`; it is not a product plugin or general Node test harness.

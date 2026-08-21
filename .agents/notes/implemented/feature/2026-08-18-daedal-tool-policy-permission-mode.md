@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-18-daedal-tool-policy-permission-mode.zh.md)
-
 ## Problem
 
 Mounting Daedal's [model-backed tool-policy capability](2026-08-16-model-backed-tool-policy.md) made its auxiliary review apply under every permission preset. That erased the product distinction between ordinary workspace confinement, independently reviewed unconfined commands, and explicit Full access. A preset label alone could not restore the distinction because enforcement occurs at tool pre-execution and must follow the session's durable permission state.

@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-workflow-worker-thread
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Use `dsh-workflow-worker-thread` to run model-written workflow scripts away from the host event loop. Each run receives its own worker thread, so synchronous loops do not stall the harness and scripts that ignore cancellation can be terminated. The engine supports the `workflow` and `ralph` tools in shipped compositions and can be paired with `dsh-tool-workflow` to expose `workflow` in another composition. This isolation limits availability failures but is not a security boundary; genuinely untrusted scripts require a separate process or container.

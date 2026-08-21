@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-04
 
-English | [中文](2026-07-21-tui-resume-command.zh.md)
-
 ## Problem
 
 The original `/resume` printed shell commands. It did not let a keyboard user inspect titles or outcomes, distinguish corruption from a missing adapter, or safely transfer the terminal. Leaving the TUI and manually launching a command also hid the required ordering: finish current work, flush it, release the UI and app, then restore the exact persisted identity without silently creating a replacement.

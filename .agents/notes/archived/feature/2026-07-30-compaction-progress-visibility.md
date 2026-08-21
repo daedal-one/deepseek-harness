@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-04
 
-English | [中文](2026-07-30-compaction-progress-visibility.zh.md)
-
 ## Problem
 
 A standalone manual compaction runs between turns while the agent remains idle. The TUI's turn-phase indicator therefore kept its plain `>` caret throughout the slow summary operation, and a failed attempt produced no transcript row because no replacement checkpoint landed. The liveness presentation needs to reuse the existing status indicator without introducing a second animated status location.

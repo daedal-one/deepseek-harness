@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-28-ci-node-compile-cache-data-disk.zh.md)
-
 ## Problem
 
 The self-hosted Linux CI VM (`vm-backup` pool, 32 runner instances on one host) exhausts the root partition's inode capacity. Issue #3134's residue (`/tmp/dsh-*`) is one source; a second, larger source is the Node.js module compile cache. Tools in the CI toolchain call `module.enableCompileCache()` explicitly: pnpm 11.7.0 enables the cache in its entry (`module.enableCompileCache?.()` in `bin/pnpm.mjs`) on every invocation, and TypeScript does so in `tsc`/`tsserver`; vitest forwards the API but does not enable it itself. Every such call writes the serialized V8 bytecode cache under `os.tmpdir()/node-compile-cache`. On the shared VM that is the root partition's `/tmp`: measured 2026-08-28 at **697,389 inodes and 9.2 GB**, with 34,110 files younger than 1 hour — the cache grows on every CI run and is never cleaned, so the root partition's 3,276,800 inodes trend toward exhaustion even after the `dsh-*` residue is controlled.

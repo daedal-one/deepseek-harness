@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-08-browser-third-party-build-inputs.zh.md)
-
 ## Problem
 
 Prebuilt browser plugins distribute their third-party implementations inside JavaScript, but production npm dependencies still make installers download those libraries separately and resolve their peers. When React is declared only for development, installers can select a different React version for those extra dependencies than the browser artifact uses. Both `use-sync-external-store@1.2.0` and `@tanstack/react-virtual@3.14.9` support the current React 18; this problem does not require a React upgrade.

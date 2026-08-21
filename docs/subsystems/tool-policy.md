@@ -1,7 +1,5 @@
 # Tool authorization policy
 
-English | [中文](tool-policy.zh.md)
-
 The tool-policy capability evaluates a tool execution through named providers before the tool body runs. The [model-backed tool-policy decision](../../.agents/notes/implemented/feature/2026-08-16-model-backed-tool-policy.md) owns the provider seam and exact MCP authorization; the [independent evidence decision](../../.agents/notes/implemented/bug-fix/2026-08-18-independent-tool-policy-evidence.md) owns shell evidence separation and direct approval. This page records the provider-neutral types and service API declared by [`dsh-tool-policy`](../../packages/guard/tool-policy/src/index.ts).
 
 ## Requests and verdicts

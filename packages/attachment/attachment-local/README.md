@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-attachment-local
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Store images and generic file attachments durably below `DSH_HOME` on the machine running DSH. Images are validated, normalized for model requests, and cached per route; generic files are preserved byte-for-byte without admission limits. Identical bytes are stored once even when uploads use different display names, reads verify file length and content, and admitted images remain readable if limits later tighten. The shipped `dsh` composition uses this package without configuration. Objects remain local to one machine and are never deleted automatically.

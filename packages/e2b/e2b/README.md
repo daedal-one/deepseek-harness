@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-e2b
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 `dsh-e2b` runs the agent's file operations, shell commands, and terminals in one shared remote Linux sandbox instead of on your machine. The sandbox is created at startup and deleted when its configured lifetime expires or the app shuts down, so everything it holds is ephemeral. Configure an API key, an absolute remote working directory, and the sandbox lifetime. Use it with `dsh-fs-e2b` and `dsh-subprocess-e2b`; by itself it adds no user-visible capability. It sends nothing to the model, and no shipped composition enables E2B by default.

@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-08-file-display-through-filesystem.zh.md)
-
 ## Problem
 
 Session prose can reference screenshots in temporary directories or files stored by a remote filesystem provider. A Host-local workspace allowlist cannot serve those paths. An image response without a byte limit can also make the browser download a 1 GiB image before attempting to decode it.

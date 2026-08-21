@@ -1,7 +1,5 @@
 # Long-session browser benchmark
 
-English | [中文](README.zh.md)
-
 The required Chromium workflow in [long-session.bench.ts](long-session.bench.ts) measures opening a synthetic 240-turn Session, loading every older page, visiting Trajectory, and typing another draft during a paced reply. The shipped Web scaffold owns the isolated home, persistence, replay adapter, and loopback listener; Chromium loads the built Web artifacts, not a replacement development server.
 
 ## Run

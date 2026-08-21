@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-03-user-owned-goal-pause-activation.zh.md)
-
 ## Problem
 
 The host-pause fix in [Host-initiated goal pause aborts the live turn](../../archived/bug-fix/2026-09-01-host-goal-pause-aborts-turn.md) stopped the current model turn, but a later human turn could still use `update_goal resume` to lift a durable `paused` goal. The Web strip also read only the durable `goal` projection, so an active-but-disarmed goal and an armed goal rendered identically and offered the same pause action.

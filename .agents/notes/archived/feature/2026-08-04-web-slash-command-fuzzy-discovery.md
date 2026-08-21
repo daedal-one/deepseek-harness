@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-08-04-web-slash-command-fuzzy-discovery.zh.md)
-
 ## Problem
 
 The web command menu required a command-name prefix, so discovery failed when a user remembered the significant letters but not their exact positions. The skill source of the same `/` menu later kept a case-sensitive prefix filter, so the two groups of one menu answered the same keystrokes differently. Broadening menu matching could make discovery easier, but command execution must remain exact and deterministic: an approximate line must never execute a nearby command.

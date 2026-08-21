@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-07-26
 
-English | [中文](2026-07-21-tui-remove-cancel-command.zh.md)
-
 ## Problem
 
 The TUI exposed two identical ways to cancel a running turn: the `Esc` (and `Ctrl+C`) keybinding and a `/cancel` slash command. Both called `agent.cancel('cancelled from terminal')` with the same reason; when idle, `/cancel` only printed a "The agent is already idle." notice while the keybindings stayed silent. The running status line already advertises the keybinding (`Enter sends steering, Esc cancels`), and cancelling by keystroke needs no editor submission, so the slash command was a second, less discoverable path to the same effect — surface area with no behavior of its own.

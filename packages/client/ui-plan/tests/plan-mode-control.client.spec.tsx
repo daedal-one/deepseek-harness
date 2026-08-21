@@ -32,7 +32,7 @@ function setup(
   return { store, exitPlanMode, view }
 }
 
-const chip = () => screen.getByRole('button', { name: 'plan mode 已开启，按下关闭' })
+const chip = () => screen.getByRole('button', { name: 'Plan mode on, press to turn off' })
 
 describe('PlanChip', () => {
   it('renders nothing for an absent capability or a default-mode target', () => {
@@ -65,7 +65,7 @@ describe('PlanChip', () => {
     resolve(null)
     store.set({ value: { active: true, pending: true } })
     await waitFor(() => {
-      expect(screen.queryByRole('button', { name: 'plan mode 已开启，按下关闭' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Plan mode on, press to turn off' })).toBeNull()
     })
   })
 

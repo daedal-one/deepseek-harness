@@ -29,7 +29,7 @@ const IDENTIFIER = /^[\p{XID_Start}_]\p{XID_Continue}*$/u
  * Whether a name can be emitted as a bare Python identifier rather than
  * routed to the subscript/`dict[str, Any]` path.
  *
- * Python identifiers are not ASCII: `路径` is as legal a field name as `path`,
+ * Python identifiers are not ASCII: `café` is as legal a field name as `path`,
  * and rejecting it would degrade the whole enclosing object, dropping every
  * field's name, requiredness, and type — information whose only source under
  * `mode: 'ptc'` is this generated text.
@@ -249,7 +249,7 @@ function docLines(description: unknown, indent: number): string[] {
  * CamelCase a name into a Python type identifier: non-identifier characters
  * split words, `_` splits too (it is `XID_Continue`, so the split set names it
  * explicitly), and a head that cannot start an identifier takes a `Tool`
- * prefix. Unicode survives, so a `路径` field yields `路径`-based class names
+ * prefix. Unicode survives, so a `café` field yields `café`-based class names
  * instead of collapsing to the bare prefix. A character that is not
  * `XID_Continue` splits even when it is a letter, so a name whose NFKC folding
  * would leave the identifier set is not carried through — the split set is the

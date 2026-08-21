@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-09-workspace-file-read-authority.zh.md)
-
 ## Problem
 
 Workspace Files serves both file content and workspace navigation. Applying workspace containment to every operation creates a second read policy above the Session filesystem backend and prevents a user from previewing paths that the same Session can read outside its workspace. HTML preview also needs direct relative JavaScript and stylesheet files, including `..` paths, while its script-enabled document can use the browser network.

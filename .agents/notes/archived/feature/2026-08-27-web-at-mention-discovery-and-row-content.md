@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-08-27-web-at-mention-discovery-and-row-content.zh.md)
-
 ## Problem
 
 Typing after `@` in the Web composer was slow, and the menu it filled was padded with text that distinguished nothing. Three defects sat behind that, all reachable from one keystroke.

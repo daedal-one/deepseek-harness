@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-07-win32-picker-foreground-alt-key.zh.md)
-
 ## Problem
 
 The web GUI host picks a workspace directory through the native Win32 folder dialog, which runs in a child process the host spawns (issue #3543). Windows grants the foreground only to the foreground process, to a process it started, or to a process that received recent input; a child of a background server process qualifies for none of these, so the dialog that `Show` opens sits behind every visible window even though it is the child's first window. The first-window activation assumption behind the spawn design ([archived feature note](../../archived/feature/2026-08-02-win32-in-process-folder-dialog.md)) holds only when the spawner chain owns the console foreground, as in a console-launched CLI.

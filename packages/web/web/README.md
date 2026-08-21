@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-web
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Use `dsh-web` to search the web or fetch a URL without tying callers to a specific vendor. It selects a usable backend for each operation and gives callers consistent cancellation, errors, and result limits. Choose it for plugins or tools that call `ctx.web.search()` or `ctx.web.fetch()`; the shipped `dsh-tool-web` tools load it for you. A search or fetch requires a configured, usable provider because this package does not make network requests on its own.

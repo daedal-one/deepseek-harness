@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-client-ui-subagent
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Use this package to browse every subagent conversation beneath a parent session, open any descendant, and see whether it is running together with its token use and active-turn duration. Completed one-shot conversations open as read-only execution records. Continuable conversations accept follow-up prompts in submission order while they run and provide Stop independently. The ordinary session sidebar omits subagent conversations, so the parent header catalog is their navigation entry point. The separate `@` source inserts a running child's label into a user message without resolving it into a continuation address.

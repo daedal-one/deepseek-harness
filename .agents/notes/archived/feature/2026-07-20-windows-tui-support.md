@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-04
 
-English | [中文](2026-07-20-windows-tui-support.zh.md)
-
 ## Problem
 
 The full-screen TUI delegates raw input, ANSI rendering, resize events, and terminal restoration to pi-tui's `ProcessTerminal`. That dependency contains a native Windows console path, but the repository's real-process smoke used Python's POSIX-only `pty` and `termios` modules. Skipping that smoke on Windows would leave the supported product path without coverage for startup, input, interaction, failure reporting, or restoration.

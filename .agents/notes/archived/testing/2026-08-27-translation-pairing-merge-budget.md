@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-08-27-translation-pairing-merge-budget.zh.md)
-
 ## Problem
 
 [`scripts/translation-pairing-merge.spec.ts`](../../../../scripts/translation-pairing-merge.spec.ts) took a `describe`-level `{ timeout: 15_000 }`. All 23 of its cases inherit that value; none carries an allowance of its own.

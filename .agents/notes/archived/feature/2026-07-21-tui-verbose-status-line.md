@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-07-26
 
-English | [中文](2026-07-21-tui-verbose-status-line.zh.md)
-
 ## Problem
 
 While a turn ran, the [full-screen TUI](2026-07-17-dedicated-full-screen-tui-front-door.md) showed a single static "Working" spinner. It conveyed neither how long the current step had taken nor what the agent was doing — waiting on the model, thinking, streaming a response, or running tools — so a slow or stalled turn was indistinguishable from a fast one.

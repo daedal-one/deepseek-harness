@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-08-29-code-runtime-python-load-and-dispatch-hardening.zh.md)
-
 ## Problem
 
 Review of the CPython subprocess backend (packages/experimental/code-runtime-python) surfaced four non-blocking findings that a long-running host could still misbehave under: an explicit `pythonBin` path bypassed the load-time configuration checks, a throwing binding member accessor could escape the fd-3 data callback and terminate the host, the reply drain could hang forever waiting for a `drain` event that a destroyed pipe never emits, and two leak assertions diffed a global tmpdir in a way a parallel vitest worker could false-positive on.

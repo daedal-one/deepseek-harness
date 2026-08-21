@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-08-31-session-sequence-and-log-offset-brands.zh.md)
-
 ## Problem
 
 Session positions used one structural `number` type for two incompatible meanings. An event reference names an existing row, while a prefix length, next append position, or read cut names a gap and may equal the event count. The compiler therefore accepted an offset where an event identity was required and could not expose a missed sequence-field migration.

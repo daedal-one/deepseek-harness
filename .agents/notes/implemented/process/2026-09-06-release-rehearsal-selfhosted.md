@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-06-release-rehearsal-selfhosted.zh.md)
-
 ## Problem
 
 Dependency-layout and release-pack rehearsals consume hosted Linux minutes without requiring npm or API credentials. Moving arbitrary pull-request code or credentialed publication onto a persistent shared host would weaken isolation; reusing a checkout without cleaning would also weaken the packed-payload proof.

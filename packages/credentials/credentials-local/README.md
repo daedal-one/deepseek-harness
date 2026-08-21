@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-credentials-local
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 `dsh-credentials-local` keeps API keys and other secrets in a private file under your harness home. You can save credentials through the configuration UI or edit the file directly; changes reload automatically and saved values survive restarts. Credential lookup follows a fixed precedence: the launch environment wins, followed by the stored file, the project's `.env`, and the harness-home `.env`; a newly saved value immediately overrides older `.env` values. Only your OS user can read the file, but agent tool processes run as that same user, so this store cannot isolate secrets from the agent.

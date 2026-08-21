@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-07-sidebar-responsive-tab-info.zh.md)
-
 ## Problem
 
 Tab extensions need consistent live information about their containing pane and Sidebar without a growing list of owner props. The workbench must also preserve content while adapting to limited viewport space, without reopening a Sidebar the user has closed.

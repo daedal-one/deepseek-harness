@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-01-v2-embedded-assistant-streams.zh.md)
-
 ## Problem
 
 Token-sized `assistant/chunk` events preserve exact stream order, timing, usage, terminal state, replay metadata, and partial failed output, but making each chunk a top-level Session event repeats envelopes throughout persistence, telemetry, history transport, indexing, and client assembly. Physical packed rows reduce JSONL bytes without reducing logical event count or the work of consumers that receive the canonical stream.

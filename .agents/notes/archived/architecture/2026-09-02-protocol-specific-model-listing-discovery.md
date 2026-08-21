@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-09-02-protocol-specific-model-listing-discovery.zh.md)
-
 ## Problem
 
 The [draft provider interrogation](2026-08-04-draft-provider-endpoint-interrogation.md) originally read the OpenAI-compatible `data` array only. Some compatible gateways instead publish an enriched `models` object, while Anthropic publishes a native model-listing route with different authentication and URL rules. Treating either case as unsupported forced a user to copy model ids and capacities by hand even though the endpoint disclosed them.

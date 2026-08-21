@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-04
 
-English | [中文](2026-07-17-dedicated-full-screen-tui-front-door.zh.md)
-
 ## Problem
 
 The reusable TUI package remains implemented, but [`dsh` no longer ships it as an application entrypoint](../simplification/2026-08-03-explicit-config-dsh-entrypoint.md). This note continues to own the package boundary and terminal behavior; the later note owns product composition.

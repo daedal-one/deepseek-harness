@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-05-nested-terminal-cards.zh.md)
-
 ## Problem
 
 A shell command dispatched through `run_code` carries the arguments and rendered output needed for a terminal card, but rejecting every block with `parentCallId` hides that presentation solely because the call is nested. The rejection also affects running prompts and selected-child Details.

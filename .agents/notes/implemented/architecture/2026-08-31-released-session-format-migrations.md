@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-31-released-session-format-migrations.zh.md)
-
 ## Problem
 
 Session format v0 shipped in an alpha release, so a structural writer change can no longer treat existing JSONL as disposable pre-release state. The first whole-artifact migration implementation made those logs convertible, but its data model turned a 116 MB real Session into an operation that exhausted a 16 GB Node process before returning a handle.

@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-repeat-tool-reminder
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 This package helps a model escape loops in which it calls the same tool with identical arguments without making progress. At configured repeat counts, it asks the model to inspect the previous result and change approach or finish. The reminder is advisory: it never blocks or delays a legitimate repeated call. Repeats are tracked separately for each agent and cleared by a new user message. The `dsh` base bundle enables the package with reminders at 3, 5, and 8 repeats.

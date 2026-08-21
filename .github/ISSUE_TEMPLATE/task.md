@@ -1,6 +1,6 @@
 ---
 name: Task
-about: 明确的非 Feature、非 Bug 工作
+about: Non-Feature, non-Bug work that is clearly scoped
 type: Task
 ---
 

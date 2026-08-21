@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-07-26-frozen-agent-note-archive.zh.md)
-
 ## Problem
 
 Implemented Agent Notes are maintained as current decision records, so every path, symbol, default, translation, code fence, package reference, and outbound link in the active corpus remains an obligation. That cost is justified when the rationale can guide future work, but not for closed UI details, minor fixes, superseded implementation mechanics, or process history whose current authority lives elsewhere. Deleting every low-value implemented record would erase useful historical evidence, while retaining every rejected proposal preserves ideas that are neither plausible nor instructive. The corpus needs a retention boundary that distinguishes active guidance from frozen history without turning archival into another maintenance tier.

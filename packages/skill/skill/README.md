@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-skill
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Use this package to give agents and users one catalog of reusable, task-specific instructions collected from local directories, embedded plugin data, or remote services. It resolves duplicate names predictably, validates entries, tolerates unavailable sources without discarding usable results, and loads the selected skill's full instructions on demand. Mount it when a composition needs skills from multiple or non-filesystem sources; pair it with `dsh-skill-filesystem` for local discovery and `dsh-tool-skill` for model access, because it includes no skill content itself.

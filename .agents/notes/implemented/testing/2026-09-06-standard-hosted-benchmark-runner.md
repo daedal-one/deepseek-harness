@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-06-standard-hosted-benchmark-runner.zh.md)
-
 ## Problem
 
 Wall-clock performance checks need an isolated execution lane and a consistent runner class. Routing them through the enterprise Linux failover switch makes their measurements depend on either larger hosted capacity or a shared self-hosted VM, while also consuming capacity needed by parallel correctness checks.

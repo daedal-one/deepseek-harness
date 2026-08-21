@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-08-ci-readiness-and-completion.zh.md)
-
 ## Problem
 
 The [empty master PR run](https://github.com/deepseek-harness/deepseek-harness/actions/runs/34206953049) fails while waiting one second for webhook Session creation and five seconds for PowerShell output. Neither test measures a startup latency guarantee. A [separate run](https://github.com/deepseek-harness/deepseek-harness/actions/runs/34207864157) shows the same short-budget problem in a desktop worker readiness test and captures a feedback acknowledgement while the composer still holds the submitted command.

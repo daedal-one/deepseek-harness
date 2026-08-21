@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-client-file-upload
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 This package lets browser features store a `Blob`, exact bytes, or a `ReadableStream<Uint8Array>` for one Session and receive an opaque receipt for a later prompt. Served pages send Blob and stream bodies without aggregating their bytes on the page thread; pages whose Host runs in another execution context supply a Fetch-shaped carrier before Cordis boots. Callers can observe consumed bytes and cancel an active operation. A stream body is consumed once and transfers ownership when it crosses a Worker boundary. The standalone `?fixture` page uses the generated Remote for replayable Blob and exact-byte inputs.

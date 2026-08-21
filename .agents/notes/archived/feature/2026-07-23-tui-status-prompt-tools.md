@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-04
 
-English | [中文](2026-07-23-tui-status-prompt-tools.zh.md)
-
 ## Problem
 
 Session counters describe activity but do not reveal the instructions and capabilities that the next model request receives. Diagnosing scoped prompt contributions and tool restrictions otherwise requires leaving the TUI or inferring configuration from files.

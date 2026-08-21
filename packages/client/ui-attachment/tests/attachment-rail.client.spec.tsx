@@ -25,9 +25,9 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals() })
 
 const labels: AttachmentRailLabels = {
-  group: '待发送图片',
-  scrollLeft: '向左滚动图片',
-  scrollRight: '向右滚动图片',
+  group: 'Images to send',
+  scrollLeft: 'Scroll images left',
+  scrollRight: 'Scroll images right',
 }
 
 function item(id: string): AttachmentRailItem {
@@ -57,7 +57,7 @@ describe('AttachmentRail', () => {
   it('renders owner-provided attachment cards in order', () => {
     const items = [item('a'), item('b')]
     const view = render(<AttachmentRail items={items} labels={labels} renderItem={renderItem} />)
-    const rail = view.getByRole('group', { name: '待发送图片' })
+    const rail = view.getByRole('group', { name: 'Images to send' })
     expect([...rail.children].map(child => child.textContent)).toEqual(['a', 'b'])
   })
 
@@ -65,41 +65,41 @@ describe('AttachmentRail', () => {
     const view = render(
       <AttachmentRail items={[item('a'), item('b'), item('c')]} labels={labels} renderItem={renderItem} />,
     )
-    const rail = view.getByRole('group', { name: '待发送图片' })
+    const rail = view.getByRole('group', { name: 'Images to send' })
     const { scrollBy } = stubGeometry(rail, { scrollWidth: 400, clientWidth: 200 })
     // No arrows until geometry is observed (mount saw jsdom's zero metrics).
-    expect(view.queryByLabelText('向右滚动图片')).toBeNull()
+    expect(view.queryByLabelText('Scroll images right')).toBeNull()
     fireEvent.scroll(rail)
     // Same-edges scroll takes the memoized-state path.
     fireEvent.scroll(rail)
-    expect(view.queryByLabelText('向左滚动图片')).toBeNull()
-    const right = view.getByLabelText('向右滚动图片')
+    expect(view.queryByLabelText('Scroll images left')).toBeNull()
+    const right = view.getByLabelText('Scroll images right')
     // clientWidth 200 - 64 < the 200 floor: pages by the floor.
     fireEvent.click(right)
     expect(scrollBy).toHaveBeenCalledWith({ left: 200, behavior: 'smooth' })
     fireEvent.scroll(rail)
     // Scrolled to the far edge: only the left arrow remains.
-    expect(view.queryByLabelText('向右滚动图片')).toBeNull()
-    fireEvent.click(view.getByLabelText('向左滚动图片'))
+    expect(view.queryByLabelText('Scroll images right')).toBeNull()
+    fireEvent.click(view.getByLabelText('Scroll images left'))
     expect(scrollBy).toHaveBeenCalledWith({ left: -200, behavior: 'smooth' })
     fireEvent.scroll(rail)
-    expect(view.queryByLabelText('向左滚动图片')).toBeNull()
-    expect(view.getByLabelText('向右滚动图片')).toBeTruthy()
+    expect(view.queryByLabelText('Scroll images left')).toBeNull()
+    expect(view.getByLabelText('Scroll images right')).toBeTruthy()
   })
 
   it('shows both arrows mid-scroll and recomputes when the rail itself resizes', () => {
     const view = render(
       <AttachmentRail items={[item('a'), item('b'), item('c')]} labels={labels} renderItem={renderItem} />,
     )
-    const rail = view.getByRole('group', { name: '待发送图片' })
+    const rail = view.getByRole('group', { name: 'Images to send' })
     const { setScrollLeft } = stubGeometry(rail, { scrollWidth: 400, clientWidth: 200 })
     setScrollLeft(100)
     // The component observes the rail element, not the window: a sidebar or
     // panel resize reaches it through the ResizeObserver callback.
     expect(observers.at(-1)?.observed).toContain(rail)
     act(() => { observers.at(-1)!.callback([], undefined as never) })
-    expect(view.getByLabelText('向左滚动图片')).toBeTruthy()
-    expect(view.getByLabelText('向右滚动图片')).toBeTruthy()
+    expect(view.getByLabelText('Scroll images left')).toBeTruthy()
+    expect(view.getByLabelText('Scroll images right')).toBeTruthy()
   })
 
   it('keeps scrolling available when ResizeObserver is unavailable', () => {
@@ -115,7 +115,7 @@ describe('AttachmentRail', () => {
     const view = render(
       <AttachmentRail items={[item('a'), item('b')]} labels={labels} renderItem={renderItem} />,
     )
-    const rail = view.getByRole('group', { name: '待发送图片' })
+    const rail = view.getByRole('group', { name: 'Images to send' })
     const { scrollBy } = stubGeometry(rail, { scrollWidth: 400, clientWidth: 200 })
     // Converted ticks are consumed (preventDefault): fireEvent returns false.
     expect(fireEvent.wheel(rail, { deltaY: 30 })).toBe(false)
@@ -145,10 +145,10 @@ describe('AttachmentRail', () => {
       const view = render(
         <AttachmentRail items={[item('a'), item('b'), item('c')]} labels={labels} renderItem={renderItem} />,
       )
-      const rail = view.getByRole('group', { name: '待发送图片' })
+      const rail = view.getByRole('group', { name: 'Images to send' })
       const { scrollBy } = stubGeometry(rail, { scrollWidth: 400, clientWidth: 200 })
       fireEvent.scroll(rail)
-      fireEvent.click(view.getByLabelText('向右滚动图片'))
+      fireEvent.click(view.getByLabelText('Scroll images right'))
       expect(scrollBy).toHaveBeenCalledWith({ left: 200, behavior })
       view.unmount()
     }
@@ -159,7 +159,7 @@ describe('AttachmentRail', () => {
     const view = render(
       <AttachmentRail items={first} labels={labels} renderItem={renderItem} />,
     )
-    const rail = view.getByRole('group', { name: '待发送图片' })
+    const rail = view.getByRole('group', { name: 'Images to send' })
     stubGeometry(rail, { scrollWidth: 400, clientWidth: 200 })
     view.rerender(
       <AttachmentRail items={[...first, item('c')]} labels={labels} renderItem={renderItem} />,

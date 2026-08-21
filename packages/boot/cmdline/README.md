@@ -5,8 +5,6 @@ kind: "package-library"
 
 # @deepseek-ai/dsh-cmdline
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 `dsh-cmdline` lets an app parse its own flags, `--help`, and errors from the arguments left unchanged after launcher flags. Parsed values can override configuration defaults without rewriting configuration. The app can also request process exit through the launcher's shutdown path. Use this package for app bins with their own command-line interface. It adds no prompt, schema, or model-visible content.

@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-03
 
-English | [中文](2026-09-03-session-search-result-reveal.zh.md)
-
 ## Problem
 
 Selecting a Session search result opened its conversation while leaving the sidebar in the filtered search view. The user could not see where the Session belonged in the normal Workspace hierarchy. Clearing search alone was insufficient because the owning Workspace could be closed, the Session could be hidden beyond the five-row fold, and either grouped or flat navigation could place the row outside the scrollport.

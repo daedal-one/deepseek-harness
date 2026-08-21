@@ -1,7 +1,5 @@
 # Cookbook: adding a Session log format version
 
-English | [中文](adding-a-session-format-version.zh.md)
-
 ## Summary
 
 Use this tutorial to introduce the next structural Session log version without rewriting released data. Read the [version and release-status authority](../session-format-status.md) to identify the checkout writer and the latest released format. Let N denote that verified released format and N+1 the target; substitute numeric values for these placeholders in names and metadata. Start with a working contributor checkout and read the [package checklist](adding-a-package.md), [format library](../../packages/session/session-format/README.md), and [released-format decision](../../.agents/notes/implemented/architecture/2026-08-31-released-session-format-migrations.md).

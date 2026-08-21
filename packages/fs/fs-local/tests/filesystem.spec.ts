@@ -581,15 +581,15 @@ describe('writeText', () => {
   })
 
   it('gates the NEW content by UTF-8 byte length, not character count', async () => {
-    // Three CJK characters are 9 UTF-8 bytes: below an 8-byte bound by
-    // characters but at/above it by bytes, so the basis must be declined.
+    // `séquoïa` is 9 UTF-8 bytes: below an 8-byte bound by characters but at/above
+    // it by bytes, so the basis must be declined.
     await remountWithDiffLimit(8)
     await writeFile(join(dir, 'cjk.txt'), 'tiny')
     const target = await fs.resolve('cjk.txt')
-    const outcome = await fs.writeText(target, '你好吗')
+    const outcome = await fs.writeText(target, 'séquoïa')
     expect(outcome.operation).toBe('update')
     expect(outcome.before).toBeNull()
-    expect(outcome.after).toBe('你好吗')
+    expect(outcome.after).toBe('séquoïa')
   })
 
   it('an overwrite with BOTH sides below the whole-file bound keeps its contextual before basis', async () => {

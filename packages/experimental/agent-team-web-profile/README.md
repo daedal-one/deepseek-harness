@@ -5,8 +5,6 @@ kind: "package-bundle"
 
 # @deepseek-ai/dsh-experimental-agent-team-web-profile
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 `dsh-experimental-agent-team-web-profile` is the published experimental Web layer for [Agent Teams](../agent-team/README.md). Add it after `@deepseek-ai/dsh-web-app` and [`@deepseek-ai/dsh-experimental-agent-team-profile`](../agent-team-profile/README.md) to show the Team roster, task board, and teammate navigation in the browser. Removing either experimental layer leaves the stable base and Web composition unchanged. No shipped Web profile enables it by default.

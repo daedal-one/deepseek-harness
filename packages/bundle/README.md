@@ -5,8 +5,6 @@ kind: "package-group"
 
 # bundle/ — profile plugin bundles
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 This group maps the installable patch layers used by `dsh --profile`. Each package declares `dsh.bundle.patch`; the launcher stacks those patch documents to assemble a named profile. The `web`, `headless`, `acp`, and `sdk` profiles build on `dsh-base`, while `sdk-minimal` supplies its complete tree in one bundle. Domain packages can declare additional layers outside this directory.

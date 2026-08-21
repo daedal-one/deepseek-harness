@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-07-pwsh-ci-observable-completion.zh.md)
-
 ## Problem
 
 The [hosted coverage job](https://github.com/deepseek-harness/deepseek-harness/actions/runs/34033367752/job/101605386802) rejects a persistent PowerShell send because it returns `inferred_idle` rather than `stdin_read`. Output silence is a supported bounded inference, not proof that a command finished. The real-shell test also searches output for text present in the echoed command, which cannot independently prove execution.

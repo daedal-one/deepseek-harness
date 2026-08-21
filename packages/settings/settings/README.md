@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-settings
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Use this package when users must change a plugin's configuration at runtime without restarting or rereading `cordis.yml`. Each namespace combines schema defaults, deployment configuration, and user overrides; readers receive a deep-frozen resolved snapshot and can observe committed changes. Writes affect only user overrides, are serialized per namespace, and may reject stale revisions instead of overwriting newer changes. Durable runtime edits require configured settings storage; without it, the plugin continues with its composed configuration.

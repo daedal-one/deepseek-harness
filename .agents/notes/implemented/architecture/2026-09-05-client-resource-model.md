@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-05-client-resource-model.zh.md)
-
 ## Problem
 
 A right-Sidebar tab body, a chat card, or any other slot component often needs live data it knows only by address: the file an agent just wrote, later a chat node or a terminal. Before the resource model each consumer fetched for itself — the text preview owned its own Remote call and refresh loop — so every mount re-read, two components showing one file held two copies, switching tabs unmounted the body and lost its content, and each new kind of content meant a new bespoke hook.

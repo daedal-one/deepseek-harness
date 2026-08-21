@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-06-frontend-performance-budgets.zh.md)
-
 ## Problem
 
 A fast Node conversation fold does not prove that a browser paints a long conversation or remains responsive while a response streams. Active reconnect also reconstructs a different representation from settled history: a compact prefix becomes public per-chunk Client entries. The [Session performance policy](2026-09-04-session-open-performance-gate.md) supplies an isolated CI job but does not measure these user paths.

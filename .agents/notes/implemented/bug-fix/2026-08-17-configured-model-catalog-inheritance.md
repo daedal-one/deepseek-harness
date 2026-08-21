@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-17-configured-model-catalog-inheritance.zh.md)
-
 ## Problem
 
 A configured model whose request identifier did not exactly match an installed pi-ai catalog identifier was materialized as a hand-declared model. It retained the configured identifier and route defaults but silently lost installed reasoning levels, compatibility behavior, headers, modalities, pricing, and other request metadata. Dated identifiers and provider routing suffixes therefore behaved differently from the catalog model they intentionally represented.

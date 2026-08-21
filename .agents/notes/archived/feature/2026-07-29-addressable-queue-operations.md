@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-07-31
 
-English | [中文](2026-07-29-addressable-queue-operations.zh.md)
-
 ## Problem
 
 The Web queue rendered pending messages but could not edit or delete one row. `MessageId` was insufficient as an address because callers may enqueue the same immutable message more than once. The browser also inferred queue retirement from turn and status events, so a row operation racing with driver claim had no authoritative outcome.
@@ -19,7 +17,7 @@ The Web queue rendered pending messages but could not edit or delete one row. `M
 
 **Queue addresses require a live Agent.** `session.updateQueue` queries only the mounted Agent registry and never resumes a cold session: an `InboxItemId` is process-local and cannot name work after restart or disposal. A missing Agent and a driver-claimed occurrence both return `queue-item-not-found`.
 
-**Web actions address Queue only.** The Host excludes pending steering from `session/queue`; steering retains its existing durable transcript path after consumption. QueueDock hides while empty, renders one pending occurrence directly, and defaults two or more occurrences to a collapsed `"<n> 条排队消息"` header that expands or collapses the complete list. The header exposes `aria-expanded` and `aria-controls`; the expanded list scrolls within a 180px height bound. An active edit or mutation keeps its rows visible, and emptying the queue restores the collapsed default for the next queue. Visible rows expose edit and delete, but no send-now control. The UI derives queue row and mutation types from the runtime `SessionFace` contract rather than importing the connection plugin, so plugin cooperation continues through services and snapshots. Edit is available only when all content blocks are text; the editor cannot silently drop non-text blocks. An editing row exposes only save and cancel, with Enter and Escape as their keyboard equivalents. Delete removes the exact occurrence.
+**Web actions address Queue only.** The Host excludes pending steering from `session/queue`; steering retains its existing durable transcript path after consumption. QueueDock hides while empty, renders one pending occurrence directly, and defaults two or more occurrences to a collapsed `"<n> queued messages"` header that expands or collapses the complete list. The header exposes `aria-expanded` and `aria-controls`; the expanded list scrolls within a 180px height bound. An active edit or mutation keeps its rows visible, and emptying the queue restores the collapsed default for the next queue. Visible rows expose edit and delete, but no send-now control. The UI derives queue row and mutation types from the runtime `SessionFace` contract rather than importing the connection plugin, so plugin cooperation continues through services and snapshots. Edit is available only when all content blocks are text; the editor cannot silently drop non-text blocks. An editing row exposes only save and cancel, with Enter and Escape as their keyboard equivalents. Delete removes the exact occurrence.
 
 ## Alternatives considered
 

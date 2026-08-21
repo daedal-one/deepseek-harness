@@ -141,7 +141,7 @@ describe('matrix row: claimed', () => {
     const { view, textarea, shell, claim } = bench()
     claim()
     act(() => { shell.editor.update(() => {}, { discrete: true }) }) // flush the queued decoration refresh
-    expect(shell.snapshot.claim).toEqual({ token: '/goal ', hint: '目标' })
+    expect(shell.snapshot.claim).toEqual({ token: '/goal ', hint: 'Goal' })
     expect(view.container.querySelector('[data-lexical-text][style*="warn-label"]')?.textContent).toBe('/goal ')
     // The zh dictionary owns a hint.goal entry, which overrides the raw claim hint (production behavior).
     expect(textarea.style.getPropertyValue('--dsh-composer-hint')).toBe(JSON.stringify('输入目标，智能体将持续执行'))
@@ -153,7 +153,7 @@ describe('matrix row: claimed', () => {
   })
 
   it('enter routes to claim.submit (command lane, never the queue sink)', async () => {
-    const submit = vi.fn(() => Promise.resolve({ kind: 'success' as const, text: '完成', source: 'command', name: 'goal' }))
+    const submit = vi.fn(() => Promise.resolve({ kind: 'success' as const, text: 'Done', source: 'command', name: 'goal' }))
     const { view, textarea, shell, sink, claim } = bench({ submit })
     claim()
     act(() => { shell.setDraft('/goal 发布') })
@@ -162,7 +162,7 @@ describe('matrix row: claimed', () => {
     await vi.waitFor(() => { expect(submit).toHaveBeenCalledWith('发布', SCTX, []) })
     // Commit: draft cleared, notice surfaced, back to plain.
     await vi.waitFor(() => { expect(shell.snapshot.draft).toBe('') })
-    expect(view.getByText('完成')).toBeTruthy()
+    expect(view.getByText('Done')).toBeTruthy()
   })
 
   it('backspacing the token auto-releases to plain and the visuals vanish (scenario H)', () => {
@@ -295,10 +295,10 @@ describe('matrix row: submitting', () => {
     first.claim()
     fireEvent.keyDown(first.textarea, { key: 'Enter' })
     await vi.waitFor(() => { expect(submit).toHaveBeenCalled() })
-    act(() => { rejectSubmit(new Error('执行失败')) })
+    act(() => { rejectSubmit(new Error('Execution failed')) })
     await vi.waitFor(() => { expect(first.shell.snapshot.phase).toBe('claimed') })
     expect(first.shell.snapshot.draft).toBe('/goal ')
-    expect(first.view.getByText('执行失败')).toBeTruthy()
+    expect(first.view.getByText('Execution failed')).toBeTruthy()
     cleanup()
     // Drift: typing during flight wins; no restore, plain, notice only.
     const submit2 = vi.fn(() => new Promise<SubmitOutcome>((_res, rej) => { rejectSubmit = rej }))
@@ -306,11 +306,11 @@ describe('matrix row: submitting', () => {
     second.claim()
     fireEvent.keyDown(second.textarea, { key: 'Enter' })
     await vi.waitFor(() => { expect(submit2).toHaveBeenCalled() })
-    act(() => { second.shell.setDraft('用户飞行中打的新稿') })
-    act(() => { rejectSubmit(new Error('晚到失败')) })
+    act(() => { second.shell.setDraft('New draft typed mid-flight') })
+    act(() => { rejectSubmit(new Error('Late failure')) })
     await vi.waitFor(() => { expect(second.shell.snapshot.phase).toBe('plain') })
     expect(second.shell.snapshot.draft).toBe('用户飞行中打的新稿')
-    expect(second.view.getByText('晚到失败')).toBeTruthy()
+    expect(second.view.getByText('Late failure')).toBeTruthy()
   })
 })
 

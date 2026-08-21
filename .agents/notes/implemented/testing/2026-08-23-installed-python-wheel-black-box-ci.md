@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-23-installed-python-wheel-black-box-ci.zh.md)
-
 ## Problem
 
 The Python SDK unit suite drives fake peers, while the packaged-runtime workflow can run the source SDK against a newly built executable before either Python distribution exists. Its clean virtual environment exercises only the default and MCP cases, and required pull-request CI builds only Linux x64. A source checkout, editable install, mismatched SDK/runtime pair, broken native wheel, platform-specific closure, or real-provider integration can therefore escape the evidence that blocks a merge.

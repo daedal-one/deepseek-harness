@@ -5,8 +5,6 @@ kind: "package-library"
 
 # @deepseek-ai/dsh-loader-smoke
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Use `dsh-loader-smoke` to boot an application fixture from its real bin and `cordis.yml` in an isolated temporary directory, with captured output and cleanup. `runFixtureTurn` drives one task through the configured root agent and returns the final assistant text plus token usage. Tests can select zero-build source execution or built-package execution, so local and CI smoke tests use the intended consumer path for each environment. This support-tier library is for test authors, not product integrations.

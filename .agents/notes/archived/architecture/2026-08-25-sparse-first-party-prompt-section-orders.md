@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-08-25-sparse-first-party-prompt-section-orders.zh.md)
-
 ## Problem
 
 Repository-owned system-prompt sections declared unrelated numeric literals across more than twenty packages. The main tool sequence occupied consecutive values from 100 through 117 and then used half-step values for insertions. A later change could therefore collide with an existing section without seeing the complete allocation.

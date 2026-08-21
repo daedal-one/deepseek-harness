@@ -5,8 +5,6 @@ kind: "package-library"
 
 # @deepseek-ai/dsh-scope
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 `dsh-scope` lets plugin authors give each agent or group an isolated contribution set with a shared lifetime. Child scopes inherit ancestor contributions, with the nearest definition taking precedence, while ancestor scopes can observe descendant activity; neither relationship works in reverse. Disposing a scope removes everything owned by it. Use this dependency-free library when per-agent or per-group isolation must work without depending on the agent loop or presets.

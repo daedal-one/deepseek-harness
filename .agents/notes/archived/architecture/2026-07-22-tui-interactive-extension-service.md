@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-04
 
-English | [中文](2026-07-22-tui-interactive-extension-service.zh.md)
-
 ## Problem
 
 Cordis plugins can register human commands through `ctx.commands`, but a command that needs terminal interaction has no supported presentation boundary. It must either remain non-interactive or capture the TUI's private pi-tui tree, focus state, renderer, and shutdown lifecycle. That coupling makes the extension depend on one front door's internals, lets independently developed overlays compete for focus, and leaves plugin unload with no reliable way to remove queued or visible UI.

@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-16-model-backed-tool-policy.zh.md)
-
 ## Problem
 
 Tool authorization needs deployment rules without trusting the acting model to approve itself or weakening the existing approval audit. Shell calls also need independent model judgment without provider-specific HTTP; a single classifier denial can be a false positive, while classifier failure must never become permission. Reviewed MCP calls need execution-time principal and argument checks because projecting a limited tool schema is not authorization.

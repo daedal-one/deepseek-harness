@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-01-parent-owned-subagent-catalog.zh.md)
-
 ## Problem
 
 Direct-child discovery once reconstructed a catalog from the global Session corpus and each selected child's log. Creation already knows the direct parent, child id, mode, and label, so repository-wide enumeration and child-log reads duplicated an owned fact and made browser refresh cost depend on unrelated Sessions.

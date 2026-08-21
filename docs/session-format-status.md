@@ -1,7 +1,5 @@
 # Session format version and release status
 
-English | [中文](session-format-status.zh.md)
-
 ## Summary
 
 Use this reference to distinguish the checkout’s Session writer version from the latest published Session format. The code constant owns the writer version; the release record below owns the latest released format and its publication evidence. Other documentation links here instead of restating which version is current, next, or unreleased.

@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-06-backend-continuation-performance.zh.md)
-
 ## Problem
 
 Opening one Session does not measure the repeated cost of preparing model requests after a long tool conversation, executing another tool-heavy turn, or discovering multiple inactive fork children. The [Session-opening gate](2026-09-04-session-open-performance-gate.md) covers first history and activation but deliberately stops before new model work. Its text/reasoning workload also lacks historical tool-call arguments and large tool results.

@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-tool-cordis
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 `dsh-tool-cordis` lets a model inspect the live Cordis runtime and create, run, stop, update, or remove temporary dynamic packages with host code, browser code, or both. Package versions are immutable, so a failed package can be corrected by adding a new version and updating the active one. Definitions exist only in process memory and disappear when DSH restarts; the package does not write repository files, install dependencies, or change `cordis.yml`. It also teaches the model this workflow. Compose it with `@deepseek-ai/dsh-cordis-host-runner`, which provides the sandbox and run round trip.

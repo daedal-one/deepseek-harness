@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-09-sidebar-and-preview-interaction-polish.zh.md)
-
 ## Problem
 
 Five small interaction defects around the right Sidebar and the document preview. Every session's surface was born with a seeded default page, so a collapsed column the user never opened already held a page, and the first open into a fresh surface showed the seed beside the content it opened. Page tabs deduplicated surface-wide: opening a page whose tab sat in the other pane pulled focus across panes instead of opening it where asked. Dragging a pane's sole tab onto its own edge did nothing, though the user plainly asked for a split. A dropdown over the HTML preview did not dismiss on a click inside the sandboxed iframe, because that pointerdown never reaches the parent document. And the code preview's copy banner and card background scrolled away under horizontal scrolling, while the code kept the chat card's gray fill instead of sitting on the pane's own background.

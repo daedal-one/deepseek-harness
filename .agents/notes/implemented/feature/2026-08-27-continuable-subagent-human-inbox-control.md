@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-27-continuable-subagent-human-inbox-control.zh.md)
-
 ## Problem
 
 Continuable children use the same Agent loop and inbox as ordinary Agents, but the human delivery path exposed only FIFO follow-up. The Client discarded its existing Queue/Steer choice when it selected the dedicated subagent prompt Remote, and the generic Session ownership fence rejected every queue mutation for a subagent-owned identity. The browser therefore hid controls that the live child inbox already supported.

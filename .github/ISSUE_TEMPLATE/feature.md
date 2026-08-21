@@ -1,6 +1,6 @@
 ---
 name: Feature
-about: 新增或有意改变可观察行为
+about: Add or intentionally change observable behavior
 type: Feature
 ---
 

@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-session-turn-outline
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 This package gives history clients a whole-session outline of every started turn, including bounded prompt and settled-response previews. Clients can navigate turns that are not yet loaded and page backward from the exact event sequence needed to load a selected turn. It fits assemblies that provide session projections; elsewhere, clients continue using loaded-window navigation. Previews exclude injected context and tool results, and a response appears only after its turn settles.

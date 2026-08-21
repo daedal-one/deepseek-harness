@@ -106,11 +106,11 @@ describe('Tool presentation tails', () => {
     const errorView = render(<BashRow {...bashProps(errorResult)} />)
     expect(errorView.container.querySelector('[data-sample="bash"]')).not.toBeNull()
     expect(errorView.container.querySelector('[data-state="error"]')).not.toBeNull()
-    expect(errorView.getByText('失败')).toBeTruthy()
+    expect(errorView.getByText('Failed')).toBeTruthy()
     errorView.unmount()
 
     const stoppedView = render(<BashRow {...bashProps(stoppedResult)} />)
     expect(stoppedView.container.querySelector('[data-state="stopped"]')).not.toBeNull()
-    expect(stoppedView.getByText('已停止')).toBeTruthy()
+    expect(stoppedView.getByText('Stopped')).toBeTruthy()
   })
 })

@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-host-directory-picker
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 The web GUI lets an operator choose a workspace directory with either an OS chooser or an in-app browser. Use the native option when the operator can reach the host display; use the browser option for remote clients or when directory listing and creation must stay in the app. Consumers receive the interaction kind and can present the matching workflow. Directory picking is limited to the GUI host and never affects the agent loop. The browser workflow exposes one directory tree at a time; multiple roots are unsupported.

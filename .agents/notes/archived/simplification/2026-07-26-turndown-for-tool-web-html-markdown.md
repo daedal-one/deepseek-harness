@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-07
 
-English | [中文](2026-07-26-turndown-for-tool-web-html-markdown.zh.md)
-
 ## Problem
 
 `dsh-tool-web`'s `src/html.ts` (~86 lines, ~40 lines of dedicated tests; deleted by this change) converted fetched HTML to markdown with regexes: strip script/style/noscript/comments, convert `<a>`/`<h1-6>`/`<li>`, decode numeric entities plus a 12-entry named-entity table, collapse whitespace. The module's own JSDoc said "A richer converter can replace it without changing the seam or tool schema", and the README's Known Limitations documented it as "a minimal regex converter, not an HTML parser — tables, images, and nested formatting are lost." The [web capability seam note](../architecture/2026-06-24-web-capability-seam.md) assigns HTML→markdown to this package as presentation, so the swap point was exactly here. The converter's output is model-visible on every fetched HTML page; no keyless snapshot exercised `web_fetch`, so no expected outputs pinned it.

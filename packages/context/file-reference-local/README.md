@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-file-reference-local
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Agents and host UIs can complete `@file` mentions with ranked paths from each agent's local workspace, with bounded discovery that stays responsive in large repositories. Results refresh after tool activity without blocking completion, and directory symlinks are never followed. When `read` is available, the model also receives stable guidance for interpreting referenced paths. Choose this package when `read` uses the Harness host filesystem; remote or virtual namespaces need matching discovery.

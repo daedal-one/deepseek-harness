@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-28-subprocess-native-containment.zh.md)
-
 ## Problem
 
 Detached POSIX process groups, Windows direct-parent traversal, and PTY descendant scans describe only members that remain observable through one process relationship. A child can call `setsid`, reparent, or outlive its direct parent and leave those ranges, so terminating the apparent tree can return while work, ports, or files remain active. A direct target result also does not prove that every descendant has stopped.

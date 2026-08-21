@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-client-ui-workflow-run
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Use `dsh-client-ui-workflow-run` to inspect each durable top-level workflow run as an independent Chat node. Expand a run to see its phases and expand a phase to see members; running, failed, cancelled, and interrupted levels open by default, while completed levels remain closed. A running member can open its child Session only when it belongs to the current Session and is available locally. The node shows identities and statuses only; scripts, outputs, errors, logs, usage, topology, and controls remain outside this surface.

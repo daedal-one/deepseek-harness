@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-04
 
-English | [中文](2026-07-29-tui-hidden-mode-assistant-fold.zh.md)
-
 ## Problem
 
 Ctrl+O's hidden phase ([consolidated TUI presentation](../architecture/2026-07-28-consolidated-tui-presentation.md)) drops tool cards so the transcript reads as a conversation, but each model step still rendered its own `Assistant` header. A multi-step turn (text → tools → text) therefore showed several consecutive `Assistant` blocks with nothing between them — the removed tool cards were the only thing that had justified the repeated headers. Codex-style conversation-only reading wants one assistant message per turn.

@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-07-12-simplify-session-log-representation.zh.md)
-
 ## Problem
 
 The session log maintains two representations that cost more machinery than their consumers require: a pseudo-linked surface and custom request-header deltas.

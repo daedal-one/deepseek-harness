@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-04
 
-English | [中文](2026-07-27-tui-step-timing-trails-tool-cards.zh.md)
-
 ## Problem
 
 The per-step timing summary (`Model wait … · Completed …`) was a child of the assistant message component, so it rendered directly under the assistant text. When a step drove tool calls, the tool cards were appended to the chat *after* the assistant message, leaving the timing line stranded above them — one message before the step's actual last output. The summary is meant to close a step, so on any tool-calling step it appeared in the wrong place.

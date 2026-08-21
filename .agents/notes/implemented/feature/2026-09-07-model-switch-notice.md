@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-07-model-switch-notice.zh.md)
-
 ## Problem
 
 Session history identifies message roles but does not tell a newly selected model which route generated earlier assistant turns. In the motivating session, the user switched from `deepseek-v4-flash` to `deepseek-v4-flash-vision-exp`. The new model saw image placeholders saying that a text-only model had omitted the images and inferred that the limitation described its own image capability.

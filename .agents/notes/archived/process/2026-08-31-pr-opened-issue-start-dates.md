@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-02
 
-English | [中文](2026-08-31-pr-opened-issue-start-dates.zh.md)
-
 ## Problem
 
 The organization-level `Start date` Issue field records when work begins, but adding an Issue to the Issue Project or linking it from a pull request does not provide a date value. A pull request can identify both Issues it resolves and Issues that supply related implementation context, and either relationship marks the start of repository work.

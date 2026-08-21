@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-subagent-acp
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Use this package to delegate a task to an ACP-compatible agent running in a fresh subprocess with its own runtime, session, model, and tools. Each run shares only the selected working directory, sends the task over ACP, and returns the child's final answer or a safe error; intermediate messages and tool traffic stay outside the parent conversation. Permission prompts are answered by configured policy without human interaction. Choose it when delegation needs process isolation or a non-Harness ACP agent, and choose an in-process backend when the child must share parent capabilities.

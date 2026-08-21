@@ -183,36 +183,36 @@ describe('WorkspaceBrowser', () => {
       useSessions: hook(sessions),
       useWorkspaces: hook(workspaceState([workspace('alpha', ['alpha-s']), workspace('beta', ['beta-s'])])),
     })
-    expect(screen.getByText('工作区')).toBeTruthy()
+    expect(screen.getByText('Workspaces')).toBeTruthy()
     expect(screen.getByText('alpha')).toBeTruthy()
     // Sessions hidden while their group is folded.
     expect(screen.queryByText('alpha-s')).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
-    expect(screen.getByText('分组方式')).toBeTruthy() // the menu heading label
+    fireEvent.click(screen.getByRole('button', { name: 'View options' }))
+    expect(screen.getByText('Group by')).toBeTruthy() // the menu heading label
     expect(screen.getByRole('separator')).toBeTruthy()
     expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual([
-      '按工作区', '单列表', '手动排序', '最近更新',
+      'WorkSpace', 'In one list', 'Manual', 'Last updated',
     ])
-    expect(screen.getByRole('menuitem', { name: '按工作区' }).querySelector('svg')).toBeTruthy()
-    expect(screen.getByRole('menuitem', { name: '手动排序' }).querySelector('svg')).toBeTruthy()
-    fireEvent.click(screen.getByRole('menuitem', { name: '单列表' }))
+    expect(screen.getByRole('menuitem', { name: 'WorkSpace' }).querySelector('svg')).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: 'Manual' }).querySelector('svg')).toBeTruthy()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'In one list' }))
     // Store-driven flip: title changes, rows flatten newest-first, headers gone.
     expect(b.store.getSnapshot().groupBy).toBe('flat')
-    expect(screen.getByText('会话')).toBeTruthy()
+    expect(screen.getByText('Sessions')).toBeTruthy()
     expect(screen.queryByText('alpha')).toBeNull()
     expect(screen.getByText('alpha-s')).toBeTruthy()
     expect(screen.getByText('beta-s')).toBeTruthy()
 
     // Back to workspace grouping through the same menu.
-    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
-    expect(screen.getByRole('menuitem', { name: '手动排序' }).hasAttribute('disabled')).toBe(false)
-    fireEvent.click(screen.getByRole('menuitem', { name: '按工作区' }))
+    fireEvent.click(screen.getByRole('button', { name: 'View options' }))
+    expect(screen.getByRole('menuitem', { name: 'Manual' }).hasAttribute('disabled')).toBe(false)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'WorkSpace' }))
     expect(b.store.getSnapshot().groupBy).toBe('workspace')
-    expect(screen.getByText('工作区')).toBeTruthy()
+    expect(screen.getByText('Workspaces')).toBeTruthy()
 
     // Escape closes the menu without picking.
-    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
+    fireEvent.click(screen.getByRole('button', { name: 'View options' }))
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(screen.queryByRole('menu')).toBeNull()
     expect(b.store.getSnapshot().groupBy).toBe('workspace')
@@ -230,8 +230,8 @@ describe('WorkspaceBrowser', () => {
       useWorkspaces: hook(workspaces),
       insertSessionBefore,
     })
-    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: '单列表' }))
+    fireEvent.click(screen.getByRole('button', { name: 'View options' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'In one list' }))
     await waitFor(() => {
       expect(b.store.getSnapshot().sessionOrderByAccount[FLAT_SESSION_ORDER_KEY])
         .toEqual(['one', 'two', 'three'])
@@ -249,15 +249,15 @@ describe('WorkspaceBrowser', () => {
       .toEqual(['two', 'three', 'one'])
     expect(insertSessionBefore).not.toHaveBeenCalled()
 
-    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: '最近更新' }))
+    fireEvent.click(screen.getByRole('button', { name: 'View options' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Last updated' }))
     await waitFor(() => {
       expect(b.store.getSnapshot().sessionOrderByAccount[FLAT_SESSION_ORDER_KEY])
         .toEqual(['one', 'two', 'three'])
     })
 
-    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: '手动排序' }))
+    fireEvent.click(screen.getByRole('button', { name: 'View options' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Manual' }))
     fireEvent.dragStart(one, { dataTransfer: dragData() })
     fireDrag(three, 'drop', 180)
     b.view.unmount()
@@ -391,8 +391,8 @@ describe('WorkspaceBrowser', () => {
       useWorkspaces: hook(workspaceState([workspace('alpha', ['two', 'one'])])),
     })
     fireEvent.click(screen.getByText('alpha'))
-    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: '最近更新' }))
+    fireEvent.click(screen.getByRole('button', { name: 'View options' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Last updated' }))
     await waitFor(() => {
       const rows = screen.getAllByRole('treeitem').slice(1)
       expect(rows[0]?.textContent).toContain('one')
@@ -407,8 +407,8 @@ describe('WorkspaceBrowser', () => {
     fireDrag(two, 'drop', 180)
     expect(b.store.getSnapshot().sessionOrderByAccount.alpha).toEqual(['two', 'one'])
 
-    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: '手动排序' }))
+    fireEvent.click(screen.getByRole('button', { name: 'View options' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Manual' }))
     expect(screen.getAllByRole('treeitem').slice(1)[0]?.textContent).toContain('two')
 
     // User activity updates the timestamp baseline in Manual mode without
@@ -422,8 +422,8 @@ describe('WorkspaceBrowser', () => {
     expect(screen.getAllByRole('treeitem').slice(1)[0]?.textContent).toContain('two')
 
     // Entering Last updated performs one complete recency sort.
-    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: '最近更新' }))
+    fireEvent.click(screen.getByRole('button', { name: 'View options' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Last updated' }))
     await waitFor(() => {
       expect(b.store.getSnapshot().sessionOrderByAccount.alpha).toEqual(['one', 'two'])
       expect(screen.getAllByRole('treeitem').slice(1)[0]?.textContent).toContain('one')
@@ -462,8 +462,8 @@ describe('WorkspaceBrowser', () => {
     // The archive-set echo hides the row in grouped and flat modes.
     rerender(b, { useWorkspaces: hook(workspaceState([workspace('alpha', ['kept-s', 'gone-s'])], [sid('gone-s')])) })
     expect(screen.queryByText('gone-s')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: '单列表' }))
+    fireEvent.click(screen.getByRole('button', { name: 'View options' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'In one list' }))
     expect(screen.getByText('kept-s')).toBeTruthy()
     expect(screen.queryByText('gone-s')).toBeNull()
   })
@@ -868,8 +868,8 @@ describe('WorkspaceBrowser', () => {
       useWorkspaces: hook(workspaceState([workspace('alpha', ['target', 'other'])])),
       open,
     })
-    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: '单列表' }))
+    fireEvent.click(screen.getByRole('button', { name: 'View options' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'In one list' }))
     const input = screen.getByPlaceholderText<HTMLInputElement>('搜索会话…')
     fireEvent.change(input, { target: { value: 'needle' } })
     fireEvent.click(screen.getByRole('treeitem'))
@@ -1229,8 +1229,8 @@ describe('WorkspaceBrowser', () => {
     expect(b.store.getSnapshot().sessionOrderByAccount[UNGROUPED_KEY]).toEqual(['three', 'one', 'two'])
     expect(insertSessionBefore).not.toHaveBeenCalled()
 
-    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: '最近更新' }))
+    fireEvent.click(screen.getByRole('button', { name: 'View options' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Last updated' }))
     await waitFor(() => {
       expect(b.store.getSnapshot().sessionOrderByAccount[UNGROUPED_KEY]).toEqual(['one', 'two', 'three'])
     })

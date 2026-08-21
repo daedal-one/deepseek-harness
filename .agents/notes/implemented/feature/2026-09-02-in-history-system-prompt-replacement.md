@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-02-in-history-system-prompt-replacement.zh.md)
-
 ## Problem
 
 Every system prompt change costs the whole provider prefix cache. The loop renders the prompt on every step; when the bytes differ — a plan-mode section entering or leaving, a skill or tool guidance section registering, an agent-scoped persona shadow, a changed `{{model}}` variable — the request's message 0 changes and the DeepSeek context cache misses from the first token. Long agentic sessions pay this repeatedly, and the [runtime-context snapshot design](../../archived/feature/2026-07-30-current-sandbox-policy-context.md) exists precisely because moving a changing fact out of the prompt was the only way to keep the prefix stable.

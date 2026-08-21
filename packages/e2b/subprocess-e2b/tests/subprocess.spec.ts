@@ -108,7 +108,7 @@ class FakeSandbox {
   sdkKillStops = true
   alive = true
   zombieOnly = false
-  ambient = 'PATH=/ambient/bin\0KEEP=safe\0UNICODE=你好\0NPM_TOKEN=secret\0DSH_STALE=old\0BROKEN\0=bad\0'
+  ambient = 'PATH=/ambient/bin\0KEEP=safe\0UNICODE=héllo\0NPM_TOKEN=secret\0DSH_STALE=old\0BROKEN\0=bad\0'
   environmentHome = '/home/user'
   environmentWire: string | undefined
   environmentRequest: ((signal: AbortSignal | undefined) => Promise<void>) | undefined
@@ -336,9 +336,9 @@ describe('E2BOutputReader', () => {
   it('decodes base64 across arbitrary callback boundaries and rejects malformed framing', () => {
     const decoder = new E2BBase64Decoder()
     expect(decoder.push('')).toEqual(Buffer.alloc(0))
-    expect(decoder.push('5')).toEqual(Buffer.alloc(0))
-    expect(decoder.push('L2')).toEqual(Buffer.alloc(0))
-    expect(decoder.push('g\n').toString()).toBe('你')
+    expect(decoder.push('4')).toEqual(Buffer.alloc(0))
+    expect(decoder.push('oK')).toEqual(Buffer.alloc(0))
+    expect(decoder.push('s\n').toString()).toBe('€')
     expect(decoder.push('YQ==\nYg==\n').toString()).toBe('ab')
     expect(decoder.push(`${Buffer.from([0, 255]).toString('base64')}\n`)).toEqual(Buffer.from([0, 255]))
     expect(decoder.push(`${E2B_OUTPUT_COMPLETE_FRAME}\n`)).toEqual(Buffer.alloc(0))
@@ -441,7 +441,7 @@ describe('E2BSubprocessHandle', () => {
       '/workspace/.dsh-e2b/processes/one/stderr.log',
     ])
     expect(fake.writtenFileData.get('/workspace/.dsh-e2b/processes/one/environment')).toBe(
-      'PATH=/bin\0UNICODE=你好\0HOME=/home/user\0FOO-BAR=hyphen-value\0--split-string=literal-value\0DEEPSEEK_API_KEY=explicit-secret\0DSH_MODE=test\0',
+      'PATH=/bin\0UNICODE=héllo\0HOME=/home/user\0FOO-BAR=hyphen-value\0--split-string=literal-value\0DEEPSEEK_API_KEY=explicit-secret\0DSH_MODE=test\0',
     )
 
     let piped = ''
@@ -487,12 +487,12 @@ describe('E2BSubprocessHandle', () => {
     await flush()
     const chunks: Buffer[] = []
     handle.stdout!.on('data', (chunk: Buffer) => { chunks.push(chunk) })
-    for (const character of `${Buffer.from('A你好B').toString('base64')}\n`) {
+    for (const character of `${Buffer.from('AhélloB').toString('base64')}\n`) {
       await fake.stdoutWire(character)
     }
     fake.finish()
     await expect(handle.done).resolves.toEqual({ exitCode: 0, signal: null })
-    expect(Buffer.concat(chunks).toString('utf8')).toBe('A你好B')
+    expect(Buffer.concat(chunks).toString('utf8')).toBe('AhélloB')
   })
 
   it('rejects malformed output transport without confusing it with a consumer sink failure', async () => {

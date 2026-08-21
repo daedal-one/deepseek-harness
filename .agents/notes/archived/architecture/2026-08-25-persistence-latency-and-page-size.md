@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-08-25-persistence-latency-and-page-size.zh.md)
-
 ## Problem
 
 Physical persistence optimizations need to reduce retained storage without moving disproportionate work into full writes, reads, or Session forks. The original 105-Session corpus showed that JSONL level-19 compression made full writes and forks more than twice as slow.

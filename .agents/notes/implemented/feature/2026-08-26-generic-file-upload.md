@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-26-generic-file-upload.zh.md)
-
 ## Problem
 
 Sessions accepted pasted or dropped images as durable attachments, but no other file kind could enter a conversation: the composer refused non-image bytes, and the only file affordance was the `@` path mention, which requires the file to already be readable from the host workspace. A user could not hand the agent a PDF, a data file, or an archive from a browser, and DeepSeek Chat users expect the paperclip-and-file-card upload flow (#2984).

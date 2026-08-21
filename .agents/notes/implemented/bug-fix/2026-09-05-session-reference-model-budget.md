@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-05-session-reference-model-budget.zh.md)
-
 ## Problem
 
 A fixed 64 KiB reference budget discards useful source context on large-context models. The target session header describes a prior request, while agent options seed routing; neither necessarily identifies the model selected for the entering step.

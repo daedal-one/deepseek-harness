@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-03-normalized-unread-fs-tool-diagnostic.zh.md)
-
 ## Problem
 
 The `dsh-tool-fs` write and edit operations can receive `FS_NOT_OBSERVED` from either the observation policy or a filesystem provider. Those sources describe the same requirement with operation-specific messages, so identical recovery conditions reach the model with different wording. Provider text can also expose whether the rejected operation would overwrite an existing target, although the model only needs to read the target and retry.

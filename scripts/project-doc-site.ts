@@ -167,7 +167,7 @@ export function rewriteMarkdown(source: string, options: RewriteMarkdownOptions)
     const targetPath = repoPath(absPath, options.repoRoot)
     const isLanguageSwitcher = targetPath === counterpartSource(options.sourcePath)
     const targetLocale: DocsLocale = isLanguageSwitcher
-      ? options.locale === 'root' ? 'en' : 'root'
+      ? 'root'
       : options.locale
     const page = published.get(targetPath)?.get(targetLocale)
     const nextUrl = page !== undefined
@@ -541,8 +541,7 @@ export interface LlmsTxtSite {
 
 /** Locale groups llms.txt lists, in the order the site's navigation presents them. */
 const llmsTxtLocales: readonly { heading: string; locale: DocsLocale }[] = [
-  { heading: '简体中文', locale: 'root' },
-  { heading: 'English', locale: 'en' },
+  { heading: 'English', locale: 'root' },
 ]
 
 /**

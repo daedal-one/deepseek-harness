@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-06-agent-request-freeze-provenance.zh.md)
-
 ## Problem
 
 Long tool conversations repeatedly traverse immutable history while constructing requests. The [backend continuation baseline](../testing/2026-09-06-backend-continuation-performance.md) attributes 132.876 ms of sampled CPU self time to `buildRequest`'s `deepFreeze` during a 211.300 ms request-history operation. Skipping all frozen roots is unsafe: restore adopts independently owned graphs without freezing them, and a shallow-frozen message can still contain mutable content.

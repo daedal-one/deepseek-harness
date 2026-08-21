@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-08-05-session-preparation.zh.md)
-
 ## Problem
 
 Fresh creation and persisted resume reached the same publication boundary through different construction flows. This obscured the invariant that setup must finish against one unpublished Session before that exact Session and its Agent become visible together.

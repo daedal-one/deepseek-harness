@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-07-pinned-scroll-delivery-before-layout.zh.md)
-
 ## Problem
 
 A delayed scroll sample compares positions from different layouts. While Chat is pinned, a composer or transcript shrink can move the browser floor; subsequent growth can move the browser position again before `scrollend` or the sampling timer. Deferring follow during that interval leaves the observed-top ledger stale and can classify browser layout movement as reader input, disabling follow without a reader gesture.

@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-llm-deepseek
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Use this package to stream DeepSeek models through the `deepseek-official` route, including configurable thinking and reasoning effort, image input for vision models, and an advisory model catalog. Endpoint, credentials, catalog, and thinking policy resolve for each request, so valid user-settings changes apply to the next request without restarting the process. Choose it for DeepSeek's official API or an OpenAI-compatible gateway; it can run beside the pi-ai package because they use different route names.

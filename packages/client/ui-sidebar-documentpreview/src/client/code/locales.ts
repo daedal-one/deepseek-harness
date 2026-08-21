@@ -10,9 +10,9 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /** Simplified Chinese dictionary and key source. */
 export const zh = {
-  title: '代码',
-  copy: '复制',
-  copied: '已复制',
+  title: 'Code',
+  copy: 'Copy',
+  copied: 'Copied',
 }
 
 /** English dictionary with the same keys. */

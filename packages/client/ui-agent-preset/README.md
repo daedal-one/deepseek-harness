@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-client-ui-agent-preset
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Use this package to choose the agent preset for a new Web GUI session, see the active preset in the session header, and manage available presets in Settings. A preset is fixed when a session is created, so changing the selection or default affects only later sessions. If the deployment provides no presets, these controls stay hidden and every session uses the host composition.

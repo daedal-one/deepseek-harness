@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-code-runtime-worker-thread
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 This package lets PTC compositions execute model-written TypeScript with host-provided bindings and receive the completion value, ordered logs, or a structured failure. Each request starts with no state from earlier runs, and failures such as syntax errors, budget expiry, aborts, memory exhaustion, and output overflow are returned instead of thrown. Treat executed code as bash-equivalent: the package limits environment exposure and resource use, but does not isolate code from the host. Configurable compute, wall-clock, heap, and output limits terminate the run and bound its results.

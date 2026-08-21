@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-08-native-windows-pull-request-ci.zh.md)
-
 ## Problem
 
 Wine checks the win32 toolchain over a Linux kernel and case-sensitive ext4 with a hoisted dependency layout. It cannot prove NTFS, DACL, ConPTY, crash durability, or native process behavior. Pull-request correctness therefore needs native Windows build and process checks independently of the post-merge Wine result.

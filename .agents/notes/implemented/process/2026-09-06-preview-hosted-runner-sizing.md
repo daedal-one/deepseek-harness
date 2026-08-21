@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-06-preview-hosted-runner-sizing.zh.md)
-
 ## Problem
 
 PR previews build the full workspace and browser-worker VFS image. A lower per-minute runner price does not guarantee lower job cost because GitHub rounds each job upward to whole minutes. Moving previews to persistent self-hosted machines also changes isolation and is outside this decision.

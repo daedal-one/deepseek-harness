@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-fs
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Use `dsh-fs` when an application needs consistent filesystem operations across host, confined, or remote execution environments. It lets consumers resolve stable file identities, map shared host files where supported, perform bounded text and byte reads, list directories, and apply atomic text writes and literal edits. Version guards are optional, so a backend works without policy enforcement; callers can supply a guard to reject a mutation after the file changes. Choose `fs-local`, `fs-sandbox`, or `fs-e2b` for the required execution environment. Model-facing filesystem tools are provided separately by `dsh-tool-fs`.

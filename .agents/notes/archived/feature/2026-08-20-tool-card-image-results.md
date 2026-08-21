@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-08-20-tool-card-image-results.zh.md)
-
 ## Problem
 
 A settled `read_image` call rendered its raw attachment object as literal text in the tool card — `{"type":"image","attachment":{"attachmentId":"sha256:…","mediaType":"image/png","bytes":24588,"width":1496,…}}` — instead of showing the image.

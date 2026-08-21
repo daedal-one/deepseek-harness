@@ -61,7 +61,7 @@ class DelayedSuccessAdapter extends LlmAdapter {
 
 const SCRIPT: StreamChunk[] = [
   { type: 'block-start', index: 0, blockType: 'text' },
-  { type: 'text-delta', index: 0, text: '  五个字标题  ' },
+  { type: 'text-delta', index: 0, text: '  five character title  ' },
   { type: 'finish', reason: { kind: 'stop' } },
 ]
 
@@ -86,7 +86,7 @@ function request(ctx: Context, signal = new AbortController().signal): SessionTi
     source: { kind: 'user' },
   }), { surfaceOp: 'append' })
   const second = session.append('user/message', createUserMessage({
-    content: [{ type: 'text', text: '第二个问题' }],
+    content: [{ type: 'text', text: 'second question' }],
     source: { kind: 'user' },
   }), { surfaceOp: 'append' })
   session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
@@ -94,7 +94,7 @@ function request(ctx: Context, signal = new AbortController().signal): SessionTi
     session,
     messages: [
       { seq: first.seq, text: 'first prompt' },
-      { seq: second.seq, text: '第二个问题' },
+      { seq: second.seq, text: 'second question' },
     ],
     route: { provider: 'current-route', model: 'current-model' },
     signal,
@@ -140,7 +140,7 @@ describe('generateSessionTitleWithLlm', () => {
     )
 
     expect(result).toEqual({
-      title: '五个字标题',
+      title: 'five character title',
       messageSeqs: providerRequest.messages.map(message => message.seq),
       model: { provider: 'current-route', model: 'current-model' },
     })
@@ -161,7 +161,7 @@ describe('generateSessionTitleWithLlm', () => {
     expect(options.system).toContain('10 CJK characters')
     const prompt = options.messages[0]?.content[0]
     expect(prompt?.type === 'text' && prompt.text).toContain('first prompt')
-    expect(prompt?.type === 'text' && prompt.text).toContain('第二个问题')
+    expect(prompt?.type === 'text' && prompt.text).toContain('second question')
     expect(providerRequest.session.snapshotEvents().findLast(event => event.type === 'session/title-llm-request')?.data)
       .toEqual({
         titleProvider: TITLE_PROVIDER,

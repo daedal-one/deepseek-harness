@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-30
 
-English | [中文](2026-08-18-sqlite-physical-chunk-row-compression.zh.md)
-
 ## Problem
 
 The scalar [`session-persistence-sqlite`](../../../../packages/session/session-persistence-sqlite/README.md) layout stores one physical row per logical `SessionEvent`. Provider streams produce token-sized `assistant/chunk` events with repeated turn, step, block, type, and envelope fields, so transaction batching reduces commits without reducing row count or repeated JSON payload. The logical stream cannot be coalesced because chunk boundaries, sequence numbers, timestamps, replay, partial output, UI fidelity, and `sourceEventSeqs` remain observable.

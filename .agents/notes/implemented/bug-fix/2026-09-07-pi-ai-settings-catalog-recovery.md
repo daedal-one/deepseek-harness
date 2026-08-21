@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-07-pi-ai-settings-catalog-recovery.zh.md)
-
 ## Problem
 
 An installed pi-ai catalog can change the validity of unchanged user settings. OpenRouter models outside the catalog can inherit a protocol while all shipped models agree; adding a second protocol removes that inference. Removing a catalog model also invalidates an override keyed by its former id. Rejecting the entire settings namespace at registration makes unrelated providers disappear and removes the controls needed to repair the configuration.

@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-07-26
 
-English | [中文](2026-07-23-browser-demo-gif-recording.zh.md)
-
 ## Problem
 
 Browser demonstrations have been assembled with one-off capture and encoding commands. That makes timing and output size inconsistent, encourages continuous recordings that obscure the useful state changes, and can blur the boundary between a genuine server or API flow and a fixture. Combining local recording with attachment upload or pull-request editing also gives a media task unrelated remote-write authority.

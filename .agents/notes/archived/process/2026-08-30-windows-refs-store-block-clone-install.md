@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-08-30-windows-refs-store-block-clone-install.zh.md)
-
 ## Problem
 
 The self-hosted Windows VM's workspaces moved from the NTFS `E:` volume to the ReFS `F:` volume. `git clean -ffdx` on the NTFS volume deleted the ~70k-file node_modules tree in tens of minutes and forced a full reinstall on every run, driving disk writes past the volume's sustained bandwidth. ReFS metadata operations are orders of magnitude faster, so the workspace move restored fast checkout, but it exposed a second failure.

@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-04
 
-English | [中文](2026-07-27-assistant-timing-header-trailing.zh.md)
-
 ## Problem
 
 The TUI assistant message opened with a single header line joining the `Assistant` label and the step-timing string (`Assistant · Model wait 0.0s · Completed …`). Placing the timing before the body pushed the durations away from the answer they describe and, once completed, buried the reply's first line under a metadata line the reader scans past.

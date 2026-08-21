@@ -107,8 +107,8 @@ function commandSource(
 }
 
 const COMMANDS: FakeCommand[] = [
-  { name: 'goal', description: '设定目标', input: { hint: '目标内容' } },
-  { name: 'compact', description: '压缩上下文' },
+  { name: 'goal', description: 'Set a goal', input: { hint: 'Goal content' } },
+  { name: 'compact', description: 'Compact context' },
   { name: 'vision', description: '识别图片', input: { hint: '想问什么', attachments: true } },
 ]
 
@@ -198,7 +198,7 @@ async function scopedBench(register?: (inputTriggers: InputTriggerService) => vo
 
 async function bench(executeImpl?: (line: string) => Promise<SubmitOutcome>) {
   const execute = vi.fn(executeImpl ?? ((line: string) =>
-    Promise.resolve({ kind: 'success' as const, text: `已执行 ${line}` })))
+    Promise.resolve({ kind: 'success' as const, text: `Executed ${line}` })))
   const { source, executed, envelopes } = commandSource(COMMANDS, execute)
   const base = await scopedBench((inputTriggers) => { inputTriggers.registerSource(source) })
   return { ...base, execute, executed, envelopes }
@@ -223,14 +223,14 @@ describe('scenario A: menu-pick /goal, type args, enter submits', () => {
     // The zh dictionary owns a hint.goal entry, which overrides the machine's raw hint (production behavior).
     expect(b.textarea.style.getPropertyValue('--dsh-composer-hint')).toBe(JSON.stringify('输入目标，智能体将持续执行'))
     // Continue typing args; hint drops; claim holds.
-    b.type('/goal 发布 v1')
+    b.type('/goal release v1')
     expect(b.shell.snapshot.phase).toBe('claimed')
     // Enter: submitting → command execute → commit clears.
     fireEvent.keyDown(b.textarea, { key: 'Enter' })
     await vi.waitFor(() => { expect(b.execute).toHaveBeenCalledWith('/goal 发布 v1', []) })
     await vi.waitFor(() => { expect(b.shell.snapshot.draft).toBe('') })
     expect(b.shell.snapshot.phase).toBe('plain')
-    expect(b.view.getByText('已执行 /goal 发布 v1')).toBeTruthy()
+    expect(b.view.getByText('Executed /goal release v1')).toBeTruthy()
     expect(b.sink).not.toHaveBeenCalled()
   })
 })
@@ -240,7 +240,7 @@ describe('scenario C: pasted /goal xxx + enter (menu never opened)', () => {
     const b = await bench()
     // Paste lands whole; caret at end means detectTrigger sees no token under
     // the caret mid-whitespace — menu stays closed; enter runs adjudication.
-    act(() => { b.shell.setDraft('/goal 尽快发布') })
+    act(() => { b.shell.setDraft('/goal release soon') })
     fireEvent.keyDown(b.textarea, { key: 'Enter' })
     await vi.waitFor(() => { expect(b.execute).toHaveBeenCalledWith('/goal 尽快发布', []) })
     await vi.waitFor(() => { expect(b.shell.snapshot.phase).toBe('plain') })
@@ -269,7 +269,7 @@ describe('scenario D: execute-kind /compact', () => {
     await vi.waitFor(() => { expect(b.shell.snapshot.phase).toBe('plain') })
     cleanup()
     const b2 = await bench()
-    act(() => { b2.shell.setDraft('/compact 现在') })
+    act(() => { b2.shell.setDraft('/compact now') })
     fireEvent.keyDown(b2.textarea, { key: 'Enter' })
     // execute with trailing → matchEnter answers undefined → default sink.
     await vi.waitFor(() => { expect(b2.sink).toHaveBeenCalledWith('/compact 现在', [], 'queue', expect.any(AbortSignal)) })
@@ -352,7 +352,7 @@ describe('scenario: reference decoration lights up when the lexicon settles', ()
 describe('scenario I: unknown /xyz + enter', () => {
   it('adjudication misses in one hop and the whole line rides the default sink', async () => {
     const b = await bench()
-    act(() => { b.shell.setDraft('/xyz 干点啥') })
+    act(() => { b.shell.setDraft('/xyz do something') })
     fireEvent.keyDown(b.textarea, { key: 'Enter' })
     await vi.waitFor(() => { expect(b.sink).toHaveBeenCalledWith('/xyz 干点啥', [], 'queue', expect.any(AbortSignal)) })
     await vi.waitFor(() => { expect(b.shell.snapshot.phase).toBe('plain') })
@@ -365,12 +365,12 @@ describe('scenario I: unknown /xyz + enter', () => {
         trigger: '/', name: 'command',
         candidates: () => Promise.resolve([]),
         onPick: () => undefined,
-        matchEnter: () => Promise.reject(new Error('目录预热失败')),
+        matchEnter: () => Promise.reject(new Error('Directory warmup failed')),
       } as never)
     })
-    act(() => { b.shell.setDraft('/plan 上线') })
+    act(() => { b.shell.setDraft('/plan deploy') })
     fireEvent.keyDown(b.textarea, { key: 'Enter' })
-    await vi.waitFor(() => { expect(b.view.getByText('目录预热失败')).toBeTruthy() })
+    await vi.waitFor(() => { expect(b.view.getByText('Directory warmup failed')).toBeTruthy() })
     // Never a silent downgrade: draft retained, sink untouched.
     expect(b.shell.snapshot.draft).toBe('/plan 上线')
     expect(b.sink).not.toHaveBeenCalled()

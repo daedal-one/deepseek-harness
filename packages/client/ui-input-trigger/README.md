@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-client-ui-input-trigger
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 When users type `/` or `@` at the caret in the Web GUI, this package opens a grouped menu for slash commands, file references, and session references. It supports keyboard and pointer selection, including drill-down choices and launchers that open a single candidate group over the current selection. A pick either invokes a command flow or inserts a reference for the consuming input surface to handle. The package affects browser presentation only; it does not assemble or send model requests.

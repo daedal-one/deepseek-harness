@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-18-forge-hub-code-workspaces.zh.md)
-
 ## Problem
 
 The DeepSeek Harness Web application owns a local Workspace registry, while Forge owns registered project identity, repository links, and application projections. Embedding the ordinary Web application in the Hub without joining those models would expose a second project list: operators could select a Forge project outside the frame and still land in a different recent Harness Workspace inside it. Letting the browser create missing paths would also turn an unauthenticated presentation parameter into project provisioning authority.

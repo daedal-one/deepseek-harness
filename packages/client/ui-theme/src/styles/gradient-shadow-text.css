@@ -1,7 +1,7 @@
 body {
   --dsw-linear-gradient-think: linear-gradient(180deg, #fff 20.19%, rgba(255, 255, 255, 0) 100%);
   --dsw-linear-think-select: linear-gradient(180deg, #f5f6f7 20.19%, rgba(245, 246, 247, 0) 100%);
-  /* 阴影 */
+  /* shadows */
   --dsw-shadow-lv1: 0 2px 4px 0 rgba(0, 0, 0, 0.05);
   --dsw-shadow-lv1-blur: 0 4px 12px 0 rgba(0, 0, 0, 0.02);
   --dsw-shadow-lv2: 0 4px 12px 0 rgba(0, 0, 0, 0.02), 0 2px 8px 0 rgba(0, 0, 0, 0.04);
@@ -39,8 +39,8 @@ body[data-ds-dark-theme] {
   --dsw-linear-think-select: linear-gradient(180deg, #232325 20.19%, rgba(35, 35, 37, 0) 100%);
 }
 
-/* ---------- 字体 ---------- */
-/* 由 @deepseek-figma-plugin/custom-variable-name 插件导出 */
+/* ---------- typography ---------- */
+/* Exported by the @deepseek-figma-plugin/custom-variable-name plugin */
 /* Markdown 阶梯整体按 0.875（正文 16 → 14）等比缩放，四舍五入到整数像素；
    重新从 Figma 导出时需要保留这一缩放。 */
 /* 正文字号调节：--dsh-content-font-size 由主题 bootstrap 与 ThemePresenter
@@ -168,7 +168,7 @@ body {
   --dsw-font-markdown-code-block-font-size: 11px;
   --dsw-font-markdown-code-block-font-style: normal;
 
-  /* 手工补充（非插件导出）：tool row 展开卡片内的小号 code 字体。 */
+  /* Hand-added (not plugin-exported): small code font for the tool-row expanded card. */
   --dsw-font-markdown-code-block-small: 11px/16px var(--ds-font-family-code);
   --dsw-font-markdown-code-block-small-font-family: var(--ds-font-family-code);
   --dsw-font-markdown-code-block-small-font-weight: 400;

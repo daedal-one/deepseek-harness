@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-tool-bash
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 `dsh-tool-bash` lets an agent run one-shot `bash` commands and receive stdout, stderr, and exit markers. Each call uses a fresh shell, so cwd, variables, and functions do not persist; `run_in_background` starts long-running work that the agent can inspect with `job_output` and stop with `job_kill`. Commands receive the managed `DSH_*` environment, and sandbox denials can be retried once with wider `sandbox_permissions`, a `justification`, and user approval. Non-zero exits are reported as results, so the agent decides how to respond; use an executor such as `dsh-bash-local` or `dsh-bash-sandbox` and load `dsh-shell-env`.

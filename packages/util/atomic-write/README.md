@@ -5,8 +5,6 @@ kind: "package-library"
 
 # @deepseek-ai/dsh-atomic-write
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Use `dsh-atomic-write` to replace a file without exposing partial content or following a symlinked temporary path. Its writer lock serializes read-modify-write cycles across processes so concurrent writers cannot overwrite one another with stale state. Each replacement uses caller-selected permission bits on a fresh inode, which safely narrows an existing file's permissions. This zero-dependency library accepts strings; it does not provide a `cordis.yml` plugin or crash durability because it does not call `fsync`.

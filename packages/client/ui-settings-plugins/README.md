@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-client-ui-settings-plugins
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Use the **Plugins** settings section to configure the plugins exposed by the current deployment and to open feature-specific plugin pages. The **Plugin configuration** tab presents one expandable card for each supported plugin, shows which values the user overrode, and lets the user reset them to deployment defaults. Cards keep edits local until save. If the configuration changed after the card loaded, the save is rejected instead of overwriting the newer values.

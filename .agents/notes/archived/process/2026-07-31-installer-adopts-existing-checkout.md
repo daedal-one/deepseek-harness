@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-10
 
-English | [中文](2026-07-31-installer-adopts-existing-checkout.zh.md)
-
 ## Problem
 
 `scripts/install.sh` produced two incompatible installation layouts. A `curl … | sh` install built the managed layout — a master clone at `~/.dsh/source/master`, a staging worktree on `dsh-staging/<timestamp>`, and the stable `current` symlink the PATH launcher resolves through. Running the same script from a checkout instead linked `dsh` straight at that checkout's `bin/dsh`, per the earlier [in-repo skip-clone decision](../../archived/process/2026-07-22-installer-in-repo-skip-clone.md).

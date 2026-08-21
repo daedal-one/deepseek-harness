@@ -1,7 +1,5 @@
 # `@deepseek-ai/dsh-forge-project-workspaces`
 
-English | [中文](README.zh.md)
-
 This Web-host plugin accepts the Forge Hub's authenticated project catalog and reconciles it into the Harness Workspace registry. Forge remains authoritative for project identity and repository ownership; the Harness stores only the derived directory registrations and sessions.
 
 ## Runtime contract

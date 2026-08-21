@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-07-26
 
-English | [中文](2026-07-21-doc-sync-through-gate-scheduler.zh.md)
-
 ## Problem
 
 `pnpm run doc-sync` was a `&&` chain of 24 `pnpm run` subcommands. Each link paid a full pnpm wrapper start (workspace resolution, script lookup, tsx boot) before its script ran; measured on a development host, the 24 script bodies together finish in about 34 seconds while the chained form takes around 3 minutes, and the wrapper stall reproduces on local disk, so every developer and CI lane pays it, not just network-filesystem checkouts. The chain also ran serially even though the member gates are read-only and independent, and it silently drifted from [scripts/run-gates.ts](../../../../scripts/run-gates.ts): `verify-cordis-api` joined the chain when the runtime API catalog landed but was never added to `docSyncLeafGates`, so CI never enforced that catalog's freshness.

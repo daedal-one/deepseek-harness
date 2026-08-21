@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-31-win32-picker-path-string-read.zh.md)
-
 ## Problem
 
 The Win32 picker needs to decode a NUL-terminated UTF-16 string allocated by `IShellItem::GetDisplayName` and release it through `CoTaskMemFree`. A fixed-length external ArrayBuffer adds a runtime requirement and manual terminator scanning without providing the allocation size.

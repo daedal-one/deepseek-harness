@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-04-web-clickable-link-styles.zh.md)
-
 ## Problem
 
 Clickable artifact links in the chat transcript wore four different costumes: markdown anchors and prose file mentions were business-primary blue with a solid hover underline, web search/fetch links matched that pair, produced-file chips were grey pills (label-secondary text on interactive-bg-hover, 96px max width), and workflow member links carried a resting solid underline. Nothing marked what a link opens (browser, host app, Finder, in-app view), and link color was coupled to `--dsw-alias-state-business-primary`, which also drives focus rings and state dots, so tuning link color risked unrelated surfaces.

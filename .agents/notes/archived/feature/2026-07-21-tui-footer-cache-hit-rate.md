@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-07-26
 
-English | [中文](2026-07-21-tui-footer-cache-hit-rate.zh.md)
-
 ## Problem
 
 The footer summed the session's token usage as `↑<input> ↓<output>`, where `↑` is the uncached input reported by the model. `TokenUsage` counts are disjoint: billed prompt tokens are `inputTokens` (uncached) plus `cacheReadTokens` and `cacheWriteTokens`. With only the uncached number visible, a user could not tell how much of each turn's prompt the provider cache served — the signal that most directly reflects whether the reused request prefix is paying off. On a long session dominated by cache reads the `↑` figure stays small and hides that the prompt is large but cheap.

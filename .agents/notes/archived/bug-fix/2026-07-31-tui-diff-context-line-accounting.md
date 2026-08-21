@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-04
 
-English | [中文](2026-07-31-tui-diff-context-line-accounting.zh.md)
-
 ## Problem
 
 Result-time filesystem diffs carry the applied change with three surrounding context lines in each `FileDiff.oldText` and `FileDiff.newText`. The TUI rendered every old-side row as removed and every new-side row as added, including the identical context present on both sides. A one-line edit therefore appeared as seven removals plus seven additions, and the footer repeated those inflated totals.

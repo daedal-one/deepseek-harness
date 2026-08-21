@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-06-python-runtime-install-retry.zh.md)
-
 ## Problem
 
 The Python runtime lane's `Install (immutable)` step runs `pnpm install` on every target, and install-time native build downloads fetch Node headers from nodejs.org. That endpoint stalls intermittently: on 2026-09-06 the hosted `node24-macos-x64` cell failed when the `fs-ext` build's node-gyp download raised `ConnectTimeoutError` against nodejs.org after a 10-second connect timeout, aborting the immutable install. The stall is external and transient; the lane previously had no recovery beyond a human job rerun.

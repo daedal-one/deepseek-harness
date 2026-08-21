@@ -5,8 +5,6 @@ kind: "package-bundle"
 
 # `@deepseek-ai/dsh-sdk-minimal`
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Use `dsh --profile sdk-minimal` when an SDK client needs a small, explicit coding-agent runtime. The profile advertises only a platform-selected persistent shell, persists sessions as uncompressed JSONL, and selects the model from the SDK initialization request. It supplies a complete Cordis tree and deliberately excludes `dsh-base`, Web, settings, managed credentials, telemetry, compaction, filesystem tools, workspace instructions, skills, jobs, and subagents. Its danger-full-access policy lets the shell modify any path available to the process, so use it only with an isolated workspace.

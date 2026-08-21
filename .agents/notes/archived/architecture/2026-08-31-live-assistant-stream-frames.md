@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-08-31-live-assistant-stream-frames.zh.md)
-
 ## Problem
 
 The v2 session log keeps one `assistant/message` or `assistant/attempt` settlement with the complete compact timed stream, so replay, cold reads, telemetry, and request reconstruction observe one durable history. A live consumer also needs prompt frame-by-frame presentation while a request runs. Treating a transient presentation update as another durable event would restore token-level event cardinality and make a process-lifetime concern survive restart.

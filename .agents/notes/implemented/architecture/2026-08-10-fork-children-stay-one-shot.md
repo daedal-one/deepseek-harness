@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-10-fork-children-stay-one-shot.zh.md)
-
 ## Problem
 
 Fork differs from spawn by seeding the child Session with the parent's completed-turn prefix. That seed costs tokens, and its intended payoff is provider-side prefix reuse: under the same provider and model, a child request whose leading bytes match the parent's does not prefill the shared span again. A child-only system-prompt section or tool schema ahead of the inherited history defeats that payoff.

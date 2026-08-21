@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-07-27-web-subagent-conversations.zh.md)
-
 ## Problem
 
 Session-backed subagents have durable identities, persisted transcripts, and a direct-child catalog, but ordinary session lineage cannot distinguish them from forks or prove their descriptor mode and continuation authority. Generic Agent-bound Host operations can otherwise resume or drive a child outside its direct-parent continuation owner.

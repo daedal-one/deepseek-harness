@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-08-24-standalone-sdk-minimal-profile.zh.md)
-
 ## Problem
 
 A minimal SDK agent needs an explicit plugin roster. Expressing it as an overlay on the full `sdk` profile leaves every `dsh-base` service mounted and makes exclusion depend on filters and disable entries spread across unrelated plugins. A later base row can change runtime behavior even when the model-facing tools remain filtered.

@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-09-01-ptc-omits-workflow-tool.zh.md)
-
 ## Problem
 
 The shipped Web `ptc` preset exposed the general `workflow` tool through its generated SDK. PTC mode already makes `run_code` the model-authored composition interface, so `workflow` added a second orchestration language with different execution semantics. The preset description also claimed complete parity with Standard mode and could not state this intentional difference.

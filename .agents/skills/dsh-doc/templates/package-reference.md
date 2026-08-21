@@ -16,8 +16,6 @@ kind: "package-reference"
 ```markdown
 # @deepseek-ai/dsh-<name>
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Three to five sentences and at most 100 `wc -w`-style words on what a user or agent can DO with the package: outcomes, when to choose it, main cost, most important boundary. Apply the [Summary voice rules](../SKILL.md#voice-rules); never describe its role, type, or internal identity.

@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-04
 
-English | [中文](2026-07-21-tui-skill-slash-command.zh.md)
-
 ## Problem
 
 The [skill system](2026-07-05-skill-system.md) shipped with model-initiated loading as its only path: the `skill({ name })` tool lets the model pull a skill body into a turn, but a person driving the TUI could not load a skill on demand. Other coding agents expose a `/skill:<name>` slash command for exactly this — the user, not the model, decides a task matches a skill and injects its instructions. The skill-system note listed direct user invocation as deferred work, and the interactive front door is where it belongs.

@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-08-13-python-minimal-model-visible-snapshot.zh.md)
-
 ## Problem
 
 The Python lane needs an exact record of what the standalone minimal profile shows the model. Functional tool assertions prove execution but do not reveal an added system section, tool description, or user-role context message, while the advanced executable snapshot replaces each request header's assembled system prompt with a token and each tool schema with its name.

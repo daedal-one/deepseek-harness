@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-07-27
 
-English | [中文](2026-07-17-run-ci-examples-from-built-lib.zh.md)
-
 ## Problem
 
 CI boots examples and Cordis-backed test projects through `node --import tsx` and the root tsconfig `paths` map. This adds TypeScript transformation cost and changes package resolution: imports resolve to workspace source instead of following package `exports` into built `lib/`.

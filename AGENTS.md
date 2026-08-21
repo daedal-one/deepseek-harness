@@ -58,7 +58,7 @@ benchmarks/  performance gates
 .agents/     Agent workflows and Agent Notes (`notes/`)
 docs/        architecture, generated catalogs, postmortems, cookbook (see docs/AGENTS.md)
 scripts/     gates and generators
-website/     VitePress projection of selected bilingual docs/ sources
+website/     VitePress projection of selected English docs/ sources
 ```
 
 Package groups: [packages/README.md](packages/README.md).
@@ -148,7 +148,7 @@ Everything compiles under `strict: true` with `noImplicitAny`; every `any` expla
 
 Comments and docs state complete contracts and context, not reasoning transcripts, control flow, tests, review history, or obvious code. Use direct terms without metaphors. Reserve `contract` for obligations and literal `boundary` for process, wire, security, transaction, or lifecycle divisions; prefer exact terms such as `response fields`, `JSON validation`, or `ESM exports` over vague `shape`. Record behavior, failure, timing, ownership, and safe use; link rationale. Use [dsh-prose-standard](.agents/skills/dsh-prose-standard/SKILL.md) for decisions. Put mechanically checkable invariants in an executed top-level gate, prove invalid acceptance paths reject, and use narrow exceptions instead of global rule suppression.
 
-Docs accompany every code change: update affected README and JSDoc contracts together. Routine bilingual work follows [docs/AGENTS.md](docs/AGENTS.md); only explicit user invocation may run `dsh-translate-docs`. Current-state prose, one physical line per paragraph, one home per fact, and word budgets live there.
+Docs accompany every code change: update affected README and JSDoc contracts together. Documentation follows [docs/AGENTS.md](docs/AGENTS.md). Current-state prose, one physical line per paragraph, one home per fact, and word budgets live there.
 
 ## Editing these instructions
 

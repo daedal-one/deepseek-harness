@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-17-openrouter-agent-model-settings.zh.md)
-
 ## Problem
 
 Conversation-model transport, provider credentials, routed model identifiers, and Agent-role defaults are separate concerns. A provider-specific adapter duplicates transport behavior already maintained by pi-ai, while model choices embedded in composition files give the graphical client no complete directory to edit. OpenRouter routing suffixes add another distinction: `:nitro` changes provider ordering, but reasoning is an independent request option and must remain explicit through configuration validation, Agent construction, durable request headers, and the OpenRouter wire payload.

@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-25-electron-desktop-packaging-and-updates.zh.md)
-
 ## Problem
 
 DeepSeek Harness needs an Electron desktop application that reuses the Web UI, works without system Node.js or pnpm, installs dsh and desktop plugins through an application-bundled pnpm, and updates the complete desktop release through one user-facing flow.

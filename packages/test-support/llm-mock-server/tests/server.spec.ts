@@ -193,8 +193,8 @@ describe('mock LLM server wire behaviors', () => {
 
   it('preserves UTF-8 code points split across request chunks', async () => {
     const server = await start(['success'])
-    const encoded = Buffer.from(JSON.stringify({ messages: [{ role: 'user', content: '你好' }] }))
-    const characterOffset = encoded.indexOf(Buffer.from('你'))
+    const encoded = Buffer.from(JSON.stringify({ messages: [{ role: 'user', content: 'café' }] }))
+    const characterOffset = encoded.indexOf(Buffer.from('é'))
     expect(characterOffset).toBeGreaterThanOrEqual(0)
 
     await rawChat(server, [
@@ -202,7 +202,7 @@ describe('mock LLM server wire behaviors', () => {
       encoded.subarray(characterOffset + 1),
     ])
 
-    expect(server.requests[0]?.body).toEqual({ messages: [{ role: 'user', content: '你好' }] })
+    expect(server.requests[0]?.body).toEqual({ messages: [{ role: 'user', content: 'café' }] })
   })
 
   it('formats an IPv6 listener as a valid base URL', async () => {

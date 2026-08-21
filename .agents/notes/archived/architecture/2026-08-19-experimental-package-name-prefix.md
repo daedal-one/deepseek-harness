@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-08-19-experimental-package-name-prefix.zh.md)
-
 ## Problem
 
 Directory placement, private manifests, and release-family filtering keep experimental packages out of releases, but an npm specifier or Cordis configuration row does not expose that status. A stable-looking package name can be copied into another composition without the reader seeing that its complete public contract remains experimental.

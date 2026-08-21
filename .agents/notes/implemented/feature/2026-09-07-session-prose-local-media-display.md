@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-07-session-prose-local-media-display.zh.md)
-
 ## Problem
 
 Assistant prose can reference an image by its filesystem path, but browsers cannot read Host files. A renderer limited to absolute HTTP(S) destinations leaves those references as inert alt text. Issue #3662 records this display gap.

@@ -5,8 +5,6 @@ kind: "package-library"
 
 # @deepseek-ai/dsh-session-format-v2-to-v3
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Restore supported released V2 Sessions as V3 without changing historical request meaning. This page is the single specification for this adjacent edge: what it transforms, preserves, and refuses, followed separately by native V3 admission. The library promotes system prompts into messages, remaps local event references, translates PTC and preset names, and canonicalizes envelopes. Persistence consumes it through the static catalog; the library does not read or publish files.

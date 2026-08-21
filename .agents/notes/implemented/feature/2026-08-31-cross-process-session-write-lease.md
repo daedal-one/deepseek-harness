@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-31-cross-process-session-write-lease.zh.md)
-
 ## Problem
 
 The JSONL backend's write-handle claim excluded a second writer only inside one backend instance. Two processes — two CLI sessions, or a host beside an SDK runtime — could write-open the same session and interleave appends into one log file, tearing compressed frames and seq contiguity. The seam needed durable cross-process write ownership whose arbiter lives outside every writer process, because no writer outlives every failure mode.

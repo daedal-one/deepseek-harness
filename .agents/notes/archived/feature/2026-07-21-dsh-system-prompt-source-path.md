@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-07-26
 
-English | [中文](2026-07-21-dsh-system-prompt-source-path.zh.md)
-
 ## Problem
 
 The `dsh` CLI is the self-referential surface: its `cordis` toolset lets the agent inspect and modify the very harness runtime it runs in. But the agent had no way to learn where that source lives on disk. `dsh` is normally symlinked onto PATH and launched from an arbitrary working directory — the project under work — so neither the cwd nor `argv` reliably points at the harness checkout. Without the path, "read your own source" is guesswork.

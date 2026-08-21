@@ -321,7 +321,7 @@ describe('chat row terminal body', () => {
     toggleRow(view)
     expect(view.getByText('line-5')).toBeTruthy()
     expect(view.getByText('line-19')).toBeTruthy()
-    expect(view.queryByText(/其余/)).toBeNull()
+    expect(view.queryByText(/more lines/)).toBeNull()
   })
 
   it('renders a multi-line command as one prompt row per line', () => {
@@ -357,7 +357,7 @@ describe('chat row terminal body', () => {
     const view = render(<GenericToolCard {...ownerProps(running())} />)
     toggleRow(view)
     expect(view.getByText('ls -la')).toBeTruthy()
-    expect(view.queryByText('复制')).toBeNull()
+    expect(view.queryByText('Copy')).toBeNull()
     // The card states its own run state: a running command reads as running
     // even though it has no output yet to distinguish it from an empty settle.
     expect(runStateOf(view.container)).toBe('ongoing')
@@ -424,7 +424,7 @@ describe('BashRow terminal card', () => {
     expect(view.queryByText(/a\.ts/)).toBeNull()
     fireEvent.click(view.container.querySelector('[data-expandable]')!)
     expect(view.getByText('a.ts  b.ts', RAW)).toBeTruthy()
-    expect(view.getByText('复制')).toBeTruthy()
+    expect(view.getByText('Copy')).toBeTruthy()
     // Collapse back in place: the summary row returns, the card unmounts.
     fireEvent.click(view.container.querySelector('[data-expandable]')!)
     expect(view.queryByText(/a\.ts/)).toBeNull()
@@ -474,7 +474,7 @@ describe('BashRow terminal card', () => {
 
     expect(row.getAttribute('aria-expanded')).toBe('true')
     expect(view.getByText('输入')).toBeTruthy()
-    expect(view.getByText('输出')).toBeTruthy()
+    expect(view.getByText('Output')).toBeTruthy()
     expect(view.getByText(/"command": "ls -la"/)).toBeTruthy()
     expect(view.container.querySelector('[class*="_ioText_"][data-error]')).toBeNull()
     expect(view.container.querySelectorAll('[class*="_ioText_"]')[1]?.textContent)
@@ -517,7 +517,7 @@ describe('BashRow terminal card', () => {
 
     expect(row.getAttribute('aria-expanded')).toBe('true')
     expect(view.getByText('输入')).toBeTruthy()
-    expect(view.getByText('输出')).toBeTruthy()
+    expect(view.getByText('Output')).toBeTruthy()
     expect(view.getByText(/"command": "ls -la"/)).toBeTruthy()
     expect(view.container.querySelector('[data-error]')?.textContent).toBe('Error: command aborted')
   })

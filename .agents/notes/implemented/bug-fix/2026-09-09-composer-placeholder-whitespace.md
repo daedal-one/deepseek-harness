@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-09-composer-placeholder-whitespace.zh.md)
-
 ## Problem
 
 Sharing the whitespace-trimmed submission check with placeholder rendering leaves guidance drawn over a draft containing spaces.

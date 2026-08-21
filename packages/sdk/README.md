@@ -5,8 +5,6 @@ kind: "package-group"
 
 # sdk/ — drive a Harness runtime from another process
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 The SDK family lets another process drive a complete DeepSeek Harness runtime over newline-delimited JSON-RPC. Its protocol package defines the public messages, the TypeScript client launches `dsh` with a named profile and ordered patches, and the server accepts SDK requests over stdio. Clients can open sessions, send prompts, and observe session events, agent status changes, and subagent completions. The TypeScript client and [Python SDK](../../python/README.md) use the same protocol, and these packages do not create developer projects or define another application.

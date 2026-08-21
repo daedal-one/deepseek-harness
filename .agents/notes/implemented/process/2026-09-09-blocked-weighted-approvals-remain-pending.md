@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-09-blocked-weighted-approvals-remain-pending.zh.md)
-
 ## Problem
 
 The weighted approval commit status must distinguish an unmet merge condition from a failed policy evaluation. An effective `CHANGES_REQUESTED` review from a write-capable reviewer prevents a pull request from satisfying the approval policy, but it is a reversible review state rather than an evaluation failure.

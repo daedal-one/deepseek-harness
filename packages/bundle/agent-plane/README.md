@@ -1,7 +1,5 @@
 # @deepseek-ai/dsh-agent-plane
 
-English | [中文](README.zh.md)
-
 Shared profile layer for every preset-aware surface. It leaves process-wide services in `dsh-base`, disables the base model-facing Consumers, and mounts one `dsh-agent-presets` roster. Each runner resolves the selected preset before Session creation and mounts it inside the new Agent scope.
 
 Place it after `@deepseek-ai/dsh-base` and before a surface bundle:

@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-09-04-right-sidebar-docking-infrastructure.zh.md)
-
 ## Problem
 
 The Web client's right column was a single-purpose Detail panel: `ui-chat` occupied the `details` slot with `DetailsPanel`, which showed one selected Tool call's raw payload through a `conversation.details.tool` child seat. Nothing else could live there. A plugin that wanted a persistent side surface — a file preview, a task list, a diff — had no seat to register into, no way to open its content from the conversation, and no shared layout to share the column with.

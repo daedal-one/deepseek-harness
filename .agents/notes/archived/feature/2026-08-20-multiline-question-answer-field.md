@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-08-20-multiline-question-answer-field.zh.md)
-
 ## Problem
 
 `ask_user_question` offers a free-text answer beside the model's own options. On a question that carried options, that answer was a single-line `<input>`: a long sentence scrolled sideways inside one 24px line, Shift+Enter did nothing, and an answer with structure — two requirements, a short list, a paragraph — could not be typed at all. The optionless question already used a textarea, but a fixed 64–140px box that neither followed the draft nor opened wider.

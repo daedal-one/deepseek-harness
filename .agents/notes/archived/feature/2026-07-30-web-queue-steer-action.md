@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-07-30-web-queue-steer-action.zh.md)
-
 ## Problem
 
 The Web composer originally queued every Enter submission while an agent ran. QueueDock already gives each pending message an addressable row, and the durable transcript already renders consumed steer events as user-style bubbles, but Web had neither an action connecting those two surfaces nor a direct composer gesture for choosing current-turn steering.
@@ -15,7 +13,7 @@ Implementing the row action as a client-side delete followed by `session.prompt(
 
 ### Product contract
 
-Each non-editing ordinary-session QueueDock row exposes the upward-arrow action as “插话发送”. The action is enabled only while the session reports a running agent; mixed-content messages remain eligible because steering forwards the complete immutable `UserMessage` rather than the row's text projection. An addressed subagent keeps its Queue projection read-only because its continuation transport does not expose queue mutation.
+Each non-editing ordinary-session QueueDock row exposes the upward-arrow action as "Steer". The action is enabled only while the session reports a running agent; mixed-content messages remain eligible because steering forwards the complete immutable `UserMessage` rather than the row's text projection. An addressed subagent keeps its Queue projection read-only because its continuation transport does not expose queue mutation.
 
 Activating the action requests strict current-turn steering for that exact `InboxItemId`. Success removes the Queue row through the authoritative Host snapshot and immediately projects the same pending steering after the `Deep diving...` running-status row; that bubble offers Copy but no Fork because the message has no durable event sequence yet. Once AgentLoop drains it, the existing durable `user/message` event takes over the same user-style bubble and restores its clock, Copy, and Fork without a separate durable presentation path.
 

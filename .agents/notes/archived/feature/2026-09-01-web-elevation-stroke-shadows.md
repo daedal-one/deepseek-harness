@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-09-01-web-elevation-stroke-shadows.zh.md)
-
 ## Problem
 
 Elevated web-client surfaces — menus, popovers, modals, panels, floating buttons, the composer — each paired a real `border: 1px solid <neutral token>` with a `--dsw-shadow-lv2`/`lv3` shadow. The border consumes layout (1px per side, and it is the UA-default replacement on `<button>` elements), the light theme drew most floats with no stroke at all (`--dsw-alias-border-inverted` is transparent in light) while `lv3` faked one with a blurred 1px ring, and the composer wore a broad soft `lv2` patch that read as a smudge rather than a lifted surface. Current desktop chat UIs instead draw elevation as one `box-shadow` list: a 0.5px hairline stroke plus two faint soft layers, with `border: 0` on the surface.

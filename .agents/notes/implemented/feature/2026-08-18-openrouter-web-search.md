@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-18-openrouter-web-search.zh.md)
-
 ## Problem
 
 The shipped `web_search` path depended on DeepSeek's Anthropic-compatible Messages endpoint and native search tool. That made one vendor's credential, endpoint, model vocabulary, request fields, response blocks, and availability part of the default deployment even though `ctx.web` and the model-facing tool were already provider-neutral. It also required a second account beside the OpenRouter route used for conversation models.

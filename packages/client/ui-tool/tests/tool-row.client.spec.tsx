@@ -327,7 +327,7 @@ describe('ToolRow', () => {
 
   it('a file path without onOpenFile renders a plain summary on an expandable row', () => {
     const view = render(
-      <ToolRow {...rowProps} variant="write" title="Write" summary="作文.md" filePath="作文.md" />,
+      <ToolRow {...rowProps} variant="write" title="Write" summary="essay.md" filePath="essay.md" />,
     )
     expect(view.container.querySelector('button')).toBeNull()
     const row = view.getByRole('button')

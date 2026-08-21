@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-host-open-in-app
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 Use `dsh-host-open-in-app` with its [browser companion](../../client/ui-open-in-app/README.md) to let users open a workspace directory in an installed editor, Git GUI, terminal, or file manager. It offers a fixed application catalog and shows only entries that the host can verify; newly installed applications appear after restart, while missing launchers are removed when detected. Requests require the deployment's browser authentication and host-origin trust checks. Detection and launch commands use configurable deadlines and do not pass inherited credentials to launched applications.

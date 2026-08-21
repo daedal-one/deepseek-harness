@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-hooks-claude-code
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 `dsh-hooks-claude-code` runs command hooks from your existing Claude Code `hooks.json` or settings file during agent runs, without requiring a rewrite. Supported hooks can run when sessions, prompts, tools, stops, or subagents reach matching moments. They can block prompts or tool calls with model-visible reasons, add conversation context, or force another model turn. Choose this package to reuse Claude Code command hooks in the harness; use a native plugin for behavior that has no Claude Code equivalent.

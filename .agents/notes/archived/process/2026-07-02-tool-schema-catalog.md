@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-09-04
 
-English | [中文](2026-07-02-tool-schema-catalog.zh.md)
-
 ## Problem
 
 The repository had no single reference for the names, descriptions, and JSON Schemas actually exposed to the model. Source declarations are scattered and runtime-composed, while the existing Cordis reference and subsystem pages cover wiring and vocabulary rather than tools.

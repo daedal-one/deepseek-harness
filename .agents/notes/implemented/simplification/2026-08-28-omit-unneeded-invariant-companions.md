@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-28-omit-unneeded-invariant-companions.zh.md)
-
 ## Problem
 
 The package invariant rule required every workspace package to publish `./invariant`, including packages with no runtime relationship to check. The current workspace had 209 explained-empty companions, each carrying a source file, public export, publication entry, invariant-only dependencies or TypeScript references, build wiring, and registration tests. That machinery expressed a negative conclusion without adding a runtime assertion.

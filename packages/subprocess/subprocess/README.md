@@ -5,8 +5,6 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-subprocess
 
-English | [中文](README.zh.md)
-
 ## Summary
 
 `ctx.subprocess` resolves executables, starts explicitly specified child processes or real terminal sessions, streams or collects bounded output, and terminates the full managed process range. Configure one subprocess implementation for each composition, choosing local or remote execution according to where commands must run. Each request sets argv, working directory, stdio, environment overrides, termination grace, and cancellation, with no shell interpretation or hidden execution defaults. Child environments remove ambient credentials and `DSH_*` values before applying explicit overrides; callers own deadlines, teardown policy, and model-facing rendering, while collected output remains readable after exit.
