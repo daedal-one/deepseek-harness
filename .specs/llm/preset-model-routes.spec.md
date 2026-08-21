@@ -13,6 +13,7 @@ refines:
   - REQ:llm/provider-management#c-runtime
 aspects: [target-directory, fixed-provider-selection, graphical-catalogs, preset-lifecycle, codex-runtime]
 categorized_under: []
+implemented: c9f64e882389ca777e3aeb13db546f6bdfb371e2
 ---
 
 # Preset model routes
