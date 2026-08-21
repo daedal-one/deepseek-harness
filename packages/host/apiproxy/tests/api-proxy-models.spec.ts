@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import type {} from '@deepseek-ai/dsh-agent-presets/types'
 import LlmRuntime, { LlmAdapter, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type {
   GenerateOptions, LlmCallConfig, LlmModelInfo, LlmModelReasoningInfo, LlmProviderInfo,
@@ -76,7 +77,7 @@ async function harness(logged?: {
   provider: string
   model: string
   reasoningEffort?: ReasoningEffortId
-}): Promise<{
+}, agentPreset?: string): Promise<{
   ctx: Context
   agent: Agent
   sessionId: SessionId
@@ -100,7 +101,7 @@ async function harness(logged?: {
     { provider: 'duplicate', id: 'same', name: 'Same' },
     { provider: 'duplicate', id: 'same', name: 'Same Again' },
   ]))
-  const session = ctx.sessions.create()
+  const session = ctx.sessions.create(undefined, agentPreset === undefined ? undefined : { meta: { agentPreset } })
   if (logged !== undefined) {
     session.append('request/header', { header: { config: logged }, reason: 'initial' })
   }
@@ -396,6 +397,26 @@ describe('Web session model selection', () => {
     await ctx.fiber.dispose()
   })
 
+  it('resolves an unlogged default from the session effective preset', async () => {
+    const { ctx, sessionId } = await harness(undefined, 'daedal')
+    const requested: (string | undefined)[] = []
+    const api = createApiProxy(ctx, {
+      defaultModelSelection: (agentPreset) => {
+        requested.push(agentPreset)
+        return agentPreset === 'daedal-openai'
+          ? { provider: 'deepseek-official', model: 'openai-route' }
+          : { provider: 'deepseek-official', model: 'openrouter-route' }
+      },
+      cwd: '/tmp',
+    })
+
+    ctx.sessions.get(sessionId)?.append('agent-preset/selected', { agentPreset: 'daedal-openai' })
+    expect(expectValue(await api.sessions.models(request({ sessionId }))).current)
+      .toEqual({ provider: 'deepseek-official', model: 'openai-route' })
+    expect(requested).toEqual(['daedal-openai'])
+    await ctx.fiber.dispose()
+  })
+
   it('keeps a session on its logged selection when the Agent default differs', async () => {
     const { ctx, sessionId } = await harness({
       provider: 'deepseek-official',
@@ -419,8 +440,8 @@ describe('Web session model selection', () => {
     let reject = false
     const api = createApiProxy(ctx, {
       defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
-      saveDefaultModelSelection: (selection) => {
-        saved.push(selection)
+      saveDefaultModelSelection: (selection, agentPreset) => {
+        saved.push({ selection, agentPreset })
         return reject ? Promise.reject(new Error('read-only document')) : Promise.resolve()
       },
       cwd: '/tmp',
@@ -430,7 +451,10 @@ describe('Web session model selection', () => {
       sessionId, provider: 'deepseek-official', model: 'deepseek-reasoner', reasoningEffort: 'max',
     })))
     expect(saved).toEqual([
-      { provider: 'deepseek-official', model: 'deepseek-reasoner', reasoningEffort: 'max' },
+      {
+        selection: { provider: 'deepseek-official', model: 'deepseek-reasoner', reasoningEffort: 'max' },
+        agentPreset: undefined,
+      },
     ])
 
     // A refused selection never becomes anyone's default.

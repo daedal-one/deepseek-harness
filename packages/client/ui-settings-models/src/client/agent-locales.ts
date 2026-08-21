@@ -4,7 +4,7 @@
 export const agentEn = {
   nav: 'Agents',
   title: 'Agent models',
-  intro: 'Choose the OpenRouter model and reasoning level used when each agent starts its next conversation.',
+  intro: 'Choose the model and reasoning level used when each agent starts its next conversation.',
   provider: 'Provider',
   model: 'Model',
   reasoning: 'Reasoning',
@@ -31,7 +31,7 @@ export type AgentModelsKey = keyof typeof agentEn
 export const agentZh: { [Key in AgentModelsKey]: string } = {
   nav: 'Agents',
   title: 'Agent models',
-  intro: 'Choose the OpenRouter model and reasoning level used when each agent starts its next conversation.',
+  intro: 'Choose the model and reasoning level used when each agent starts its next conversation.',
   provider: 'Provider',
   model: 'Model',
   reasoning: 'Reasoning',

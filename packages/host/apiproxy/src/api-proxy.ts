@@ -640,7 +640,7 @@ export interface ApiProxyDefaults {
    * every access rather than captured, so a default saved during this process
    * reaches the sessions that have not run a turn yet.
    */
-  defaultModelSelection: () => ModelSelection
+  defaultModelSelection: (agentPreset?: string) => ModelSelection
   /**
    * Record a selection as the new default. Either absent, or a closure that
    * may itself decline — the gateway plugin always passes one, and it no-ops
@@ -649,7 +649,7 @@ export interface ApiProxyDefaults {
    * reported and swallowed: the switch already applies to its own session,
    * and undoing it because storage failed would be the worse outcome.
    */
-  saveDefaultModelSelection?: (selection: ModelSelection) => Promise<void>
+  saveDefaultModelSelection?: (selection: ModelSelection, agentPreset?: string) => Promise<void>
   /** Default project directory for new sessions whose create request carries no cwd. */
   cwd: string
   /** Native open-with-default-application; injectable for carrier tests. */
@@ -1110,8 +1110,8 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
   const coldBlankProbeMaxBytes = defaults.coldBlankProbeMaxBytes
     ?? DEFAULT_COLD_BLANK_PROBE_MAX_BYTES
   /** The seed model each create/resume declares; re-read so it never goes stale. */
-  const agentOptions = (): AgentOptions => {
-    const { provider, model } = defaults.defaultModelSelection()
+  const agentOptions = (agentPreset?: string): AgentOptions => {
+    const { provider, model } = defaults.defaultModelSelection(agentPreset)
     return { provider, model }
   }
   type WebModelSelectionRef = ModelSelectionRef & { current: ModelSelection }
@@ -1162,7 +1162,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         // Incrementally folded by the session, so a per-step read costs
         // O(new events) rather than a rescan.
         const logged = agent.session.requestHeader()?.config
-        if (logged === undefined) return defaults.defaultModelSelection()
+        if (logged === undefined) return defaults.defaultModelSelection(resolveSessionPreset(agent.session))
         return {
           provider: logged.provider,
           model: logged.model,
@@ -1641,7 +1641,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           // longer make.
           return (await ctx.agents.resume({
             resumeSessionId: sessionId,
-            agentOptions: agentOptions(),
+            agentOptions: agentOptions(storedPreset),
             setup: (await composeAgent(storedPreset)).setup,
           })).agent
         }
@@ -1654,7 +1654,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         const composition = await composeAgent(presetId)
         return (await ctx.agents.create({
           sessionId,
-          agentOptions: agentOptions(),
+          agentOptions: agentOptions(composition.agentPreset),
           meta: {
             cwd,
             ...composition.agentPreset === undefined ? {} : { agentPreset: composition.agentPreset },
@@ -2298,7 +2298,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             }
             selectionFor(found.agent).current = selected
             try {
-              await defaults.saveDefaultModelSelection?.(selected)
+              await defaults.saveDefaultModelSelection?.(selected, resolveSessionPreset(found.agent.session))
             } catch (error: unknown) {
               ctx.logger.warn(
                 `api-proxy: the model switch applies to this session but was not saved as the default: ${String(error)}`,
@@ -2416,7 +2416,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
                 ? {}
                 : { agentPreset: forkComposition.agentPreset },
             },
-            agentOptions: agentOptions(),
+            agentOptions: agentOptions(forkComposition.agentPreset),
             setup: forkComposition.setup,
           })
         } catch (error: unknown) {
@@ -2908,7 +2908,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
     host: {
       describe(request) {
         // TODO: version should read apps/cli's package.json; placeholder for now.
-        const selection = defaults.defaultModelSelection()
+        const selection = defaults.defaultModelSelection(ctx.get('agentPresets')?.defaultId)
         return Promise.resolve(ok(request, {
           version: '0.0.1',
           // Same source as session.create's fallback: the UI's default project

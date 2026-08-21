@@ -35,27 +35,39 @@ class MemorySettings extends SettingsProvider {
   }
 }
 
-const MODELS: readonly LlmModelInfo[] = [
+const OPENROUTER_MODELS: readonly LlmModelInfo[] = [
   { provider: 'openrouter', id: 'fast', name: 'Fast' },
   { provider: 'openrouter', id: 'think', name: 'Think' },
 ]
 
+const CODEX_MODELS: readonly LlmModelInfo[] = [
+  { provider: 'openai-codex', id: 'gpt-5.6-terra', name: 'GPT-5.6 Terra' },
+  { provider: 'openai-codex', id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol' },
+]
+
 /** Catalog adapter that validates exact model ids and one reasoning level. */
 class CatalogAdapter extends LlmAdapter {
+  constructor(private readonly models: readonly LlmModelInfo[]) {
+    super()
+  }
+
   override listModels(): Promise<readonly LlmModelInfo[]> {
-    return Promise.resolve(MODELS)
+    return Promise.resolve(this.models)
   }
 
   override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
-    if (!MODELS.some(entry => entry.id === model)) throw new Error(`unknown model ${model}`)
+    if (!this.models.some(entry => entry.id === model)) throw new Error(`unknown model ${model}`)
     return Promise.resolve({
       provider,
       id: model,
-      name: model === 'fast' ? 'Fast' : 'Think',
-      ...model === 'think'
+      name: this.models.find(entry => entry.id === model)?.name ?? model,
+      ...model === 'think' || model.startsWith('gpt-5.6-')
         ? {
           reasoning: {
-            efforts: [{ id: ReasoningEffortId('high'), name: 'High' }],
+            efforts: [
+              { id: ReasoningEffortId('high'), name: 'High' },
+              { id: ReasoningEffortId('xhigh'), name: 'Extra high' },
+            ],
             defaultEffort: ReasoningEffortId('high'),
           },
         }
@@ -68,20 +80,21 @@ class CatalogAdapter extends LlmAdapter {
   }
 }
 
-async function boot(): Promise<{
+async function boot(config: ConstructorParameters<typeof AgentModelConfig>[1] = {
+  provider: 'openrouter',
+  model: 'fast',
+}): Promise<{
   ctx: Context
   settingsFiber: Context['fiber']
   models: AgentModelConfig
 }> {
   const ctx = new Context()
   await ctx.plugin(LlmRuntime)
-  ctx.llm.registerAdapter(['openrouter'], new CatalogAdapter())
+  ctx.llm.registerAdapter(['openrouter'], new CatalogAdapter(OPENROUTER_MODELS))
+  ctx.llm.registerAdapter(['openai-codex'], new CatalogAdapter(CODEX_MODELS))
   const settingsFiber = ctx.plugin(MemorySettings)
   await settingsFiber.await()
-  await ctx.plugin(AgentModelConfig, {
-    provider: 'openrouter',
-    model: 'fast',
-  })
+  await ctx.plugin(AgentModelConfig, config)
   return { ctx, settingsFiber, models: ctx.agentModels }
 }
 
@@ -133,6 +146,49 @@ describe('AgentModelConfig', () => {
     await bench.ctx.fiber.dispose()
   })
 
+  it('isolates preset main routes and named targets by fixed provider', async () => {
+    const bench = await boot({
+      provider: 'openrouter',
+      model: 'fast',
+      presets: {
+        'daedal-openai': {
+          provider: 'openai-codex',
+          model: 'gpt-5.6-terra',
+          reasoningEffort: 'xhigh',
+          label: 'Daedal OpenAI main agent',
+        },
+      },
+    })
+    const reviewer = agentModelTargetId('daedal-openai-reviewer')
+    bench.models.registerTarget({
+      id: reviewer,
+      label: 'Daedal OpenAI reviewer',
+      defaultSelection: {
+        provider: 'openai-codex', model: 'gpt-5.6-sol', reasoningEffort: ReasoningEffortId('xhigh'),
+      },
+    })
+
+    expect(bench.models.mainSelection('daedal')).toEqual({ provider: 'openrouter', model: 'fast' })
+    expect(bench.models.mainSelection('daedal-openai')).toEqual({
+      provider: 'openai-codex', model: 'gpt-5.6-terra', reasoningEffort: 'xhigh',
+    })
+    await bench.models.saveSelection({
+      provider: 'openai-codex', model: 'gpt-5.6-sol', reasoningEffort: ReasoningEffortId('high'),
+    }, 'daedal-openai')
+    expect(bench.models.mainSelection('daedal-openai')).toEqual({
+      provider: 'openai-codex', model: 'gpt-5.6-sol', reasoningEffort: 'high',
+    })
+    expect(bench.models.mainSelection()).toEqual({ provider: 'openrouter', model: 'fast' })
+
+    const listed = await bench.models.list()
+    expect(listed.catalogs.map(catalog => catalog.provider)).toEqual(['openai-codex', 'openrouter'])
+    expect(listed.targets.find(target => target.id === reviewer)).toMatchObject({
+      provider: 'openai-codex',
+      selection: { model: 'gpt-5.6-sol', reasoningEffort: 'xhigh' },
+    })
+    await bench.ctx.fiber.dispose()
+  })
+
   it('contains directory observer failures after each committed mutation', async () => {
     const bench = await boot()
     const warn = vi.spyOn(bench.ctx.logger, 'warn').mockImplementation(() => undefined)
@@ -179,10 +235,10 @@ describe('AgentModelConfig', () => {
     await bench.ctx.fiber.dispose()
   })
 
-  it('rejects another provider, unknown models, and unsupported effort', async () => {
+  it('rejects replacing a target provider, unknown models, and unsupported effort', async () => {
     const bench = await boot()
     await expect(bench.models.saveSelection({ provider: 'other', model: 'fast' }))
-      .rejects.toThrow(/cannot replace deployment provider/)
+      .rejects.toThrow(/cannot replace target provider/)
     await expect(bench.models.save(agentModelTargetId('main'), 'missing', undefined, 0))
       .rejects.toThrow(/unknown model/)
     await expect(bench.models.save(agentModelTargetId('main'), 'fast', 'high', 0))

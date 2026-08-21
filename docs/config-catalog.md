@@ -93,18 +93,32 @@ Source: [`packages/examples/acp-demo/src/index.ts:39`](../packages/examples/acp-
 Requires: `llm`
 
 ```ts config-catalog
-/** Composition entry for the main Agent and fixed provider route. */
+/** Composition entry for fallback and preset-specific main-Agent routes. */
 export interface Config {
-  /** Provider route shared by every registered Agent target. */
+  /** Fallback provider route for presets without an explicit assignment. */
   provider: string
-  /** Main Agent model id. */
+  /** Fallback main-Agent model id. */
   model: string
-  /** Main Agent reasoning effort, or provider/default behavior when absent. */
+  /** Fallback main-Agent reasoning effort, or provider/default behavior when absent. */
   reasoningEffort?: string
+  /** Preset ids mapped to deployment-owned main-Agent routes. */
+  presets?: Record<string, AgentModelPresetRoute>
+}
+
+/** One deployment-owned main-Agent route assigned to a preset. */
+export interface AgentModelPresetRoute {
+  /** Provider route fixed for this preset's main Agent. */
+  provider: string
+  /** Main-Agent model id. */
+  model: string
+  /** Main-Agent reasoning effort, or provider/default behavior when absent. */
+  reasoningEffort?: string
+  /** Graphical label; defaults to the preset id followed by `main agent`. */
+  label?: string
 }
 ```
 
-Source: [`packages/core/agent-default-model/src/index.ts:74`](../packages/core/agent-default-model/src/index.ts)
+Source: [`packages/core/agent-default-model/src/index.ts:97`](../packages/core/agent-default-model/src/index.ts)
 
 <a id="deepseek-aidsh-agent-instructions"></a>
 
@@ -2963,6 +2977,8 @@ export interface Config {
   agentOptions?: AgentOptions
   /** Human-facing role name used by graphical Agent model settings. */
   agentLabel?: string
+  /** Stable graphical model-settings id; defaults to the tool name in kebab-case. */
+  agentModelId?: string
   /**
    * Per-child persona that shadows `deployment:persona`. Requires the
    * provider's `persona` capability; omission preserves the deployment persona.

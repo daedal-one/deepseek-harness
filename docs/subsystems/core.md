@@ -359,7 +359,7 @@ Source: [`packages/core/agent-loop/src/index.ts:296`](../../packages/core/agent-
 
 ### `ctx.agentModels` — `AgentModelConfig`
 
-Owns persistent Agent model selections and their lifecycle-safe directory. The provider route is fixed by composition; settings select only a model and optional reasoning effort for each registered Agent target.
+Owns persistent Agent model selections and their lifecycle-safe directory. Each target's provider route is fixed by composition; settings select only a model and optional reasoning effort under that route.
 
 ```ts cordis-catalog
 /**
@@ -379,6 +379,13 @@ registerTarget(target: AgentModelTarget): () => void
 currentSelection(id: AgentModelTargetId = MAIN_AGENT_MODEL_TARGET): ModelSelection
 
 /**
+ * Read the current main-Agent route assigned to a preset.
+ * @param presetId - effective preset id, or undefined without a roster.
+ * @returns assigned selection, falling back to the deployment-wide main route.
+ */
+mainSelection(presetId?: string): ModelSelection
+
+/**
  * Apply one target's live selection over child options without disturbing
  * independent limits such as `maxTokens`.
  * @param id - registered named Agent target.
@@ -388,14 +395,15 @@ currentSelection(id: AgentModelTargetId = MAIN_AGENT_MODEL_TARGET): ModelSelecti
 optionsFor(id: AgentModelTargetId, fallback: AgentOptions = {}): AgentOptions
 
 /**
- * Save the main Agent selection after a session-local model switch.
+ * Save a preset's main-Agent selection after a session-local model switch.
  * @param next - resolved selection accepted by the session entry point.
+ * @param presetId - effective preset id, or undefined without a roster.
  * @returns fulfillment after the optional settings write settles.
  */
-async saveSelection(next: ModelSelection): Promise<void>
+async saveSelection(next: ModelSelection, presetId?: string): Promise<void>
 
 /**
- * Read the live target directory and fixed-provider model catalog.
+ * Read the live target directory and its distinct provider catalogs.
  * @returns point-in-time graphical settings snapshot.
  */
 @Remote('list') async list(): Promise<AgentModelsSnapshot>
@@ -419,7 +427,7 @@ async saveSelection(next: ModelSelection): Promise<void>
 @Remote('reset') async reset(id: AgentModelTargetId, expectedRevision: number): Promise<AgentModelsSnapshot>
 ```
 
-Source: [`packages/core/agent-default-model/src/index.ts:175`](../../packages/core/agent-default-model/src/index.ts)
+Source: [`packages/core/agent-default-model/src/index.ts:200`](../../packages/core/agent-default-model/src/index.ts)
 
 <a id="ctxagentpresets--agentpresets"></a>
 

@@ -6,6 +6,36 @@
   config:
     default: daedal
 
+# The existing Daedal preset keeps the fallback OpenRouter route. Daedal
+# OpenAI receives an independent main-Agent settings target whose provider is
+# fixed to the account-authenticated native Codex route.
+- id: agent-default-model
+  config:
+    provider: openrouter
+    model: deepseek/deepseek-v4-flash-0731:nitro
+    reasoningEffort: xhigh
+    presets:
+      daedal-openai:
+        provider: openai-codex
+        model: gpt-5.6-terra
+        reasoningEffort: xhigh
+        label: Daedal OpenAI main agent
+
+# Preserve the shipped OpenRouter customization while activating pi-ai's
+# installed OpenAI Codex catalog and device-account authenticator.
+- id: llm-pi-ai
+  config:
+    providers:
+      openrouter:
+        displayName: OpenRouter
+        apiKeyEnv: OPENROUTER_API_KEY
+        modelAliases:
+          deepseek/deepseek-v4-flash-0731:nitro:
+            catalogModel: deepseek/deepseek-v4-flash
+            name: DeepSeek V4 Flash 0731 (Nitro)
+      openai-codex:
+        displayName: OpenAI Codex
+
 # Declaration order is the browser and command-picker order. The middle mode
 # pairs an unconfined file sandbox with an available human approval channel;
 # the enforcer below activates independent policy review only for that pair.
