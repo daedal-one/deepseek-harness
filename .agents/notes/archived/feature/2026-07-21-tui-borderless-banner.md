@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-07-26
 
-English | [中文](2026-07-21-tui-borderless-banner.zh.md)
-
 ## Problem
 
 An intermediate no-banner design removed the boxed startup banner: it deleted `HeaderComponent` and its sweep, moved the model into the footer, dropped the session id, and rendered `welcome` as the transcript's first line. The user's verdict reversed that: bring the banner back — "just remove the border". The four-row box frame was the objectionable chrome, not the identifying facts it carried (model, session id) nor the sweep-in motion.

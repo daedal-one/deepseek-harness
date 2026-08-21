@@ -89,7 +89,7 @@ class FakeTerminalSandbox {
   readonly directories: string[] = []
   readonly writes = new Map<string, string>()
   createOptions: Parameters<Sandbox['pty']['create']>[0] | undefined
-  ambient = 'KEEP=visible\0UNICODE=你好\0NPM_TOKEN=secret\0DSH_STALE=old\0BROKEN\0=bad\0'
+  ambient = 'KEEP=visible\0UNICODE=héllo\0NPM_TOKEN=secret\0DSH_STALE=old\0BROKEN\0=bad\0'
   sessionId = '123\n'
   foreground = '456\n'
   groups = [123]
@@ -291,7 +291,7 @@ describe('E2B terminal allocation', () => {
     })
     expect(fake.inputs[0]?.data.toString()).toContain("exec /bin/bash '/runtime/terminal-one/runner.bash'")
     expect(fake.writes.get('/runtime/terminal-one/environment')).toContain('KEEP=visible\0')
-    expect(fake.writes.get('/runtime/terminal-one/environment')).toContain('UNICODE=你好\0')
+    expect(fake.writes.get('/runtime/terminal-one/environment')).toContain('UNICODE=héllo\0')
     expect(fake.writes.get('/runtime/terminal-one/environment')).toContain('TOKEN_EXPLICIT=kept\0')
     expect(fake.writes.get('/runtime/terminal-one/environment')).not.toContain('secret')
     expect(fake.writes.get('/runtime/terminal-one/environment')).not.toContain('DSH_STALE')

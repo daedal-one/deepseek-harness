@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-12
 
-English | [中文](2026-08-12-collapsed-sidebar-shared-entry-motion.zh.md)
-
 ## Problem
 
 The collapsed sidebar rail renders four upper controls owned by two packages: the shell owns the toggle and New Session, while the workspace region owns add and search. Their opacity timing matched, but their geometry did not. Right-aligned controls moved with the narrowing column while left-aligned controls stayed fixed, so add appeared slower than search even under the same fade.

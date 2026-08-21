@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-07-27
 
-English | [中文](2026-07-26-gui-pr-gif-evidence-and-assets-branch.zh.md)
-
 ## Problem
 
 A pull request that changes what a product user sees in the GUI is otherwise reviewed through prose and test names, neither of which shows the rendered result. The [browser-demo GIF recording](../../../skills/record-browser-gif/SKILL.md) skill produces truthful local GIFs but deliberately stopped at the local artifact, so each pull request that wanted to show one re-derived publication on its own — and committing the GIF to the pull request branch is never acceptable, because binary media in history bloats every future clone permanently.

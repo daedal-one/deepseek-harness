@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-06-21-mandatory-app-attribution-headers.zh.md)
-
 ## Problem
 
 LLM provider requests should identify the product making them. That is useful for provider-side support, abuse investigation, compatibility debugging, and traffic analytics. Before this Agent Note the harness only partially did this: the former hand-rolled DeepSeek adapter sent a hand-copied `User-Agent` constant, while the pi-ai-backed adapter at [adapter.ts](../../../../packages/llm/llm-pi-ai/src/adapter.ts) sent no harness-owned headers. New adapters could therefore omit attribution silently, and a library-backed adapter could drift from the direct implementation documented by the historical [twin-adapter Agent Note](../../archived/architecture/2026-06-13-twin-llm-adapters.md).

@@ -1,7 +1,5 @@
 # @deepseek-ai/dsh-command-feedback
 
-English | [中文](README.zh.md)
-
 Trigger-independent session feedback plus human-facing `/feedback` capture. The package exports `recordFeedback(session, text)`, which appends one log-only `feedback/record` event. Its plugin registers one global command through [`ctx.commands`](../../interaction/commands/README.md), so every composed command adapter discovers it; the shipped Web client executes it without a model turn.
 
 ## Command contract

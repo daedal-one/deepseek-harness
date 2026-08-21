@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-08-native-windows-pull-request-ci.zh.md)
-
 ## Problem
 
 The required pull-request Windows verdict needs a fast win32 toolchain signal without making the aggregate wait for scarce Windows capacity. Wine provides that critical-path signal but runs over a Linux kernel and case-sensitive ext4, uses a hoisted dependency layout, and cannot prove NTFS, DACL, ConPTY, crash durability, or native process behavior. With the native serial references disabled, every pull-request head also needs an automatic real Windows-kernel result.

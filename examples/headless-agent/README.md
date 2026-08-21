@@ -1,7 +1,5 @@
 # headless-agent
 
-English | [中文](README.zh.md)
-
 This directory owns the replay and real-model test composition for a headless coding agent: OpenRouter Nitro + local bash and filesystem tools + subagent delegation + workflows and fresh-agent Ralph iteration + `todo_write` + JSONL persistence. It explicitly mounts the shared agent spine, one root agent, persistence, and checkpoint policy; it is not a second product entry point.
 
 ## Run it

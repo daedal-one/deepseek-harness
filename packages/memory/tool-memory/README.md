@@ -1,7 +1,5 @@
 # `@deepseek-ai/dsh-tool-memory`
 
-English | [中文](README.zh.md)
-
 Ordinary memory Consumer exposing query, get, propose, challenge, and checkpoint tools. Project scope is derived from the session workspace; models cannot choose another project path. Every global mutation requests approval at execution time and proceeds only after `allowed-once`.
 
 ## Model Experience

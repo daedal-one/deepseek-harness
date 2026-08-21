@@ -1,7 +1,5 @@
 # dsh-tool-policy
 
-English | [中文](README.zh.md)
-
 `ctx.toolPolicy` is the provider-neutral authorization service. Providers register under stable ids; deployments configure an ordered set or omit it to evaluate every registered provider. Duplicate ids and missing configured providers fail loud.
 
 ## Service

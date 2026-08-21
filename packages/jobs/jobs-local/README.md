@@ -1,7 +1,5 @@
 # @deepseek-ai/dsh-jobs-local
 
-English | [中文](README.zh.md)
-
 Process-local implementation of the [`@deepseek-ai/dsh-jobs`](../jobs/README.md) registry contract: `LocalJobRegistry` keeps every record in memory, issues per-kind `<kind>-N` ids, and hands out fresh snapshots, never live state. Load it as a plugin and it registers as `ctx.jobs`.
 
 ## Admission

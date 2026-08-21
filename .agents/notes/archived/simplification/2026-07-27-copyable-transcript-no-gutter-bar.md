@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-04
 
-English | [中文](2026-07-27-copyable-transcript-no-gutter-bar.zh.md)
-
 ## Problem
 
 The TUI grouped user prompts and tool cards behind a colored left-gutter bar (`▌ `) prepended to every body line, and indented assistant and system blocks by one column. Both are per-line prefixes: a terminal mouse drag-select over the scrollback captures the leading `▌ ` or the leading space on each line, so copy-paste of a message, a tool's output, or a code block pulls in decoration the user must strip by hand. The bar was the transcript's only per-message separator, so it could not simply be dropped without another way to tell messages apart.

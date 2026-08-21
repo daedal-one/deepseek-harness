@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-03
 
-English | [中文](2026-07-28-dsh-meta-source-workspace.zh.md)
-
 ## Problem
 
 `dsh` treats the invoking directory as the workspace, which is what makes it useful on arbitrary projects. Working on dsh itself therefore means `cd`-ing to the checkout first — and the checkout is not a memorable path: the source install keeps it under a container directory as a timestamped staging worktree (`~/.dsh/source/staging-<timestamp>`) behind a `current` symlink, so the target moves on every upgrade. The agent is already *told* where its source lives by the `harness:source` prompt section, and the `cordis` toolset can modify that runtime, but the human still had to locate the directory by hand to start a session there.

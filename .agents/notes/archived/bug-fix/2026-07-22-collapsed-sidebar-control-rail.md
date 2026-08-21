@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-07-26
 
-English | [中文](2026-07-22-collapsed-sidebar-control-rail.zh.md)
-
 ## Problem
 
 The sidebar close action persisted a zero width preference, and the layout mapped that preference to a zero-width grid track. The only sidebar toggle and the settings entry both lived inside that clipped track, so closing the sidebar removed every visible recovery control. Reloading preserved the closed preference and reproduced the lockout.

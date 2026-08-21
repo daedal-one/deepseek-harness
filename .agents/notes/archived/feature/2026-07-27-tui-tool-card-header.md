@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-04
 
-English | [中文](2026-07-27-tui-tool-card-header.zh.md)
-
 ## Problem
 
 The TUI rendered each tool call as `{glyph} {title}`, where `title` was the presenter's fused verb-plus-detail string (`Read src/index.ts (1200-1360)`, `Edit files`, or a bash card's model description), bold and underlined in the status color. One flat slot carried the tool identity, the target, and the status at once, and the styling mixed bold, underline, and color inconsistently — the header read as noise, and which tool ran was not visually separable from what it operated on.

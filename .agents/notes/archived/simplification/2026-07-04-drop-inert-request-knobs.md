@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-07-26
 
-English | [中文](2026-07-04-drop-inert-request-knobs.zh.md)
-
 ## Problem
 
 Two request-contract knobs rode the whole request pipeline, yet neither could do anything:

@@ -95,7 +95,7 @@ describe('render branch tails', () => {
         useProjection={() => undefined}
       />,
     )
-    expect(view.container.textContent).toBe('2 轮 · 3 步')
+    expect(view.container.textContent).toBe('2 turns · 3 steps')
   })
 
   it('AssistantMarkdown reasoning as the streaming tail renders the running ring', () => {
@@ -105,7 +105,7 @@ describe('render branch tails', () => {
     expect(view.container.querySelector('[data-state="running"]')).not.toBeNull()
   })
 
-  it('DetailsPanel title falls to 详情 when the selection has no toolName and no material', () => {
+  it('DetailsPanel title falls to Details when the selection has no toolName and no material', () => {
     localStorage.clear()
     const snap = snapshotBase()
     const chat = createChatStore().create()
@@ -139,8 +139,8 @@ describe('render branch tails', () => {
         t={t}
       />,
     )
-    expect(view.getByText('详情')).toBeTruthy()
-    expect(view.getByText('该调用不在当前窗口内')).toBeTruthy()
+    expect(view.getByText('Details')).toBeTruthy()
+    expect(view.getByText('This call is outside the current window')).toBeTruthy()
   })
 
   it('DetailsPanel resolves a nested run_code leaf to its full logged args and output', () => {

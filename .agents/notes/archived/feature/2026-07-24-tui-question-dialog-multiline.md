@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-04
 
-English | [中文](2026-07-24-tui-question-dialog-multiline.zh.md)
-
 ## Problem
 
 `ctx.userInteraction.ask()` must keep question text, supporting `detail`, option labels, descriptions, validation, and controls readable inside configured width and height bounds. The question panel also belongs directly above the editor: placing it at the terminal edge separates the pending decision from both the transcript that prompted it and the input that follows it.

@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-09-headless-direct-core-entry-point.zh.md)
-
 ## Problem
 
 The `headless` product contract is one local task with final assistant text on stdout, a success-sensitive exit code, empty stderr on success, and no listening port. A composition containing Workspace Host services, ApiProxy, HTTP, the Web runtime, or browser plugins contradicts that contract and makes local completion depend on an unrelated transport tree.

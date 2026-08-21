@@ -55,7 +55,7 @@ export type LocaleDict = Record<string, string>
 export interface LocaleDefinition {
   /** Locale id (persisted; the setLocale argument). */
   id: LocaleId
-  /** Display name in its own language (中文 / English). */
+  /** Display name in its own language (Chinese / English). */
   label: string
 }
 
@@ -97,7 +97,7 @@ export const SETTINGS_NS = 'settings.locale'
 
 /** The two shipped locales. */
 const LOCALES: readonly LocaleDefinition[] = Object.freeze([
-  { id: 'zh', label: '中文' },
+  { id: 'zh', label: 'Chinese' },
   { id: 'en', label: 'English' },
 ])
 

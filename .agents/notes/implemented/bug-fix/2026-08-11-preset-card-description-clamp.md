@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-11-preset-card-description-clamp.zh.md)
-
 ## Problem
 
 A preset publishes its own `description`, of any length, and the settings section renders the roster as a card grid. The description had a `min-height` and no upper bound, while the grid sizes rows with `grid-auto-rows: 1fr` — which makes every implicit row the same height, not just the row holding the tall card. One long description therefore set the height of the whole roster: with a 250-character description in the custom group, all four cards measured 421px and the short-description cards filled with blank space.
@@ -23,7 +21,7 @@ Three smaller decisions ride along:
 - `Tooltip` gains an optional `maxWidth`. Its default half-viewport cap renders a description as a slab wider than the settings dialog it belongs to, spilling across the application behind it.
 - `Tooltip` also flips a `top` or `bottom` bubble to the other side when the viewport has no room for it, which its horizontal-only clamp previously left unhandled. Custom presets sit at the bottom of the roster and carry the longest descriptions, so the common case put a tall bubble under an anchor low on the page. The flip only moves into a side that genuinely fits, so an anchor with room on neither side keeps the requested placement rather than oscillating; sliding the bubble vertically instead would cover the text being read.
 
-A roster row that failed its shape check is badged `Failed to load` (`加载失败`) rather than `Broken` (`已损坏`). Discovery sets `broken` when the composition file is missing, unreadable, or malformed — most often a file the user just edited or deleted — so a damage claim overstates what was observed, and the verbatim reason under the badge already names the file and the fix.
+A roster row that failed its shape check is badged `Failed to load` rather than `Broken`. Discovery sets `broken` when the composition file is missing, unreadable, or malformed — most often a file the user just edited or deleted — so a damage claim overstates what was observed, and the verbatim reason under the badge already names the file and the fix.
 
 ## Alternatives considered
 

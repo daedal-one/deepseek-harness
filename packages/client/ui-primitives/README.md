@@ -1,7 +1,5 @@
 # @deepseek-ai/dsh-client-ui-primitives
 
-English | [中文](README.zh.md)
-
 Pure React atoms (zero cordis): StateDot, DisclosureRow, ic_ds_* icons, Button/Pill/Menu/Modal/Input, the Toast transient banner, the OnboardingSurface first-run takeover (body-portaled mask + opaque stage that holds `#root` inert for exactly its own lifetime), the markdown family (MessageText/MarkdownText/JsonBlock), the read-only JsonTree inspector, the `useAnchoredMaxHeight` hook that clamps a bottom-anchored overlay to the viewport space above its anchor (re-measured on resize, scroll, and a caller-supplied dependency), TerminalBlock, DiffBlock, ReadBlock, SearchBlock, and WebBlock.
 
 ## Hover cards
@@ -30,7 +28,7 @@ Pure React atoms (zero cordis): StateDot, DisclosureRow, ic_ds_* icons, Button/P
 
 ## Search results
 
-`SearchBlock` renders a completed search, one component for both kinds (discriminated by `kind`). A `matches` (grep) shows each file as a bold path header with its `lineNumber: line` rows, the per-file group collapsible; a `paths` (glob) shows a flat path list. Both flatten to one row list the height cap slices head/tail over (default 16, the TerminalBlock split arithmetic), and neither soft-wraps — a long match line or path scrolls horizontally instead of folding. The banner summary folds the pre-cap total in when the tool capped the result (`显示 X / 共 N 处匹配 · K 个文件` for grep, `显示 X / 共 N 个路径` for glob), so the card never presents a capped result as complete; a copy control writes the whole structured result regardless of the cap or which groups are collapsed. Geometry mirrors CodeBlock/TerminalBlock. Rationale: [the web search card note](../../../.agents/notes/implemented/feature/2026-07-30-web-search-card.md).
+`SearchBlock` renders a completed search, one component for both kinds (discriminated by `kind`). A `matches` (grep) shows each file as a bold path header with its `lineNumber: line` rows, the per-file group collapsible; a `paths` (glob) shows a flat path list. Both flatten to one row list the height cap slices head/tail over (default 16, the TerminalBlock split arithmetic), and neither soft-wraps — a long match line or path scrolls horizontally instead of folding. The banner summary folds the pre-cap total in when the tool capped the result (`showing X / N matches · K files` for grep, `showing X / N paths` for glob), so the card never presents a capped result as complete; a copy control writes the whole structured result regardless of the cap or which groups are collapsed. Geometry mirrors CodeBlock/TerminalBlock. Rationale: [the web search card note](../../../.agents/notes/implemented/feature/2026-07-30-web-search-card.md).
 
 ## Web retrieval
 

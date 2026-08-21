@@ -1,7 +1,5 @@
 # dsh-credentials-local
 
-English | [中文](README.zh.md)
-
 File-backed [credentials](../credentials/README.md) provider: four layers, one honest precedence.
 
 | Layer | Source id | Writable | Wins |

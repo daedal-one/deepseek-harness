@@ -88,7 +88,7 @@ describe('ui-settings-general apply', () => {
     const entry = generalEntry(before.slots)!
     expect(entry.options).toMatchObject({ id: 'general', order: 0 })
     // The nav label is a locale-following thunk; owners resolve at read time.
-    expect(resolveSlotLabel(entry.options.label)).toBe('通用设置')
+    expect(resolveSlotLabel(entry.options.label)).toBe('General')
     expect(before.slots.spec('settings.general.item')).toEqual({ kind: 'list', scope: 'root' })
     expect(before.slots.entries('settings.general.item')).toEqual([])
     // The onboarding hole stays declared for feature-owned steps; this plugin
@@ -122,7 +122,7 @@ describe('ui-settings-general apply', () => {
     declare(b.slots)
     const fiber = b.ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
-    expect(b.locale.bind('settings')('title')).toBe('设置')
+    expect(b.locale.bind('settings')('title')).toBe('Settings')
     b.locale.setLocale('en')
     expect(b.locale.bind('settings')('close')).toBe('Close')
     b.locale.setLocale('zh')
@@ -146,7 +146,7 @@ describe('ui-settings-general apply', () => {
     })
     expect(resolveSlotLabel(generalEntry(b.slots)!.options.label)).toBe('General')
     b.locale.setLocale('zh')
-    expect(resolveSlotLabel(generalEntry(b.slots)!.options.label)).toBe('通用设置')
+    expect(resolveSlotLabel(generalEntry(b.slots)!.options.label)).toBe('General')
   })
 
   it('refreshes loaded document availability on reconnect without reading it eagerly', async () => {

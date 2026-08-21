@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-07-28-sdk-max-output-tokens.zh.md)
-
 ## Problem
 
 The Python and TypeScript SDKs could select a provider and model but could not bound conversation-model output. The runtime therefore omitted `GenerateOptions.maxTokens`, leaving provider defaults in control even when an evaluation host required a fixed output budget. `compaction-basic.maxTokens` could not fill this role because it limits only compaction-summary calls.

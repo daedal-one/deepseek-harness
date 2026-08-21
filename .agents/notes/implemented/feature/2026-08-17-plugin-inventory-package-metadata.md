@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-17-plugin-inventory-package-metadata.zh.md)
-
 ## Problem
 
 The read-only Plugin list identified entries by a shortened Loader module name, enablement, and root Fiber phase. Those facts explain whether an entry runs, but not what the package does, who authored it, or which release is installed. Module subpaths, local files, and `cordis:` built-ins also make browser-side package lookup incomplete and deployment-dependent.

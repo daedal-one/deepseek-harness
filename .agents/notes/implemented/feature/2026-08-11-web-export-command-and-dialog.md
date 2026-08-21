@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-11-web-export-command-and-dialog.zh.md)
-
 ## Problem
 
 Session export needs a stable Session-level visible action and an equivalent slash-command path. A second backend reader or Host-path writer would duplicate the download implementation and introduce platform-specific file-permission and path-reveal problems.

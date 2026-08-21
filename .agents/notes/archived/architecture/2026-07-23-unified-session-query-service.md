@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-07-26
 
-English | [中文](2026-07-23-unified-session-query-service.zh.md)
-
 ## Problem
 
 Exact reads, semantic filters, relationship traces, and full-text search operate on the same live-preferred session corpus. Exposing full-text search under a second context key makes consumers and app compositions treat one capability as two services, even though the SQLite implementation is the only backend-specific part.

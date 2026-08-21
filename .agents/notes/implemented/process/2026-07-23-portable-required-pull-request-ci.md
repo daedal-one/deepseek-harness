@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-07-23-portable-required-pull-request-ci.zh.md)
-
 ## Problem
 
 Required pull-request jobs assigned to organization-owned runner labels remain queued when GitHub cannot allocate those pools. The workflow is valid and standard GitHub-hosted jobs can still pass, but `all checks passed` never starts and an otherwise healthy pull request cannot satisfy branch protection.

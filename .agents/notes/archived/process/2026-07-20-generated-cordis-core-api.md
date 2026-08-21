@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-07-27
 
-English | [中文](2026-07-20-generated-cordis-core-api.zh.md)
-
 ## Problem
 
 Plugin authors need the detailed Cordis APIs behind `ctx`, event dispatch, fibers, plugin registration, and services. The generated [Harness event and service catalogs](2026-06-20-generated-cordis-catalog.md) intentionally summarize inherited Cordis members, so they do not replace a method-level Cordis reference. Keeping a second hand-written copy under the website would drift from the vendored source and make the renderer an additional documentation owner.

@@ -8,8 +8,8 @@ import type { WorkspaceBrowserInjected, WorkspacePickerInjected } from '@deepsee
 import { WorkspaceBrowser } from '../src/client/WorkspaceBrowser.tsx'
 import { WorkspacePicker } from '../src/client/WorkspacePicker.tsx'
 
-// The service reads its initial locale from the browser; these specs assert
-// the shipped Chinese copy, so they state the browser they assume.
+// The service reads its initial locale from the browser; these specs pin the
+// browser they assume (the zh dictionary now carries the shared English copy).
 usePinnedBrowserLanguages('zh-CN')
 
 async function bench() {
@@ -65,7 +65,7 @@ describe('ui-workspace apply', () => {
     // Copy rides the standard locale seat: the entry declares the namespace
     // and apply registered both dictionaries.
     expect(before.slots.entries('sidebar.workspaces')[0]!.locale).toBe('workspace')
-    expect(before.locale.bind('workspace')('session.new')).toBe('新会话')
+    expect(before.locale.bind('workspace')('session.new')).toBe('New Session')
 
     const after = await bench()
     await after.ctx.plugin({ inject: [...inject], apply }).await()

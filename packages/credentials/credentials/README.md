@@ -1,7 +1,5 @@
 # dsh-credentials
 
-English | [中文](README.zh.md)
-
 Credential Service Definition (`ctx.credentials`). One doctrine, three consequences:
 
 **Configuration carries references to secrets, never the secrets.** A settings section or `cordis.yml` entry says `apiKeyEnv: DEEPSEEK_API_KEY`; the value behind that reference lives with a credential provider. So the settings document stays safe to sync and to render in a configuration UI, `describe()` can answer "is this configured, where from, can I write it" without ever holding a value, and rotating a secret touches no configuration file.

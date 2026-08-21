@@ -1,7 +1,5 @@
 # dsh-tool-policy-enforcer
 
-English | [中文](README.zh.md)
-
 This consumer enforces `ctx.toolPolicy` on `tools/pre-execute`. Unsupported and allowed tools delegate with `next()`; denial short-circuits execution. An `ask` verdict immediately enters the existing approval pipeline, so `ctx.approval` remains the sole owner of the human decision and its durable audit.
 
 `enforceWhen` optionally restricts evaluation to a conjunction of effective `sandbox/mode` and `approval/policy` values. The enforcer folds those values from the calling session's durable events before consulting any provider. An omitted condition preserves unconditional enforcement, and a missing configured value keeps enforcement active because the session cannot establish the configured bypass.

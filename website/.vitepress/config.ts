@@ -2,105 +2,15 @@
 
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import type { DefaultTheme, PageData } from 'vitepress'
 import type { ViteDevServer } from 'vite'
+import type { DefaultTheme } from 'vitepress'
 import { withMermaid } from 'vitepress-plugin-mermaid'
-import { landingLink, orderedPages, routeLink, sectionSpec, type DocsLocale, type DocsPage, type DocsSidebar } from '../docs.ts'
+import { landingLink, orderedPages, routeLink, sectionSpec, type DocsPage, type DocsSidebar } from '../docs.ts'
 import { docsSourceFiles, projectDocs } from '../../scripts/project-doc-site.ts'
 
+// The build compiles the disposable generated tree, so the projector must
+// populate it before VitePress resolves any of its sources.
 projectDocs()
-
-function sidebar(locale: DocsLocale, collection: NonNullable<DocsPage['sidebar']>): DefaultTheme.SidebarItem[] {
-  // `orderedPages` already sorts by section placement, so insertion order
-  // carries the group order and each group keeps its pages in sequence.
-  const groups = new Map<string, DocsPage[]>()
-  for (const page of orderedPages(locale, collection)) {
-    const entries = groups.get(page.section) ?? []
-    entries.push(page)
-    groups.set(page.section, entries)
-  }
-  return [...groups.entries()].map(([text, entries]) => {
-    const { collapsed } = sectionSpec(locale, text)
-    return {
-      text,
-      // A present `collapsed` is what makes the default theme render the
-      // group as collapsible at all, so an open group must omit the key.
-      ...(collapsed === undefined ? {} : { collapsed }),
-      items: entries.map(page => ({ text: page.label, link: routeLink(page.route) })),
-    }
-  })
-}
-
-/** One module link shared between the navigation bar and the guide sidebar. */
-interface GuideModuleLink {
-  /** Label shown in the navigation bar and the guide sidebar. */
-  label: string
-  /** Sidebar collection the link opens. */
-  collection: DocsSidebar
-}
-
-/**
- * Per-locale guide-module facts: the guide collection and the module links
- * appended to the guide sidebar.
- */
-interface GuideModules {
-  /** Guide sidebar collection for the locale. */
-  guide: 'zh-guide' | 'en-guide'
-  /** Development module link. */
-  develop: GuideModuleLink
-  /** Reference module link. */
-  reference: GuideModuleLink
-}
-
-/**
- * Guide-module facts keyed by locale, giving every module label and collection
- * one home shared by the navigation bar and the guide sidebar.
- */
-const guideModules = {
-  root: {
-    guide: 'zh-guide',
-    develop: { label: '开发', collection: 'zh-develop' },
-    reference: { label: '参考', collection: 'zh-reference' },
-  },
-  en: {
-    guide: 'en-guide',
-    develop: { label: 'Development', collection: 'en-develop' },
-    reference: { label: 'Reference', collection: 'en-reference' },
-  },
-} satisfies Record<DocsLocale, GuideModules>
-
-/**
- * Guide sidebar with direct links into the first development and reference pages.
- *
- * @param locale - Route tree whose guide sidebar is being built.
- * @returns Guide groups followed by top-level links to the other documentation modules.
- */
-function guideSidebar(locale: DocsLocale): DefaultTheme.SidebarItem[] {
-  const { guide, develop, reference } = guideModules[locale]
-  return [
-    ...sidebar(locale, guide),
-    ...[develop, reference].map(({ label, collection }) => ({
-      text: label,
-      link: landingLink(locale, collection),
-    })),
-  ]
-}
-
-/**
- * Navigation-bar items for the modules the guide sidebar links into, reading
- * their labels and collections from the shared per-locale record.
- *
- * @param locale - Route tree the navigation items belong to.
- * @returns The module items for the locale's navigation bar.
- */
-function moduleNav(locale: DocsLocale): DefaultTheme.NavItem[] {
-  const { develop, reference } = guideModules[locale]
-  const routePrefix = locale === 'root' ? '' : '/en'
-  return [
-    { text: develop.label, link: landingLink(locale, develop.collection), activeMatch: `^${routePrefix}/develop/` },
-    { text: reference.label, link: landingLink(locale, reference.collection), activeMatch: `^${routePrefix}/reference/` },
-  ]
-}
 
 function watchCanonicalDocs(server: ViteDevServer): void {
   const sources = docsSourceFiles()
@@ -111,53 +21,51 @@ function watchCanonicalDocs(server: ViteDevServer): void {
   })
 }
 
-function escapeVueInterpolation(html: string): string {
-  return html.replaceAll('{{', '&#123;&#123;').replaceAll('}}', '&#125;&#125;')
+function sidebar(collection: NonNullable<DocsPage['sidebar']>): DefaultTheme.SidebarItem[] {
+  // `orderedPages` already sorts by section placement, so insertion order
+  // carries the group order and each group keeps its pages in sequence.
+  const groups = new Map<string, DocsPage[]>()
+  for (const page of orderedPages(collection)) {
+    const entries = groups.get(page.section) ?? []
+    entries.push(page)
+    groups.set(page.section, entries)
+  }
+  return [...groups.entries()].map(([text, entries]) => {
+    const { collapsed } = sectionSpec(text)
+    return {
+      text,
+      // A present `collapsed` is what makes the default theme render the
+      // group as collapsible at all, so an open group must omit the key.
+      ...(collapsed === undefined ? {} : { collapsed }),
+      items: entries.map(page => ({ text: page.label, link: routeLink(page.route) })),
+    }
+  })
 }
 
-const sharedTheme: Pick<DefaultTheme.Config, 'search' | 'socialLinks' | 'editLink'> = {
-  search: {
-    provider: 'local',
-    options: {
-      locales: {
-        root: {
-          translations: {
-            button: {
-              buttonText: '搜索文档',
-              buttonAriaLabel: '搜索文档',
-            },
-            modal: {
-              displayDetails: '显示详细列表',
-              resetButtonTitle: '清除搜索',
-              backButtonTitle: '关闭搜索',
-              noResultsText: '未找到相关结果',
-              footer: {
-                selectText: '选择',
-                selectKeyAriaLabel: '回车键',
-                navigateText: '切换',
-                navigateUpKeyAriaLabel: '上方向键',
-                navigateDownKeyAriaLabel: '下方向键',
-                closeText: '关闭',
-                closeKeyAriaLabel: 'Esc 键',
-              },
-            },
-          },
-        },
-      },
-    },
-  },
-  socialLinks: [
-    { icon: 'github', link: 'https://github.com/deepseek-ai/deepseek-harness' },
-  ],
-  editLink: {
-    pattern: ({ frontmatter }: PageData) => {
-      const data: unknown = frontmatter
-      const editSource: unknown = typeof data === 'object' && data !== null ? Reflect.get(data, 'editSource') : undefined
-      if (typeof editSource !== 'string') throw new Error('Projected documentation page has no editSource frontmatter.')
-      return `https://github.com/deepseek-ai/deepseek-harness/edit/master/${editSource}`
-    },
-    text: '在 GitHub 上编辑此页',
-  },
+/** Guide sidebar with direct links into the first development and reference pages. */
+function guideSidebar(): DefaultTheme.SidebarItem[] {
+  return [
+    ...sidebar('guide'),
+    ...[
+      { label: 'Development', collection: 'develop' as DocsSidebar },
+      { label: 'Reference', collection: 'reference' as DocsSidebar },
+    ].map(({ label, collection }) => ({
+      text: label,
+      link: landingLink(collection),
+    })),
+  ]
+}
+
+/** Navigation-bar items for the modules beyond the guide. */
+function moduleNav(): DefaultTheme.NavItem[] {
+  return [
+    { text: 'Development', link: landingLink('develop'), activeMatch: '^/develop/' },
+    { text: 'Reference', link: landingLink('reference'), activeMatch: '^/reference/' },
+  ]
+}
+
+function escapeVueInterpolation(html: string): string {
+  return html.replaceAll('{{', '&#123;&#123;').replaceAll('}}', '&#125;&#125;')
 }
 
 /** Site base path, carrying the leading and trailing slashes VitePress requires. */
@@ -239,7 +147,7 @@ const scrollbarScript = `
  * Navigation-bar title: the DeepSeek wordmark and the release-stage tag.
  * VitePress renders `siteTitle` as HTML.
  *
- * @param previewTag - Localized release-stage label.
+ * @param previewTag - Release-stage label.
  * @returns Markup placed beside the navigation-bar home link.
  */
 function siteTitle(previewTag: string): string {
@@ -248,7 +156,7 @@ function siteTitle(previewTag: string): string {
 
 export default withMermaid({
   title: 'DeepSeek Harness',
-  description: '用于构建 Agent Harness 的插件化 SDK',
+  description: 'Plugin-based SDK for building agent harnesses',
   base,
   head: [
     // VitePress leaves head hrefs untouched, so the base belongs here explicitly.
@@ -260,61 +168,6 @@ export default withMermaid({
   srcDir: '.generated',
   cacheDir: '.cache',
   outDir: '.dist',
-  locales: {
-    root: {
-      label: '简体中文',
-      lang: 'zh-CN',
-      themeConfig: {
-        siteTitle: siteTitle('技术预览'),
-        nav: [
-          { text: '入门', link: landingLink('root', guideModules.root.guide), activeMatch: '^/guide/' },
-          ...moduleNav('root'),
-        ],
-        sidebar: {
-          '/guide/': guideSidebar('root'),
-          '/develop/': sidebar('root', 'zh-develop'),
-          '/reference/': sidebar('root', 'zh-reference'),
-        },
-        outline: { label: '本页目录' },
-        docFooter: { prev: '上一篇', next: '下一篇' },
-        darkModeSwitchLabel: '外观',
-        lightModeSwitchTitle: '切换到浅色主题',
-        darkModeSwitchTitle: '切换到深色主题',
-        sidebarMenuLabel: '菜单',
-        returnToTopLabel: '返回顶部',
-        langMenuLabel: '切换语言',
-        skipToContentLabel: '跳至内容',
-      },
-    },
-    en: {
-      label: 'English',
-      lang: 'en-US',
-      link: '/en/',
-      themeConfig: {
-        siteTitle: siteTitle('Preview'),
-        nav: [
-          { text: 'Guide', link: landingLink('en', guideModules.en.guide), activeMatch: '^/en/guide/' },
-          ...moduleNav('en'),
-        ],
-        sidebar: {
-          '/en/guide/': guideSidebar('en'),
-          '/en/develop/': sidebar('en', 'en-develop'),
-          '/en/reference/': sidebar('en', 'en-reference'),
-        },
-        editLink: {
-          pattern: ({ frontmatter }: PageData) => {
-            const data: unknown = frontmatter
-            const editSource: unknown = typeof data === 'object' && data !== null ? Reflect.get(data, 'editSource') : undefined
-            if (typeof editSource !== 'string') throw new Error('Projected documentation page has no editSource frontmatter.')
-            return `https://github.com/deepseek-ai/deepseek-harness/edit/master/${editSource}`
-          },
-          text: 'Edit this page on GitHub',
-        },
-        outline: { label: 'On this page' },
-        docFooter: { prev: 'Previous', next: 'Next' },
-      },
-    },
-  },
   vite: {
     // `srcDir` puts the Vite root inside the disposable generated tree, whose
     // own `public/` no tracked asset can live in.
@@ -338,5 +191,29 @@ export default withMermaid({
     },
   },
   mermaid: {},
-  themeConfig: sharedTheme,
+  lang: 'en-US',
+  themeConfig: {
+    siteTitle: siteTitle('Preview'),
+    nav: [
+      { text: 'Guide', link: landingLink('guide'), activeMatch: '^/guide/' },
+      ...moduleNav(),
+    ],
+    sidebar: {
+      '/guide/': guideSidebar(),
+      '/develop/': sidebar('develop'),
+      '/reference/': sidebar('reference'),
+    },
+    search: {
+      provider: 'local',
+    },
+    socialLinks: [
+      { icon: 'github', link: 'https://github.com/deepseek-ai/deepseek-harness' },
+    ],
+    editLink: {
+      pattern: 'https://github.com/deepseek-ai/deepseek-harness/edit/master/:path',
+      text: 'Edit this page on GitHub',
+    },
+    outline: { label: 'On this page' },
+    docFooter: { prev: 'Previous', next: 'Next' },
+  },
 })

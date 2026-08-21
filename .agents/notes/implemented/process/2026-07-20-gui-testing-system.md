@@ -4,8 +4,6 @@ Status: implemented
 
 > Path update (2026-07-22, plugin-system refactor): the three-tier philosophy and golden-path method here remain current; homes moved — object-layer specs now live in `packages/client/runtime/tests/` (was web-runtime), wire specs in `packages/client/connection/tests/`, and the `web-ui` coverage exclusion is gone with the package (component specs are per-plugin jsdom suites under each `packages/client/*/tests/`). Component-spec shape follows the [slot system standard](../architecture/2026-07-22-slot-type-chain-implementation.md): feed props directly — the store share comes from `createXXXStore().create()` (the real engine, the sanctioned zero-machinery path), framework hooks are plain stubs; no render machinery, no provider mounting. Slot ownership/registry semantics are tier-2 territory (`runtime` + `ui-slots` suites), not component specs.
 
-English | [中文](2026-07-20-gui-testing-system.zh.md)
-
 > Division of labor: this note covers only the test structure specific to the GUI (`packages/{client,host}/*` + `apps/web`); repo-wide testing policy (tiering principles, the with-key policy, real-implementation-first, REAL-composition) lives in [docs/testing.md](../../../../docs/testing.md) and is not restated here.
 
 ## Problem
@@ -18,7 +16,7 @@ Cut along the architecture's natural test hooks into three tiers, bottom-up:
 
 | Tier | Under test | Key technique | File location |
 |---|---|---|---|
-| 1 Protocol isomorphism | `AbstractApiClient` + `toFetchHandler` (bidirectional data / rpcId / zod types / SSE streams / batching / timeouts) | **The full chain at the isomorphic point**: `InProcessApiClient(toFetchHandler(脚本化 impl))` skips the network but genuinely runs the wire serialization — zero browser, pure node env | `packages/host/apiproxy/tests/client-handler.spec.ts` |
+| 1 Protocol isomorphism | `AbstractApiClient` + `toFetchHandler` (bidirectional data / rpcId / zod types / SSE streams / batching / timeouts) | **The full chain at the isomorphic point**: `InProcessApiClient(toFetchHandler(scripted impl))` skips the network but genuinely runs the wire serialization — zero browser, pure node env | `packages/host/apiproxy/tests/client-handler.spec.ts` |
 | 2 Object-layer orchestration | `Session`/`SessionManager`/`ConnectionController` (state machines and timing: stitching / dedup / paging / optimistic draft clearing / pendingBuffers / reconnect / backoff) | **The "event sequence in → snapshot out" golden path**: programmable fakes + deferreds controlling timing + fake timers controlling backoff | `packages/client/{runtime,connection}/tests/` |
 | 3 Assembled presentation | Built artifacts × the real client loader and plugin composition | App-owned semantic snapshots boot all eight built client plugins under jsdom for deterministic cross-plugin state changes; bare Playwright smoke separately proves the real browser/carrier boundary, with real-host cases self-skipping without a key; the keyless browser e2e lane disables the shipped model-adapter row and replays recorded session fixtures through `dsh-llm-replay` in the real in-process web assembly against conversation aria goldens ([web e2e lane](../testing/2026-07-24-web-gui-browser-e2e-lane.md), [required CI gate](../testing/2026-07-30-web-browser-snapshot-ci-gate.md)) | `apps/web/tests/*.snapshot.ts`, `apps/web/tests/smoke-{fixture,real}.e2e.ts`, `apps/web/tests/{replay-round-trip,seeded-history}.e2e.ts` |
 

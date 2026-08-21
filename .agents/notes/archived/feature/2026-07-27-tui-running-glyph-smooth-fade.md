@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-04
 
-English | [中文](2026-07-27-tui-running-glyph-smooth-fade.zh.md)
-
 ## Problem
 
 While a turn runs, the TUI replaces the `>` prompt caret with a phase glyph (`◍`/`✻`/`●`/`⚙`). Earlier iterations animated its brightness in the accent blue (a discrete SGR wave, then a truecolor throb) — a colored, always-pulsing indicator. The desired effect keeps the continuous pulse to signal ongoing work, but as a quiet dim gray rather than a color, and with smooth fade-in and fade-out at its edges.

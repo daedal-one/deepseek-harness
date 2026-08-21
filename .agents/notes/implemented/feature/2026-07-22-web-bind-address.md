@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-07-22-web-bind-address.zh.md)
-
 ## Problem
 
 `dsh web` binds every network interface even when its browser runs on the same machine. Local use therefore exposes an unauthenticated development server without an explicit operator choice, while remote-container and LAN-browser use still needs a supported way to accept non-loopback connections.

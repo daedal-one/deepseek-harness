@@ -1,7 +1,5 @@
 # @deepseek-ai/dsh-lsp
 
-English | [中文](README.zh.md)
-
 The **LSP capability seam**: an abstract `LspService` (`ctx.lsp`) defining WHAT semantic code navigation the harness has — go to definition, find references, find implementations, hover — over language-server providers, without binding the model contract to local subprocesses.
 
 This package owns the Service Definition role of the LSP capability:

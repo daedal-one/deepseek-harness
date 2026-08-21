@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-07-22-plan-specific-collaboration-state.zh.md)
-
 ## Problem
 
 The first plan-mode implementation introduced a generic named-mode registry even though the product shipped only `plan`. `ModeConfig.modes`, definition-name validation, `ctx.modes.list()`, retired-definition fallback, and a synthetic `review` mode in tests existed only to support hypothetical future collaboration modes. The production-specific behavior—plan guidance, `/plan`, and `exit_plan_mode`—still lived in the same package, so the generic API did not isolate a reusable mechanism from plan policy.

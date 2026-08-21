@@ -1,7 +1,5 @@
 # dsh-agent-loop
 
-English | [中文](README.zh.md)
-
 THE concrete agent plugin and loop driver. Its package-internal implementation satisfies the `Agent` interface and drives the session/turn/step lifecycle.
 
 This is the only package in the harness that contains concrete loop logic. Everything else is an abstract service or a plugin against extension points — new behavior goes into plugins, not here.

@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-07
 
-English | [中文](2026-07-29-web-message-icon-actions-and-clock.zh.md)
-
 ## Problem
 
 The web chat user bubble already had copy / branch / edit IconActions but no clock. Finalized assistant narration had no under-body action chrome at all, even though the Harness design shows a copy / branch / clock row after the answer settles. Streaming replies must not flash that chrome mid-token. Memoized rows also keep stable props across midnight, so a one-shot `Date.now()` would leave yesterday's messages stuck on `HH:mm`.
@@ -15,7 +13,7 @@ The web chat user bubble already had copy / branch / edit IconActions but no clo
 
 The assistant seat is narrowed by the [completed-turn decision](../bug-fix/2026-08-05-turn-tail-actions-require-a-completed-turn.md): only a turn with a `turn/end` grants it, so a turn still producing steps hands the row to nothing. The user seat's branch control is removed outright by the [user-bubble branch removal](../simplification/2026-08-06-user-bubbles-drop-the-branch-action.md); a user row's IconActions are clock and copy.
 
-Both seats format `node.time` through `formatMessageClock`: same calendar day → `HH:mm`, earlier this year → `M月D日 HH:mm`, other years → `YYYY年M月D日 HH:mm`. `useCalendarDay` is a component-local day tick (timeout to the next local midnight) so memoized rows re-render when the calendar day changes without a new framework hook. `MessageItem` places the label before copy (figma `388:20051`). `ChatView` derives turn-tail seqs via `assistantActionsSeqs` and withholds `time` for mid-turn content; `AssistantMarkdown` places the row after branch (figma `43:32997`) only when `streaming` is false, the event time is known, and the node has non-empty text content. Think-only nodes, mid-turn narration, and the streaming tail omit the row. Copy writes joined text blocks. Both message rows pass their event's `seq` to the same fork callback; [Web session fork actions](2026-07-27-web-session-fork-actions.md) define the real mutation contract. Clipboard write and the clock helpers live in `message-chrome.ts`. The assembled surface is pinned by `apps/web/tests/message-actions.e2e.ts` (cold-seeded history + aria golden); aria normalization collapses every clock shape to `{{clock}}`.
+Both seats format `node.time` through `formatMessageClock`: same calendar day → `HH:mm`, earlier this year → `MM/DD HH:mm`, other years → `YYYY/MM/DD HH:mm`. `useCalendarDay` is a component-local day tick (timeout to the next local midnight) so memoized rows re-render when the calendar day changes without a new framework hook. `MessageItem` places the label before copy (figma `388:20051`). `ChatView` derives turn-tail seqs via `assistantActionsSeqs` and withholds `time` for mid-turn content; `AssistantMarkdown` places the row after branch (figma `43:32997`) only when `streaming` is false, the event time is known, and the node has non-empty text content. Think-only nodes, mid-turn narration, and the streaming tail omit the row. Copy writes joined text blocks. Both message rows pass their event's `seq` to the same fork callback; [Web session fork actions](2026-07-27-web-session-fork-actions.md) define the real mutation contract. Clipboard write and the clock helpers live in `message-chrome.ts`. The assembled surface is pinned by `apps/web/tests/message-actions.e2e.ts` (cold-seeded history + aria golden); aria normalization collapses every clock shape to `{{clock}}`.
 
 ## Alternatives considered
 

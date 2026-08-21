@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-10-remote-event-delivery.zh.md)
-
 ## Problem
 
 [Typert Gateway targeted method calls](../../implemented/architecture/2026-08-02-typert-remote-method-calls.md) cover only the request/response shape and deliberately leave Session event streams and stateful interactions to separate designs. Every **one-way Host-to-consumer push** therefore still rides the legacy API Proxy.

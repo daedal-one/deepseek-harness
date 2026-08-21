@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-07-22-web-multimodal-image-input-and-durable-attachments.zh.md)
-
 ## Problem
 
 Before this change, the Web composer accepted only text: `InputBar` received a string draft, `ConversationController.send()` created text content, and the host forwarded that content to the agent. Users could not paste an image, inspect it before sending, submit an image-only prompt, or recover sent images from history.

@@ -1,7 +1,5 @@
 # credentials/ — credential references
 
-English | [中文](README.zh.md)
-
 The credential capability family separates reference resolution from its provider:
 
 | Package | Role | ctx key |

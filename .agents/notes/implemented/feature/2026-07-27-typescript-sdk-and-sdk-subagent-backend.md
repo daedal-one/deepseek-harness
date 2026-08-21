@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-07-27-typescript-sdk-and-sdk-subagent-backend.zh.md)
-
 ## Problem
 
 The stdio JSON-RPC serving surface (`@deepseek-ai/dsh-sdk-jsonrpc-server`, the [single-exe Agent Note](../architecture/2026-07-10-single-file-executable-sdk-runtime-distribution.md)) had exactly one client: the Python SDK. TypeScript consumers wanting the same drive-a-harness-as-a-subprocess capability — repo tests, automation, and above all a subagent backend whose child is a *complete harness runtime* rather than a generic ACP agent — had nothing to import: the request/notification payload shapes existed only as anonymous object literals inside the server, and the transport class lived inside the server plugin package.

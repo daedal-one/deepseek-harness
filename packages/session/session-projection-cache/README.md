@@ -1,7 +1,5 @@
 # @deepseek-ai/dsh-session-projection-cache
 
-English | [中文](README.zh.md)
-
 The persisted projection cache (`ctx.sessionProjectionCache`): durable checkpoints of every registered projection unit's state, one record per session on the domain data form (`session_projcache` domain — the shipped json backend lands it beside `workspace.json` under the configured storage root). Design authority: the [session-projection RFC](../../../.agents/notes/proposed/architecture/2026-07-27-session-projection-and-command-log.md) (persisted projection cache section).
 
 A stored row `(key → {ver, seq, val})` is a fold shortcut, never an authority: possibly stale (`seq` says exactly how stale) but never wrong. Consequences the implementation commits to:

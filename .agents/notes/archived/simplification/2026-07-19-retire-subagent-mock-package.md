@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-07-26
 
-English | [中文](2026-07-19-retire-subagent-mock-package.zh.md)
-
 ## Problem
 
 `@deepseek-ai/dsh-subagent-mock` was a configurable test double packaged as a workspace plugin. Its only external consumers were the `tool-subagent` unit suite and the tool-catalog generator; no runtime package, example, snapshot configuration, or real provider loaded it.

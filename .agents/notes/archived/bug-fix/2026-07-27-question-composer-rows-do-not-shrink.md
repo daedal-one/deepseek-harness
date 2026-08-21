@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-07
 
-English | [中文](2026-07-27-question-composer-rows-do-not-shrink.zh.md)
-
 ## Problem
 
 The question composer card is capped against the viewport (`max-height: min(60vh, 520px)`) and scrolls its option list, so the header and the footer actions stay reachable on long question batches. When the composer seat got short — a small window, or a short viewport with the details panel open — the option rows rendered on top of each other and on top of the question title.

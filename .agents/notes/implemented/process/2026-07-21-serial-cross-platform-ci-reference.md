@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-07-21-serial-cross-platform-ci-reference.zh.md)
-
 ## Problem
 
 The pull-request workflow consolidates required checks into dedicated Linux and Windows jobs. Those jobs still should not be the only completeness oracle: a defect in their gate inventory or dependency graph could omit work while the required aggregate stays green.

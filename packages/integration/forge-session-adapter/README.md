@@ -1,7 +1,5 @@
 # @deepseek-ai/dsh-forge-session-adapter
 
-English | [中文](README.zh.md)
-
 This plugin is the DeepSeek Harness implementation of `forge.agent.session/v1`. Forge owns durable work, exact revision selection, Temporal lifecycle, executor allocation, and policy. The adapter accepts that allocated world, injects a verified Forge Spec v0.6 agent render before the first model request, and mounts Forge Intellect as the only model-visible workspace action surface.
 
 ## Runtime contract

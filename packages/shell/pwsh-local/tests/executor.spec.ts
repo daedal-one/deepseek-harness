@@ -179,11 +179,11 @@ describe('spawn construction (pure, every platform)', () => {
     const ctx = new Context()
     const subprocess = new CapturingSubprocessRuntime(ctx)
     await ctx.plugin(PwshLocalExecutor)
-    await ctx.shell.run(ctx.shell.resolve({ command: 'Write-Output 你好' }))
+    await ctx.shell.run(ctx.shell.resolve({ command: 'Write-Output hello' }))
     expect(subprocess.specs).toHaveLength(1)
     const { argv } = subprocess.specs[0]!
     expect(argv.slice(0, 5)).toEqual([expect.any(String), '-NoLogo', '-NoProfile', '-NonInteractive', '-Command'])
-    expect(argv[5]).toBe(`${ENCODING_PREAMBLE}Write-Output 你好`)
+    expect(argv[5]).toBe(`${ENCODING_PREAMBLE}Write-Output hello`)
     expect(ENCODING_PREAMBLE).toContain('[Console]::OutputEncoding')
     expect(ENCODING_PREAMBLE).toContain('$OutputEncoding')
   })

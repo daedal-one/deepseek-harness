@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-16-shared-agent-plane.zh.md)
-
 ## Problem
 
 The web profile owned the host rows disabled by per-session preset composition, while the headless profile still executed the base bundle's model-facing Consumers directly. A preset therefore described a complete Agent only on the web surface. The same preset selected through headless could receive a different prompt, tool registry, compaction behavior, and delegation surface.

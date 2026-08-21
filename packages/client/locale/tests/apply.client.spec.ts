@@ -95,7 +95,7 @@ describe('locale apply', () => {
     // Base dictionaries are registered: the (ns, locale) seats are occupied.
     expect(() => locale.register('common', 'zh', {})).toThrow('already has locale')
     expect(() => locale.register('common', 'en', {})).toThrow('already has locale')
-    expect(locale.bind(SETTINGS_NS)('language.title')).toBe('语言')
+    expect(locale.bind(SETTINGS_NS)('language.title')).toBe('Language')
     const entry = before.slots.entries(SLOT).find(e => e.component === LanguageRow)!
     expect(entry.options).toMatchObject({ id: 'language', order: 0 })
 
@@ -127,7 +127,7 @@ describe('locale apply', () => {
     face.setLocale('zh')
     expect(locale.getLocale().active).toBe('zh')
     expect(instance.getSnapshot().active).toBe('zh')
-    expect(locale.bind(SETTINGS_NS)('language.title')).toBe('语言')
+    expect(locale.bind(SETTINGS_NS)('language.title')).toBe('Language')
     await vi.waitFor(() => { expect(b.mutate).toHaveBeenCalledTimes(2) })
   })
 

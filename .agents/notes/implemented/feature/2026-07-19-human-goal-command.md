@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-07-19-human-goal-command.zh.md)
-
 ## Problem
 
 The same-session goal domain and model tools provide the state machine and semantic natural-language path, but they are not a sufficient human UX. A user needs to inspect the exact current phase and round budget without asking the model, explicitly pause or clear work without spending a model turn, and rearm a restored active goal after the required post-resume human decision. Implementing those actions independently in each UI would duplicate parsing, let the surfaces drift, and risk routing an unknown or unavailable command into the model.

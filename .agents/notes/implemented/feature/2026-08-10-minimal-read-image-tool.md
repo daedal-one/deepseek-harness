@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-10-minimal-read-image-tool.zh.md)
-
 ## Problem
 
 The multimodal attachment work gave user uploads a complete durable path — bytes committed to the content-addressed attachment store before the owning `user/message`, an `ImageBlock` carrying only the `sha256:` reference, and the pi-ai route re-reading verified bytes per request — but the model itself had no way to look at an image on disk. `read` rejects binary content by contract, so an agent asked about a screenshot or a rendered chart either failed or shelled out to lossy workarounds. A first standalone attempt (PR #598) solved this together with loop-level route scoping: an `agent/request-ready` extension point publishing exact-model modalities before assembly, per-route schema/guidance visibility, and a reversible `image-placeholder-v1` history projection so text routes could continue over placeholder text. That design worked but coupled a tool to new agent-loop machinery, three new session-log concepts, and per-step registration churn — far more surface than the capability needs.

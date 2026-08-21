@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-04
 
-English | [中文](2026-07-18-tui-terminal-state-snapshots.zh.md)
-
 ## Problem
 
 The TUI is a stateful renderer. Its user-visible result depends on ANSI parsing, differential frames, wrapping, scrollback, viewport position, terminal width, focus, cursor state, and each tool's presentation intent. Unit tests that collect `Terminal.write()` fragments can prove event handling, but they cannot prove the final screen a terminal displays. The same screen may also be emitted through different write fragments, so pinning those fragments creates false regressions.

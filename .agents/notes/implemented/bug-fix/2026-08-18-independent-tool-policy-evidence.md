@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-18-independent-tool-policy-evidence.zh.md)
-
 ## Problem
 
 The shell policy sent the raw user request, acting-model description, command, and working directory to one effect classifier. A broad user request could therefore change how the same read-only command was classified: simple `cat`, `sed`, and `awk` diagnostics inherited repository-wide mutation or deletion risk from the surrounding task. The classifier then treated its own interpretation as the policy decision, so free-form categories and risk thresholds carried authorization semantics that host code could not validate.

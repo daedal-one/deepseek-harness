@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-11-plugin-settings-tabs.zh.md)
-
 ## Problem
 
 Plugin configuration and the read-only Loader inventory each registered a top-level `settings.section`. They described the same Plugins domain but occupied two navigation rows, split search and configuration into unrelated pages, and gave the Settings shell no principled way to present them together. Combining their components directly would instead make one feature plugin import and own the other feature's data lifecycle.

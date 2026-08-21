@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-07-27
 
-English | [中文](2026-07-26-consolidate-gate-scripts-on-existing-deps.zh.md)
-
 ## Problem
 
 The `scripts/` gates mostly used the right tools (`node:fs` `globSync` in 15+ gates, mdast/micromark in the markdown gates), but a handful of stragglers hand-rolled what a sibling gate already did with an existing dependency or builtin:

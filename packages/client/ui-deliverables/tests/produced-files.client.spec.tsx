@@ -339,27 +339,27 @@ describe('ProducedFiles row', () => {
     const view = render(
       <ProducedFiles matched={paths} openFile={openFile} {...capability(true)} t={t} />,
     )
-    expect(view.getByText('产物')).toBeTruthy()
+    expect(view.getByText('Produced')).toBeTruthy()
     const row = view.container.querySelector('[data-produced-files-row]')
     if (!(row instanceof HTMLElement)) throw new Error('produced row missing')
     // The third probe is 100px: two chips plus the remainder fit, three do not.
     expect(within(row).getAllByRole('button')).toHaveLength(2)
-    expect(within(row).getByText('+ 5 个文件')).toBeTruthy()
-    const chip = view.getByRole('button', { name: '打开 deep/a.html' })
+    expect(within(row).getByText('+ 5 files')).toBeTruthy()
+    const chip = view.getByRole('button', { name: 'Open deep/a.html' })
     expect(chip.textContent).toBe('a.html')
     expect(chip.getAttribute('title')).toBe('deep/a.html')
-    expect(view.queryByRole('button', { name: '打开 g.ts' })).toBeNull()
+    expect(view.queryByRole('button', { name: 'Open g.ts' })).toBeNull()
     fireEvent.click(chip)
     expect(openFile).toHaveBeenCalledWith('deep/a.html')
 
-    const showFolder = view.getByRole('button', { name: '在文件夹中显示' })
+    const showFolder = view.getByRole('button', { name: 'Show in folder' })
     fireEvent.click(showFolder)
     expect(openFile).toHaveBeenLastCalledWith('.')
 
     available = 150
     act(() => { resize?.([], {} as ResizeObserver) })
     expect(within(row).getAllByRole('button')).toHaveLength(1)
-    expect(within(row).getByText('+ 6 个文件')).toBeTruthy()
+    expect(within(row).getByText('+ 6 files')).toBeTruthy()
 
     // A missing/unsupported computed gap falls back to zero rather than NaN.
     vi.stubGlobal('getComputedStyle', () => ({ columnGap: '', gap: '' } as CSSStyleDeclaration))
@@ -387,10 +387,10 @@ describe('ProducedFiles row', () => {
       <ProducedFiles matched={['a.md']} openFile={openFile} {...capability(true)} t={t} />,
     )
     const overflowing = ['a.md', 'b.md', 'c.md', 'd.md', 'e.md', 'f.md', 'g.md']
-    expect(view.queryByRole('button', { name: '在文件夹中显示' })).toBeNull()
+    expect(view.queryByRole('button', { name: 'Show in folder' })).toBeNull()
     for (const unavailable of [capability(false), capability(true, false), capability(undefined)]) {
       view.rerender(<ProducedFiles matched={overflowing} openFile={openFile} {...unavailable} t={t} />)
-      expect(view.queryByRole('button', { name: '在文件夹中显示' })).toBeNull()
+      expect(view.queryByRole('button', { name: 'Show in folder' })).toBeNull()
     }
   })
 
@@ -410,7 +410,7 @@ describe('ProducedFiles row', () => {
 })
 
 describe('producedFileMentions resolver', () => {
-  const label = (path: string) => `打开 ${path}`
+  const label = (path: string) => `Open ${path}`
 
   it('resolves exact paths and unique basenames; ambiguity and unknowns stay unresolved', () => {
     const opened: string[] = []
@@ -421,7 +421,7 @@ describe('producedFileMentions resolver', () => {
     )
     // Unique basename resolves to its full path; the full path rides title.
     const byBasename = resolver.resolve('index.html')
-    expect(byBasename?.label).toBe('打开 out/index.html')
+    expect(byBasename?.label).toBe('Open out/index.html')
     expect(byBasename?.title).toBe('out/index.html')
     byBasename?.open()
     expect(opened).toEqual(['out/index.html'])

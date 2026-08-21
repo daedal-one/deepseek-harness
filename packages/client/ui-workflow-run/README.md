@@ -1,7 +1,5 @@
 # @deepseek-ai/dsh-client-ui-workflow-run
 
-English | [中文](README.zh.md)
-
 The browser plugin that reconstructs durable top-level workflow runs as independent Chat nodes. It consumes the four `tool-workflow/*` Session events owned by [`dsh-tool-workflow`](../../workflow/tool-workflow/README.md), registers one `ConversationNodeDefinition`, and renders through the keyed `conversation.chat.node` slot without changing the existing workflow tool card.
 
 ## Durable state and replay

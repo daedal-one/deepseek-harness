@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-06-17-filesystem-capability-seam.zh.md)
-
 ## Problem
 
 The harness has a concrete `bash` capability seam (`dsh-shell` / `dsh-bash-local` / `dsh-tool-bash`), but filesystem operations were about to land as model-facing tools without an equivalent seam. If `read`, `write`, and `edit` directly used `node:fs`, the model-facing tool package would own filesystem execution policy, local path resolution, atomic write behavior, text decoding, symlink behavior, and edit semantics all at once.

@@ -177,15 +177,15 @@ describe('JsonRpcLineTransport', () => {
     transport.onNotification((method, params) => { notifications.push({ method, params }) })
     transport.start()
 
-    const frame = Buffer.from(`${JSON.stringify({ jsonrpc: '2.0', method: 'message', params: { text: '你好' } })}\n`)
-    const character = Buffer.from('你')
+    const frame = Buffer.from(`${JSON.stringify({ jsonrpc: '2.0', method: 'message', params: { text: 'café' } })}\n`)
+    const character = Buffer.from('é')
     const characterStart = frame.indexOf(character)
     expect(characterStart).toBeGreaterThanOrEqual(0)
     input.write(frame.subarray(0, characterStart + 1))
     input.write(frame.subarray(characterStart + 1))
     await new Promise(resolve => setTimeout(resolve, 10))
 
-    expect(notifications).toEqual([{ method: 'message', params: { text: '你好' } }])
+    expect(notifications).toEqual([{ method: 'message', params: { text: 'café' } }])
     transport.close()
   })
 

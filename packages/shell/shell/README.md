@@ -1,7 +1,5 @@
 # @deepseek-ai/dsh-shell
 
-English | [中文](README.zh.md)
-
 The **`ShellExecutor`** (`ctx.shell`) defines WHAT a bash backend does — run foreground commands and start background processes — without saying HOW. Job ids, ownership, collection, cancellation, and notices belong to the generic `ctx.jobs` runtime.
 
 This package owns the Service Definition role of the bash capability, split so each role can evolve (and be swapped) independently:

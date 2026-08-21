@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-04
 
-English | [中文](2026-07-23-tui-file-reference-autocomplete.zh.md)
-
 ## Problem
 
 The TUI offered structured `@session` references but no dependable way to discover workspace paths while composing a prompt. Requiring users to remember exact paths made file-oriented requests unnecessarily awkward, while eagerly attaching every selected file would spend context before the model knew whether its contents were relevant and would hide the normal `read` observation from the tool transcript.

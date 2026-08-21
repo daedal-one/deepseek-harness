@@ -200,7 +200,7 @@ describe('ReadRow keyed toolview', () => {
     expect(view.getAllByText('src/a.ts').length).toBe(2)
     expect(view.container.querySelector('[data-read]')).not.toBeNull()
     expect(contentTexts(view.container)).toContain('export const a = 1')
-    expect(view.getByText('显示 3 / 180 行')).toBeTruthy()
+    expect(view.getByText('Showing 3 / 180 lines')).toBeTruthy()
     // Collapse back in place: the card unmounts, the summary link returns.
     toggleRow(view)
     expect(view.container.querySelector('[data-read]')).toBeNull()
@@ -318,7 +318,7 @@ describe('DetailsPanel Output section (read)', () => {
     expect(view.getByText(/"file_path"/)).toBeTruthy()
     expect(view.container.querySelector('[data-read]')).not.toBeNull()
     // The panel takes the primitive's own default cap (16), not the row's.
-    expect(view.getByText(`… 其余 ${20 - 16} 行`)).toBeTruthy()
+    expect(view.getByText(`… ${20 - 16} more lines`)).toBeTruthy()
     expect(contentTexts(view.container)).toContain('row-0')
   })
 
@@ -330,12 +330,12 @@ describe('DetailsPanel Output section (read)', () => {
       })],
     }), target)
     expect(view.container.querySelector('[data-read]')).toBeNull()
-    expect(view.getByText('输出').closest('section')?.querySelector('pre')?.textContent).toBe('plain result')
+    expect(view.getByText('Output').closest('section')?.querySelector('pre')?.textContent).toBe('plain result')
   })
 
-  it('a running read keeps the 运行中… placeholder (no result view)', () => {
+  it('a running read keeps the Running… placeholder (no result view)', () => {
     const view = mount(snapshot({ runningCalls: [running()] }), target)
-    expect(view.getByText('运行中…')).toBeTruthy()
+    expect(view.getByText('Running…')).toBeTruthy()
     expect(view.container.querySelector('[data-read]')).toBeNull()
   })
 })

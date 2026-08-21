@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-07-26
 
-English | [中文](2026-07-21-tui-steering-queue-badge.zh.md)
-
 ## Problem
 
 While a turn runs, an editor submission calls `agent.steer()` and joins the steering queue behind the running turn ([front-door Agent Note](2026-07-17-dedicated-full-screen-tui-front-door.md)). The running status line ended only with the `Enter sends steering, Esc cancels` hint, so pressing Enter gave no feedback that the message landed or how many were waiting to reach the model. A user steering several times could not tell the queue from a dropped keystroke.

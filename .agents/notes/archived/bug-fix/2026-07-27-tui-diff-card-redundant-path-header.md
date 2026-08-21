@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-07-31
 
-English | [中文](2026-07-27-tui-diff-card-redundant-path-header.zh.md)
-
 ## Problem
 
 The `edit` and `write` tool cards printed the target path twice. Each tool's `presentCall`/`presentResult` returns a diff card whose title is `Edit <path>`/`Write <path>` and whose single `FileDiff` carries the same `path`. The TUI's `diffLines` unconditionally rendered `palette.bold(diff.path)` as a per-file header, so a one-file edit rendered:

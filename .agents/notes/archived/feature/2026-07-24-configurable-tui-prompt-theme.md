@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-04
 
-English | [中文](2026-07-24-configurable-tui-prompt-theme.zh.md)
-
 ## Problem
 
 The terminal prompt row and editor prefix were assembled inside the TUI from a fixed set of workspace, model, usage, cache, context, and timing fields. Deployments could change colors globally but could not choose field order, replace the input prefix, add plugin state, or build a Powerline prompt.

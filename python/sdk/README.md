@@ -1,7 +1,5 @@
 # DeepSeek Harness Python SDK
 
-English | [中文](https://github.com/deepseek-ai/deepseek-harness/blob/master/python/sdk/README.zh.md)
-
 Python subprocess SDK for driving DeepSeek Harness over JSON-RPC stdio. The
 runtime inherits normal DeepSeek Harness environment variables such as
 `OPENROUTER_BASE_URL` and `OPENROUTER_API_KEY`, so callers can use real model

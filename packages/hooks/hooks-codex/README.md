@@ -1,7 +1,5 @@
 # @deepseek-ai/dsh-hooks-codex
 
-English | [中文](README.zh.md)
-
 A cordis plugin that runs the supported subset of a user's existing **Codex** hook config on the harness's canonical interception points. The **Codex dialect** half of the hooks subsystem. The dialect-agnostic primitives come from [`@deepseek-ai/dsh-hook-protocol`](../hook-protocol/README.md); this bridge owns the Codex-shaped payloads, matcher mode, and decision mapping.
 
 This bridge implements a deliberate subset of Codex's current hook protocol:

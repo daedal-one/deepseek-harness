@@ -255,7 +255,7 @@ describe('SearchRow keyed card', () => {
     expect(searchRows(view.container)).toContain('12: const foo = 1')
     expect(searchKindOf(view.container)).toBe('matches')
     // The card's copy control lives inside the expanded body.
-    expect(view.getByText('复制')).toBeTruthy()
+    expect(view.getByText('Copy')).toBeTruthy()
   })
 
   it('expands to the glob path card', () => {
@@ -457,7 +457,7 @@ describe('DetailsPanel Output section (search)', () => {
       nodes: [settledGrep({ callView: null, resultView: null })],
     }), grepTarget)
     expect(searchKindOf(view.container)).toBeNull()
-    const output = view.getByText('输出').closest('section')
+    const output = view.getByText('Output').closest('section')
     expect(output?.querySelector('pre')?.textContent).toContain('const foo = 1')
   })
 })

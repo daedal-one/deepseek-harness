@@ -2,8 +2,6 @@
 
 Status: proposed
 
-English | [中文](2026-07-19-make-jsonrpc-directional.zh.md)
-
 ## Problem
 
 The JSON-RPC bridge models both endpoints as symmetric peers although the shipped protocol is directional. The shared transport (now `dsh-sdk-protocol`, used by the server and by the TypeScript SDK client, which exercises the outbound-request/inbound-notification direction) still implements two halves no endpoint uses: server-originated requests and client-originated notifications. The Python SDK sends requests and receives responses or notifications, but it also queues unused inbound server requests and exposes response helpers.

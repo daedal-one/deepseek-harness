@@ -1,7 +1,5 @@
 # @deepseek-ai/dsh-english-output-guard
 
-English | [中文](README.zh.md)
-
 A scoped output policy for deployments whose selected model routes may drift into Han-script prose. It adds an English instruction to the scoped system prompt and wraps `llm/stream`; auxiliary calls and routes not listed in `targets` delegate immediately, while a targeted successful agent-loop response is buffered until its finish is known. Error and aborted responses replay byte-for-byte. A successful response without substantial unprotected Han also replays byte-for-byte, including provider `replayState`.
 
 ## Config

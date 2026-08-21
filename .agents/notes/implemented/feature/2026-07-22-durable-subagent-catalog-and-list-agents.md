@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-07-22-durable-subagent-catalog-and-list-agents.zh.md)
-
 ## Problem
 
 Continuable background subagents expose a stable child id and persist reconstruction data in that child's session, so `send_message` can resume a known child without any listing operation. Discovery has two consumers with different needs: a UI may show both one-shot work and continuable conversations, while the model should receive only children on which `send_message` is meaningful. The durable Session and Activation design is owned by [continuable subagents](../../implemented/feature/2026-07-28-continuable-subagent-conversations.md); this note owns the shared durable inventory and the model-facing projection.

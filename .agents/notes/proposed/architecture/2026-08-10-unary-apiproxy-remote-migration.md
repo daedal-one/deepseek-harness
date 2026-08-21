@@ -2,8 +2,6 @@
 
 Status: proposed
 
-English | [中文](2026-08-10-unary-apiproxy-remote-migration.zh.md)
-
 ## Problem
 
 The Host API Proxy still owns many unary methods whose implementation is only service lookup, argument projection, one business call, and response projection. That duplicates the contract across the business Service, API Proxy interface, Zod schemas, route table, client stub, and Client caller even though [Typert Remote calls](../../implemented/architecture/2026-08-02-typert-remote-method-calls.md) already let the business package own this class of call.

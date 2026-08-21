@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-07-26
 
-English | [中文](2026-07-21-tui-todo-write-opt-in.zh.md)
-
 ## Problem
 
 The shipped tui-agent `cordis.yml` loaded `@deepseek-ai/dsh-tool-todo`, exposing `todo_write` by default. The tool is a task-tracking convenience, not a core coding affordance like `bash` or the `read`/`write`/`edit` fs tools; most TUI sessions never call it, yet shipping it enlarges the wire tool list and system prompt for every turn. Meanwhile the TUI's plan rendering is event-driven: `packages/ui/tui/src/index.ts` listens for the `todo/write` session event and `TodoComponent.render` returns nothing when the list is empty, so the front door already tolerates the tool being absent or present with no runtime coupling to the plugin.

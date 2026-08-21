@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-08
 
-English | [中文](2026-07-27-wine-windows-gates-experiment.zh.md)
-
 ## Problem
 
 The pull-request Windows lane exists to prove the two blocking win32 surfaces — the workspace build and the production site — and it ran on hosted `windows-2025`, the slowest job in the required matrix: 7–9 minutes against 1.5–2.5 for the Linux jobs, so the Windows VM's boot, setup, and filesystem costs dominated every pull request's critical path.

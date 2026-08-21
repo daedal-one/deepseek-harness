@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-07-27
 
-English | [中文](2026-07-27-user-message-icon-actions.zh.md)
-
 ## Problem
 
 The chat user bubble had no under-bubble action chrome. The Harness design (figma `User_Bubble/message_container`) shows three IconActions — copy, branch in new chat, and edit — right-aligned under the bubble, matching the product action-bar pattern used elsewhere.

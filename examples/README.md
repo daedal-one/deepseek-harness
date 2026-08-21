@@ -1,7 +1,5 @@
 # Examples
 
-English | [中文](README.zh.md)
-
 Runnable demonstrations of the main DeepSeek Harness interfaces and extension points. Each child directory owns its configuration, prerequisites, commands, and detailed behavior.
 
 ## mcp-memory

@@ -1,7 +1,5 @@
 # @deepseek-ai/dsh-client-ui-settings-models
 
-English | [中文](README.zh.md)
-
 Graphical provider management for the Models and Agents settings pages, plus the first-run OpenRouter credential step. The client plugin joins the provider directory, redacted Settings descriptors, credential and account state, and the generated `agentModels` Remote namespace; it never receives secret values.
 
 ## Models page

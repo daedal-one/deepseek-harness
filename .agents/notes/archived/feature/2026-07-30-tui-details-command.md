@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-04
 
-English | [中文](2026-07-30-tui-details-command.zh.md)
-
 ## Problem
 
 The TUI's transcript detail state — tool-card visibility (`collapsed`/`expanded`/`hidden`, per the [consolidated TUI presentation](../architecture/2026-07-28-consolidated-tui-presentation.md)) and reasoning-block display — was reachable only through the Ctrl+O cycle and the Ctrl+R toggle. A user who wants a specific mode must cycle through the others, cannot set both dimensions in one action, and has no way to query the current state; a terminal that swallows those control keys has no fallback at all.

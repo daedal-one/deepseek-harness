@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-11-remove-empty-experimental-package-group.zh.md)
-
 ## Problem
 
 The package hierarchy reserves `packages/experimental/` for prototypes and internal-only plugins, but no package has used the group. The empty group adds placement, dependency, promotion, and release rules without a current package or release mechanism that needs them.

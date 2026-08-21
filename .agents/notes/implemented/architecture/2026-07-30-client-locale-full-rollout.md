@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-07-30-client-locale-full-rollout.zh.md)
-
 ## Problem
 
 After the typed locale standard seat landed (`locale:` on register → framework-injected typed `t`), only four early adopters rode it; every other client package still shipped hardcoded, mixed-language literals. Migrating the rest required mechanisms and boundary decisions the early adopters never touched: how registration-time text (nav rows, view-tab labels) refreshes on a language switch; how the zero-cordis ui-primitives atoms receive copy; and which strings deliberately stay untranslated — an unrecorded boundary invites a future agent to "complete" the localization.

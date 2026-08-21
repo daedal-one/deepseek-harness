@@ -371,7 +371,7 @@ describe('E2BFileSystem identity, metadata, and reads', () => {
 
   it('preserves newline and multibyte canonical paths through strict ASCII framing', async () => {
     const remote = new FakeRemote()
-    const path = '/workspace/你好\nfile.ts'
+    const path = '/workspace/héllo\nfile.ts'
     remote.file(path, 'text')
     const { fs } = await setup(remote)
 

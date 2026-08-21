@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-10
 
-English | [中文](2026-07-23-personal-staging-maintenance-skills.zh.md)
-
 ## Problem
 
 Personal dsh customizations need a repeatable way to locate the installed source, isolate task work, serialize integration, and incorporate upstream changes without rewriting the checkout used by running sessions. User-local instructions solve this for one installation but cannot guide other users or remain synchronized with repository installer behavior.

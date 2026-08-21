@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-13-published-document-fragments.zh.md)
-
 ## Problem
 
 `verify-md-links` validates fragments with GitHub's Markdown heading ids, while the documentation website renders headings with VitePress. Punctuation-heavy headings and translated headings can therefore pass source validation but produce links to ids absent from the published HTML. A successful VitePress build validates target pages, not fragment ids.

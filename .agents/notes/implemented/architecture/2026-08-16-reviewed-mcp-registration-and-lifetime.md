@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-16-reviewed-mcp-registration-and-lifetime.zh.md)
-
 ## Problem
 
 An MCP server's discovered tool list was registered wholesale. A child tool filter could hide tools from that child, but the parent Agent still saw every server capability, including mutations outside the intended role. Provider annotations were descriptive only, model-controlled session or page identifiers could cross Agent sessions, and stdio servers bypassed the harness subprocess lifecycle.

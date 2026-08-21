@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-07-10-single-file-executable-sdk-runtime-distribution.zh.md)
-
 ## Problem
 
 DeepSeek Harness needs a dedicated SDK distribution form for the Python library — no Node installation, runs directly on the target platform: a single-file executable (hereafter "the exe") that exposes a stdio JSON-RPC serving interface (`HarnessSdkJsonRpcServer`, the Python SDK's peer), where the plugins and configuration actually booted are decided entirely by a `cordis.yml` supplied from outside the exe.

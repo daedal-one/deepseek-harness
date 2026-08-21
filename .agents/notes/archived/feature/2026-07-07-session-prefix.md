@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-07-28
 
-English | [中文](2026-07-07-session-prefix.zh.md)
-
 The request-only prefix seam described below was later removed by the [unified sourced-message decision](../architecture/2026-07-22-unified-send-and-coalesced-user-messages.md). Current producers inject durable sourced `user/message` context at `agent/step`; this record preserves the earlier design and its trade-offs.
 
 ## Problem

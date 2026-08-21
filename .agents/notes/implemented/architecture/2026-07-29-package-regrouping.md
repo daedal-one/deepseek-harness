@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-07-29-package-regrouping.zh.md)
-
 ## Problem
 
 The two-level `packages/<group>/<pkg>` hierarchy ([original decision](../../archived/architecture/2026-06-20-package-hierarchy.md)) had drifted since June: 167 packages sat in 42 groups, and several group boundaries no longer matched how the packages actually cluster.

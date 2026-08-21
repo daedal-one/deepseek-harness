@@ -39,14 +39,14 @@ describe('LocaleRuntime', () => {
 
   it('translates through the active-locale -> zh -> key chain', () => {
     const { svc } = make()
-    svc.register('ns', 'zh', { hello: '你好', onlyZh: '仅中文' })
+    svc.register('ns', 'zh', { hello: 'Greetings', onlyZh: 'zh-only' })
     svc.register('ns', 'en', { hello: 'Hello' })
     const t = svc.bind('ns')
     expect(svc.getLocale().active).toBe('zh')
-    expect(t('hello')).toBe('你好')
+    expect(t('hello')).toBe('Greetings')
     svc.setLocale('en')
     expect(t('hello')).toBe('Hello')
-    expect(t('onlyZh')).toBe('仅中文')
+    expect(t('onlyZh')).toBe('zh-only')
     expect(t('missing.key')).toBe('missing.key')
   })
 
@@ -54,14 +54,14 @@ describe('LocaleRuntime', () => {
     const { svc } = make()
     // The shipped common pair is registered by apply; the bench registers it
     // directly to pin the production chain: ns -> common -> zh -> key.
-    svc.register('common', 'zh', { retry: '重试' })
+    svc.register('common', 'zh', { retry: 'Retry' })
     svc.register('common', 'en', { retry: 'Retry' })
-    svc.register('ns', 'zh', { own: '自有' })
+    svc.register('ns', 'zh', { own: 'Own' })
     const t = svc.bind('ns')
-    expect(t('retry')).toBe('重试')
+    expect(t('retry')).toBe('Retry')
     svc.setLocale('en')
     expect(t('retry')).toBe('Retry')
-    expect(t('own')).toBe('自有')
+    expect(t('own')).toBe('Own')
     // common itself must not recurse: a miss inside common echoes the key.
     // (Wide-string ns hits the untyped bind overload — the typed one rejects
     // unknown keys at compile time, which is the point of the typed registry contract.)
@@ -70,10 +70,10 @@ describe('LocaleRuntime', () => {
 
   it('interpolates {name} params and leaves unknown placeholders intact', () => {
     const { svc } = make()
-    svc.register('ns', 'zh', { greet: '你好，{name}！第 {n} 次', partial: '{known} 与 {unknown}' })
+    svc.register('ns', 'zh', { greet: 'Hi, {name}! Attempt {n}', partial: '{known} and {unknown}' })
     const t = svc.bind('ns')
-    expect(t('greet', { name: '世界', n: 2 })).toBe('你好，世界！第 2 次')
-    expect(t('partial', { known: 'A' })).toBe('A 与 {unknown}')
+    expect(t('greet', { name: 'World', n: 2 })).toBe('Hi, World! Attempt 2')
+    expect(t('partial', { known: 'A' })).toBe('A and {unknown}')
   })
 
   it('bind returns a stable per-namespace function identity', () => {
@@ -233,7 +233,7 @@ describe('LocaleRuntime', () => {
   it('exposes the two shipped locales with self-described labels', () => {
     const { svc } = make()
     expect(svc.getLocale().locales).toEqual([
-      { id: 'zh', label: '中文' },
+      { id: 'zh', label: 'Chinese' },
       { id: 'en', label: 'English' },
     ])
   })

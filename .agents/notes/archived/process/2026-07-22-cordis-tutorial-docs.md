@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-07-27
 
-English | [中文](2026-07-22-cordis-tutorial-docs.zh.md)
-
 ## Problem
 
 The repo documents Cordis at two levels: the condensed [cordis-primer](../../../../docs/cordis-primer.md) states the concepts, and the `docs/user/develop/` pages teach harness plugin authoring against harness services. Neither serves a developer meeting Cordis itself for the first time: the primer assumes the reader already writes plugins, and the develop pages jump straight to `defineTool` without showing how contexts, fibers, services, and dispatch actually behave. There was no path where a reader runs bare Cordis, watches a fiber go PENDING, or sees a waterfall veto happen.
@@ -15,7 +13,7 @@ The repo documents Cordis at two levels: the condensed [cordis-primer](../../../
 
 - **Every transcript is real.** Each chapter's files run in the gitignored `tmp/cordis-tutorial/` scratch directory via `node --import tsx ../../vendor/cordis/bin.js`, and the shown output is what those commands print. The chapter that uses harness packages (`@deepseek-ai/dsh-tools` and `@deepseek-ai/dsh-llm`) runs keylessly.
 - **dsh-flavored, not pure Cordis**: later chapters use real harness services and events (`ctx.tools`, `tools/result`) so the tutorial lands the reader inside this repo's actual composition model, per the requesting user's choice.
-- **English-only, published to both website locales** through `mirroredPages()` in [website/docs.ts](../../../../website/docs.ts) under a `Cordis 教程` / `Cordis tutorial` section of the develop sidebar — the same pattern as the reference pages, so a Chinese pair can ratchet in later without route changes.
+- **English-only, published to both website locales** through `mirroredPages()` in [website/docs.ts](../../../../website/docs.ts) under a `Cordis tutorial` section of the develop sidebar — the same pattern as the reference pages, so the content stays a single English source mirrored across locales.
 - Code fences compile under `doc-typecheck` except the two fences that import scratch-relative files (`./stats.ts`) or intentionally throw, which carry `ignore-check`.
 
 ## Alternatives considered

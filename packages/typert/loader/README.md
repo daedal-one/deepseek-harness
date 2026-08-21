@@ -1,7 +1,5 @@
 # @deepseek-ai/dsh-typert-loader
 
-English | [中文](README.zh.md)
-
 Node-only Loader integration for generated Typert artifacts. The plugin requires `ctx.loader` and `ctx.typert`; it does not provide the registry itself.
 
 During activation it scans existing Loader entries. It then follows Cordis `internal/plugin` lifecycle notifications, resolves each entry package's `package.json`, imports `./typert` when exported, validates its `TYPERT` manifest, and registers the contribution until the entry or this plugin unmounts. An import that settles after either owner is gone is discarded.

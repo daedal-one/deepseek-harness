@@ -2,8 +2,6 @@
 
 Status: rejected — every swap below fails the net-simplification bar on evidence; recorded so the survey is not re-run from scratch
 
-English | [中文](2026-07-26-dependency-swaps-rejected-by-nih-audit.zh.md)
-
 ## Problem
 
 A repository-wide "Not Invented Here" audit (2026-07-26, ten parallel surveys covering every package group, scripts/, native/, vendor/ edges, python/, test infrastructure, and CI) asked of each hand-rolled surface: would a maintained external package or Node builtin delete it with a net win under the [dependency policy](../../implemented/process/2026-07-26-dependencies-over-hand-rolling.md)? The positive findings became their own proposed notes. The negative verdicts carry equal value — each names a plausible-looking swap whose hand-rolled shape is load-bearing — but would otherwise live only in a PR body. This note freezes them.

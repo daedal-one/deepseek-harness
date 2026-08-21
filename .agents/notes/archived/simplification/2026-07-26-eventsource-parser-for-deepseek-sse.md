@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-07
 
-English | [中文](2026-07-26-eventsource-parser-for-deepseek-sse.zh.md)
-
 ## Problem
 
 `packages/llm/llm-deepseek/src/sse.ts` hand-implemented Server-Sent Events parsing: a streaming `TextDecoder`, event-block splitting on `\r?\n\r?\n`, `data:` payload extraction and joining, comment/field skipping, the `[DONE]` sentinel, a `STREAM_CLOSED` error on EOF without it, and a flush of a final unterminated event block. The file was ~67 lines with ~108 lines of dedicated tests (`tests/sse.spec.ts`) re-proving SSE spec behavior — UTF-8 split across chunks, CRLF handling, multi-`data:` joining, no-space-after-colon — that a maintained parser already guarantees. Its only consumer is `adapter.ts` (`yield* translate(parseSse(response.body))`).

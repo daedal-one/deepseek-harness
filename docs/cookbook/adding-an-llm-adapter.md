@@ -1,7 +1,5 @@
 # Cookbook: adding an LLM adapter
 
-English | [中文](adding-an-llm-adapter.zh.md)
-
 How to connect a new model provider. The shipped reference implementation is `packages/llm/llm-pi-ai`, which wraps the multi-provider pi-ai library. Read the `StreamChunk` documentation in `packages/llm/llm/src/types.ts` first; it defines the protocol obligations every adapter must satisfy.
 
 ## The shape

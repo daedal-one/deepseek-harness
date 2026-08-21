@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-07
 
-English | [中文](2026-07-26-execa-for-test-subprocess-plumbing.zh.md)
-
 ## Problem
 
 Roughly ten e2e/smoke files re-derived the same spawn-collect-timeout choreography by hand: `let stdout = ''` accumulation with `setEncoding` and `data` handlers, a `setTimeout` → `kill('SIGKILL')` deadline, and `once('exit')`/`once('error')` settlement, each with small variations. The sites: the inner spawn block of `runLoaderSmoke` (`packages/support/loader-smoke/src/index.ts`), `runBuiltBin` in `apps/cli/tests/built-bin.e2e.ts` and `packages/examples/cli-demo/tests/built-bin.e2e.ts`, `runBinExpectingExit` in `packages/examples/acp-demo/tests/built-bin.e2e.ts`, the built-lib e2e helpers in `lsp-local` and `code-runtime-worker`, the outer collector of `examples/tui-agent/tests/pty-harness.ts`, `examples/jsonrpc-agent/tests/keyless-smoke.e2e.ts`, and partially `apps/web/tests/smoke-real.e2e.ts` and `session-checkpoint-policy/tests/crash-recovery.e2e.ts`.

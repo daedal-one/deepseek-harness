@@ -1,7 +1,5 @@
 # `@deepseek-ai/dsh-tool-memory-reviewer`
 
-English | [中文](README.zh.md)
-
 Privileged memory Consumer exposing pending-item discovery, review, supersession, and deletion only inside subagent children carrying its config-selected principal. Root and ordinary children receive no reviewer prompt or tool schemas. Every execution also folds the durable subagent descriptor and requires the same principal; no model argument, persona, or role string can claim reviewer authority. Global mutations additionally require an `allowed-once` approval.
 
 ## Model Experience

@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-16-trusted-subagent-principals-and-results.zh.md)
-
 ## Problem
 
 Named roles imported from another agent setup need capabilities and completion rules that ordinary children must not receive. A role label, prompt sentence, or tool argument is model-controlled text and cannot authorize privileged tools. Completion protocols such as a required status block also cannot be enforced reliably by asking the child to remember them.

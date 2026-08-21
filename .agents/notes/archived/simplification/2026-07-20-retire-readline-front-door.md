@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-07-26
 
-English | [中文](2026-07-20-retire-readline-front-door.zh.md)
-
 ## Problem
 
 The repo shipped two interactive terminal front doors: the line-oriented readline channel (`@deepseek-ai/dsh-stdio`) and the full-screen [`@deepseek-ai/dsh-tui`](../feature/2026-07-17-dedicated-full-screen-tui-front-door.md). After the TUI landed, readline's interactive role was redundant — `demo:tui` superseded `demo:repl` as the coding-agent experience — while its remaining real role, pipes and automation, was already served better by the one-shot `@deepseek-ai/dsh-cli-demo` app (task in, DSH-native `text`/`json`/`stream-json` out, durable persistence, signal handling).

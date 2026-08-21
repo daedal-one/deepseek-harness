@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-07-27-web-session-search.zh.md)
-
 ## Problem
 
 The Web sidebar exposes session titles and Workspace membership but cannot retrieve a past conversation from words that appear only inside its messages. Scanning histories in the browser would require attaching or loading every session, duplicate the existing indexed-search service, and make cold persisted sessions both slow and easy to omit. The product also needs a predictable failure path: an unavailable derived index must not erase title matches that the client can compute locally.
@@ -18,7 +16,7 @@ The host gateway exposes `session.search` through the existing typed RPC stack. 
 
 The result bound is one protocol constant, not per-connection state. `SESSION_SEARCH_RESULT_LIMIT` lives beside the response schema that enforces it in `dsh-host-apiproxy`, and `SessionRuntime.searchResultLimit` re-exposes that constant for presentation plugins. Reaching it from a feature is an explicit widening of the sessions domain: `ISessions` — the face injected as `ctx.sessions`, and therefore what the test runtime's sessions double must implement — declares the search verb next to that bound. The connection handle does not carry it: a per-connection field would imply a transport-varying or server-negotiated bound that the schema's fixed `max` forbids, and would leave the same fact with two homes in the same module.
 
-Content matching inherits the SQLite backend's normalized literal token/phrase semantics. The shared semantic projection excludes reasoning blocks, so UI search never returns a model's private reasoning as a hit or snippet; the derived-index schema version advances so existing persistent indexes rebuild without the former documents. FTS5 operators are inert data, and this surface adds no typo, fuzzy, prefix, or arbitrary-substring expansion. In particular, the `unicode61` tokenizer may treat an uninterrupted Chinese sequence as one token, so a shorter query such as `搜索` is not guaranteed to match inside `会话搜索功能`. Title and Workspace matching remains ordinary client-side substring matching.
+Content matching inherits the SQLite backend's normalized literal token/phrase semantics. The shared semantic projection excludes reasoning blocks, so UI search never returns a model's private reasoning as a hit or snippet; the derived-index schema version advances so existing persistent indexes rebuild without the former documents. FTS5 operators are inert data, and this surface adds no typo, fuzzy, prefix, or arbitrary-substring expansion. In particular, the `unicode61` tokenizer may treat an uninterrupted CJK sequence as one token, so a shorter query inside a longer composed term is not guaranteed to match — a query for "search" does not necessarily hit inside the CJK phrase whose characters read "session search feature". Title and Workspace matching remains ordinary client-side substring matching.
 
 ## Failure and visibility contract
 

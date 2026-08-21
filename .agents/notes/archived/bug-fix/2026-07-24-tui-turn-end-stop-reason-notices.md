@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-04
 
-English | [中文](2026-07-24-tui-turn-end-stop-reason-notices.zh.md)
-
 ## Problem
 
 The TUI rendered transcript notices for `error`, `aborted`, `max-tokens`, `rejected`, and `interrupted` turn ends, but a `disposed` turn end and any plugin-added `TurnEndReasonMap` kind rendered nothing. When such a turn ended — live or replayed from a persisted log — the agent stopped working with no visible reason, breaking the product expectation that every stop is explained to the user.

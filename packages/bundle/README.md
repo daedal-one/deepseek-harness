@@ -1,7 +1,5 @@
 # bundle/ — profile plugin bundles
 
-English | [中文](README.zh.md)
-
 Profile bundles: npm packages whose manifest declares `"dsh": { "bundle": { "patch": "./cordis.patch.yml" } }`, making them installable patch layers for `dsh --profile` compositions ([profile contract](../boot/app-boot/README.md#profiles)). A bundle's substance is its patch list; some also ship runtime glue plugins their patch mounts.
 
 | Package | Role | ctx key |

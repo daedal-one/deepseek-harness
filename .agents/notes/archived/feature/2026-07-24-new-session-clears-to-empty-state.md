@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-07-26
 
-English | [中文](2026-07-24-new-session-clears-to-empty-state.zh.md)
-
 ## Problem
 
 Sidebar "New Session" created and opened a blank session immediately, so the center column showed `ConversationRoot` with an empty transcript and the resident composer. The Figma NEW SESSION screen (`EmptyState` + shared `InputBar` hero) only rendered when `sessions.current` was already undefined, so the launch page was unreachable from the primary creation control.

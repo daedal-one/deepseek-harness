@@ -1,20 +1,20 @@
 ---
 name: Task
-about: 明确的非 Feature、非 Bug 工作
+about: Non-Feature, non-Bug work that is clearly scoped
 title: ''
 labels: ''
 assignees: ''
 type: Task
 ---
 
-<!-- 标题写中文行动或结果句；外露正文不超过 50 单位。 -->
-一句话说明要完成的工作。
+<!-- Write the title as an action- or result-focused sentence; keep the exposed body under 50 units. -->
+State the work to complete in one sentence.
 
 <details>
-<summary>验收与细节</summary>
+<summary>Acceptance and details</summary>
 
-- 验收条件：
-- 交付物：
-- 测试证据：
+- Acceptance criteria:
+- Deliverables:
+- Test evidence:
 
 </details>

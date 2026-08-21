@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-07-26
 
-English | [中文](2026-07-19-use-one-session-surface-manager.zh.md)
-
 ## Problem
 
 `Session` maintained two `SurfaceManager` instances over the same append-only event log. One validated seed and append candidates, while a second lazy instance independently folded committed events for `session.surface`, derived messages, compaction, and workspace context. Once the public surface had been read, every later event advanced duplicate node and replacement-generation state without creating a separate authority or failure boundary.

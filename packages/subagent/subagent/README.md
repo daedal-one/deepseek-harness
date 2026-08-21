@@ -1,7 +1,5 @@
 # @deepseek-ai/dsh-subagent
 
-English | [中文](README.zh.md)
-
 The subagent seam lets one agent delegate work to a child through a named provider. Callers use one service API (`ctx.subagents`); providers decide whether the child runs in this process, in another process, or through a future transport.
 
 The [subagent family overview](../README.md) maps implementations and model-facing consumers. This package owns the provider registry, shared request and result contracts, durable descriptors, and continuable-child orchestration. Multiple named providers may coexist behind that contract.

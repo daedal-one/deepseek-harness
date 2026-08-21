@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-07-27
 
-English | [中文](2026-07-22-tui-titles-from-session-title-service.zh.md)
-
 ## Problem
 
 A per-session title makes terminal panes and tabs distinguishable, but a TUI-local model call would create a second title pipeline beside [log-backed session titles](../feature/2026-07-21-log-backed-session-titles.md). The local path needs its own prompt, cap, one-shot latch, resume derivation, cancellation, and failure fallback, while its process-local result remains invisible to session listings, forks, Web consumers, and replay. If both paths run, one session can also be titled twice by different strategies.

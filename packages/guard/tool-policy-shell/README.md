@@ -1,7 +1,5 @@
 # dsh-tool-policy-shell
 
-English | [中文](README.zh.md)
-
 This effect-scoped provider interprets explicitly mapped shell tools through the existing `ctx.toolPolicy` service. It combines fixed security checks, ordered deployment rules, a conservative parsed read-only set, and bounded independent intent and command-effect review. Bash and PowerShell are supported by configuration; neither tool name nor argument name is built in.
 
 ## Configuration and behavior

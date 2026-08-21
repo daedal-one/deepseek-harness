@@ -1,7 +1,5 @@
 # @deepseek-ai/dsh-subagent-fork-in-process
 
-English | [中文](README.zh.md)
-
 The fork provider creates an in-process child seeded with the parent's completed conversation turns. It shares all run mechanics with spawn; the session seed is the only behavioral difference.
 
 ## Seed boundary

@@ -1,7 +1,5 @@
 # @deepseek-ai/dsh-typert-protocol
 
-English | [中文](README.zh.md)
-
 Compiler-independent declarations shared by business packages, generated Typert artifacts, the Host Gateway, and Client API. This package owns the Remote Service base, decorators, explicit binding fallback, merge-extensible protocol maps, invocation descriptors, codecs, and provider contracts; it does not run TypeScript analysis or register a concrete Cordis service.
 
 ## Remote declarations

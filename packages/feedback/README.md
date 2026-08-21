@@ -1,7 +1,5 @@
 # feedback/ — recorded human feedback
 
-English | [中文](README.zh.md)
-
 The feedback family exposes two deliberately separate contracts: an immutable remark in the canonical Session log, and editable feedback attached to one assistant message in a local sidecar. Neither form enters the model conversation.
 
 | Package | Role | ctx key |

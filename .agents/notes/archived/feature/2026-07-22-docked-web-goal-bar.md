@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-07
 
-English | [中文](2026-07-22-docked-web-goal-bar.zh.md)
-
 ## Problem
 
 The web UI had no goal surface at all: the goal stack shipped with model tools, the TUI/ACP adapters, and the `/goal` command, but the browser client exposed none of it — no runtime verbs, no indicator. This change introduces the client goal verbs (runtime session methods over RPC) and the first goal UI together. Placement follows the redesign's premise that goal presence belongs to the composer's context: the goal is a property of the work the user is about to prompt, so its indicator belongs in the composer-context stack; the [composer context stack decision](../bug-fix/2026-07-30-composer-context-stack-order.md) owns its position among Goal, Todo, Queue, and the composer. The mock keeps only a sparkle, a phase word ("Ongoing/Paused/Blocked Goal"), the truncated objective, and edit/clear icon actions, with resume appearing only on a paused goal.

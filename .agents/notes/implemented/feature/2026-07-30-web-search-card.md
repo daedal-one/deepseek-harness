@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-07-30-web-search-card.zh.md)
-
 ## Problem
 
 The `grep` and `glob` tools declare a result-time `card: 'search'` render intent ([search render card](2026-07-30-search-render-card.md)): a `SearchMatchesResultView` (`shape: 'matches'`) carrying grep's matches grouped by file, or a `SearchPathsResultView` (`shape: 'paths'`) carrying glob's flat path list, both with a `truncated`/`total` capping signal. That view already reaches the browser — host, connection, and runtime deliver it onto `ConversationSnapshot` as `resultView` — but the Web client ignored it: every non-terminal, non-diff tool result fell through to the generic card, which renders the model-facing text. A web frontend that wants an expandable per-file group of matches, or a scannable path list, had only the pre-formatted text.
@@ -22,7 +20,7 @@ The component's contract:
 
 - **Grouped matches, collapsible per file.** Each file is a header row (a bold path plus its match count, the whole row the collapse control) followed by its `lineNumber: line` rows. Collapsing a group drops its match rows from the flattened list and from the height cap's arithmetic, but never from the copy text.
 - **Flat path list.** The paths shape renders one path per row, no headers.
-- **A capped indicator.** When `truncated`, the banner summary folds the pre-cap total in — `显示 X / 共 N 处匹配 · K 个文件` for grep, `显示 X / 共 N 个路径` for glob — so the card never presents a capped page as the complete result. When not `truncated` the summary is a plain structural count (`{n} 处匹配 · {m} 个文件`, or `{n} 个路径`).
+- **A capped indicator.** When `truncated`, the banner summary folds the pre-cap total in — `showing X / N total matches · K files` for grep, `showing X of N total paths` for glob — so the card never presents a capped page as the complete result. When not `truncated` the summary is a plain structural count (`{n} matches · {m} files`, or `{n} paths`).
 - **A recovery footer for a capped result.** The card holds only the retained page, but the locator to the rest — grep/glob's `Full … stored at: <locator>` footer — lives only in the raw `tool/result` content (the search view carries no result text; a UI without a card falls back to that raw content), not in the structured matches/paths. Because every render site replaces the raw result with the card, `searchCardModel` surfaces the block's own flattened result text as `SearchCardModel.recovery` when (and only when) the result was capped, and each render site draws it below the card. Without this the one path to the dropped rows would vanish from the UI; an uncapped result carries every row, so its raw text adds nothing and is dropped.
 - **No soft wrapping.** Result rows are `white-space: pre` inside a horizontally scrolling box, so a long match line or a deep path scrolls sideways rather than folding.
 - **Height cap with an expand control.** More than `DEFAULT_SEARCH_MAX_LINES` (16) rows shows a head/tail slice with a button reporting the hidden count, the same shape and arithmetic as `TerminalBlock`.

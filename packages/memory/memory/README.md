@@ -1,7 +1,5 @@
 # `@deepseek-ai/dsh-memory`
 
-English | [中文](README.zh.md)
-
 Service Definition for durable reviewed memory. Every operation names either one canonical project path or the global scope; ids and revisions prevent cross-scope and stale writes. Proposals carry evidence, trust, temporal validity, and explicit contradiction links.
 
 ## Model Experience

@@ -1,7 +1,5 @@
 # @deepseek-ai/dsh-agent-default-model
 
-English | [中文](README.zh.md)
-
 Persistent model selection for the main Agent and deployment-defined named Agent roles. `AgentModelConfig` provides `ctx.agentModels`; direct entry points, Host-backed entry points, and named child tools read one owner instead of carrying unrelated model defaults.
 
 The plugin config requires `{ provider, model }` and accepts `reasoningEffort`. The provider is fixed by composition for every Agent role. The `agent-models` Settings section stores only each role's model and optional reasoning effort, so a graphical change cannot silently move an Agent to another credential or provider route.

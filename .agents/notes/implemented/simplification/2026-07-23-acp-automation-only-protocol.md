@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-07-23-acp-automation-only-protocol.zh.md)
-
 ## Problem
 
 The ACP bridge had become a second interactive product UI. It translated durable events into editor cards, terminal metadata, diffs, plans, titles, reasoning, commands, modes, model and permission pickers, session navigation, and human elicitation. Those responsibilities duplicated the TUI and the Web client while coupling an automation transport to UI services, persistence queries, presentation policy, and editor-specific conventions.

@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-06-20-remove-agent-boundary-mirror-events.zh.md)
-
 ## Problem
 
 The loop records the canonical transcript in `SessionEvent` and also emitted a parallel set of live `agent/*` boundary mirror events: `agent/turn-start`, `agent/turn-end`, `agent/step-start`, and `agent/step-end`. The mirrors made consumers choose between two sources of truth for the SAME durable fact. ACP already chose the session log for prompt settlement and committed output because it is the one durable, replayable record; consuming a live mirror would require reconciling its timing with the boundary already stored in that log. The stdio UI was the only production consumer that still rendered turn boundaries from the mirror events; it already rendered tool calls and results from `session/event`.

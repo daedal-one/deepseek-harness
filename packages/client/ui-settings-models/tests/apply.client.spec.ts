@@ -56,10 +56,10 @@ describe('ui-settings-models apply', () => {
     expect(entry.component).toBe(ModelsSection)
     expect(entry.options).toMatchObject({ id: 'models', order: 10 })
     // The nav label is a locale-following thunk; owners resolve at read time.
-    expect(resolveSlotLabel(entry.options.label)).toBe('模型')
+    expect(resolveSlotLabel(entry.options.label)).toBe('Models')
     const injected = (entry.inject as unknown as () => import('../src/client/ModelsSection.tsx').ModelsSectionInjected)()
-    expect(injected.t('nav')).toBe('模型')
-    expect(injected.t('deleteTitle')).toBe('删除 {provider}？')
+    expect(injected.t('nav')).toBe('Models')
+    expect(injected.t('deleteTitle')).toBe('Delete {provider}?')
     expect(typeof injected.controller.load).toBe('function')
     expect(typeof injected.useSnapshot).toBe('function')
     expect(injected.api).toBeDefined()
@@ -106,8 +106,8 @@ describe('ui-settings-models apply', () => {
     const injected = b.slots.entries('settings.section')[0]!.inject as unknown as () => import('../src/client/ModelsSection.tsx').ModelsSectionInjected
     expect(injected().t('deleteTitle')).toBe('Delete {provider}?')
     b.locale.setLocale('zh')
-    expect(resolveSlotLabel(b.slots.entries('settings.section')[0]!.options.label)).toBe('模型')
-    expect(injected().t('deleteTitle')).toBe('删除 {provider}？')
+    expect(resolveSlotLabel(b.slots.entries('settings.section')[0]!.options.label)).toBe('Models')
+    expect(injected().t('deleteTitle')).toBe('Delete {provider}?')
   })
 
   it('locale change while the slot is undeclared stays a no-op', async () => {
@@ -143,8 +143,8 @@ describe('ui-settings-models apply', () => {
     declare(b.slots)
     const fiber = b.ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
-    expect(b.locale.bind('settings.models')('nav')).toBe('模型')
-    expect(b.locale.bind('settings.agents')('nav')).toBe('智能体')
+    expect(b.locale.bind('settings.models')('nav')).toBe('Models')
+    expect(b.locale.bind('settings.agents')('nav')).toBe('Agents')
     await fiber.dispose()
     expect(b.slots.entries('settings.section')).toHaveLength(0)
     expect(b.slots.entries('settings.onboarding')).toHaveLength(0)

@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-16-durable-reviewed-memory.zh.md)
-
 ## Problem
 
 Session transcripts preserve what happened but do not provide a bounded, queryable source of durable project knowledge. Automatically treating extracted text as truth would let guesses, stale facts, tool-output instructions, or an acting model's claimed role become long-lived authority. Global memory also crosses project isolation and needs explicit human consent for every mutation.

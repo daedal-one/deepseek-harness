@@ -84,7 +84,7 @@ describe('MenuView', () => {
     mount(openState())
     const options = screen.getAllByRole('option')
     expect(options.map(o => o.textContent)).toEqual(['⚑goalSet up a goal', 'plan'])
-    expect(screen.queryByText('正在加载…')).not.toBeNull()
+    expect(screen.queryByText('Loading…')).not.toBeNull()
   })
 
   it('titles each group with the localized source name, raw name for unknown sources, none for empty ready groups', () => {
@@ -96,7 +96,7 @@ describe('MenuView', () => {
         { source: 'skill', status: 'pending', items: [] },
       ],
     }))
-    expect(titles(view.container)).toEqual(['命令', 'mystery', '技能'])
+    expect(titles(view.container)).toEqual(['Commands', 'mystery', 'Skills'])
   })
 
   it('exposes the highlight via aria-activedescendant and aria-selected', () => {

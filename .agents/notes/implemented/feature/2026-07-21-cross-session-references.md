@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-07-21-cross-session-references.zh.md)
-
 ## Problem
 
 TUI users need to bring relevant work from another conversation into one new message without resuming, forking, or granting the source transcript authority over the current session. The harness already exposes exact session enumeration and raw event inspection, but every host independently parsing logs would duplicate compaction folding, filtering by cited source-event seqs, size limits, error behavior, and persistence. Encoding host markup directly into the agent message contract would also bind the core loop to one UI syntax.

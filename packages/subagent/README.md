@@ -1,7 +1,5 @@
 # subagent/ — subagent capability family
 
-English | [中文](README.zh.md)
-
 This family lets an agent delegate work to child agents. Multiple named providers may coexist in one context.
 
 | Package | Role | ctx key |

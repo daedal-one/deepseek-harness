@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-07-04-doc-tiers-and-budgets.zh.md)
-
 ## Problem
 
 Standing docs accumulated repeated rules, retold incidents, duplicated package maps, and stale Agent Note summaries despite existing writing guidance. That guidance also did not define how a document's place in the hierarchy limits its scope or how ordered teaching differs from lookup-oriented material. Because review alone did not prevent that growth, the repository needed a mechanical budget alongside its documentation taxonomy.

@@ -1,7 +1,5 @@
 # @deepseek-ai/dsh-skill-filesystem
 
-English | [中文](README.zh.md)
-
 Local filesystem provider for the `ctx.skills` registry.
 
 This package implements one skill source. It scans local project, custom, and user skill roots, parses `SKILL.md` or flat Markdown skill files, and registers the provider on `ctx.skills`. The registry remains in `@deepseek-ai/dsh-skill`; the durable session catalogs and model-facing loader tool remain in `@deepseek-ai/dsh-tool-skill`.

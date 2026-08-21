@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-04
 
-English | [中文](2026-07-23-tui-generic-card-markdown.zh.md)
-
 ## Problem
 
 Tool presenters can put Markdown in generic-card content, including fenced `console` output used for background-task acknowledgements and execution errors. Rendering that content as plain text exposes the fence markers and diverges from assistant and user content in the same transcript.

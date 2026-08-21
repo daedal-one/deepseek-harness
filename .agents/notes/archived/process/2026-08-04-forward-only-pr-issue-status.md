@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-10
 
-English | [中文](2026-08-04-forward-only-pr-issue-status.zh.md)
-
 ## Problem
 
 The Issue Project status represents the phase of the work, while an exact same-repository resolving keyword establishes the authoritative PR-to-Issue relationship. Restricting lifecycle advancement to Issues already in `Ready` leaves an Issue in `Inbox` or `Backlog` after implementation has demonstrably started. Requiring otherwise valid PR metadata before projecting the phase also conflates policy compliance with the work's observable state.

@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-03
 
-English | [中文](2026-07-31-experimental-subcommand-gate.zh.md)
-
 ## Problem
 
 The `meta` and `upgrade` entry points carried their experimental status in their names: `dsh experimental-meta` and `dsh experimental-upgrade`. The prefix made every invocation verbose, and renaming a command at stabilization would break every reference to it — muscle memory, scripts, and docs alike. The status belongs in an opt-in gate, not in the name.

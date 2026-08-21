@@ -21,11 +21,15 @@ rg -n --hidden -i 'probably |should be enough|should suffice|it simply|is safe �
 rg -n --hidden '§\d' ...
 ```
 
-## Chinese battery
+## Working-language battery
 
 ```sh
-rg -n --hidden '设计稿|评审|上一?轮|旧版|老的|不再|以前|本版|遗留|私有' ...
-rg -n --hidden '(^|[^a-zA-Z])端([^a-zA-Z]|$)' --glob '*.md' ...
+# Authoring-language fragments that slip into English prose from zh drafting sessions.
+# Match the concepts directly; the banned forms are the same whether written as Zh-CN glyphs or as
+# an English gloss of them (design-brief, review, earlier round, old version, older, no longer,
+# previously, this release, leftover, private, plus a bare trailing "end" word-fragment).
+rg -n --hidden -i 'design[- ]?brief|earlier round|old version|older|no longer|previously|prior|leftover|private .*separator|client end' ...
+rg -n --hidden '\bend\b' --glob '*.md' ...
 ```
 
 ## Known false-positive families
@@ -39,5 +43,5 @@ Judged and kept during the purge; expect them again:
 - **`§N` with a committed owner** — external standards (RFC 9110 §10.1.5) and committed docs that own their §-numbering stay citable by section.
 - **Contrastive "actually" and noun "wait"** — ordinary English, not hedging; no committed line probes them, so they surface only when you extend the battery with broader hedging patterns.
 - **"Today" in generated timestamps and CLI output samples** — recorded output keeps its voice.
-- **本版本 in zh prose** — a legitimate rendering of "this release" in versioned-artifact contexts; the banned indexical is 本版 as a bare stamp mirroring "this cut".
+- **"This release" in zh-authored versioned contexts** — a legitimate rendering of "this release" in versioned-artifact contexts; the banned indexical is the bare stamp "this cut", not its release-worded form.
 - **Alternatives-considered sections** — "rejected" inside an Agent Note's genre slot is the sanctioned home, not review choreography.

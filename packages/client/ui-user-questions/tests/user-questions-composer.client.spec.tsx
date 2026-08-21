@@ -40,19 +40,19 @@ const kit = {
 
 const QUESTIONS = [
   {
-    id: 'profile', header: '偏好', question: '选择候选人类型',
-    detail: '按当前空缺岗位的优先级选择。',
+    id: 'profile', header: 'Preference', question: 'Select a candidate type',
+    detail: 'Choose according to the current opening\'s priorities.',
     options: [
-      { label: '工程落地型 (Recommended)', description: '优先工程交付。' },
-      { label: '研究潜力型', description: '优先研究能力。' },
+      { label: 'Implementation-focused (Recommended)', description: 'Prioritizes shipping.' },
+      { label: 'Research-oriented', description: 'Prioritizes research ability.' },
     ],
   },
   {
-    id: 'detail', question: '补充你的要求',
+    id: 'detail', question: 'Add your requirements',
   },
   {
-    id: 'signals', question: '选择重要信号（可多选）', multiSelect: true,
-    options: [{ label: '系统设计' }, { label: '代码质量' }, { label: '产品判断' }],
+    id: 'signals', question: 'Select the important signals (multi-select)', multiSelect: true,
+    options: [{ label: 'System design' }, { label: 'Code quality' }, { label: 'Product judgment' }],
   },
 ]
 
@@ -76,49 +76,49 @@ describe('QuestionComposer', () => {
     const { carrier, respond } = wait()
     render(<QuestionComposer matched={carrier} interactions={[carrier]} {...kit} />)
 
-    expect(screen.getByText('偏好')).toBeTruthy()
+    expect(screen.getByText('Preference')).toBeTruthy()
     expect(screen.getByText('1 / 3')).toBeTruthy()
-    expect(screen.getByText('推荐')).toBeTruthy()
-    expect(screen.getByText('工程落地型')).toBeTruthy()
-    const detail = screen.getByText('按当前空缺岗位的优先级选择。')
+    expect(screen.getByText('Recommended')).toBeTruthy()
+    expect(screen.getByText('Implementation-focused')).toBeTruthy()
+    const detail = screen.getByText('Choose according to the current opening\'s priorities.')
     const scrollRegion = detail.closest('[data-question-scroll]')
     expect(scrollRegion).toBeTruthy()
-    expect(scrollRegion?.contains(screen.getByRole('radio', { name: /工程落地型/ }))).toBe(true)
-    expect(scrollRegion?.contains(screen.getByText('下一题').closest('button'))).toBe(false)
-    fireEvent.keyDown(screen.getByRole('radio', { name: /工程落地型/ }), { key: 'Enter' })
+    expect(scrollRegion?.contains(screen.getByRole('radio', { name: /Implementation-focused/ }))).toBe(true)
+    expect(scrollRegion?.contains(screen.getByText('Next').closest('button'))).toBe(false)
+    fireEvent.keyDown(screen.getByRole('radio', { name: /Implementation-focused/ }), { key: 'Enter' })
     expect(respond).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('radio', { name: /工程落地型/ }))
+    fireEvent.click(screen.getByRole('radio', { name: /Implementation-focused/ }))
 
     expect(screen.getByText('2 / 3')).toBeTruthy()
     // detail is per-question: the second question carries none.
-    expect(screen.queryByText('按当前空缺岗位的优先级选择。')).toBeNull()
-    expect(screen.queryByRole('button', { name: '填写答案' })).toBeNull()
-    const custom = screen.getByPlaceholderText('输入你的答案')
-    fireEvent.change(custom, { target: { value: '要能独立排查线上问题' } })
+    expect(screen.queryByText('Choose according to the current opening\'s priorities.')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Fill in answer' })).toBeNull()
+    const custom = screen.getByPlaceholderText('Type your answer')
+    fireEvent.change(custom, { target: { value: 'Must be able to debug production issues independently' } })
     fireEvent.keyDown(custom, { key: 'Enter' })
 
     expect(screen.getByText('3 / 3')).toBeTruthy()
     // The model's question text renders verbatim — no marker filtering.
-    expect(screen.getByText('选择重要信号（可多选）')).toBeTruthy()
-    fireEvent.click(screen.getByRole('checkbox', { name: '系统设计' }))
-    fireEvent.click(screen.getByRole('checkbox', { name: '系统设计' }))
-    fireEvent.click(screen.getByRole('checkbox', { name: '系统设计' }))
-    fireEvent.click(screen.getByRole('checkbox', { name: '代码质量' }))
-    const multiCustom = screen.getByPlaceholderText('输入你的答案')
-    fireEvent.change(multiCustom, { target: { value: '沟通能力' } })
-    fireEvent.click(screen.getByRole('checkbox', { name: '产品判断' }))
-    expect(screen.getByRole('checkbox', { name: '系统设计' }).getAttribute('aria-checked')).toBe('true')
-    expect(screen.getByRole('checkbox', { name: '代码质量' }).getAttribute('aria-checked')).toBe('true')
-    expect((multiCustom as HTMLInputElement).value).toBe('沟通能力')
+    expect(screen.getByText('Select the important signals (multi-select)')).toBeTruthy()
+    fireEvent.click(screen.getByRole('checkbox', { name: 'System design' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'System design' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'System design' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Code quality' }))
+    const multiCustom = screen.getByPlaceholderText('Type your answer')
+    fireEvent.change(multiCustom, { target: { value: 'Communication skills' } })
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Product judgment' }))
+    expect(screen.getByRole('checkbox', { name: 'System design' }).getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByRole('checkbox', { name: 'Code quality' }).getAttribute('aria-checked')).toBe('true')
+    expect((multiCustom as HTMLInputElement).value).toBe('Communication skills')
     fireEvent.keyDown(multiCustom, { key: 'Enter' })
 
     // The domain face encoded the whole batch into one carrier envelope.
     expect(respond).toHaveBeenCalledWith(answeredEnvelope('question-1', [
-      { id: 'profile', selected: ['工程落地型 (Recommended)'] },
-      { id: 'detail', selected: [], custom: '要能独立排查线上问题' },
-      { id: 'signals', selected: ['系统设计', '代码质量', '产品判断'], custom: '沟通能力' },
+      { id: 'profile', selected: ['Implementation-focused (Recommended)'] },
+      { id: 'detail', selected: [], custom: 'Must be able to debug production issues independently' },
+      { id: 'signals', selected: ['System design', 'Code quality', 'Product judgment'], custom: 'Communication skills' },
     ]))
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: '正在提交…' }).disabled).toBe(true)
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Submitting…' }).disabled).toBe(true)
   })
 
   it('renders plan detail through the shared assistant Markdown primitive', () => {

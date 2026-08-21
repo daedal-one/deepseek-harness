@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-03
 
-English | [中文](2026-07-30-versioned-tui-first-run-welcome.zh.md)
-
 ## Problem
 
 The shipped `dsh` terminal starts directly in the editor and gives first-time internal testers no durable orientation about the product's maturity or feedback channel. The existing one-line `welcome` banner subtitle cannot carry the supplied notice without crowding the normal session header, and putting onboarding in the session log would create a user turn or model-visible context that is unrelated to the user's work.

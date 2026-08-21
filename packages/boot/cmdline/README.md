@@ -1,7 +1,5 @@
 # `@deepseek-ai/dsh-cmdline`
 
-English | [中文](README.zh.md)
-
 The command line a dsh launcher hands to the app it boots. The launcher parses only its own flags (`--profile`, `--patch`, the config dumps) and hands **everything after them** to the tree verbatim, so an app owns its flag family, its `--help` text, and its parse errors instead of the launcher knowing them.
 
 ## The launcher values

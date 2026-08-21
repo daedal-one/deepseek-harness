@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-04-websocket-downlink-carrier.zh.md)
-
 ## Problem
 
 The browser Web GUI has long used two SSE responses for `events.mux` and `events.host`. HTTP/1.1 browsers typically allow only about six concurrent connections per origin; each page permanently occupying two makes same-origin tabs, plugin resources, and ordinary RPCs contend for connection slots, and reaching the limit causes requests to queue rather than merely slowing them down. The RPC protocol itself is channel-independent: a constraint of the browser's physical carrier must not leak into the session/runtime object layer.

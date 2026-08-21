@@ -1,7 +1,5 @@
 # memory/ — durable reviewed-memory capability family
 
-English | [中文](README.zh.md)
-
 This family stores evidence-backed project or global knowledge, keeps extracted statements pending until review, and exposes ordinary and principal-authorized model tools.
 
 | Package | Role | ctx key |

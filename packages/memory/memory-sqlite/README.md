@@ -1,7 +1,5 @@
 # `@deepseek-ai/dsh-memory-sqlite`
 
-English | [中文](README.zh.md)
-
 SQLite Service Provider for durable reviewed memory. The configured absolute path is created with a monotonic application-owned schema; old, foreign, and unversioned non-empty databases fail closed. Compare-and-set mutations and supersession are transactional. Retention removes only old rejected or superseded project records; global deletion remains approval-owned.
 
 ## Model Experience

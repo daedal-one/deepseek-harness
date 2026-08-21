@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-04-remove-tui-package.zh.md)
-
 ## Problem
 
 Removing the implicit `dsh` terminal application left `@deepseek-ai/dsh-tui` without a shipped composition. The package still carried a terminal renderer, interactive command and question adapters, extension overlays, snapshot fixtures, a patched `pi-tui` dependency, and SDK scaffolding that advertised TUI as a supported application interface. Keeping that surface required maintaining a product-sized frontend whose only remaining consumer was the project generator itself.

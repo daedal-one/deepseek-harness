@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-10
 
-English | [中文](2026-08-08-review-driven-issue-lifecycle-triggers.zh.md)
-
 ## Problem
 
 The Issue lifecycle workflow reads the current pull request after each subscribed repository event and projects resolving Issues forward to `In progress` or `In review`. A resolving draft already reaches `In progress` from its `opened` event. Changing that draft to ready creates no new lifecycle outcome until a reviewer is requested or submits a review, yet subscribing to `ready_for_review` launches another hosted job and creates another GitHub App token.

@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-07
 
-English | [中文](2026-07-31-hero-visible-while-blank-session-opens.zh.md)
-
 ## Problem
 
 The conversation root has a `settling` phase for a session that is still opening while its composer reads `blank`: the hero-versus-docked outcome is unknowable until history arrives, so the composer seat is hidden (`visibility:hidden`) rather than flashing the centered hero and snapping to the docked bar. Startup auto-selection turned that guard into the defect it was meant to prevent. From the no-workspace hero, `WorkspacesService.startInitialSelection` connects the most recent workspace and opens its blank session; `openState` flips to `loading` the moment `open()` lands, so the center column went blank for the whole history round-trip and then repainted, which reads as a full-page refresh on every launch.

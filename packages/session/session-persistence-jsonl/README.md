@@ -1,7 +1,5 @@
 # @deepseek-ai/dsh-session-persistence-jsonl
 
-English | [中文](README.zh.md)
-
 The JSONL durable session-persistence backend — a concrete `SessionPersistence` (the `dsh-session-persistence` seam). Each session has one append-only logical JSONL log, stored as `.jsonl.zstd` by default or raw `.jsonl` when compression is disabled.
 
 ## On-disk layout

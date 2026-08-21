@@ -1,7 +1,5 @@
 # @deepseek-ai/dsh-session-query
 
-English | [中文](README.zh.md)
-
 `SessionQueryEngine` is the combined abstract `ctx.sessionQuery` contract. It implements exact session-history retrieval, relationship tracing, and provider-independent filtering over live `ctx.sessions` plus optional dynamically mounted `ctx.sessionPersistence`; concrete backends implement its two full-text methods. Matching ids produce one record: live events win, while `live` and `persisted` report both source availabilities. Conflicting immutable headers fail with `SESSION_QUERY_SOURCE_CONFLICT`.
 
 ## Reads

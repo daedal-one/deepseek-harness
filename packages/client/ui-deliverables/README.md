@@ -1,7 +1,5 @@
 # @deepseek-ai/dsh-client-ui-deliverables
 
-English | [中文](README.zh.md)
-
 Produced-files and clickable-reference feature owner. The Node half registers final-response guidance with the system-prompt registry; the browser half registers the deliverables row a finished turn ends with into the chat view's `conversation.chat.turnTail` hole and links matching inline-code references in the closing prose. The shipped Web patch is the only composition that loads this package. Removing its one cordis.yml entry removes the guidance, row, and prose links together.
 
 `deliverablesDefinition` folds each Turn's successful mutation calls into engine-published `DeliverablesTurnData`; `producedForClosing` reads that data with the closing Assistant seq. The vocabulary is the mutation tools' own follow-along `locations`, never the closing prose: a produced file is listed whether or not the model remembered to name it. A mutation is recognized by render intent, not tool name — a diff card, or a generic card whose `kind` is `edit` (the shape `str_replace_editor`'s insert presents) — so a new mutation tool joins by declaring what it does. Reads, deletes, and failed calls contribute nothing; a path appears once per Turn in first-seen order. The Conversation Location index owns Turn membership, so a Turn that mutates and then ends without content text cannot spill into the next Turn's row.

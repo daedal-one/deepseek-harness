@@ -106,7 +106,7 @@ describe('the agent-preset settings controller', () => {
 
   it('carries the display metadata a preset published', async () => {
     const controller = new AgentPresetSettingsController(fakeApi([
-      { id: 'standard', trust: 'system', isDefault: true, name: '标准模式', description: '完整的编码 agent。' },
+      { id: 'standard', trust: 'system', isDefault: true, name: 'Standard mode', description: 'A complete coding agent.' },
     ] as never))
 
     await controller.load()
@@ -114,7 +114,7 @@ describe('the agent-preset settings controller', () => {
     // Surfaces beyond this row read the same options; the id alone never said
     // what a preset does.
     expect(controller.store.getSnapshot().options).toEqual([
-      { id: 'standard', trust: 'system', name: '标准模式', description: '完整的编码 agent。' },
+      { id: 'standard', trust: 'system', name: 'Standard mode', description: 'A complete coding agent.' },
     ])
   })
 
@@ -293,13 +293,13 @@ describe('the new-session chip controller', () => {
 
   it('carries the display metadata into the menu rows', async () => {
     const controller = chip([
-      { id: 'standard', trust: 'system', isDefault: true, name: '标准模式', description: '完整的编码 agent。' },
+      { id: 'standard', trust: 'system', isDefault: true, name: 'Standard mode', description: 'A complete coding agent.' },
     ] as never, undefined)
 
     await controller.load()
 
     expect(controller.store.getSnapshot().options).toEqual([
-      { id: 'standard', trust: 'system', name: '标准模式', description: '完整的编码 agent。' },
+      { id: 'standard', trust: 'system', name: 'Standard mode', description: 'A complete coding agent.' },
     ])
   })
 

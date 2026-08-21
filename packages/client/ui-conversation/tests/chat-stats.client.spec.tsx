@@ -248,7 +248,7 @@ describe('StatsLine', () => {
     const { source } = makeSource({ nodes: [timed] })
     const view = render(<StatsLine {...props(source)} t={t} />)
     expect(view.container.textContent)
-      .toBe('1 轮 · 1 步| LLM 3.8s| 首 token 平均 0.8s · 16 tok/s| 缓存命中 90%| 输入 100 tok · 输出 5 tok')
+      .toBe('1 turns · 1 steps| LLM 3.8s| TTFT avg 0.8s · 16 tok/s| Cache hit 90%| Input 100 tok · Output 5 tok')
   })
 
   it('renders without ResizeObserver support', () => {
@@ -339,7 +339,7 @@ describe('StatsLine', () => {
   })
 
   it('renders whole-log wall times and speeds from the projection, not the loaded window', () => {
-    // The 加载更早 hazard beyond counts: LLM/tool durations and the TTFT and
+    // The Load earlier hazard beyond counts: LLM/tool durations and the TTFT and
     // throughput figures must not grow per loaded page either. An untimed
     // 1-node window renders the projection's whole-log figures verbatim.
     const { source } = makeSource({ nodes: [assistant(1, 1)] })

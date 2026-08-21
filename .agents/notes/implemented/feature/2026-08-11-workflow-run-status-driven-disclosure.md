@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-11-workflow-run-status-driven-disclosure.zh.md)
-
 ## Problem
 
 A durable workflow Chat node updates in place from its running prefix to a terminal record. A disclosure choice initialized only at mount can hide a newly running phase, leave completed work occupying the conversation, or bury a failed, cancelled, or interrupted member behind two collapsed levels. Making openness a pure function of completion avoids those failures but also prevents users from reopening clean history for review.

@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-08-lightweight-routine-documentation-translation.zh.md)
-
 ## Problem
 
 Routine bilingual edits automatically selected the full [translation skill](../../../skills/dsh-translate-docs/SKILL.md). Even after the [briefed-update optimization](2026-07-26-briefed-minimal-translation-updates.md), a small documentation change could still load a specialized workflow, generate a briefing, delegate prose to a subagent, and perform a separate verification pass. That orchestration consumed more time, context, and model tokens than translating the changed text itself, and automatic skill discovery exposed the workflow on ordinary documentation turns.

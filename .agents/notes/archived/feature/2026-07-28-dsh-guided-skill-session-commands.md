@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-03
 
-English | [中文](2026-07-28-dsh-guided-skill-session-commands.zh.md)
-
 ## Problem
 
 Two recurring flows begin with the user manually invoking one skill and answering its questions: migrating from another coding agent, and upgrading this checkout. Both require the user to know the skill exists and to type `/skill:dsh-migrate` or `/skill:dsh-upgrade` as the session's first turn. A dedicated entry command that drops the user straight into that guided session removes the discovery step.

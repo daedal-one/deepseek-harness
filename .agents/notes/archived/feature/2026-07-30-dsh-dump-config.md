@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-08-07
 
-English | [中文](2026-07-30-dsh-dump-config.zh.md)
-
 ## Problem
 
 The booted tree is a composition the user never sees: the shipped base, a surface overlay, and the `--config` or personal `~/.dsh/config.yaml` overlay apply as sibling patch lists where each id-targeted patch replaces the row's whole `config` and an unmatched id only warns. Debugging a misbehaving personal overlay (a restated field dropped, a row id typo, a patch applying to the wrong surface) required mentally replaying the patch algorithm across three files. There was no way to see the effective tree or to diff it against the shipped defaults.

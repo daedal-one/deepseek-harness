@@ -1,22 +1,22 @@
 ---
 name: Bug
-about: 记录现有预期行为的失效
+about: Log a regression of current expected behavior
 title: ''
 labels: ''
 assignees: ''
 type: Bug
 ---
 
-<!-- 标题写中文行动或结果句；外露正文不超过 50 单位。 -->
-一句话说明错误结果。
+<!-- Write the title as an action- or result-focused sentence; keep the exposed body under 50 units. -->
+State the incorrect result in one sentence.
 
 <details>
-<summary>复现、预期与验收</summary>
+<summary>Reproduction, expectation, and acceptance</summary>
 
-- 复现步骤：
-- 实际结果：
-- 预期结果：
-- 环境：
-- 验收条件：
+- Reproduction steps:
+- Actual result:
+- Expected result:
+- Environment:
+- Acceptance criteria:
 
 </details>

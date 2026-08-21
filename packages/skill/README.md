@@ -1,7 +1,5 @@
 # skill/ — skill capability family
 
-English | [中文](README.zh.md)
-
 This family discovers reusable agent instructions and exposes them to the model through a provider-neutral catalog and loader.
 
 | Package | Role | ctx key |

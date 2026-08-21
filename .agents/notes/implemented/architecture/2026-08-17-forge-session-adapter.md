@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-17-forge-session-adapter.zh.md)
-
 ## Problem
 
 Forge had accepted DeepSeek Harness as its first coding-harness adapter, but the fork exposed no `forge.agent.session/v1` endpoint. Its general coding compositions also published local filesystem and shell tools directly, so a Forge session could not prove that it started from accepted intent or that all workspace reads, mutations, commands, diffs, and checkpoints entered Forge Intellect.

@@ -41,22 +41,22 @@ describe('attachment rejection copy', () => {
   })
 
   it('maps user-solvable reasons to limit-naming copy', () => {
-    expect(attachmentErrorText(t, 'MODEL_DOES_NOT_SUPPORT_IMAGES')).toBe('当前模型不支持图片，请切换支持图片的模型')
-    expect(attachmentErrorText(t, 'SUBAGENT_IMAGE_UNSUPPORTED')).toBe('子智能体会话暂不支持图片')
-    expect(attachmentErrorText(t, 'IMAGE_TOO_MANY_PIXELS')).toBe('图片分辨率过大，请压缩后重试')
-    expect(attachmentErrorText(t, 'INVALID_IMAGE')).toBe('仅支持 PNG、JPG、WebP、GIF 格式的图片')
-    expect(attachmentErrorText(t, 'IMAGE_TYPE_MISMATCH')).toBe('仅支持 PNG、JPG、WebP、GIF 格式的图片')
-    expect(attachmentErrorText(t, 'TOO_MANY_IMAGES', limits)).toBe('一条消息最多添加 20 张图片')
-    expect(attachmentErrorText(t, 'IMAGE_TOO_LARGE', limits)).toBe('单张图片不能超过 5MB')
-    expect(attachmentErrorText(t, 'IMAGES_TOO_LARGE', limits)).toBe('图片总大小超过 100MB，请移除部分图片')
+    expect(attachmentErrorText(t, 'MODEL_DOES_NOT_SUPPORT_IMAGES')).toBe('The current model does not support images; switch to a model that does')
+    expect(attachmentErrorText(t, 'SUBAGENT_IMAGE_UNSUPPORTED')).toBe('Subagent sessions do not support images yet')
+    expect(attachmentErrorText(t, 'IMAGE_TOO_MANY_PIXELS')).toBe('Image resolution is too high; compress it and try again')
+    expect(attachmentErrorText(t, 'INVALID_IMAGE')).toBe('Only PNG, JPG, WebP, and GIF images are supported')
+    expect(attachmentErrorText(t, 'IMAGE_TYPE_MISMATCH')).toBe('Only PNG, JPG, WebP, and GIF images are supported')
+    expect(attachmentErrorText(t, 'TOO_MANY_IMAGES', limits)).toBe('A message can include up to 20 images')
+    expect(attachmentErrorText(t, 'IMAGE_TOO_LARGE', limits)).toBe('Each image must be smaller than 5MB')
+    expect(attachmentErrorText(t, 'IMAGES_TOO_LARGE', limits)).toBe('Images exceed 100MB in total; remove some and try again')
     expect(attachmentErrorText(enT, 'TOO_MANY_IMAGES', limits)).toBe('A message can include up to 20 images')
   })
 
   it('folds unknown reasons and limit reasons without projected limits into the send-failed line', () => {
-    expect(attachmentErrorText(t, 'INVALID_IMAGE_BASE64')).toBe('图片发送失败（INVALID_IMAGE_BASE64），请重新添加图片后再试')
-    expect(attachmentErrorText(t, 'TOO_MANY_IMAGES')).toBe('图片发送失败（TOO_MANY_IMAGES），请重新添加图片后再试')
-    expect(attachmentErrorText(t, 'IMAGE_TOO_LARGE')).toBe('图片发送失败（IMAGE_TOO_LARGE），请重新添加图片后再试')
-    expect(attachmentErrorText(t, 'IMAGES_TOO_LARGE')).toBe('图片发送失败（IMAGES_TOO_LARGE），请重新添加图片后再试')
+    expect(attachmentErrorText(t, 'INVALID_IMAGE_BASE64')).toBe('Sending images failed (INVALID_IMAGE_BASE64); re-add them and try again')
+    expect(attachmentErrorText(t, 'TOO_MANY_IMAGES')).toBe('Sending images failed (TOO_MANY_IMAGES); re-add them and try again')
+    expect(attachmentErrorText(t, 'IMAGE_TOO_LARGE')).toBe('Sending images failed (IMAGE_TOO_LARGE); re-add them and try again')
+    expect(attachmentErrorText(t, 'IMAGES_TOO_LARGE')).toBe('Sending images failed (IMAGES_TOO_LARGE); re-add them and try again')
   })
 })
 
@@ -70,13 +70,13 @@ describe('assistant images through the label bridge', () => {
         loadImage={() => Promise.resolve('blob:history')}
       />,
     )
-    const frame = await view.findByRole('button', { name: 'history.png，点击查看原图' })
-    expect(frame.getAttribute('title')).toBe('查看原图')
+    const frame = await view.findByRole('button', { name: 'history.png, click to view original' })
+    expect(frame.getAttribute('title')).toBe('View original')
     await view.findByAltText('history.png')
     fireEvent.click(frame)
-    expect(view.getByRole('dialog', { name: '原图预览' })).toBeTruthy()
-    fireEvent.click(view.getByRole('button', { name: '关闭原图预览' }))
-    expect(view.queryByRole('dialog', { name: '原图预览' })).toBeNull()
+    expect(view.getByRole('dialog', { name: 'Original image preview' })).toBeTruthy()
+    fireEvent.click(view.getByRole('button', { name: 'Close original image preview' }))
+    expect(view.queryByRole('dialog', { name: 'Original image preview' })).toBeNull()
   })
 
   it('resolves the active English dictionary', async () => {

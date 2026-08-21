@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-07-26
 
-English | [中文](2026-07-23-thinking-row-disclosure-target.zh.md)
-
 ## Problem
 
 A collapsed reasoning entry presents `Think` and its one-line reasoning summary as one visual row, but an icon-only disclosure control leaves both visible labels inert. Applying title expansion to every tool row would instead break the generic tool-row contract, where the row opens details and only the leading control expands arguments.

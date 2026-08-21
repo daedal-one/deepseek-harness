@@ -209,7 +209,7 @@ describe('InputHub queue steering (empty-draft accelerated Enter)', () => {
     b.shell.steerQueue()
     await vi.waitFor(() => {
       expect(b.shell.notices.getSnapshot()).toEqual(
-        expect.objectContaining({ level: 'error', text: '插话发送失败，请重试。' }),
+        expect.objectContaining({ level: 'error', text: 'Steering failed. Try again.' }),
       )
     })
     expect(b.updateQueue).toHaveBeenCalledTimes(1)

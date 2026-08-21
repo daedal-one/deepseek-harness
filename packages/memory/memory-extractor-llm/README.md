@@ -1,7 +1,5 @@
 # `@deepseek-ai/dsh-memory-extractor-llm`
 
-English | [中文](README.zh.md)
-
 Asynchronous project-memory extraction after a completed `turn/end` has reached session persistence. The bounded queue records the exact auxiliary request before dispatch, flushes it, then records the exact assembled response and proposal ids. Timeout, cancellation, provider failure, malformed output, and saturation settle independently without failing the parent turn. Disposal aborts and awaits active calls.
 
 ## Model Experience

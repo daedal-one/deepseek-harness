@@ -3,13 +3,11 @@
 Status: implemented
 Archived: 2026-07-26
 
-English | [中文](2026-07-26-intent-draft-same-tick-echo.zh.md)
-
 ## Problem
 
 The hero composer ("Let's start building") is a controlled textarea whose value is the frontend Session Intent's retained prompt, read from the sessions **list** snapshot (`EmptyState` binds `intent.prompt` via `useSessions`). Typing routed through `SessionManager.updateIntent → Session.updatePendingPrompt`, which flushes the **Session's own** notifier synchronously — but the list snapshot the composer actually renders from only heard about the change through the intent watch subscription in `startIntent`, which calls `markDirty()`, a microtask-deferred flush.
 
-A deferred echo violates the controlled-input contract documented on the Notifier (see the [web client architecture note](../architecture/2026-07-19-gui-web-client-architecture.md)): React compares the DOM value against the still-stale snapshot during the same tick as `onChange` and rolls the textarea back. With plain typing this shows as caret jumps; with an IME it corrupts input — every composition update gets rolled back and re-applied against a stale value, so typing Pinyin "nihao" commits fragments like "nnini hni hani hao你好". The resident composer (`ConversationRoot`) was not affected: its draft lives in the chat store (sync flush) or comes from `updateSessionPrompt`, which reads the Session snapshot directly rather than the list projection.
+A deferred echo violates the controlled-input contract documented on the Notifier (see the [web client architecture note](../architecture/2026-07-19-gui-web-client-architecture.md)): React compares the DOM value against the still-stale snapshot during the same tick as `onChange` and rolls the textarea back. With plain typing this shows as caret jumps; with an IME it corrupts input — every composition update gets rolled back and re-applied against a stale value, so composing "nation" through an IME commits fragments like "nnati natio nation" instead of one clean word. The resident composer (`ConversationRoot`) was not affected: its draft lives in the chat store (sync flush) or comes from `updateSessionPrompt`, which reads the Session snapshot directly rather than the list projection.
 
 ## Decision
 

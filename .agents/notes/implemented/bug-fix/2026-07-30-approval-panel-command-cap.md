@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-07-30-approval-panel-command-cap.zh.md)
-
 ## Problem
 
 The approval panel is a composer takeover: while a sandbox escalation waits, it replaces the InputBar in the composer seat with the model's justification, the paired command, and a refuse/allow row. Both texts are unbounded model output, and the card had no height cap. A long command — the realistic shape, since escalation happens on the command the sandbox just denied, and a denied command is often a long inline write — grew the card until the action row left the viewport. The user could read the request and not answer it: the buttons existed, off screen, in a sticky footer that had already used the whole column.

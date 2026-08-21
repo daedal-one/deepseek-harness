@@ -46,7 +46,7 @@ function comWorld(overrides: Partial<ComWorld> = {}): ComWorld {
   return {
     coInitHr: 0, coCreateHr: 0, showHr: 0, getResultHr: 0, getDisplayNameHr: 0,
     hasThreadDpi: true, supportedDpiContexts: [-4], enumThrows: false,
-    path: 'C:\\选中\\directory',
+    path: 'C:\\selected\\directory',
     titles: [], options: [], dpiContexts: [], freed: [], released: [], posted: [],
     registered: 0, unregistered: 0, uninitialized: 0,
     ...overrides,
@@ -170,9 +170,9 @@ describe('loadWin32DialogBindings over the fake COM world', () => {
     const bindings = await loadWin32DialogBindings()
     const showing = vi.fn()
 
-    expect(runFolderDialog(bindings, '选择工作区目录', showing)).toBe('C:\\选中\\directory')
+    expect(runFolderDialog(bindings, 'Select workspace directory', showing)).toBe('C:\\selected\\directory')
     expect(world.dpiContexts).toEqual([-4])
-    expect(world.titles).toEqual(['选择工作区目录'])
+    expect(world.titles).toEqual(['Select workspace directory'])
     expect(world.options).toHaveLength(1)
     expect(showing).toHaveBeenCalledWith(31337)
     expect(world.freed).toHaveLength(1)
@@ -194,7 +194,7 @@ describe('loadWin32DialogBindings over the fake COM world', () => {
     const world = comWorld({ supportedDpiContexts: [-3] })
     installFakeKoffi(world)
     const bindings = await (await loadBindingsModule()).loadWin32DialogBindings()
-    expect(runFolderDialog(bindings, 'Pick', vi.fn())).toBe('C:\\选中\\directory')
+    expect(runFolderDialog(bindings, 'Pick', vi.fn())).toBe('C:\\selected\\directory')
     expect(world.dpiContexts).toEqual([-4, -3])
   })
 
@@ -203,7 +203,7 @@ describe('loadWin32DialogBindings over the fake COM world', () => {
     const rejecting = comWorld({ supportedDpiContexts: [] })
     installFakeKoffi(rejecting)
     let bindings = await (await loadBindingsModule()).loadWin32DialogBindings()
-    expect(runFolderDialog(bindings, 'Pick', vi.fn())).toBe('C:\\选中\\directory')
+    expect(runFolderDialog(bindings, 'Pick', vi.fn())).toBe('C:\\selected\\directory')
     expect(rejecting.dpiContexts).toEqual([-4, -3, -2])
 
     vi.doUnmock('koffi')
@@ -211,7 +211,7 @@ describe('loadWin32DialogBindings over the fake COM world', () => {
     const preThreadDpi = comWorld({ hasThreadDpi: false })
     installFakeKoffi(preThreadDpi)
     bindings = await (await loadBindingsModule()).loadWin32DialogBindings()
-    expect(runFolderDialog(bindings, 'Pick', vi.fn())).toBe('C:\\选中\\directory')
+    expect(runFolderDialog(bindings, 'Pick', vi.fn())).toBe('C:\\selected\\directory')
     expect(preThreadDpi.dpiContexts).toEqual([])
   })
 

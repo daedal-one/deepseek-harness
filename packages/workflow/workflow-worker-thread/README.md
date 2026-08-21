@@ -1,7 +1,5 @@
 # @deepseek-ai/dsh-workflow-worker-thread
 
-English | [中文](README.zh.md)
-
 This package implements `WorkflowEngine` with one Node worker thread per run. The worker executes the orchestration script; child agents remain on the host and are reached through `ctx.subagents` over a typed host/worker protocol.
 
 The package root exports the default engine plugin and its `Config`; the worker protocol, runtime, and session modules stay private to the implementation. The operational `./worker` entry remains the engine's spawn target.

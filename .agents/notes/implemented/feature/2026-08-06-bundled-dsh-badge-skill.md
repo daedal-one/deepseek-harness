@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-06-bundled-dsh-badge-skill.zh.md)
-
 ## Problem
 
 The [Cordis tutorial](../../../../docs/cordis-tutorial/index.md) uses an official “powered by dsh” badge across its pages, but the shipped CLI has no reusable instructions or explicit opt-in provider for applying the same attribution elsewhere.

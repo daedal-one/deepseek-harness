@@ -3,8 +3,6 @@
 Status: implemented
 Archived: 2026-07-26
 
-English | [中文](2026-07-20-code-mode-result-card-completeness.zh.md)
-
 ## Problem
 
 The outer `run_code` tool persisted complete rendered content, but its UI presenter ignored that content and rebuilt the card body from a logs-only `presentationMeta` projection. A result-only run appeared correct because an empty presenter body let consumers fall back to `tool/result.content`. Once the program emitted a log, the presenter supplied non-empty content, that fallback stopped, and the returned value disappeared from the completed card. A spill policy's final head/tail preview was vulnerable to the same split ownership whenever captured logs made the stale projection non-empty.

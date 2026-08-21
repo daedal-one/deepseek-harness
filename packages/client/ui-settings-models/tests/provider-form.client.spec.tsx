@@ -761,23 +761,23 @@ describe('hand-declared providers', () => {
   it('renames a declared route and falls back to its id when the name is cleared', async () => {
     const { mutate } = await mountSection({
       providers: {
-        'acme-gateway': { displayName: 'Acme Gateway', api: 'openai-completions', baseURL: 'https://acme.test/v1' },
+        'acme-gateway': { displayName: 'Acme', api: 'openai-completions', baseURL: 'https://acme.test/v1' },
       },
       declaredRoutes: ['acme-gateway'],
     })
     openEditor('acme-gateway')
 
     const name = screen.getByLabelText<HTMLInputElement>(en.customDisplayName)
-    expect(name.value).toBe('Acme Gateway')
+    expect(name.value).toBe('Acme')
     // The route id, not the stored name: it is what the route will be called
     // the moment the field is cleared.
     expect(name.placeholder).toBe('acme-gateway')
-    fireEvent.change(name, { target: { value: 'Acme 网关' } })
+    fireEvent.change(name, { target: { value: 'Acme Gateway' } })
     fireEvent.click(screen.getByText(en.apply))
 
     await waitFor(() => { expect(mutate).toHaveBeenCalledTimes(1) })
     expect(firstMutate(mutate).ops)
-      .toEqual([{ op: 'set', path: ['providers', 'acme-gateway', 'displayName'], value: 'Acme 网关' }])
+      .toEqual([{ op: 'set', path: ['providers', 'acme-gateway', 'displayName'], value: 'Acme Gateway' }])
   })
 
   it('offers the composition name as what a cleared field falls back to', async () => {
@@ -802,7 +802,7 @@ describe('hand-declared providers', () => {
     // The status line used to echo the target captured when the card opened,
     // which never lied while the name could not change. It can now.
     const { face } = await mountSection({
-      providers: { 'acme-gateway': { displayName: 'Acme Gateway', api: 'openai-completions' } },
+      providers: { 'acme-gateway': { displayName: 'Acme', api: 'openai-completions' } },
       declaredRoutes: ['acme-gateway'],
     })
     // The reload after the write answers with the renamed route, exactly as
@@ -810,7 +810,7 @@ describe('hand-declared providers', () => {
     face.llm.providers = vi.fn(() => Promise.resolve(ok({
       providers: [{
         provider: 'acme-gateway',
-        displayName: 'Acme 网关',
+        displayName: 'Acme Gateway',
         settingsNs: 'llm-pi-ai',
         settingsPath: ['providers', 'acme-gateway'],
         active: true,
@@ -819,13 +819,13 @@ describe('hand-declared providers', () => {
     })))
     openEditor('acme-gateway')
 
-    fireEvent.change(screen.getByLabelText(en.customDisplayName), { target: { value: 'Acme 网关' } })
+    fireEvent.change(screen.getByLabelText(en.customDisplayName), { target: { value: 'Acme Gateway' } })
     fireEvent.click(screen.getByText(en.apply))
 
     const notice = await screen.findByRole('status')
     expect(notice.textContent).toBe(providerCopy(en.savedProvider, {
       provider: 'acme-gateway',
-      displayName: 'Acme 网关',
+      displayName: 'Acme Gateway',
     }))
   })
 
