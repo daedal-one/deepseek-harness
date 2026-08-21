@@ -86,7 +86,7 @@ export interface SessionControllerInternals {
 /** Host service backing the generated `ctx.remote.session` namespace. */
 export class SessionController extends TypertRemoteService {
   static inject = [
-    'agentDefaultModel',
+    'agentModels',
     'agents',
     'attachments',
     'fileUploads',

@@ -283,12 +283,13 @@ export class ApiSessionAgentController {
     let picked = projectionState.pending === null
       ? undefined
       : agentModelSelection(projectionState.pending)
-    const defaultModel = this.ctx.agentDefaultModel
+    const defaultModel = this.ctx.agentModels
+    const preset = this.presetForSession(agent.session)
     const selection: InstalledSelection = {
       get current(): AgentModelSelection {
         if (picked !== undefined) return picked
         const loggedHeader = agent.session.requestHeader()
-        if (loggedHeader === undefined) return defaultModel.currentSelection()
+        if (loggedHeader === undefined) return defaultModel.mainSelection(preset)
         const logged = loggedHeader.config
         return {
           provider: logged.provider,
@@ -429,7 +430,7 @@ export class ApiSessionAgentController {
     }
     return (await this.ctx.agents.resume({
       resumeSessionId: sessionId,
-      agentOptions: this.agentOptions(),
+      agentOptions: this.agentOptions(composition.agentPreset),
       setup: composition.setup,
     })).agent
   }
@@ -461,7 +462,7 @@ export class ApiSessionAgentController {
         const composition = await this.composeAgent(storedPreset)
         return (await this.ctx.agents.resume({
           resumeSessionId: sessionId,
-          agentOptions: this.agentOptions(),
+          agentOptions: this.agentOptions(composition.agentPreset),
           setup: composition.setup,
         })).agent
       } catch (error: unknown) {
@@ -478,7 +479,7 @@ export class ApiSessionAgentController {
     const composition = await this.composeAgent(presetId)
     return (await this.ctx.agents.create({
       sessionId,
-      agentOptions: this.agentOptions(),
+      agentOptions: this.agentOptions(composition.agentPreset),
       meta: {
         cwd,
         ...(composition.agentPreset === undefined ? {} : { agentPreset: composition.agentPreset }),
@@ -487,8 +488,8 @@ export class ApiSessionAgentController {
     })).agent
   }
 
-  private agentOptions(): AgentOptions {
-    const { provider, model } = this.ctx.agentDefaultModel.currentSelection()
+  private agentOptions(agentPreset?: string): AgentOptions {
+    const { provider, model } = this.ctx.agentModels.mainSelection(agentPreset)
     return { provider, model }
   }
 

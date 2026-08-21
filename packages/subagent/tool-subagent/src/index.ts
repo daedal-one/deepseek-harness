@@ -78,6 +78,8 @@ export interface Config {
   agentOptions?: AgentOptions
   /** Human-facing role name used by graphical Agent model settings. */
   agentLabel?: string
+  /** Stable graphical model-settings id; defaults to the tool name in kebab-case. */
+  agentModelId?: string
   /**
    * Per-child persona that shadows `deployment:persona-prefix`. Requires the
    * provider's `persona` capability; omission preserves the deployment persona.
@@ -138,6 +140,7 @@ export const Config: z<Config> = z.object({
     maxTokens: number
   }),
   agentLabel: z.string().min(1),
+  agentModelId: z.string().min(1),
   persona: z.string(),
   // Preserve omission; Schemastery's `{ allow: [] }` default would deny every tool.
   toolFilter: z.object({
@@ -409,7 +412,7 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
     && (config.agentOptions?.provider === undefined || config.agentOptions.model === undefined)
     ? undefined
     : {
-      id: agentModelTargetId(toolName.replaceAll('_', '-')),
+      id: agentModelTargetId(config.agentModelId ?? toolName.replaceAll('_', '-')),
       label: config.agentLabel ?? toolName.split(/[-_]/u)
         .map(word => word.length === 0 ? word : word.charAt(0).toLocaleUpperCase() + word.slice(1))
         .join(' '),

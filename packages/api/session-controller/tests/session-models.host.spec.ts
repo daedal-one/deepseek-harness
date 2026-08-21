@@ -117,7 +117,7 @@ async function harness(logged?: {
     { provider: 'duplicate', id: 'same', name: 'Same' },
     { provider: 'duplicate', id: 'same', name: 'Same Again' },
   ]))
-  const session = ctx.sessions.create()
+  const session = ctx.sessions.create(undefined, agentPreset === undefined ? undefined : { meta: { agentPreset } })
   if (logged !== undefined) {
     const { adapterDefaults, ...config } = logged
     session.append('request/header', {
@@ -525,6 +525,26 @@ describe('Web session model selection', () => {
     await ctx.fiber.dispose()
   })
 
+  it('resolves an unlogged default from the session effective preset', async () => {
+    const { ctx, sessionId } = await harness(undefined, 'daedal')
+    const requested: (string | undefined)[] = []
+    const api = createApiProxy(ctx, {
+      defaultModelSelection: (agentPreset) => {
+        requested.push(agentPreset)
+        return agentPreset === 'daedal-openai'
+          ? { provider: 'deepseek-official', model: 'openai-route' }
+          : { provider: 'deepseek-official', model: 'openrouter-route' }
+      },
+      cwd: '/tmp',
+    })
+
+    ctx.sessions.get(sessionId)?.append('agent-preset/selected', { agentPreset: 'daedal-openai' })
+    expect(expectValue(await api.sessions.models(request({ sessionId }))).current)
+      .toEqual({ provider: 'deepseek-official', model: 'openai-route' })
+    expect(requested).toEqual(['daedal-openai'])
+    await ctx.fiber.dispose()
+  })
+
   it('keeps a session on its logged selection when the Agent default differs', async () => {
     const { ctx, sessionId } = await harness({
       provider: 'deepseek-official',
@@ -565,8 +585,8 @@ describe('Web session model selection', () => {
     let reject = false
     const remote = createSessionTestRemote(ctx, {
       defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
-      saveDefaultModelSelection: (selection) => {
-        saved.push(selection)
+      saveDefaultModelSelection: (selection, agentPreset) => {
+        saved.push({ selection, agentPreset })
         return reject ? Promise.reject(new Error('read-only document')) : Promise.resolve()
       },
       cwd: '/tmp',
@@ -576,7 +596,10 @@ describe('Web session model selection', () => {
       sessionId, provider: 'deepseek-official', model: 'deepseek-reasoner', reasoningEffort: 'max',
     })))
     expect(saved).toEqual([
-      { provider: 'deepseek-official', model: 'deepseek-reasoner', reasoningEffort: 'max' },
+      {
+        selection: { provider: 'deepseek-official', model: 'deepseek-reasoner', reasoningEffort: 'max' },
+        agentPreset: undefined,
+      },
     ])
 
     // A refused selection never becomes anyone's default.

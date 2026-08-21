@@ -150,7 +150,7 @@ export class SessionCommandController {
         }
         this.agents.selectForNextRequest(agent, selected)
         try {
-          await this.ctx.agentDefaultModel.saveSelection(selected)
+          await this.ctx.agentModels.saveSelection(selected, this.agents.presetForSession(agent.session))
         } catch (error) {
           this.ctx.logger.warn(
             `session-controller: model selection changed for the Session but the default was not saved: ${String(error)}`,
@@ -257,7 +257,7 @@ export class SessionCommandController {
     const childId = brandString<SessionId>(`session-${randomUUID()}`)
     const composition = await this.agents.composeAgent(this.agents.presetForObservation(source))
     try {
-      const { provider, model } = this.ctx.agentDefaultModel.currentSelection()
+      const { provider, model } = this.ctx.agentModels.mainSelection(composition.agentPreset)
       await this.ctx.agents.create({
         sessionId: childId,
         seed: source.events.slice(0, cut),

@@ -6,7 +6,7 @@ import type { AgentModelsKey } from './agent-locales.ts'
 import css from './AgentsSection.module.css'
 
 type Target = AgentModelsSnapshot['targets'][number]
-type Model = AgentModelsSnapshot['models'][number]
+type Model = AgentModelsSnapshot['catalogs'][number]['models'][number]
 
 /** Remote calls used by the Agents settings section. */
 export interface AgentsSectionInjected {
@@ -43,7 +43,6 @@ function messageOf(error: unknown): string {
 function AgentCard({
   target,
   models,
-  provider,
   writable,
   revision,
   save,
@@ -53,7 +52,6 @@ function AgentCard({
 }: {
   target: Target
   models: readonly Model[]
-  provider: string
   writable: boolean
   revision: number
   save: AgentsSectionInjected['save']
@@ -95,7 +93,7 @@ function AgentCard({
       <div className={css.cardHeader}>
         <span className={css.identity}>
           <strong className={css.name}>{target.label}</strong>
-          <span className={css.route}>{provider}</span>
+          <span className={css.route}>{target.provider}</span>
         </span>
         <span className={css.tag}>{t(target.overridden ? 'overrideTag' : 'defaultTag')}</span>
       </div>
@@ -201,8 +199,7 @@ export function AgentsSection(props: AgentsSectionProps): ReactNode {
           <AgentCard
             key={String(target.id)}
             target={target}
-            models={snapshot.models}
-            provider={snapshot.provider}
+            models={snapshot.catalogs.find(catalog => catalog.provider === target.provider)?.models ?? []}
             writable={snapshot.writable}
             revision={snapshot.revision}
             save={save}

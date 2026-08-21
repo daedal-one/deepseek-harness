@@ -15,7 +15,7 @@ import type {
  */
 export async function buildModelCatalog(
   ctx: Context,
-  defaultSelection: ModelSelection = ctx.agentDefaultModel.currentSelection(),
+  defaultSelection: ModelSelection = ctx.agentModels.mainSelection(ctx.get('agentPresets')?.defaultId),
 ): Promise<ModelCatalog> {
   const providers = ctx.llm.listProviders()
   const catalog = await Promise.all(providers.map(async (provider) => {

@@ -15,6 +15,7 @@ import type { SettingsDescriptor } from '@deepseek-ai/dsh-settings'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type {
   AgentModelOption,
+  AgentModelCatalogView,
   AgentModelsSnapshot,
   AgentModelTargetId,
   AgentModelTargetView,
@@ -23,6 +24,7 @@ import type {
 
 export type {
   AgentModelOption,
+  AgentModelCatalogView,
   AgentModelsSnapshot,
   AgentModelTargetId,
   AgentModelTargetView,
@@ -51,6 +53,15 @@ export function agentModelTargetId(value: string): AgentModelTargetId {
 /** Main conversation Agent target. */
 export const MAIN_AGENT_MODEL_TARGET = agentModelTargetId('main')
 
+/**
+ * Derive the stable main-Agent settings target for one preset route.
+ * @param presetId - preset roster id owned by the deployment.
+ * @returns preset-qualified main-Agent target id.
+ */
+export function presetAgentModelTargetId(presetId: string): AgentModelTargetId {
+  return agentModelTargetId(`main-${presetId}`)
+}
+
 /** Settings namespace carrying per-Agent model selections. */
 export const AGENT_MODELS_SETTINGS_NAMESPACE = settingsNamespace('agent-models')
 
@@ -70,14 +81,28 @@ export const AGENT_MODELS_SETTINGS_SCHEMA: z<AgentModelsSettings> = z.object({
   agents: z.dict(storedSelection),
 })
 
-/** Composition entry for the main Agent and fixed provider route. */
-export interface Config {
-  /** Provider route shared by every registered Agent target. */
+/** One deployment-owned main-Agent route assigned to a preset. */
+export interface AgentModelPresetRoute {
+  /** Provider route fixed for this preset's main Agent. */
   provider: string
-  /** Main Agent model id. */
+  /** Main-Agent model id. */
   model: string
-  /** Main Agent reasoning effort, or provider/default behavior when absent. */
+  /** Main-Agent reasoning effort, or provider/default behavior when absent. */
   reasoningEffort?: string
+  /** Graphical label; defaults to the preset id followed by `main agent`. */
+  label?: string
+}
+
+/** Composition entry for fallback and preset-specific main-Agent routes. */
+export interface Config {
+  /** Fallback provider route for presets without an explicit assignment. */
+  provider: string
+  /** Fallback main-Agent model id. */
+  model: string
+  /** Fallback main-Agent reasoning effort, or provider/default behavior when absent. */
+  reasoningEffort?: string
+  /** Preset ids mapped to deployment-owned main-Agent routes. */
+  presets?: Record<string, AgentModelPresetRoute>
 }
 
 /** One deployment-owned named Agent contribution. */
@@ -169,8 +194,8 @@ interface CountedTarget {
 
 /**
  * Owns persistent Agent model selections and their lifecycle-safe directory.
- * The provider route is fixed by composition; settings select only a model and
- * optional reasoning effort for each registered Agent target.
+ * Each target's provider route is fixed by composition; settings select only
+ * a model and optional reasoning effort under that route.
  */
 export class AgentModelConfig extends TypertRemoteService {
   static inject = ['llm']
@@ -179,15 +204,20 @@ export class AgentModelConfig extends TypertRemoteService {
     provider: z.string().required(),
     model: z.string().required(),
     reasoningEffort: z.string(),
+    presets: z.dict(z.object({
+      provider: z.string().required(),
+      model: z.string().required(),
+      reasoningEffort: z.string(),
+      label: z.string().min(1),
+    })).default({}),
   })
 
   private source: () => AgentModelsSettings
   private readonly targets = new Map<AgentModelTargetId, CountedTarget>()
-  private readonly provider: string
+  private readonly presetTargets = new Map<string, AgentModelTargetId>()
 
   constructor(ctx: Context, config: Config) {
     super(ctx, 'agentModels')
-    this.provider = config.provider
     const mainSelection: ModelSelection = {
       provider: config.provider,
       model: config.model,
@@ -201,6 +231,25 @@ export class AgentModelConfig extends TypertRemoteService {
       target: { id: MAIN_AGENT_MODEL_TARGET, label: 'Main agent', defaultSelection: mainSelection },
       count: 1,
     })
+    for (const [presetId, route] of Object.entries(config.presets ?? {})) {
+      const id = presetAgentModelTargetId(presetId)
+      const selection: ModelSelection = {
+        provider: route.provider,
+        model: route.model,
+        ...route.reasoningEffort === undefined
+          ? {}
+          : { reasoningEffort: ReasoningEffortId(route.reasoningEffort) },
+      }
+      this.presetTargets.set(presetId, id)
+      this.targets.set(id, {
+        target: {
+          id,
+          label: route.label ?? `${presetId} main agent`,
+          defaultSelection: selection,
+        },
+        count: 1,
+      })
+    }
     installSettingsSection(ctx, AGENT_MODELS_SETTINGS_NAMESPACE, AGENT_MODELS_SETTINGS_SCHEMA, entry, {
       setSource: (current) => { this.source = current },
       onChange: () => {},
@@ -234,12 +283,6 @@ export class AgentModelConfig extends TypertRemoteService {
     const resolved: ResolvedAgentModelTarget = {
       ...target,
       defaultSelection: { ...(target.defaultSelection ?? mainDefault) },
-    }
-    if (resolved.defaultSelection.provider !== this.provider) {
-      throw new Error(
-        `agent-models: target "${String(target.id)}" uses provider "${resolved.defaultSelection.provider}";`
-        + ` this deployment fixes Agent models to "${this.provider}"`,
-      )
     }
     const existing = this.targets.get(target.id)
     if (existing !== undefined) {
@@ -276,7 +319,18 @@ export class AgentModelConfig extends TypertRemoteService {
     const configured = this.source().agents[id]
     return configured === undefined
       ? { ...target.defaultSelection }
-      : selected(this.provider, configured)
+      : selected(target.defaultSelection.provider, configured)
+  }
+
+  /**
+   * Read the current main-Agent route assigned to a preset.
+   * @param presetId - effective preset id, or undefined without a roster.
+   * @returns assigned selection, falling back to the deployment-wide main route.
+   */
+  mainSelection(presetId?: string): ModelSelection {
+    return this.currentSelection(presetId === undefined
+      ? MAIN_AGENT_MODEL_TARGET
+      : this.presetTargets.get(presetId) ?? MAIN_AGENT_MODEL_TARGET)
   }
 
   /**
@@ -291,10 +345,15 @@ export class AgentModelConfig extends TypertRemoteService {
     return { ...rest, ...this.currentSelection(id) }
   }
 
-  /** Validate one requested selection against the exact fixed-provider route. */
-  private async validateSelection(value: StoredAgentModelSelection): Promise<StoredAgentModelSelection> {
+  /** Validate one requested selection against its target's fixed-provider route. */
+  private async validateSelection(
+    id: AgentModelTargetId,
+    value: StoredAgentModelSelection,
+  ): Promise<StoredAgentModelSelection> {
+    const target = this.targets.get(id)?.target
+    if (target === undefined) throw new Error(`agent-models: unknown target "${String(id)}"`)
     await this.ctx.llm.resolveCallConfig({
-      provider: this.provider,
+      provider: target.defaultSelection.provider,
       model: value.model,
       ...value.reasoningEffort === undefined
         ? {}
@@ -309,8 +368,7 @@ export class AgentModelConfig extends TypertRemoteService {
     value: StoredAgentModelSelection,
     expectedRevision?: number,
   ): Promise<void> {
-    if (!this.targets.has(id)) throw new Error(`agent-models: unknown target "${String(id)}"`)
-    const next = await this.validateSelection(value)
+    const next = await this.validateSelection(id, value)
     const settings = this.ctx.get('settings')
     if (settings === undefined) throw new Error('agent-models: settings provider is unavailable')
     await settings.mutate(
@@ -321,35 +379,39 @@ export class AgentModelConfig extends TypertRemoteService {
   }
 
   /**
-   * Save the main Agent selection after a session-local model switch.
+   * Save a preset's main-Agent selection after a session-local model switch.
    * @param next - resolved selection accepted by the session entry point.
+   * @param presetId - effective preset id, or undefined without a roster.
    * @returns fulfillment after the optional settings write settles.
    */
-  async saveSelection(next: ModelSelection): Promise<void> {
-    if (next.provider !== this.provider) {
+  async saveSelection(next: ModelSelection, presetId?: string): Promise<void> {
+    const id = presetId === undefined
+      ? MAIN_AGENT_MODEL_TARGET
+      : this.presetTargets.get(presetId) ?? MAIN_AGENT_MODEL_TARGET
+    const provider = this.targets.get(id)?.target.defaultSelection.provider
+    if (provider === undefined) throw new Error(`agent-models: unknown target "${String(id)}"`)
+    if (next.provider !== provider) {
       throw new Error(
-        `agent-models: provider "${next.provider}" cannot replace deployment provider "${this.provider}"`,
+        `agent-models: provider "${next.provider}" cannot replace target provider "${provider}"`,
       )
     }
     const settings = this.ctx.get('settings')
     if (settings === undefined) return
-    await this.saveTarget(MAIN_AGENT_MODEL_TARGET, stored(next))
+    await this.saveTarget(id, stored(next))
   }
 
   /**
-   * Read the live target directory and fixed-provider model catalog.
+   * Read the live target directory and its distinct provider catalogs.
    * @returns point-in-time graphical settings snapshot.
    */
   @Remote('list')
   async list(): Promise<AgentModelsSnapshot> {
     const descriptor = ownDescriptor(this.ctx)
-    const listed = await this.ctx.llm.listModels(this.provider)
-    const models = await Promise.all(listed.map(model =>
-      this.ctx.llm.resolveModelInfo(this.provider, model.id).then(modelOption)))
     const targets = [...this.targets.values()]
       .map(({ target }): AgentModelTargetView => ({
         id: target.id,
         label: target.label,
+        provider: target.defaultSelection.provider,
         selection: stored(this.currentSelection(target.id)),
         defaultSelection: stored(target.defaultSelection),
         overridden: userOwns(descriptor, target.id),
@@ -359,12 +421,18 @@ export class AgentModelConfig extends TypertRemoteService {
         : right.id === MAIN_AGENT_MODEL_TARGET
           ? 1
           : left.label.localeCompare(right.label) || String(left.id).localeCompare(String(right.id)))
+    const providers = [...new Set(targets.map(target => target.provider))].sort()
+    const catalogs = await Promise.all(providers.map(async (provider): Promise<AgentModelCatalogView> => {
+      const listed = await this.ctx.llm.listModels(provider)
+      const models = await Promise.all(listed.map(model =>
+        this.ctx.llm.resolveModelInfo(provider, model.id).then(modelOption)))
+      return { provider, models }
+    }))
     return {
-      provider: this.provider,
       writable: this.ctx.get('settings')?.writable === true,
       revision: descriptor?.revision ?? 0,
       targets,
-      models,
+      catalogs,
     }
   }
 

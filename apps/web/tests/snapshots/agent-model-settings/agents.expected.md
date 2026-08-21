@@ -1,33 +1,33 @@
-- dialog "设置":
+- dialog "Settings":
   - navigation:
-    - text: 设置
-    - button "通用设置":
+    - text: Settings
+    - button "General":
       - img
-      - text: 通用设置
-    - button "模型":
+      - text: General
+    - button "Models":
       - img
-      - text: 模型
-    - button "插件":
+      - text: Models
+    - button "Plugins":
       - img
-      - text: 插件
-    - button "智能体":
+      - text: Plugins
+    - button "Agents":
       - img
-      - text: 智能体
-    - button "Agent 预设":
+      - text: Agents
+    - button "Agent presets":
       - img
-      - text: Agent 预设
-  - button "打开配置文件"
-  - button "关闭":
+      - text: Agent presets
+  - button "Open configuration file"
+  - button "Close":
     - img
-    - text: 关闭
-  - heading "智能体模型" [level=2]
-  - paragraph: 选择每个智能体下次开始会话时使用的 OpenRouter 模型与推理强度。
-  - heading "智能体角色" [level=3]
+    - text: Close
+  - heading "Agent models" [level=2]
+  - paragraph: Choose the model and reasoning level used when each agent starts its next conversation.
+  - heading "Agent roles" [level=3]
   - list:
     - listitem:
       - strong: Main agent
-      - text: openrouter 部署默认值 模型
-      - combobox "模型":
+      - text: openrouter Deployment default Model
+      - combobox "Model":
         - 'option "AI21: Jamba Large 1.7"'
         - 'option "AionLabs: Aion-2.0"'
         - 'option "AionLabs: Aion-3.0"'
@@ -305,17 +305,31 @@
         - option "OpenAI GPT Mini Latest"
         - 'option "xAI: Grok Latest"'
         - option "DeepSeek V4 Flash 0731 (Nitro)" [selected]
-      - text: 推理强度
-      - combobox "推理强度":
-        - option "提供方默认值"
+      - text: Reasoning
+      - combobox "Reasoning":
+        - option "Provider default"
         - option "Off"
         - option "High"
         - option "Xhigh" [selected]
-      - button "保存" [disabled]
+      - button "Apply" [disabled]
+    - listitem:
+      - strong: Daedal OpenAI reviewer
+      - text: openai-codex Deployment default Model
+      - combobox "Model":
+        - option "GPT-5.6 Luna"
+        - option "GPT-5.6 Terra"
+        - option "GPT-5.6 Sol" [selected]
+      - text: Reasoning
+      - combobox "Reasoning":
+        - option "Provider default"
+        - option "Minimal"
+        - option "Extra high" [selected]
+        - option "Maximum"
+      - button "Apply" [disabled]
     - listitem:
       - strong: Forked agent
-      - text: openrouter 部署默认值 模型
-      - combobox "模型":
+      - text: openrouter Deployment default Model
+      - combobox "Model":
         - 'option "AI21: Jamba Large 1.7"'
         - 'option "AionLabs: Aion-2.0"'
         - 'option "AionLabs: Aion-3.0"'
@@ -593,17 +607,17 @@
         - option "OpenAI GPT Mini Latest"
         - 'option "xAI: Grok Latest"'
         - option "DeepSeek V4 Flash 0731 (Nitro)" [selected]
-      - text: 推理强度
-      - combobox "推理强度":
-        - option "提供方默认值"
+      - text: Reasoning
+      - combobox "Reasoning":
+        - option "Provider default"
         - option "Off"
         - option "High"
         - option "Xhigh" [selected]
-      - button "保存" [disabled]
+      - button "Apply" [disabled]
     - listitem:
       - strong: Guru
-      - text: openrouter 部署默认值 模型
-      - combobox "模型":
+      - text: openrouter Deployment default Model
+      - combobox "Model":
         - 'option "AI21: Jamba Large 1.7"'
         - 'option "AionLabs: Aion-2.0"'
         - 'option "AionLabs: Aion-3.0"'
@@ -881,17 +895,17 @@
         - option "OpenAI GPT Mini Latest"
         - 'option "xAI: Grok Latest"'
         - option "DeepSeek V4 Flash 0731 (Nitro)" [selected]
-      - text: 推理强度
-      - combobox "推理强度":
-        - option "提供方默认值"
+      - text: Reasoning
+      - combobox "Reasoning":
+        - option "Provider default"
         - option "Off"
         - option "High"
         - option "Xhigh" [selected]
-      - button "保存" [disabled]
+      - button "Apply" [disabled]
     - listitem:
       - strong: Subagent
-      - text: openrouter 部署默认值 模型
-      - combobox "模型":
+      - text: openrouter Deployment default Model
+      - combobox "Model":
         - 'option "AI21: Jamba Large 1.7"'
         - 'option "AionLabs: Aion-2.0"'
         - 'option "AionLabs: Aion-3.0"'
@@ -1169,10 +1183,10 @@
         - option "OpenAI GPT Mini Latest"
         - 'option "xAI: Grok Latest"'
         - option "DeepSeek V4 Flash 0731 (Nitro)" [selected]
-      - text: 推理强度
-      - combobox "推理强度":
-        - option "提供方默认值"
+      - text: Reasoning
+      - combobox "Reasoning":
+        - option "Provider default"
         - option "Off"
         - option "High"
         - option "Xhigh" [selected]
-      - button "保存" [disabled]
+      - button "Apply" [disabled]

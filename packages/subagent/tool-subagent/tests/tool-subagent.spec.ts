@@ -329,11 +329,12 @@ describe('dsh-tool-subagent', () => {
       provider: 'capture',
       toolName: 'subagent_reviewer',
       agentLabel: 'Reviewer',
+      agentModelId: 'daedal-openai-reviewer',
       maxDepth: 'provider-managed',
     })
 
     expect(registerTarget).toHaveBeenCalledWith({
-      id: 'subagent-reviewer',
+      id: 'daedal-openai-reviewer',
       label: 'Reviewer',
     })
     await ctx.tools.execute({
@@ -343,7 +344,7 @@ describe('dsh-tool-subagent', () => {
       arguments: { description: 'review', prompt: 'inspect this' },
       agent: fakeAgent(),
     })
-    expect(optionsFor).toHaveBeenCalledWith('subagent-reviewer', undefined)
+    expect(optionsFor).toHaveBeenCalledWith('daedal-openai-reviewer', undefined)
     expect(seen?.agentOptions).toEqual({
       provider: 'openrouter',
       model: 'deepseek/deepseek-v4-flash-0731:nitro',

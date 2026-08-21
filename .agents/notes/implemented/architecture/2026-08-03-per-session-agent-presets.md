@@ -19,7 +19,7 @@ Composition splits into two planes, decided by what must be shared rather than b
 | Host | one | The registries themselves (`tools`, `systemPrompt`, `agents`, `agent-loop`, `sessions`), cross-session facilities (persistence, query, projections, storage, settings, credentials, telemetry), the subagent providers those facilities resolve, and the web host |
 | Agent | one per session | What a single agent contributes to those registries: tool plugins, persona and prompt sections, compaction policy |
 
-Model routing stays out of presets. `installAgentLlmTarget` is already the per-agent seam for provider, model, and reasoning effort, and an LLM adapter mounted inside a preset would never be resolved by `agent-loop`, which lives in the host plane.
+Model routing stays out of preset documents. The host-plane `agent-default-model` service maps preset ids to main-Agent routes and owns named-role settings targets; an LLM adapter mounted inside a preset would never be resolved by `agent-loop`, which lives in the host plane.
 
 The presets the deployment ships are the directories under `packages/preset/agent-presets/presets/`; the roster is that listing, not a list restated here.
 

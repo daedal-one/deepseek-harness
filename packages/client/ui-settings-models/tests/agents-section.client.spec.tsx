@@ -8,13 +8,13 @@ import { AgentsSection } from '../src/client/AgentsSection.tsx'
 import { agentEn } from '../src/client/agent-locales.ts'
 
 const snapshot: AgentModelsSnapshot = {
-  provider: 'openrouter',
   writable: true,
   revision: 7,
   targets: [
     {
       id: 'main' as never,
       label: 'Main agent',
+      provider: 'openrouter',
       selection: { model: 'model-a', reasoningEffort: 'high' },
       defaultSelection: { model: 'model-a', reasoningEffort: 'high' },
       overridden: false,
@@ -22,24 +22,27 @@ const snapshot: AgentModelsSnapshot = {
     {
       id: 'reviewer' as never,
       label: 'Reviewer',
+      provider: 'openai-codex',
       selection: { model: 'model-b' },
-      defaultSelection: { model: 'model-a', reasoningEffort: 'high' },
+      defaultSelection: { model: 'model-b' },
       overridden: true,
     },
   ],
-  models: [
+  catalogs: [
     {
-      id: 'model-a',
-      name: 'Model A',
-      reasoningEfforts: [
-        { id: 'high', name: 'High' },
-        { id: 'xhigh', name: 'Extra high' },
-      ],
+      provider: 'openai-codex',
+      models: [{ id: 'model-b', name: 'Model B', reasoningEfforts: [] }],
     },
     {
-      id: 'model-b',
-      name: 'Model B',
-      reasoningEfforts: [],
+      provider: 'openrouter',
+      models: [{
+        id: 'model-a',
+        name: 'Model A',
+        reasoningEfforts: [
+          { id: 'high', name: 'High' },
+          { id: 'xhigh', name: 'Extra high' },
+        ],
+      }],
     },
   ],
 }
@@ -54,7 +57,7 @@ const useAgentDirectory = bindSnapshotSelector(directory)
 afterEach(cleanup)
 
 describe('AgentsSection', () => {
-  it('renders main and named Agent selections from the OpenRouter directory', async () => {
+  it('renders each Agent selection from its deployment-owned provider catalog', async () => {
     const { container } = render(<AgentsSection
       {...globalProps}
       useAgentDirectory={useAgentDirectory}
@@ -66,7 +69,8 @@ describe('AgentsSection', () => {
 
     expect(await screen.findByText('Main agent')).toBeTruthy()
     expect(screen.getByText('Reviewer')).toBeTruthy()
-    expect(screen.getAllByText('openrouter')).toHaveLength(2)
+    expect(screen.getByText('openrouter')).toBeTruthy()
+    expect(screen.getByText('openai-codex')).toBeTruthy()
     const reviewer = container.querySelector<HTMLElement>('[data-agent-id="reviewer"]')
     expect(reviewer).not.toBeNull()
     if (reviewer === null) throw new Error('reviewer card is missing')
@@ -193,6 +197,7 @@ describe('AgentsSection', () => {
         {
           id: 'guru' as never,
           label: 'Guru',
+          provider: 'openrouter',
           selection: { model: 'model-a', reasoningEffort: 'high' },
           defaultSelection: { model: 'model-a', reasoningEffort: 'high' },
           overridden: false,

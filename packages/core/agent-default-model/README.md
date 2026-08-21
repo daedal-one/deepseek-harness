@@ -1,125 +1,28 @@
----
-description: "The deployment default model selection for users and maintainers choosing, configuring, or debugging which model freshly created agents start on."
-kind: "package-reference"
----
-
 # @deepseek-ai/dsh-agent-default-model
 
-## Summary
+Persistent model selection for the main Agent and deployment-defined named Agent roles. `AgentModelConfig` provides `ctx.agentModels`; direct entry points, Host-backed entry points, and named child tools read one owner instead of carrying unrelated model defaults.
 
-`dsh-agent-default-model` gives newly created agents a shared default provider and model when their sessions do not specify one. Use it to choose the starting model once for all supported agent entry points, including `dsh --profile headless`. When settings are available, users can override the configured selection, including reasoning effort, and saved changes apply to subsequent reads. The default is process-wide; per-session model selection remains the responsibility of the entry point that creates the agent.
+The plugin config requires a fallback `{ provider, model }`, accepts `reasoningEffort`, and can map preset ids under `presets` to independent `{ provider, model, reasoningEffort?, label? }` main-Agent routes. Composition fixes the provider independently for every target. The `agent-models` Settings section stores only each target's model and optional reasoning effort, so a graphical change cannot silently move an Agent to another credential or provider route.
 
-## Table of Contents
+- `currentSelection(id?)` returns the effective selection for the main Agent or one registered role.
+- `mainSelection(presetId?)` returns the preset-specific main-Agent selection, falling back to the deployment-wide main route when no assignment exists.
+- `optionsFor(id, fallback?)` applies a role selection while preserving unrelated Agent options such as output limits.
+- `registerTarget(target)` contributes a named role for the lifetime of its plugin scope. A visible addition or final removal publishes `agent-models/directory-updated`; equivalent contributions coalesce without publishing duplicate changes, and conflicting definitions fail.
+- `saveSelection(selection, presetId?)` persists a switch under the effective preset's main-Agent target when a settings provider is mounted.
+- The generated `agentModels.list/save/reset` Remote namespace backs the Settings > Agents page with each target's fixed provider, the distinct required catalogs, exact model metadata, and compare-and-swap revisions.
 
-- [Use this package](#use-this-package)
-- [Understand the implementation](#understand-the-implementation)
-- [Further Exploration](#further-exploration)
-- [Model Experience](#model-experience)
-- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
-- [Dev Note](#dev-note)
+Every graphical save validates the exact model and reasoning effort through `ctx.llm` before writing. A stale settings revision is rejected instead of overwriting a concurrent edit. Removing an override restores that role's composition default.
 
------
-
-<a id="use-this-package"></a>
-## Use this package
-
-Mount this package wherever agents are created without an explicit model route. The service answers one question — which model should a fresh agent use? — so entry points that create agents consult it instead of re-implementing a default.
-
-### Configure the default
-
-The composition entry is the base of the default: it requires a provider and model and stays usable without any settings provider.
-
-```yaml
-- name: '@deepseek-ai/dsh-agent-default-model'
-  config:
-    provider: deepseek
-    model: deepseek-chat
-```
-
-| Field | Default | Meaning |
-|---|---|---|
-| `provider` | required | Registered provider route for fresh agents |
-| `model` | required | Provider-owned model id for fresh agents |
-
-The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-agent-default-model) is the exhaustive source for every accepted field. `reasoningEffort` is deliberately not a config field: it belongs to the settings layer, so a complete saved selection can clear an effort when the next selected model has none, while a composition value would be inherited again.
-
-### Read and change the default
-
-`currentSelection()` returns a detached `{ provider, model, reasoningEffort? }` for a newly created agent; `saveSelection()` stores the complete selection for later agents.
-
-```text
-const selection = ctx.agentDefaultModel.currentSelection()
-await ctx.agentDefaultModel.saveSelection({ provider, model, reasoningEffort: 'high' })
-```
-
-Without a settings provider, `saveSelection()` is a no-op and the composition entry remains current. The service does not validate catalog membership: a provider route may serve an unadvertised model, and the consumer that opens a model request owns availability diagnostics.
-
------
-
-<a id="understand-the-implementation"></a>
-## Understand the implementation
-
-<details>
-<summary>Implementation internals — click to expand</summary>
-
-This section explains how the service realizes the behavior above; the observable contract is covered in [Use this package](#use-this-package).
-
-### Design concept
-
-The service is a composition entry with a settings-backed source. The plugin config supplies the base `{ provider, model }`; when a settings provider is mounted, the `agent-default-model` settings section becomes the live source and every consumer reads through `currentSelection()`, so a settings write needs no registration-level rebuild. `reasoningEffort` lives only in the settings schema — the config cannot carry it, because an effort cleared by a new selection must stay cleared rather than being re-inherited from composition.
-
-### Source map
-
-| File | Role |
-|---|---|
-| [`src/index.ts`](src/index.ts) | Plugin entry: `AgentDefaultModelConfig` service, settings section install, `currentSelection`/`saveSelection` |
-| — | No runtime invariant companion is published; settings validation owns the only mutable-value relationship. |
-
-### Behavior notes
-
-Both public methods are thin reads and writes over that source: `currentSelection()` returns a fresh detached object so a caller can hold it without aliasing service state, and `saveSelection()` writes the whole selection through `ctx.settings` when present.
-
-</details>
-
------
-
-<a id="further-exploration"></a>
-## Further Exploration
-
-The package-level contract is enough for most consumers; read these when you need the surrounding domain.
-
-- [Core subsystem](../../../docs/subsystems/core.md) — the `Agent` handle and `AgentOptions` route selection.
-- [agent-loop package](../agent-loop/README.md) — how agents resolve provider and model at request time.
-- [Generated configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-agent-default-model) — every accepted config field and its source declaration.
-- [Core group map](../README.md) — how the core packages compose.
-
------
-
-<a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through the `ModelSelection` the service supplies to an entry point; request assembly and the provider adapters own the model-visible request.
+Indirectly, through the selection passed to a subsequently created Agent; the service adds no prompt content.
 
 #### KV Cache effect
 
-Changing the default affects only agents that subsequently resolve from it. An existing session whose request log already names a selection keeps that selection, so this service does not invalidate its established prefix.
+Existing sessions keep their logged selection. A saved change applies to later starts and blank sessions whose effective preset selects that main-Agent target, without invalidating an established request prefix.
 
 ## Known Limitations and Deferred Work
 
-<a id="known-limitations-and-deferred-work"></a>
-
-
-These limits define the service's scope. They are current package constraints, not a task backlog.
-
-- **One process-wide default** — the service owns a single default; per-session model selection remains the entry point's responsibility.
-- **No retention without a settings provider** — `saveSelection()` cannot keep a selection for a later agent when no settings provider is mounted.
-
-<a id="dev-note"></a>
-### Dev Note
-
-<details>
-<summary>Working context for maintainers — click to expand</summary>
-
-None.
-
-</details>
+- Each target's provider route is deployment-owned and cannot be changed from the graphical page.
+- Named roles appear only while their contributing plugins are mounted; open clients re-read the directory when that live set changes.
+- Without a writable settings provider, the directory remains readable but changes cannot be retained.

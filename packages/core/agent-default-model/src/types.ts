@@ -18,7 +18,7 @@ declare module '@deepseek-ai/cordis' {
 /** Stable identity of one configurable Agent role. */
 export type AgentModelTargetId = Branded<'AgentModelTargetId'>
 
-/** Stored selection under the deployment-fixed provider route. */
+/** Stored selection under one target's deployment-fixed provider route. */
 export interface StoredAgentModelSelection {
   /** Provider-owned model id. */
   model: string
@@ -26,7 +26,7 @@ export interface StoredAgentModelSelection {
   reasoningEffort?: string
 }
 
-/** One graphical model option under the deployment-fixed provider. */
+/** One graphical model option under a deployment-fixed provider. */
 export interface AgentModelOption {
   /** Exact provider request id. */
   readonly id: string
@@ -53,6 +53,8 @@ export interface AgentModelTargetView {
   readonly id: AgentModelTargetId
   /** Human-facing Agent role name. */
   readonly label: string
+  /** Deployment-fixed provider route for this target. */
+  readonly provider: string
   /** Effective selection for the next Agent start. */
   readonly selection: StoredAgentModelSelection
   /** Deployment selection restored by reset. */
@@ -61,16 +63,22 @@ export interface AgentModelTargetView {
   readonly overridden: boolean
 }
 
-/** Point-in-time Agent model directory and fixed-provider catalog. */
-export interface AgentModelsSnapshot {
-  /** Deployment-fixed provider route. */
+/** One provider catalog required by the visible Agent targets. */
+export interface AgentModelCatalogView {
+  /** Exact deployment provider route. */
   readonly provider: string
+  /** Models currently served by this provider route. */
+  readonly models: readonly AgentModelOption[]
+}
+
+/** Point-in-time Agent model directory and its provider catalogs. */
+export interface AgentModelsSnapshot {
   /** Whether the current settings provider accepts writes. */
   readonly writable: boolean
   /** Monotonic revision of the raw Agent-model settings section. */
   readonly revision: number
   /** Main Agent first, then named contributions by label and id. */
   readonly targets: readonly AgentModelTargetView[]
-  /** Models currently served by the fixed provider route. */
-  readonly models: readonly AgentModelOption[]
+  /** Distinct provider catalogs required by the visible targets. */
+  readonly catalogs: readonly AgentModelCatalogView[]
 }
