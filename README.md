@@ -4,6 +4,20 @@ DeepSeek Harness (`dsh`) is an open-source agent harness developed by [DeepSeek 
 
 It uses an architecture where **everything is a plugin**, and is powered by [Cordis](https://github.com/cordiverse/cordis), whose design is described in [_A Programming Paradigm for Spatiotemporal Composability_](https://github.com/cordiverse/paper).
 
+## Changes in this fork
+
+Alongside minor cosmetic changes, this fork:
+
+- Keeps the maintained source, documentation, and website English-only, without the bilingual translation and synchronization system (a bit sad about this but my Chinese is not good enough and it was only wasting tokens).
+- Adds the [Daedal reference setup](docs/reference/daedal/README.md): an OpenRouter-first coding preset with named roles, matching Web and headless composition, and per-role model and reasoning controls.
+- Routes conversation models and citation-backed web search through OpenRouter, with provider-routing controls, editable provider and model configuration, and native OpenAI Codex account authentication.
+- Adds [model-backed tool policy](docs/subsystems/tool-policy.md), including a Policy reviewed permission mode, independent intent and effect review, scoped MCP capabilities and clients, trusted subagent principals, and validated child results.
+- Adds [durable reviewed memory](docs/subsystems/memory.md) with explicit project and global scopes, evidence, review states, and approval-gated global changes.
+- Adds a route-scoped [English-output guard](packages/guard/english-output-guard/README.md) that keeps selected models' reasoning blocks in English before they enter durable history; drifting explanatory prose is translated too, while code, identifiers, and tool calls stay unchanged.
+- Rejects private-network Web fetches and fails closed when required policy evidence is missing, invalid, or unavailable.
+- Integrates [Forge-managed sessions](packages/integration/forge-session-adapter/README.md) and [Forge-managed Code workspaces](packages/integration/forge-project-workspaces/README.md), with Forge Intellect as the accountable workspace tool plane.
+- Improves the Web UI with searchable plugin metadata and state filters, plus end-to-end LLM output-rate reporting that does not mistake buffered delivery for generation speed.
+
 ## Developer preview
 
 DeepSeek Harness is currently in _developer preview_ and is iterating rapidly. **THERE WILL BE COMPATIBILITY-BREAKING CHANGES.**
