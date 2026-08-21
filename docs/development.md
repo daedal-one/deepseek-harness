@@ -134,6 +134,8 @@ The credential-free dsh dependency-layout and dsh/vendor pack rehearsals use the
 
 The root [contributor instructions](../AGENTS.md#commands) summarize common commands, while [`package.json`](../package.json) and [scripts/run-gates.ts](../scripts/run-gates.ts) own the current script and gate inventories. Select the smallest checks that cover the changed surface. Documentation changes use `pnpm run doc-sync`; package-public behavior changes also update the owning README or JSDoc, and built-artifact checks require `pnpm run build` first.
 
+Use the [agent memory benchmark](cookbook/benchmarking-agent-memory.md) to separate fixed Host and tool memory from the incremental cost of retained live agents and to compare DSH with jcode on one machine and metric.
+
 ### Profile runs
 
 Run the repository build separately before using these source-checkout demos:
