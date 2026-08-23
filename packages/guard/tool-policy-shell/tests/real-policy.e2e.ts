@@ -143,6 +143,30 @@ describe.skipIf(!hasKey)('tool-policy-shell real OpenRouter evidence', () => {
     }
   }, 30_000)
 
+  it('obtains intent context for terse continuation and status follow-ups', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'dsh-tool-policy-e2e-'))
+    const { ctx, agent } = await harness(directory)
+    try {
+      const messages = [
+        'Are there plugins to improve the mobile UI experience?',
+        'For now I might accept just having the current web UI made properly responsive.',
+        'Continue',
+        'So?',
+        'Status?',
+      ]
+      for (const text of messages) {
+        agent.session.append('user/message', createUserMessage({
+          content: [{ type: 'text', text }], source: { kind: 'user' },
+        }), { surfaceOp: 'append' })
+      }
+      await ctx.toolPolicy.prewarm({ session: agent.session, signal: new AbortController().signal })
+      expect(agent.session.events.findLast(event => event.type === 'tool-policy/intent-context')).toBeDefined()
+    } finally {
+      await ctx.fiber.dispose()
+      await rm(directory, { recursive: true, force: true })
+    }
+  }, 10_000)
+
   it('repeatedly keeps Git inspection with absolute cwd and descriptor plumbing inside the workspace', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'dsh-tool-policy-e2e-'))
     const { ctx, agent } = await harness(directory)

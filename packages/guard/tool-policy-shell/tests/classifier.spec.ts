@@ -133,6 +133,9 @@ describe('shell classifier dispatch', () => {
         kind: 'effect', commandArgument: 'command', intentArgument: 'description', maxCommandChars: 1_000, maxIntentChars: 100,
       },
     })
+    expect(JSON.stringify(requests[0]?.data))
+      .toContain('Line 1 is comma-separated allowed effects or -. Line 2 is comma-separated explicitly forbidden effects or -.')
+    expect(JSON.stringify(requests[0]?.data)).toContain('the response begins exactly with -\\n-\\n')
     expect(JSON.stringify(requests[1]?.data))
       .toContain('only for a path explicitly named or derived by the command that resolves outside cwd')
     expect(events.filter(event => event.type === 'tool-policy/intent-context')).toHaveLength(1)
