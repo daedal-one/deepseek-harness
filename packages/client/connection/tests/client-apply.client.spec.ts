@@ -319,6 +319,47 @@ describe('connection client apply', () => {
     })
   })
 
+  it('carries API calls without requiring secure-context randomUUID', async () => {
+    ;(globalThis as Win).location = {
+      hostname: '192.0.2.20', search: '', origin: 'http://192.0.2.20:3081',
+    }
+    vi.stubGlobal('crypto', {
+      getRandomValues(bytes: Uint8Array) {
+        return bytes.fill(0)
+      },
+    })
+    const handle = await mount()
+    const original = globalThis.fetch
+    const seen: { url: string; body: unknown }[] = []
+    globalThis.fetch = async (input: URL | RequestInfo, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      if (typeof init?.body !== 'string') throw new TypeError('expected a JSON string request body')
+      const body = JSON.parse(init.body) as { rpcId: string }
+      seen.push({ url, body })
+      return Response.json({
+        type: 'server-response',
+        rpcId: body.rpcId,
+        result: { ok: true, value: { items: [], archivedSessionIds: [] } },
+      })
+    }
+    try {
+      await expect(handle.api.workspace.list({})).resolves.toMatchObject({
+        result: { ok: true, value: { items: [], archivedSessionIds: [] } },
+      })
+    } finally {
+      globalThis.fetch = original
+      vi.unstubAllGlobals()
+    }
+    expect(seen).toHaveLength(1)
+    expect(seen[0]?.url).toBe('http://192.0.2.20:3081/api/workspace.list')
+    expect(seen[0]?.body).toMatchObject({
+      type: 'client-request',
+      rpcId: '00000000-0000-4000-8000-000000000000',
+      method: 'workspace.list',
+      payload: {},
+    })
+  })
+
   it('validates generic RPC transport failures, correlation, and targets', async () => {
     ;(globalThis as Win).location = {
       hostname: 'harness.example', search: '', origin: 'https://harness.example',
