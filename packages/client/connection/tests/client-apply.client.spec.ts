@@ -446,7 +446,7 @@ describe('connection client apply', () => {
   })
 
   it('carries RPC calls without requiring secure-context randomUUID', async () => {
-    ;(globalThis as Win).location = { hostname: 'localhost', search: '' }
+    ;(globalThis as Win).location = { hostname: '192.0.2.20', search: '', origin: 'http://192.0.2.20:3081' }
     vi.stubGlobal('crypto', {
       getRandomValues(bytes: Uint8Array) {
         return bytes.fill(0)
@@ -474,7 +474,7 @@ describe('connection client apply', () => {
       vi.unstubAllGlobals()
     }
     expect(seen).toHaveLength(1)
-    expect(seen[0]?.url).toBe('http://dsh.internal/api/goals/create')
+    expect(seen[0]?.url).toBe('http://192.0.2.20:3081/api/goals/create')
     expect(seen[0]?.body).toMatchObject({
       type: 'client-request',
       rpcId: '00000000-0000-4000-8000-000000000000',
