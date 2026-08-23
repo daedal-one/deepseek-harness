@@ -289,6 +289,7 @@ describe('headless stream-json snapshots', () => {
       tsconfigPath,
       env: {
         DSH_CLI_DAEDAL: '1',
+        DSH_CLI_INTENT_RETRY: '1',
         DSH_CLI_POLICY_ASK: '1',
         DSH_PERMISSION_MODE: 'workspace-write',
         DSH_TELEMETRY_DISABLED: '1',

@@ -239,6 +239,15 @@ describe('shell classifier dispatch', () => {
     expect(adapter.seen).toHaveLength(2)
   })
 
+  it('retries intent preparation after a failed prewarm', async () => {
+    const adapter = new RoutedAdapter({ intent: ['invalid', INTENT_ALLOW], primary: [EFFECT_ALLOW] })
+    const ctx = await setup(adapter)
+    const { agent } = fakeAgent()
+    await prewarm(ctx, agent)
+    await expect(evaluate(ctx, agent)).resolves.toMatchObject({ decision: 'allow' })
+    expect(adapter.seen.map(item => item.provider)).toEqual(['intent', 'intent', 'primary'])
+  })
+
   it('records late intent context in the turn that requested it', async () => {
     const ctx = await setup(new RoutedAdapter({ intent: [INTENT_ALLOW] }, 5))
     const { agent, events } = fakeAgent()

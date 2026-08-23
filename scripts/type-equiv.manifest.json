@@ -2213,6 +2213,11 @@
     },
     {
       "doc": "docs/subsystems/tool-policy.md",
+      "symbol": "ToolPolicyPrewarmRequest",
+      "source": "packages/guard/tool-policy/src/index.ts"
+    },
+    {
+      "doc": "docs/subsystems/tool-policy.md",
       "symbol": "ToolPolicyProvider",
       "source": "packages/guard/tool-policy/src/index.ts"
     }
