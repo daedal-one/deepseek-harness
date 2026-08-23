@@ -14,6 +14,8 @@ const OFF = ReasoningEffortId('off')
 
 /** Keyless headless-agent adapter: one real bash call followed by a final answer. */
 class CliMockAdapter extends LlmAdapter {
+  private intentRequests = 0
+
   override async resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
     return {
       provider,
@@ -36,7 +38,10 @@ class CliMockAdapter extends LlmAdapter {
       return
     }
     if (options.provider === 'cli-mock-intent' && options.system?.startsWith('Derive authorization context')) {
-      const text = 'local-compute\n-\nprove the CLI round trip'
+      this.intentRequests += 1
+      const text = process.env.DSH_CLI_INTENT_RETRY === '1' && this.intentRequests === 1
+        ? 'invalid-evidence'
+        : 'local-compute\n-\nprove the CLI round trip'
       yield { type: 'text-delta', index: 0, text }
       yield { type: 'finish', reason: { kind: 'stop' } }
       return

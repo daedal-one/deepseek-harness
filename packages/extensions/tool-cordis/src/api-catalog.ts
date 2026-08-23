@@ -2054,6 +2054,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'idempotent disposer for this exact registration.',
       },
       {
+        signature: 'async prewarm(request: ToolPolicyPrewarmRequest): Promise<void>',
+        description: 'Start reusable preparation in every selected provider that supports it.',
+        parameters: [{ name: 'request', description: 'session and cancellation for this prewarm opportunity.' }],
+        returns: 'when every selected provider\'s preparation has settled.',
+      },
+      {
         signature: 'async evaluate(request: ToolPolicyRequest): Promise<ToolPolicyVerdict | undefined>',
         description: 'Evaluate one execution through the selected provider.',
         parameters: [{ name: 'request', description: 'immutable call identity, arguments, agent, and cancellation.' }],
@@ -4779,8 +4785,12 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ToolPolicyOpinion {\n    readonly providerId: ToolPolicyProviderId;\n    readonly decision: ToolPolicyDecision;\n    readonly risk: number;\n    readonly categories: readonly string[];\n    readonly reason: string;\n}',
   },
   {
+    name: 'ToolPolicyPrewarmRequest',
+    declaration: 'export interface ToolPolicyPrewarmRequest {\n    readonly session: Session;\n    readonly signal: AbortSignal;\n}',
+  },
+  {
     name: 'ToolPolicyProvider',
-    declaration: 'export interface ToolPolicyProvider {\n    evaluate(request: ToolPolicyRequest): Promise<ToolPolicyVerdict | undefined>;\n}',
+    declaration: 'export interface ToolPolicyProvider {\n    prewarm?(request: ToolPolicyPrewarmRequest): Promise<void>;\n    evaluate(request: ToolPolicyRequest): Promise<ToolPolicyVerdict | undefined>;\n}',
   },
   {
     name: 'ToolPolicyProviderId',

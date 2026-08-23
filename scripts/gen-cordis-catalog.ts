@@ -466,6 +466,7 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   ToolSchema: 'tools.md',
   ToolPolicyProvider: 'tool-policy.md',
   ToolPolicyProviderId: 'tool-policy.md',
+  ToolPolicyPrewarmRequest: 'tool-policy.md',
   ToolPolicyRequest: 'tool-policy.md',
   ToolPolicyVerdict: 'tool-policy.md',
   SettingsNamespace: 'settings.md',

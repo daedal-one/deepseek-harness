@@ -613,6 +613,11 @@ class ShellPolicyProvider implements ToolPolicyProvider {
       Date.now() + this.config.intentContextTimeoutMs,
     ).catch((_intentContextFailure: unknown) => this.intentFailure('intent context reviewer is unavailable', 'unavailable'))
     this.intentCache.set(cacheKey, { latestUserSeq: latest.seq, promise })
+    void promise.then((outcome) => {
+      if (outcome.review === undefined && this.intentCache.get(cacheKey)?.promise === promise) {
+        this.intentCache.delete(cacheKey)
+      }
+    })
     return promise
   }
 

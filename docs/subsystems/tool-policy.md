@@ -45,6 +45,14 @@ interface ToolPolicyRequest {
 }
 ```
 
+```ts type-equiv
+/** Session facts supplied before an enforced turn is likely to execute a tool. */
+interface ToolPolicyPrewarmRequest {
+  readonly session: Session
+  readonly signal: AbortSignal
+}
+```
+
 ## Provider registration and composition
 
 Provider plugins register one stable id for their effect lifetime. Configuration selects an ordered provider set; omission evaluates every registered provider in parallel. Unsupported providers disappear from the result. One supported verdict passes through, while overlapping verdicts combine as deny over ask over allow, with maximum risk and merged categories and opinions. Missing configured providers and an empty unconfigured registry reject evaluation instead of silently permitting the tool.
@@ -52,6 +60,8 @@ Provider plugins register one stable id for their effect lifetime. Configuration
 ```ts type-equiv
 /** One implementation of policy for a subset of tools. */
 interface ToolPolicyProvider {
+  /** Start optional reusable preparation without delaying the calling session event. */
+  prewarm?(request: ToolPolicyPrewarmRequest): Promise<void>
   /** Evaluate a supported tool, or return `undefined` without side effects when unsupported. */
   evaluate(request: ToolPolicyRequest): Promise<ToolPolicyVerdict | undefined>
 }
@@ -85,6 +95,13 @@ Effect-scoped named policy-provider registry.
 register(id: ToolPolicyProviderId, provider: ToolPolicyProvider): () => void
 
 /**
+ * Start reusable preparation in every selected provider that supports it.
+ * @param request - session and cancellation for this prewarm opportunity.
+ * @returns when every selected provider's preparation has settled.
+ */
+async prewarm(request: ToolPolicyPrewarmRequest): Promise<void>
+
+/**
  * Evaluate one execution through the selected provider.
  * @param request - immutable call identity, arguments, agent, and cancellation.
  * @returns a canonical verdict, or `undefined` when the selected provider does not support the tool.
@@ -93,5 +110,5 @@ register(id: ToolPolicyProviderId, provider: ToolPolicyProvider): () => void
 async evaluate(request: ToolPolicyRequest): Promise<ToolPolicyVerdict | undefined>
 ```
 
-Source: [`packages/guard/tool-policy/src/index.ts:66`](../../packages/guard/tool-policy/src/index.ts)
+Source: [`packages/guard/tool-policy/src/index.ts:75`](../../packages/guard/tool-policy/src/index.ts)
 <!-- END GENERATED cordis-surface -->
