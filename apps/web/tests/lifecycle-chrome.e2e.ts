@@ -285,22 +285,43 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
     try {
       const frame = page.locator('[data-phone="true"]')
       await frame.waitFor({ timeout: 10_000 })
+      const header = page.locator('[data-conversation-header]')
+      await page.evaluate(() => { document.scrollingElement!.scrollTop = 0 })
+      await expect.poll(() => header.getAttribute('data-scroll-hidden')).toBeNull()
+      await expect.poll(() => header.evaluate(element => getComputedStyle(element).transform)).toBe('none')
       const geometry = await page.evaluate(() => {
         const phoneFrame = document.querySelector<HTMLElement>('[data-phone="true"]')
         const conversation = document.querySelector<HTMLElement>('[data-conversation-scroll]')
-        if (phoneFrame === null || conversation === null) throw new Error('phone shell did not render')
+        const header = document.querySelector<HTMLElement>('[data-conversation-header]')
+        const firstRow = document.querySelector<HTMLElement>('[data-chat-flow-key]')
+        if (phoneFrame === null || conversation === null || header === null || firstRow === null) {
+          throw new Error('phone shell did not render')
+        }
         const frameBox = phoneFrame.getBoundingClientRect()
         const conversationBox = conversation.getBoundingClientRect()
+        const headerBox = header.getBoundingClientRect()
+        const headerStyle = getComputedStyle(header)
         return {
           documentWidth: document.documentElement.scrollWidth,
           viewportWidth: window.innerWidth,
           frameWidth: frameBox.width,
           conversationWidth: conversationBox.width,
+          headerPosition: headerStyle.position,
+          headerBackground: headerStyle.backgroundColor,
+          headerBottom: headerBox.bottom,
+          firstRowTop: firstRow.getBoundingClientRect().top,
+          htmlOverscroll: getComputedStyle(document.documentElement).overscrollBehavior,
+          bodyOverscroll: getComputedStyle(document.body).overscrollBehavior,
         }
       })
       expect(geometry.documentWidth).toBeLessThanOrEqual(geometry.viewportWidth)
       expect(geometry.frameWidth).toBe(390)
       expect(geometry.conversationWidth).toBe(390)
+      expect(geometry.headerPosition).toBe('sticky')
+      expect(geometry.headerBackground).not.toBe('rgba(0, 0, 0, 0)')
+      expect(geometry.firstRowTop).toBeGreaterThanOrEqual(geometry.headerBottom)
+      expect(geometry.htmlOverscroll).toBe('none')
+      expect(geometry.bodyOverscroll).toBe('none')
 
       await page.evaluate(() => {
         const firstRow = document.querySelector<HTMLElement>('[data-chat-flow-key]')
@@ -314,6 +335,11 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
       await expect.poll(() => page.evaluate(() => document.scrollingElement!.scrollHeight > window.innerHeight)).toBe(true)
       await page.evaluate(() => { document.scrollingElement!.scrollTop = 300 })
       await expect.poll(() => page.evaluate(() => document.scrollingElement!.scrollTop)).toBeGreaterThan(0)
+      await expect.poll(() => header.getAttribute('data-scroll-hidden')).toBe('true')
+      await expect.poll(() => header.evaluate(element => getComputedStyle(element).transform)).not.toBe('none')
+      await page.evaluate(() => { document.scrollingElement!.scrollTop -= 50 })
+      await expect.poll(() => header.getAttribute('data-scroll-hidden')).toBeNull()
+      await expect.poll(() => header.evaluate(element => getComputedStyle(element).transform)).toBe('none')
       const scrollGeometry = await page.evaluate(() => {
         const host = document.querySelector<HTMLElement>('[data-conversation-scroll]')!
         const composer = document.querySelector<HTMLElement>('[data-composer-seat]')!

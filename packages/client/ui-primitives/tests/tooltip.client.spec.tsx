@@ -3,12 +3,16 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
 
 describe('Tooltip', () => {
   it('resolves lazy labels only after the bubble becomes visible', () => {
     vi.useFakeTimers()
     try {
+      vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true }) as MediaQueryList))
       const label = vi.fn(() => 'Timing details')
       render(
         <Tooltip label={label} delayMs={500}>
@@ -260,22 +264,44 @@ describe('Tooltip', () => {
   it('chains the anchor\'s own handlers ahead of the tooltip\'s', () => {
     const onMouseEnter = vi.fn()
     const onMouseLeave = vi.fn()
+    const onPointerDown = vi.fn()
     const onFocus = vi.fn()
     const onBlur = vi.fn()
     render(
       <Tooltip label="Chained">
-        <button type="button" onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} onFocus={onFocus} onBlur={onBlur}>anchor</button>
+        <button type="button" onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} onPointerDown={onPointerDown} onFocus={onFocus} onBlur={onBlur}>anchor</button>
       </Tooltip>,
     )
     const anchor = screen.getByText('anchor')
     fireEvent.mouseEnter(anchor)
     fireEvent.mouseLeave(anchor)
+    fireEvent.pointerDown(anchor, { pointerType: 'mouse' })
     fireEvent.focus(anchor)
     fireEvent.blur(anchor)
     expect(onMouseEnter).toHaveBeenCalledOnce()
     expect(onMouseLeave).toHaveBeenCalledOnce()
+    expect(onPointerDown).toHaveBeenCalledOnce()
     expect(onFocus).toHaveBeenCalledOnce()
     expect(onBlur).toHaveBeenCalledOnce()
+  })
+
+  it('suppresses hover and touch focus on hoverless inputs while preserving keyboard focus', () => {
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: false }) as MediaQueryList))
+    render(
+      <Tooltip label="Touch-only">
+        <button type="button">anchor</button>
+      </Tooltip>,
+    )
+    const anchor = screen.getByText('anchor')
+    fireEvent.mouseEnter(anchor)
+    fireEvent.pointerDown(anchor, { pointerType: 'touch' })
+    fireEvent.focus(anchor)
+    expect(screen.queryByRole('tooltip')).toBeNull()
+    fireEvent.blur(anchor)
+    fireEvent.focus(anchor)
+    expect(screen.getByRole('tooltip').textContent).toBe('Touch-only')
+    fireEvent.pointerDown(anchor, { pointerType: 'touch' })
+    expect(screen.queryByRole('tooltip')).toBeNull()
   })
 
   it('suppresses the bubble while disabled without remounting the anchor', () => {

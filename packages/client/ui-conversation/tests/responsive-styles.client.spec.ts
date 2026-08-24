@@ -13,6 +13,14 @@ describe('conversation responsive styles', () => {
       /\.root \.scrollBody:not\(:has\(\[data-conversation-composer-overlay\]\)\)\s*\{[^}]*\}/,
     )?.[0]
     expect(phoneChatFlow).toMatch(/overflow-x: clip;[\s\S]*?overflow-y: visible;/)
+    const floatingHeader = skeleton.match(
+      /\.root\[data-phase='active'\] > \.headerFloat\s*\{[^}]*\}/,
+    )?.[0]
+    expect(floatingHeader).toMatch(/position: sticky;[\s\S]*?top: 0;[\s\S]*?background: var\(--dsw-alias-bg-base\);/)
+    expect(floatingHeader).toMatch(/transition: transform var\(--ds-transition-duration\) var\(--ds-ease-in-out\);/)
+    expect(skeleton).toMatch(/\.headerFloat\[data-scroll-hidden='true'\]\s*\{\s*transform: translateY\(-100%\);/)
+    expect(skeleton).toMatch(/\.headerFloat:focus-within\s*\{\s*transform: translateY\(0\);\s*transition: none;/)
+    expect(skeleton).toMatch(/prefers-reduced-motion: reduce[\s\S]*?\.headerFloat\s*\{\s*transition: none;/)
     expect(skeleton).toMatch(/\.header\s*\{\s*padding: 10px 12px 0 64px;/)
     expect(skeleton).toMatch(/\.tabs\s*\{[\s\S]*?overflow-x: auto;/)
     expect(skeleton).toMatch(/\.composerSeat\s*\{\s*padding-bottom: env\(safe-area-inset-bottom\);/)

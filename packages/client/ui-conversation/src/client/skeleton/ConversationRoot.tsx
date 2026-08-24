@@ -8,6 +8,7 @@ import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import type { ConversationSlotProps, InputZone } from '../contract/slots.ts'
 import { conversationPhase } from '../contract/snapshot.ts'
 import { HeroShell, WorkspaceChip, workspaceLabel } from './EmptyHero.tsx'
+import { conversationScroller, conversationScrollEventTargets, isDocumentScroller } from '../scroll-owner.ts'
 import css from './ConversationRoot.module.css'
 
 /** Full props composed from the slot contract. */
@@ -127,6 +128,8 @@ function WidthHandle(props: {
     />
   )
 }
+const HEADER_HIDE_TRAVEL_PX = 24
+const HEADER_SHOW_TRAVEL_PX = 8
 
 export function ConversationRoot({
   sessionId, useSession, useSessions, useSessionPendingInteraction,
@@ -151,7 +154,10 @@ export function ConversationRoot({
 
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pendingWorkspaceId, setPendingWorkspaceId] = useState<WorkspaceId | undefined>()
+  const [headerScrollHidden, setHeaderScrollHidden] = useState(false)
+  const headerScrollHiddenRef = useRef(false)
   const pickerAnchor = useRef<HTMLButtonElement>(null)
+  const scrollBodyRef = useRef<HTMLDivElement>(null)
 
   // Publishes the two live measurements floating View chrome reads off the
   // scroll body: the seat's height as --dsh-composer-height, so controls clear
@@ -233,6 +239,11 @@ export function ConversationRoot({
     const root = rootEl.current
     if (root !== null) publishWidths(root)
   }, [publishWidths])
+  const updateHeaderScrollHidden = useCallback((hidden: boolean): void => {
+    if (headerScrollHiddenRef.current === hidden) return
+    headerScrollHiddenRef.current = hidden
+    setHeaderScrollHidden(hidden)
+  }, [])
 
   const sessionWorkspace = sessionId === undefined
     ? undefined
@@ -353,6 +364,71 @@ export function ConversationRoot({
   )
 
   const phase = settling ? 'settling' : hero ? 'hero' : 'active'
+
+  useEffect(() => {
+    const body = scrollBodyRef.current
+    if (phase !== 'active' || body === null) {
+      updateHeaderScrollHidden(false)
+      return
+    }
+
+    let owner = conversationScroller(body)
+    let previousTop = owner.scrollTop
+    let direction: -1 | 0 | 1 = 0
+    let directionStart = previousTop
+    const resetDirection = (top: number) => {
+      previousTop = top
+      direction = 0
+      directionStart = top
+    }
+    const handleScroll = () => {
+      const nextOwner = conversationScroller(body)
+      const nextTop = nextOwner.scrollTop
+      if (nextOwner !== owner) {
+        owner = nextOwner
+        resetDirection(nextTop)
+        updateHeaderScrollHidden(false)
+        return
+      }
+      if (!isDocumentScroller(nextOwner)) {
+        resetDirection(nextTop)
+        updateHeaderScrollHidden(false)
+        return
+      }
+      if (nextTop <= 0) {
+        resetDirection(nextTop)
+        updateHeaderScrollHidden(false)
+        return
+      }
+      const delta = nextTop - previousTop
+      if (delta === 0) return
+      const nextDirection = delta > 0 ? 1 : -1
+      if (nextDirection !== direction) {
+        direction = nextDirection
+        directionStart = previousTop
+      }
+      const travel = Math.abs(nextTop - directionStart)
+      if (direction > 0 && travel >= HEADER_HIDE_TRAVEL_PX) updateHeaderScrollHidden(true)
+      else if (direction < 0 && travel >= HEADER_SHOW_TRAVEL_PX) updateHeaderScrollHidden(false)
+      previousTop = nextTop
+    }
+    const handleResize = () => {
+      const nextOwner = conversationScroller(body)
+      const ownerChanged = nextOwner !== owner
+      owner = nextOwner
+      resetDirection(nextOwner.scrollTop)
+      if (ownerChanged) updateHeaderScrollHidden(false)
+    }
+    const targets = conversationScrollEventTargets(body)
+    const listenerOptions = { passive: true }
+    for (const target of targets) target.addEventListener('scroll', handleScroll, listenerOptions)
+    window.addEventListener('resize', handleResize)
+    return () => {
+      for (const target of targets) target.removeEventListener('scroll', handleScroll)
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [phase, updateHeaderScrollHidden])
+
   const composer = renderSlotChain(
     'conversation.composer',
     { sessionId, session, pendingInteraction },
@@ -371,9 +447,13 @@ export function ConversationRoot({
 
   return (
     <div ref={rootResizeRef} className={css.root} data-phase={phase}>
-      {sessionId === undefined ? null : renderSlot('conversation.session.header', {})}
+      <div className={css.headerFloat} data-conversation-header=""
+        data-scroll-hidden={headerScrollHidden || undefined}
+        onFocusCapture={() => { updateHeaderScrollHidden(false) }}>
+        {sessionId === undefined ? null : renderSlot('conversation.session.header', {})}
+      </div>
       <div className={css.body}>
-        <div className={css.scrollBody} data-conversation-scroll="">
+        <div ref={scrollBodyRef} className={css.scrollBody} data-conversation-scroll="">
           {sessionId === undefined ? null : renderSlot('conversation.session', {})}
           {composerSeat}
         </div>

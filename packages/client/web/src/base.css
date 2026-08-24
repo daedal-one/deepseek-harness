@@ -8,6 +8,13 @@ body,
   margin: 0;
 }
 
+/* Keep boundary gestures inside the application instead of handing them to
+   browser refresh or history navigation. */
+html,
+body {
+  overscroll-behavior: none;
+}
+
 body {
   font-family: var(
     --dsw-font-family,

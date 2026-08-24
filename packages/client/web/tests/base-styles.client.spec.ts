@@ -30,6 +30,9 @@ const literalContentSelectors = [
 ]
 
 describe('web shell base.css', () => {
+  it('contains root boundary gestures', () => {
+    expect(baseCss).toMatch(/html,\s*body\s*{\s*overscroll-behavior:\s*none;/)
+  })
   it('leaves theme styles to the dynamic ui-theme client entry', () => {
     expect(imports).toEqual([])
     expect(baseCss).not.toContain(THEME_PACKAGE)

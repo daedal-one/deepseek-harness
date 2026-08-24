@@ -8,7 +8,7 @@ The responsive shell filled the phone viewport but kept Chat inside `[data-conve
 
 ## Decision
 
-Below 768px, the Chat layout grows the main document. The frame, center column, conversation root, and ordinary Chat scroll body use auto height with a `100dvh` minimum and visible vertical overflow. The header remains ordinary flow and scrolls away with the transcript, while the composer remains sticky to the visible viewport. Sidebar, details, their mask, and the shell overlay layer use fixed positioning so they continue to cover the current viewport after the document moves.
+Below 768px, the Chat layout grows the main document. The frame, center column, conversation root, and ordinary Chat scroll body use auto height with a `100dvh` minimum and visible vertical overflow. The header follows the [phone floating-header decision](2026-08-24-phone-floating-conversation-header.md), while the composer remains sticky to the visible viewport. Sidebar, details, their mask, and the shell overlay layer use fixed positioning so they continue to cover the current viewport after the document moves.
 
 `ui-conversation` resolves one scroll owner through its internal `scroll-owner.ts`: the nearest `[data-conversation-scroll]` host on desktop and in isolated component rendering, or `document.scrollingElement` when that host is inside `data-phone="true"`. Chat anchor geometry uses browser viewport coordinates for the document owner and element-relative coordinates for the nested owner. Scroll listeners bind both assembled candidates once because crossing the breakpoint does not remount Chat; each event resolves the current owner before reading or writing position. InputBar wheel chaining uses the same resolver.
 

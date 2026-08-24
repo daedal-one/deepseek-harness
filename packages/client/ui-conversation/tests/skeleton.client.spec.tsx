@@ -73,6 +73,8 @@ function fireResize(el: Element): void {
 
 afterEach(() => {
   cleanup()
+  document.documentElement.scrollTop = 0
+  document.body.scrollTop = 0
   vi.unstubAllGlobals()
   resizeObservers.length = 0
 })
@@ -126,6 +128,8 @@ function mount(
     composerBlock?: { reason: string }
     /** Mutable view ledger used by registration-order regressions. */
     viewTabs?: ViewTab[]
+    /** Wrap the resident tree in the assembled phone-layout marker. */
+    phone?: boolean
   } = {},
 ) {
   const root = sid('root')
@@ -316,11 +320,14 @@ function mount(
     selectWorkspace: retargetWorkspace,
     t,
   }
-  const view = render(<ConversationRoot {...props} />)
+  const tree = () => options.phone === true
+    ? <div data-phone="true"><ConversationRoot {...props} /></div>
+    : <ConversationRoot {...props} />
+  const view = render(tree())
   return {
     view, store, wiring, sink, retargetWorkspace, session, conversation, slotCalls, lineageOwners, seatOwners, open,
     pickerOwner: () => pickerOwner,
-    rerender: () => { view.rerender(<ConversationRoot {...props} />) },
+    rerender: () => { view.rerender(tree()) },
   }
 }
 
@@ -438,10 +445,12 @@ describe('ConversationRoot resident composer', () => {
     const b = mount(sessionSnapshotOf())
     const host = b.view.container.querySelector('[data-conversation-scroll]')
     const seat = b.view.container.querySelector('[data-composer-seat]')
+    const headerSeat = b.view.container.querySelector('[data-conversation-header]')
     const header = b.view.container.querySelector('header')
     const textarea = b.view.container.querySelector<HTMLDivElement>('[data-composer-input]')
     expect(host).not.toBeNull()
     expect(seat).not.toBeNull()
+    expect(headerSeat).not.toBeNull()
     expect(header).not.toBeNull()
     // Header is column chrome above the scrollport; the seat sticks inside it.
     expect(host?.contains(header)).toBe(false)
@@ -451,6 +460,48 @@ describe('ConversationRoot resident composer', () => {
     expect(b.slotCalls).toContain('conversation.session.header.actions')
     expect(b.slotCalls).toContain('conversation.session.header.utilities')
     expect(b.slotCalls).toContain('conversation.session.header.corner')
+  })
+
+  it('phone header hides downward, returns upward or on focus, and resets across the breakpoint', () => {
+    const b = mount(conversationSnapshot(), undefined, undefined, { phone: true })
+    const headerSeat = b.view.container.querySelector<HTMLElement>('[data-conversation-header]')!
+    const phone = headerSeat.closest<HTMLElement>('[data-phone="true"]')!
+    const documentScroller = (document.scrollingElement ?? document.documentElement) as HTMLElement
+    expect(headerSeat.hasAttribute('data-scroll-hidden')).toBe(false)
+
+    documentScroller.scrollTop = 10
+    fireEvent.scroll(document)
+    expect(headerSeat.hasAttribute('data-scroll-hidden')).toBe(false)
+    documentScroller.scrollTop = 25
+    fireEvent.scroll(document)
+    expect(headerSeat.getAttribute('data-scroll-hidden')).toBe('true')
+
+    documentScroller.scrollTop = 20
+    fireEvent.scroll(document)
+    expect(headerSeat.getAttribute('data-scroll-hidden')).toBe('true')
+    documentScroller.scrollTop = 16
+    fireEvent.scroll(document)
+    expect(headerSeat.hasAttribute('data-scroll-hidden')).toBe(false)
+
+    documentScroller.scrollTop = 50
+    fireEvent.scroll(document)
+    expect(headerSeat.getAttribute('data-scroll-hidden')).toBe('true')
+    fireEvent.focus(b.view.getByRole('tab', { name: 'Chat' }))
+    expect(headerSeat.hasAttribute('data-scroll-hidden')).toBe(false)
+
+    documentScroller.scrollTop = 160
+    fireEvent.scroll(document)
+    expect(headerSeat.getAttribute('data-scroll-hidden')).toBe('true')
+    documentScroller.scrollTop = 0
+    fireEvent.scroll(document)
+    expect(headerSeat.hasAttribute('data-scroll-hidden')).toBe(false)
+
+    documentScroller.scrollTop = 120
+    fireEvent.scroll(document)
+    expect(headerSeat.getAttribute('data-scroll-hidden')).toBe('true')
+    phone.removeAttribute('data-phone')
+    fireEvent.resize(window)
+    expect(headerSeat.hasAttribute('data-scroll-hidden')).toBe(false)
   })
 
   it('sticky composer seat wraps the whole overlay chain, not only the fallback stack', () => {

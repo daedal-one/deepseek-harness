@@ -12,7 +12,7 @@ The existing presentation owners adapt their own surfaces below 768px. `ui-layou
 
 `ui-conversation` owns phone transcript, header, tabs, composer safe-area, visible-viewport geometry, and compact control-row labels. Its tool-approval takeover preserves the [safe-action focus contract](../bug-fix/2026-07-30-approval-panel-command-cap.md) at phone widths, and every built-in permission mode supplies a glyph so the compact access trigger never competes with the model label. `ui-settings-general` turns its modal into a full-viewport column with horizontally scrolling section navigation and an independently scrolling options region. The implementation uses component state, owner props, CSS modules, and stable attributes emitted by the owning frame; it introduces no DOM discovery controller or replacement shell.
 
-Browser zoom, native navigation gestures, and tooltips remain browser- and component-owned. Responsive layout does not register a service worker, PWA manifest, push channel, global touch listener, or page-level gesture suppression.
+Browser zoom remains browser-owned. Root navigation gestures and hover-preview input policy follow the [touch boundary and hover-preview guards](../bug-fix/2026-08-24-touch-boundary-and-hover-preview-guards.md): the shell owns standard CSS boundary suppression, and the primitives own their triggers. Responsive layout does not register a service worker, PWA manifest, push channel, or global touch listener.
 
 ## Alternatives considered
 
