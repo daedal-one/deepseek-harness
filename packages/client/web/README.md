@@ -10,6 +10,8 @@ The optional override parameter `seams` forwards the module system's `loadBundle
 
 The shell owns browser-title projection. With a selected session carrying a durable title, it renders `<session title> — <existing HTML title>` and reacts to later title revisions; no selection or a selected untitled session preserves the existing title, and shell unmount restores it. The existing HTML title remains the configurable product suffix.
 
+The shell base sheet disables root boundary overscroll so browser refresh and history navigation do not claim page-edge gestures.
+
 ## Model Experience
 
 None, as the entry shell boots the browser plugin tree; nothing here reaches a model request.

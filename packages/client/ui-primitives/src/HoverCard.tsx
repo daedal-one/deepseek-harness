@@ -15,8 +15,12 @@ import { writeClipboard } from './clipboard.ts'
 import { usePointerGrace } from './pointer-grace.ts'
 import css from './HoverCard.module.css'
 
+function primaryInputCanHover(): boolean {
+  return typeof matchMedia === 'undefined' || matchMedia('(hover: hover)').matches
+}
+
 /**
- * Render an anchor with a hover-triggered preview card.
+ * Render an anchor with a hover-triggered preview card when the primary input supports hover.
  * @param props.anchor - the hover target (rendered in place inside a wrapper span).
  * @param props.content - card content; the pointer may rest on it, so it is
  * readable and selectable, but it carries no dismissal affordance of its own.
@@ -182,7 +186,7 @@ export function HoverCard({
       ref={rootRef}
       className={css.root}
       onPointerEnter={() => {
-        if (disabled) return
+        if (disabled || !primaryInputCanHover()) return
         // Coming back inside during the grace (the gap, or the card itself)
         // keeps the current card rather than restarting the dwell.
         cancelClose()

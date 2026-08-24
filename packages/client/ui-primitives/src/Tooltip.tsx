@@ -9,8 +9,12 @@
 // without a portal.
 
 import { cloneElement, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { FocusEventHandler, MouseEventHandler, MutableRefObject, ReactElement, Ref } from 'react'
+import type { FocusEventHandler, MouseEventHandler, MutableRefObject, PointerEventHandler, ReactElement, Ref } from 'react'
 import css from './Tooltip.module.css'
+
+function primaryInputCanHover(): boolean {
+  return typeof matchMedia === 'undefined' || matchMedia('(hover: hover)').matches
+}
 
 /** Bubble placement relative to the anchor. */
 export type TooltipSide = 'right' | 'bottom' | 'top'
@@ -20,6 +24,7 @@ interface AnchorProps {
   ref?: Ref<HTMLElement> | undefined
   onMouseEnter?: MouseEventHandler | undefined
   onMouseLeave?: MouseEventHandler | undefined
+  onPointerDown?: PointerEventHandler | undefined
   onFocus?: FocusEventHandler | undefined
   onBlur?: FocusEventHandler | undefined
 }
@@ -27,7 +32,8 @@ interface AnchorProps {
 type TooltipLabel = string | (() => string)
 
 /**
- * Attach a hover/focus tooltip to an anchor element.
+ * Attach a pointer-hover and keyboard-focus tooltip to an anchor element.
+ * Pointer hover requires a hover-capable primary input, and touch-induced focus does not open the bubble.
  * @param props.label - bubble text, or a resolver evaluated only while the bubble is visible.
  * @param props.side - placement relative to the anchor (default 'right').
  * @param props.delayMs - hover delay in milliseconds; keyboard focus remains immediate.
@@ -99,6 +105,7 @@ export function Tooltip({ label, side = 'right', delayMs = 0, disabled = false, 
   // Hover and focus are independent triggers: the bubble hides only after
   // BOTH clear (hovering away from a focused anchor must not drop it).
   const triggers = useRef({ hover: false, focus: false })
+  const touchFocus = useRef(false)
 
   // Disabling mid-hover (e.g. clicking a rail control expands the sidebar)
   // must drop an already-visible bubble: no mouseleave fires.
@@ -129,6 +136,7 @@ export function Tooltip({ label, side = 'right', delayMs = 0, disabled = false, 
   }
   const showAfterHoverDelay = () => {
     cancelShow()
+    if (!primaryInputCanHover()) return
     if (delayMs <= 0) {
       show()
       return
@@ -149,8 +157,29 @@ export function Tooltip({ label, side = 'right', delayMs = 0, disabled = false, 
         ref: mergedRef,
         onMouseEnter: (e) => { children.props.onMouseEnter?.(e); triggers.current.hover = true; showAfterHoverDelay() },
         onMouseLeave: (e) => { children.props.onMouseLeave?.(e); triggers.current.hover = false; cancelShow(); setPos(null) },
-        onFocus: (e) => { children.props.onFocus?.(e); triggers.current.focus = true; cancelShow(); show() },
-        onBlur: (e) => { children.props.onBlur?.(e); triggers.current.focus = false; hide() },
+        onPointerDown: (e) => {
+          children.props.onPointerDown?.(e)
+          touchFocus.current = e.pointerType === 'touch'
+          if (touchFocus.current) {
+            cancelShow()
+            triggers.current.hover = false
+            setPos(null)
+          }
+        },
+        onFocus: (e) => {
+          children.props.onFocus?.(e)
+          triggers.current.focus = true
+          cancelShow()
+          const suppressed = touchFocus.current
+          touchFocus.current = false
+          if (!suppressed) show()
+        },
+        onBlur: (e) => {
+          children.props.onBlur?.(e)
+          touchFocus.current = false
+          triggers.current.focus = false
+          hide()
+        },
       })}
       {pos !== null && (
         <span

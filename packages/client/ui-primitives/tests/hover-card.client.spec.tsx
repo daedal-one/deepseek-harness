@@ -6,7 +6,10 @@ import { POINTER_GRACE_MS } from '../src/pointer-grace.ts'
 
 afterEach(cleanup)
 beforeEach(() => { vi.useFakeTimers() })
-afterEach(() => { vi.useRealTimers() })
+afterEach(() => {
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
+})
 
 /** Anchor wrapper rect: the card positions from this (jsdom rects are all-zero by default). */
 function stubAnchorRect(anchor: HTMLElement, rect: { top: number; right: number }): void {
@@ -47,6 +50,7 @@ function installClipboard(writeText: (text: string) => Promise<void>): () => voi
 
 describe('HoverCard', () => {
   it('opens after the dwell delay, positioned right of the anchor', () => {
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true }) as MediaQueryList))
     const { wrapper } = mount()
     fireEvent.pointerEnter(wrapper)
     expect(screen.queryByText('card body')).toBeNull()
@@ -356,6 +360,14 @@ describe('HoverCard', () => {
     } finally {
       restoreClipboard()
     }
+  })
+
+  it('keeps the card closed when the primary input cannot hover', () => {
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: false }) as MediaQueryList))
+    const { wrapper } = mount()
+    fireEvent.pointerEnter(wrapper)
+    act(() => { vi.advanceTimersByTime(1000) })
+    expect(screen.queryByText('card body')).toBeNull()
   })
 
   it('disabled suppresses opening entirely', () => {

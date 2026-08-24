@@ -11,6 +11,7 @@ addresses:
   - REQ:ui/responsive-web-shell#c-conversation
   - REQ:ui/responsive-web-shell#c-settings
   - REQ:ui/responsive-web-shell#c-accessibility
+  - REQ:ui/responsive-web-shell#c-touch-interaction
   - REQ:ui/responsive-web-shell#c-desktop
 labels: [web, ui, responsive, mobile]
 assignee: carlo
@@ -20,4 +21,4 @@ assignee: carlo
 
 ## Acceptance
 
-The first-party layout, sidebar, conversation, details, and settings owners implement the accepted phone interaction without a replacement shell or third-party runtime plugin. Focused component coverage pins drawer state and desktop preservation, and assembled browser coverage verifies the phone viewport has no horizontal page overflow, keeps navigation, composer, details, and settings usable, and retains focus on the safe action when tool approval replaces the composer.
+The first-party layout, sidebar, conversation, details, settings, shell, and primitive owners implement the accepted phone interaction without a replacement shell or third-party runtime plugin. Focused component coverage pins drawer state, desktop preservation, and hoverless preview suppression. Assembled browser coverage verifies the phone viewport prevents boundary overscroll, has no horizontal page overflow, keeps navigation, composer, details, and settings usable, and retains focus on the safe action when tool approval replaces the composer.

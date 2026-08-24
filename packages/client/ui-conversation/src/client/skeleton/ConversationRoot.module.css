@@ -25,6 +25,11 @@
   --dsh-composer-dock-inset: 8px;
 }
 
+.headerFloat {
+  flex: none;
+  min-width: 0;
+}
+
 .header {
   position: relative;
   flex: none;
@@ -211,9 +216,10 @@
   --dsh-composer-text-max-height: 336px;
 }
 
-/* Active phase: header is ordinary column chrome (not sticky). The scroll body
-   holds the transcript and sticky composer seat; desktop bounds that host,
-   while the phone rule below lets the main document own Chat scrolling. */
+/* Active phase: desktop keeps the header as ordinary column chrome. The scroll
+   body holds the transcript and sticky composer seat; desktop bounds that host,
+   while the phone rule below lets the main document own Chat scrolling and
+   floats the header above it. */
 .root[data-phase='active'] {
   overflow: hidden;
 }
@@ -385,6 +391,23 @@
     scrollbar-gutter: auto;
   }
 
+  .root[data-phase='active'] > .headerFloat {
+    position: sticky;
+    top: 0;
+    z-index: 8;
+    background: var(--dsw-alias-bg-base);
+    transition: transform var(--ds-transition-duration) var(--ds-ease-in-out);
+  }
+
+  .root[data-phase='active'] > .headerFloat[data-scroll-hidden='true'] {
+    transform: translateY(-100%);
+  }
+
+  .root[data-phase='active'] > .headerFloat:focus-within {
+    transform: translateY(0);
+    transition: none;
+  }
+
   /* The collapsed sidebar toggle floats over this corner. Active-session
      chrome reserves its hit target while the centered Hero remains below it. */
   .header {
@@ -428,5 +451,11 @@
 
   .composerSeat {
     padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+@media (max-width: 767px) and (prefers-reduced-motion: reduce) {
+  .root[data-phase='active'] > .headerFloat {
+    transition: none;
   }
 }

@@ -54,6 +54,10 @@ describe('web shell base.css', () => {
     }
   })
 
+  it('keeps root boundary gestures inside the application', () => {
+    expect(baseCss).toMatch(/html,\s*body\s*{\s*overscroll-behavior:\s*none;/)
+  })
+
   it('imports the scrollbar sheet after the token sheet it reads', () => {
     // Both sheets bind on `body`, so with scrollbar.css first the alias tokens
     // would still resolve; the order encodes the dependency direction so a
