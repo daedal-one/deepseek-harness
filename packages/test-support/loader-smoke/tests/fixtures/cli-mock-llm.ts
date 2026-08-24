@@ -16,7 +16,7 @@ const SHELL_COMMAND = process.platform === 'win32'
   ? "Write-Output 'CLI_TOOL_ROUND_TRIP'"
   : 'printf CLI_TOOL_ROUND_TRIP'
 
-/** Keyless headless-agent adapter: one production shell call followed by a final answer. */
+/** Keyless headless-agent adapter for the real guarded bash acceptance paths. */
 class CliMockAdapter extends LlmAdapter {
   private intentRequests = 0
 
@@ -58,26 +58,39 @@ class CliMockAdapter extends LlmAdapter {
       yield { type: 'finish', reason: { kind: 'stop' } }
       return
     }
-    const toolResult = options.messages.at(-1)?.content.find(block => block.type === 'tool-result')
-    if (toolResult === undefined) {
+    const toolResult = options.messages
+      .findLast(message => message.content.some(block => block.type === 'tool-result'))
+      ?.content.find(block => block.type === 'tool-result')
+    const priorDaedalAttempt = toolResult === undefined
+      ? 0
+      : Number(String(toolResult.toolCallId).match(/^cli-smoke-call-(\d+)$/)?.[1] ?? 0)
+    const daedalPolicyRetry = process.env.DSH_CLI_DAEDAL === '1'
+      && process.env.DSH_CLI_POLICY_ASK === '1'
+      && toolResult?.isError === true
+      && priorDaedalAttempt > 0
+      && priorDaedalAttempt < 3
+    if (toolResult === undefined || daedalPolicyRetry) {
+      const callId = process.env.DSH_CLI_DAEDAL === '1'
+        ? ToolCallId(`cli-smoke-call-${priorDaedalAttempt + 1}`)
+        : ToolCallId('cli-smoke-call')
       const reasoning = 'Inspecting the task before the tool call.'
       const args = JSON.stringify({ command: SHELL_COMMAND, description: 'Prove the CLI tool round trip.' })
       yield { type: 'block-start', index: 0, blockType: 'reasoning' }
       yield { type: 'reasoning-delta', index: 0, text: reasoning }
       yield { type: 'block-end', index: 0, block: { type: 'reasoning', text: reasoning } }
       yield { type: 'block-start', index: 1, blockType: 'tool-call' }
-      yield { type: 'tool-call-delta', index: 1, id: ToolCallId('cli-smoke-call'), name: SHELL_TOOL, argumentsDelta: args }
-      yield { type: 'block-end', index: 1, block: { type: 'tool-call', id: ToolCallId('cli-smoke-call'), name: SHELL_TOOL, arguments: args } }
+      yield { type: 'tool-call-delta', index: 1, id: callId, name: SHELL_TOOL, argumentsDelta: args }
+      yield { type: 'block-end', index: 1, block: { type: 'tool-call', id: callId, name: SHELL_TOOL, arguments: args } }
       yield { type: 'usage', usage: { inputTokens: 11, outputTokens: 3, cacheReadTokens: 2 } }
       yield { type: 'finish', reason: { kind: 'tool-calls' } }
       return
     }
 
-    if (process.env.DSH_CLI_DAEDAL === '1' && toolResult.toolCallId === CallId('cli-smoke-call')) {
+    if (process.env.DSH_CLI_DAEDAL === '1' && String(toolResult.toolCallId).startsWith('cli-smoke-call-')) {
       const args = JSON.stringify({
         scope: 'project',
         statement: 'The assembled Daedal profile completed its guarded shell round trip.',
-        evidence: ['snapshot:cli-smoke-call'],
+        evidence: [`snapshot:${toolResult.toolCallId}`],
         trust: 0.9,
       })
       yield { type: 'block-start', index: 0, blockType: 'tool-call' }
