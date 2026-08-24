@@ -41,6 +41,7 @@ function command(workspace: string, sessionId: string, key: string, name: string
       tools: ['git', 'spec'],
       credential_scopes: [],
       workspace,
+      executor_lease_id: 'agent-0123456789abcdef01234567',
     },
   }
 }
@@ -70,6 +71,9 @@ describe('Forge session adapter composition', () => {
       intellectGraphDb: join(state, 'intellect', 'graph.sqlite'),
       intellectExcludes: ['.git'],
       intellectToolCallTimeoutMs: 10_000,
+      credentialSocketRoot: join(state, 'credentials'),
+      commandSandbox: 'disabled',
+      commandReadRoots: ['/usr', '/bin'],
     })
     const headers = { authorization: 'Bearer test-adapter-token', 'content-type': 'application/json' }
     const sessionId = 'forge-session-test'
@@ -109,6 +113,23 @@ describe('Forge session adapter composition', () => {
     const rejected = await fetch(url, { method: 'POST', headers, body: JSON.stringify(changedPolicy) })
     expect(rejected.status).toBe(409)
     expect(await rejected.json()).toMatchObject({ outcome: 'policy_denied' })
+
+    const credentialSession = 'forge-session-credential'
+    const missingCredential = command(
+      canonicalWorkspace,
+      credentialSession,
+      'start-credential-1',
+      'start',
+      { intent },
+    ) as { executor_policy: { credential_scopes: string[]; executor_lease_id: string } }
+    missingCredential.executor_policy.credential_scopes = ['forgejo:project:write']
+    missingCredential.executor_policy.executor_lease_id = 'agent-fedcba9876543210fedcba98'
+    const credentialResponse = await fetch(
+      `http://127.0.0.1:${ctx.webServer.port}/v1/sessions/${credentialSession}/commands`,
+      { method: 'POST', headers, body: JSON.stringify(missingCredential) },
+    )
+    expect(credentialResponse.status).toBe(200)
+    expect(await credentialResponse.json()).toMatchObject({ outcome: 'policy_denied' })
     await ctx.fiber.dispose()
   })
 })
