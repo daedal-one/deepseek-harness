@@ -773,6 +773,28 @@ describe('running and lock semantics', () => {
     }
   })
 
+  it('forwards a phone draft wheel edge to the document scroller', () => {
+    const frame = document.createElement('div')
+    frame.dataset.phone = 'true'
+    const host = document.createElement('div')
+    host.dataset.conversationScroll = ''
+    Object.defineProperty(host, 'scrollTop', { value: 0, writable: true, configurable: true })
+    const { view, textarea } = bench()
+    host.appendChild(view.container)
+    frame.append(host)
+    document.body.append(frame)
+    const scroller = (document.scrollingElement ?? document.documentElement) as HTMLElement
+    Object.defineProperty(scroller, 'scrollTop', { value: 40, writable: true, configurable: true })
+    try {
+      expect(fireEvent.wheel(textarea, { deltaY: 30 })).toBe(false)
+      expect(scroller.scrollTop).toBe(70)
+      expect(host.scrollTop).toBe(0)
+    } finally {
+      frame.remove()
+      Reflect.deleteProperty(scroller, 'scrollTop')
+    }
+  })
+
   it('wheel chains: long drafts scroll inside the draft scrollport until each edge, then the host', () => {
     const host = document.createElement('div')
     host.setAttribute('data-conversation-scroll', '')

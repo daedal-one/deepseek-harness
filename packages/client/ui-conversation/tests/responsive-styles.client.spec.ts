@@ -8,7 +8,11 @@ const chat = readFileSync(fileURLToPath(new URL('../src/client/chat/ChatView.mod
 
 describe('conversation responsive styles', () => {
   it('keeps phone chrome, composer, and transcript inside the visible viewport', () => {
-    expect(skeleton).toMatch(/@media \(max-width: 767px\)[\s\S]*?\.root\s*\{[\s\S]*?height: 100dvh;/)
+    expect(skeleton).toMatch(/@media \(max-width: 767px\)[\s\S]*?\.root\s*\{[\s\S]*?min-height: 100dvh;[\s\S]*?height: auto;/)
+    const phoneChatFlow = skeleton.match(
+      /\.root \.scrollBody:not\(:has\(\[data-conversation-composer-overlay\]\)\)\s*\{[^}]*\}/,
+    )?.[0]
+    expect(phoneChatFlow).toMatch(/overflow-x: clip;[\s\S]*?overflow-y: visible;/)
     expect(skeleton).toMatch(/\.header\s*\{\s*padding: 10px 12px 0 64px;/)
     expect(skeleton).toMatch(/\.tabs\s*\{[\s\S]*?overflow-x: auto;/)
     expect(skeleton).toMatch(/\.composerSeat\s*\{\s*padding-bottom: env\(safe-area-inset-bottom\);/)

@@ -25,6 +25,7 @@ import type {} from '@deepseek-ai/dsh-goal/client'
 import type { Translate } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ComposerAttachment, ComposerBarProps } from '../contract/slots.ts'
 import { deriveDecorations } from '../input/decorations.ts'
+import { conversationScroller } from '../scroll-owner.ts'
 import type { DraftDecorations } from '../input/decorations.ts'
 import {
   attachmentErrorText, attachmentRailLabels, dropOverlayLabels, imageSizeText, lightboxLabels,
@@ -255,13 +256,13 @@ export function InputBar({
     const el = scrollRef.current
     if (el === null) return
     const onWheel = (e: WheelEvent): void => {
-      const host = el.closest('[data-conversation-scroll]')
-      if (!(host instanceof HTMLElement) || e.deltaY === 0) return
+      const host = el.closest<HTMLElement>('[data-conversation-scroll]')
+      if (host === null || e.deltaY === 0) return
       const atTop = el.scrollTop <= 0
       const atEnd = el.scrollTop + el.clientHeight >= el.scrollHeight - 1
       if ((e.deltaY < 0 && !atTop) || (e.deltaY > 0 && !atEnd)) return
       e.preventDefault()
-      host.scrollTop += e.deltaY
+      conversationScroller(host).scrollTop += e.deltaY
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => { el.removeEventListener('wheel', onWheel) }

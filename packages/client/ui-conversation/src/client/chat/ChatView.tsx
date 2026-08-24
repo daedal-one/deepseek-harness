@@ -3,10 +3,10 @@
 // Each row dispatches through 'conversation.chat.node'; ui-tool owns the
 // tool-call renderer and its recursive root/subcall composition.
 //
-// Scroll: when nested under `[data-conversation-scroll]` (active conversation
-// column), that host is the scrollport and this view is flow content; when
-// mounted alone (unit tests), `.scroll` owns overflow. Bottom-follow and
-// prepend anchoring always target the resolved scrollport.
+// Scroll: under `[data-conversation-scroll]`, desktop uses that host and phone
+// uses the main document so mobile browser chrome can retract. When mounted
+// alone (unit tests), `.scroll` owns overflow. Bottom-follow and prepend
+// anchoring always target the resolved owner.
 //
 // Render economics: order changes only when rows enter, leave or move. Each
 // ChatNodeSeat subscribes to one Node key, so Assistant deltas and Tool
@@ -16,17 +16,18 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ConversationTimelineSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
 import { IconChevronDownOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
+import {
+  conversationFlowTop as flowTop,
+  conversationScroller as scrollerOf,
+  conversationScrollEventTargets,
+  conversationViewport,
+} from '../scroll-owner.ts'
 import { PendingSteeringBubble } from './MessageItem.tsx'
 import { ChatNodeSeat } from './ChatNodeSeat.tsx'
 import { formatRunDuration } from './message-chrome.ts'
 import css from './ChatView.module.css'
 
 const FOLLOW_THRESHOLD = 24
-
-/** Active column host when present; otherwise the view-local scroller. */
-function scrollerOf(from: HTMLElement): HTMLElement {
-  return (from.closest('[data-conversation-scroll]')) ?? from
-}
 
 interface PagingAnchor {
   /** Stable node/call identity, independent of boundary-spanning group keys. */
@@ -43,15 +44,10 @@ function anchorElement(list: HTMLElement, key: string): HTMLElement | null {
   return null
 }
 
-/** Row position in scrollport coordinates (viewport-independent). */
-function flowTop(row: HTMLElement, scrollport: HTMLElement): number {
-  return row.getBoundingClientRect().top - scrollport.getBoundingClientRect().top
-}
-
 /** Select a visible stable node/call identity, falling back only when layout
  * has not exposed a visible box yet. */
 function pagingAnchor(list: HTMLElement, scrollport: HTMLElement): HTMLElement | null {
-  const viewport = scrollport.getBoundingClientRect()
+  const viewport = conversationViewport(scrollport)
   const composer = scrollport.querySelector<HTMLElement>('[data-composer-seat]')
   const visibleBottom = composer?.getBoundingClientRect().top ?? viewport.bottom
   // Scroll events are hot: hit-test a few points through the stretched flow
@@ -299,18 +295,19 @@ export function ChatView({
     observedTopRef.current = el.scrollTop
   }
 
-  // Bind the scroll listener on the resolved scrollport once per mount;
-  // reader-input attribution rides the observed-top ledger, not per-device
-  // input listeners.
+  // Bind both possible assembled scroll targets once. CSS may cross the phone
+  // breakpoint without remounting ChatView; the handler resolves the live owner
+  // for every delivered event, while isolated component tests retain the local
+  // list scroller only.
   useEffect(() => {
     const local = listRef.current
     /* v8 ignore next -- ref-null guard: effect runs after the list node commits. */
     if (local === null) return
-    const el = scrollerOf(local)
+    const targets = conversationScrollEventTargets(local)
     const onScroll = (): void => { onScrollRef.current() }
-    el.addEventListener('scroll', onScroll, { passive: true })
+    for (const target of targets) target.addEventListener('scroll', onScroll, { passive: true })
     return () => {
-      el.removeEventListener('scroll', onScroll)
+      for (const target of targets) target.removeEventListener('scroll', onScroll)
     }
   }, [])
 

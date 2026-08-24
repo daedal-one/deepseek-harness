@@ -211,9 +211,9 @@
   --dsh-composer-text-max-height: 336px;
 }
 
-/* Active phase: header is ordinary column chrome above the scrollport (not
-   sticky). The scroll body holds the transcript and the sticky composer seat
-   so wheel over the footer moves the flow. */
+/* Active phase: header is ordinary column chrome (not sticky). The scroll body
+   holds the transcript and sticky composer seat; desktop bounds that host,
+   while the phone rule below lets the main document own Chat scrolling. */
 .root[data-phase='active'] {
   overflow: hidden;
 }
@@ -367,7 +367,22 @@
 @media (max-width: 767px) {
   .root {
     --dsh-composer-side-clearance: 12px;
-    height: 100dvh;
+    min-height: 100dvh;
+    height: auto;
+  }
+
+  .root[data-phase='active'] {
+    overflow: visible;
+  }
+
+  /* Chat grows the document so mobile browsers observe viewport scrolling and
+     may retract their chrome. Views that opt into a composer overlay retain
+     the bounded nested box above because their own virtualized regions scroll. */
+  .root .scrollBody:not(:has([data-conversation-composer-overlay])) {
+    overflow-x: clip;
+    overflow-y: visible;
+    overscroll-behavior-y: auto;
+    scrollbar-gutter: auto;
   }
 
   /* The collapsed sidebar toggle floats over this corner. Active-session

@@ -1144,6 +1144,37 @@ describe('ChatView', () => {
     }
   })
 
+  it('routes phone bottom-follow and reader scroll events through the document', () => {
+    const frame = document.createElement('div')
+    frame.dataset.phone = 'true'
+    const host = document.createElement('div')
+    host.dataset.conversationScroll = ''
+    Object.defineProperty(host, 'scrollTop', { value: 0, writable: true, configurable: true })
+    frame.append(host)
+    document.body.append(frame)
+    const scroller = (document.scrollingElement ?? document.documentElement) as HTMLElement
+    Object.defineProperty(scroller, 'scrollHeight', { value: 2000, writable: true, configurable: true })
+    Object.defineProperty(scroller, 'clientHeight', { value: 500, writable: true, configurable: true })
+    Object.defineProperty(scroller, 'scrollTop', { value: 0, writable: true, configurable: true })
+    try {
+      const h = makeHarness({ nodes: [user(1, 'q'), assistant(2, 'a')] })
+      const view = render(<h.ChatView {...h.props} />, { container: host })
+      expect(scroller.scrollTop).toBe(2000)
+      expect(host.scrollTop).toBe(0)
+      scroller.scrollTop = 100
+      fireEvent.scroll(document)
+      expect(view.getByLabelText('Back to bottom')).toBeTruthy()
+      fireEvent.click(view.getByLabelText('Back to bottom'))
+      expect(scroller.scrollTop).toBe(2000)
+      view.unmount()
+    } finally {
+      frame.remove()
+      Reflect.deleteProperty(scroller, 'scrollHeight')
+      Reflect.deleteProperty(scroller, 'clientHeight')
+      Reflect.deleteProperty(scroller, 'scrollTop')
+    }
+  })
+
   it('a remount restores the saved semantic row after width reflow', () => {
     const host = document.createElement('div')
     host.setAttribute('data-conversation-scroll', '')
