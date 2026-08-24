@@ -4,7 +4,7 @@
 
 import type {
   IApiClient, HostFrame, MuxFrame, RpcError, RpcRequest, RpcResult, SessionId,
-  SessionSummary, SubagentAddress, SubagentCatalog, JobView, WorkspaceId,
+  SessionListCursor, SessionSummary, SubagentAddress, SubagentCatalog, JobView, WorkspaceId,
 } from '@deepseek-ai/dsh-api-remotes/client'
 // Value import from the inline-safe wire layer (not the connection plugin):
 // plugin-to-plugin value imports are a bundle purity error.
@@ -48,6 +48,8 @@ export interface SessionListSnapshot {
   /** Arrival lifecycle (see {@link SessionListPhase}); `state` stays the pull-activity axis. */
   phase: SessionListPhase
   error: RpcError | null
+  hasMore: boolean
+  loadingMore: boolean
   subagentsByParent: Readonly<Record<SessionId, SubagentCatalogSnapshot>>
   /** Background jobs per session; an absent key is an empty set. */
   jobsBySession: Readonly<Record<SessionId, readonly JobView[]>>
@@ -133,6 +135,9 @@ export class SessionManager {
   private listPhase: SessionListPhase = 'pending'
   private listError: RpcError | null = null
   private listInflight: Promise<void> | null = null
+  private listCursor: SessionListCursor | undefined
+  private listHasMore = false
+  private listLoadingMore = false
   /** Mutations arriving after a list request starts are replayed over its response. */
   private listMutations: SessionListMutation[] | null = null
   private readonly addresses = new Map<SessionId, SubagentAddress>()
@@ -446,8 +451,12 @@ export class SessionManager {
     this.notifier.markDirty()
     this.listInflight = (async () => {
       try {
-        const { result } = await this.api.sessions.list({})
+        const { result } = await this.api.sessions.list({
+          ...this.selected === undefined ? {} : { includeSessionId: this.selected },
+        })
         if (result.ok) {
+          this.listCursor = result.value.nextCursor
+          this.listHasMore = result.value.hasMore
           const baseline = this.listPhase === 'pending'
             ? result.value.items
             : mergeOrderedBaseline(established, result.value.items, summary => summary.sessionId)
@@ -501,6 +510,55 @@ export class SessionManager {
         this.listError = folded.ok ? null : folded.error
       } finally {
         this.listMutations = null
+        this.listInflight = null
+        this.notifier.markDirty()
+      }
+    })()
+    return this.listInflight
+  }
+
+  /** Append one explicit continuation page; concurrent requests share it. */
+  loadMoreList(): Promise<void> {
+    if (this.listInflight !== null) return this.listInflight
+    if (!this.listHasMore || this.listCursor === undefined) return Promise.resolve()
+    this.listLoadingMore = true
+    this.listError = null
+    this.notifier.markDirty()
+    const cursor = this.listCursor
+    this.listInflight = (async () => {
+      try {
+        const { result } = await this.api.sessions.list({ cursor })
+        if (!result.ok) {
+          this.listError = result.error
+          return
+        }
+        const pageById = new Map(result.value.items.map(summary => [summary.sessionId, summary]))
+        this.summaries = this.summaries.map(summary => pageById.get(summary.sessionId) ?? summary)
+        const known = new Set(this.summaries.map(summary => summary.sessionId))
+        for (const summary of result.value.items) {
+          if (known.has(summary.sessionId)) continue
+          this.summaries.push(summary)
+          known.add(summary.sessionId)
+        }
+        this.listCursor = result.value.nextCursor
+        this.listHasMore = result.value.hasMore
+        for (const summary of result.value.items) {
+          const session = this.sessions.get(summary.sessionId)
+          if (session !== undefined) {
+            session.handleBlank(summary.blank)
+            session.handleRunning(summary.running)
+          }
+          const block = summary.projections
+          if (block === undefined) continue
+          const store = this.projectionStore(summary.sessionId)
+          const values = block.values as Record<string, unknown>
+          for (const key of Object.keys(values)) store.apply(key, values[key], block.asOfSeq)
+        }
+      } catch (error) {
+        const folded = transportError<never>(error)
+        this.listError = folded.ok ? null : folded.error
+      } finally {
+        this.listLoadingMore = false
         this.listInflight = null
         this.notifier.markDirty()
       }
@@ -885,6 +943,7 @@ export class SessionManager {
    * request with its live rpcId.
   */
   handleDisconnected(): void {
+    for (const session of this.sessions.values()) session.handleDisconnected()
     if (this.pendingInteractions.size > 0) {
       this.pendingInteractions.clear()
       this.notifier.markDirty()
@@ -1069,6 +1128,8 @@ export class SessionManager {
       state: this.listState,
       phase: this.listPhase,
       error: this.listError,
+      hasMore: this.listHasMore,
+      loadingMore: this.listLoadingMore,
       subagentsByParent: Object.fromEntries(this.catalogs),
       jobsBySession: Object.fromEntries(this.jobsBySession),
       currentAddress: current === undefined ? undefined : this.addresses.get(current),

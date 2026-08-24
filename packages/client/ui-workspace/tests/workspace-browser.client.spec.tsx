@@ -95,6 +95,20 @@ function rerender(b: ReturnType<typeof mount>, overrides: Partial<WorkspaceBrows
 }
 
 describe('WorkspaceBrowser', () => {
+  it('requests the next session page only from the explicit control', () => {
+    const loadMoreSessions = vi.fn()
+    const b = mount({
+      useSessions: hook(sessionState([summary('one', 1)], { hasMore: true, loadingMore: false })),
+      loadMoreSessions,
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Load more sessions' }))
+    expect(loadMoreSessions).toHaveBeenCalledOnce()
+    rerender(b, {
+      useSessions: hook(sessionState([summary('one', 1)], { hasMore: true, loadingMore: true })),
+    })
+    expect(screen.getByRole('button', { name: 'Loading…' })).toHaveProperty('disabled', true)
+  })
+
   it('prunes deleted Workspace view state only after the Workspace baseline is ready', async () => {
     const pending = {
       ...workspaceState([]),

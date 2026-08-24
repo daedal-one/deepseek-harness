@@ -97,6 +97,13 @@ function scopedConversation(sessions: ISessions, id: SessionId): IConversation {
   return conversation
 }
 
+/** Resolve the public Session face for a list identity, failing loud. */
+function sessionFace(sessions: ISessions, id: SessionId) {
+  const session = sessions.binding(id)?.session
+  if (session === undefined) throw new Error(`ui-conversation: session "${id}" resolved no binding`)
+  return session
+}
+
 /** Resolve package-internal attachment operations from the public service registration. */
 function concreteConversation(ctx: Context): ConversationController {
   const conversation = ctx.get('conversation') as ConversationController | undefined
@@ -400,6 +407,8 @@ export function apply(ctx: Context): void {
           })
         },
         loadOlder: () => { void scoped.loadOlder() },
+        retryOpen: () => { void sessionFace(sessions, sessionId).retryOpen?.() },
+        loadToolResult: (seq) => { void scoped.loadToolResult(seq) },
         loadImage: attachment => conversation.resolveImage(sessionId, attachment),
         // Unregistered 'trajectory' id is safe: the tab ring falls back to
         // the first view, and the untouched inspect target stays inert.

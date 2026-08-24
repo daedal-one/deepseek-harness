@@ -7,7 +7,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import type { SessionId } from '@deepseek-ai/dsh-session'
-import type { ApiProxy, GoalRef, HostFrame, MuxFrame, RpcMessage, RpcRequest, RpcResponse } from '@deepseek-ai/dsh-host-apiproxy'
+import type { ApiProxy, GoalRef, HostFrame, MuxFrame, RpcMessage, RpcRequest, RpcResponse, SessionListCursor } from '@deepseek-ai/dsh-host-apiproxy'
 import { InProcessApiClient, RpcId, toFetchHandler } from '@deepseek-ai/dsh-host-apiproxy'
 
 const sid = (id: string): SessionId => id as SessionId
@@ -35,7 +35,7 @@ function scriptedApi(overrides: {
     Promise.resolve({ rpcId: r.rpcId, result: { ok: false, error: { code: 'internal' as const, message: 'stub', details: {} } } })
   return {
     sessions: {
-      list: r => ok(r, { items: [] }),
+      list: r => ok(r, { items: [], hasMore: false }),
       search: r => ok(r, { items: [], hasMore: false }),
       create: r => ok(r, { sessionId: sid('s-new') }),
       history: r => ok(r, {
@@ -43,6 +43,7 @@ function scriptedApi(overrides: {
         hasMore: false,
         modelSelection: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
       }),
+      historyDetail: r => err(r),
       models: r => ok(r, {
         current: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
         routable: true,
@@ -154,21 +155,21 @@ function recorderInto(seen: { method: string; payload: unknown }[]) {
 
 describe('unary round trip', () => {
   it('carries payload out and value back through the full wire form', async () => {
-    let seen: RpcRequest<{ cursor?: string }> | undefined
+    let seen: RpcRequest<{ cursor?: SessionListCursor }> | undefined
     const api = scriptedApi({
       sessions: {
         list: (r) => {
           seen = r
-          return ok(r, { items: [{ sessionId: sid('s1'), updatedAt: 7, running: false, blank: false }] })
+          return ok(r, { items: [{ sessionId: sid('s1'), updatedAt: 7, running: false, blank: false }], hasMore: false })
         },
       },
     })
-    const response = await client(api).sessions.list({ cursor: 'c1' })
+    const response = await client(api).sessions.list({ cursor: 'c1' as SessionListCursor })
     // Impl received the narrow form with a minted id; client returned the same id and value.
     expect(seen?.payload).toEqual({ cursor: 'c1' })
     expect(seen?.rpcId).toBeTruthy()
     expect(response.rpcId).toBe(seen?.rpcId)
-    expect(response.result).toEqual({ ok: true, value: { items: [{ sessionId: 's1', updatedAt: 7, running: false, blank: false }] } })
+    expect(response.result).toEqual({ ok: true, value: { items: [{ sessionId: 's1', updatedAt: 7, running: false, blank: false }], hasMore: false } })
   })
 
   it('round-trips a trimmed session search query and its bounded result metadata', async () => {
@@ -268,7 +269,7 @@ describe('unary round trip', () => {
 
   it('throws on rpcId echo mismatch', async () => {
     const api = scriptedApi({
-      sessions: { list: () => Promise.resolve({ rpcId: RpcId('forged'), result: { ok: true, value: { items: [] } } }) },
+      sessions: { list: () => Promise.resolve({ rpcId: RpcId('forged'), result: { ok: true, value: { items: [], hasMore: false } } }) },
     })
     await expect(client(api).sessions.list({})).rejects.toThrow(/rpcId mismatch/)
   })
@@ -349,7 +350,7 @@ describe('unary round trip', () => {
   })
 
   it('rejects non-JSON media types before executing anything (cross-site simple-request fence)', async () => {
-    const list = vi.fn((r: RpcRequest<{}>) => ok(r, { items: [] }))
+    const list = vi.fn((r: RpcRequest<{}>) => ok(r, { items: [], hasMore: false }))
     const handler = toFetchHandler(scriptedApi({ sessions: { list } }))
     const body = JSON.stringify({ type: 'client-request', rpcId: 'r1', method: 'session.list', payload: {} })
     // A "simple" browser POST (text/plain — sent with no CORS preflight) is

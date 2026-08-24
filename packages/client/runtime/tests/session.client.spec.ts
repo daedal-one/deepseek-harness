@@ -126,7 +126,11 @@ const TEST_EVENT_DEFINITION: ConversationNodeDefinition<TestEventState> = {
   kind: 'runtime-test-event',
   target: 'chat',
   match: event => ({ id: String(event.seq), role: 'start' }),
-  start: (_context, match) => ({ event: match.event, view: match.view }),
+  start: (_context, match) => ({
+    event: match.event,
+    view: match.view,
+    ...match.detail === undefined ? {} : { detail: match.detail },
+  }),
   update: context => context.state,
   publication: match => match.event.type === 'assistant/chunk' ? 'animation-frame' : 'immediate',
   buildViewNode: (context) => {
@@ -225,6 +229,53 @@ describe('open', () => {
     await session.open()
     expect(session.getSnapshot().openState).toBe('error')
     expect(session.getSnapshot().openError).toMatchObject({ code: 'internal', message: 'socket died' })
+  })
+
+  it('classifies a timeout and retries the initial open on the same Session', async () => {
+    const { api, session } = makeSession()
+    api.onHistory = () => Promise.reject(new DOMException('history timed out', 'TimeoutError'))
+    await session.open()
+    expect(session.getSnapshot()).toMatchObject({
+      openState: 'error', openError: { code: 'transport-timeout' },
+    })
+    api.onHistory = () => histResponse(plainTurn(0, 0, 'retry', 'worked'))
+    await session.retryOpen()
+    expect(session.getSnapshot()).toMatchObject({ openState: 'open', openError: null })
+    expect(session.getSnapshot().nodes.map(node => node.seq)).toEqual([1, 3])
+  })
+
+  it('loads one deferred Tool result exactly once and replaces the projected row', async () => {
+    const { api, session } = makeSession()
+    const full = ev.toolResult(0, 1, 'detail-call', 'full result')
+    if (full.type !== 'tool/result') throw new Error('fixture returned another event type')
+    const projected = {
+      ...full,
+      data: {
+        ...full.data,
+        message: {
+          ...full.data.message,
+          content: [{ ...full.data.message.content[0], content: [] }],
+        },
+      },
+    }
+    api.onHistory = () => Promise.resolve(ok({
+      events: [{ event: projected, detail: { kind: 'tool-result', bytes: 400 } }] as never[],
+      hasMore: false,
+    }))
+    const gate = deferred<Awaited<ReturnType<FakeApiClient['onHistoryDetail']>>>()
+    api.onHistoryDetail = () => gate.promise
+    await session.open()
+    expect(chatEvents(session.getSnapshot())[0]?.detail).toEqual({ kind: 'tool-result', bytes: 400 })
+    const first = session.loadHistoryDetail(0)
+    const second = session.loadHistoryDetail(0)
+    expect(api.callsOf('session.historyDetail')).toHaveLength(1)
+    gate.resolve(ok({ entry: { event: full, view: { for: 'result', view: { card: 'generic', title: 'loaded' } } } as never }))
+    await Promise.all([first, second])
+    const loaded = chatEvents(session.getSnapshot())[0]
+    expect(loaded?.detail).toBeUndefined()
+    expect((loaded?.event as SessionEvent<'tool/result'>).data.message.content[0]?.content)
+      .toEqual([{ type: 'text', text: 'full result' }])
+    expect(loaded?.view).toEqual({ for: 'result', view: { card: 'generic', title: 'loaded' } })
   })
 
   it('stitches live frames arriving while history is pending, dropping the page overlap', async () => {
@@ -413,7 +464,7 @@ describe('paging', () => {
     const { api, session } = makeSession()
     api.onHistory = payload => payload.beforeSeq === undefined
       ? histResponse(plainTurn(10, 1, 'new', 'page'), true)
-      : histResponse(plainTurn(0, 0, 'broken', 'segment'), true) // tail seq 5, but baseSeq is 10 → hole
+      : histResponse(plainTurn(10, 0, 'broken', 'segment'), true) // overlaps the existing base → invalid page
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     try {
       await session.open()
@@ -932,6 +983,24 @@ describe('resync', () => {
     const cold = makeSession()
     await cold.session.resync()
     expect(cold.api.calls).toEqual([]) // never opened: no traffic
+  })
+
+  it('keeps the last good transcript visible until reconnect repair commits', async () => {
+    const { api, session } = makeSession()
+    api.onHistory = () => histResponse(plainTurn(0, 0, 'before', 'disconnect'))
+    await session.open()
+    const gate = deferred<Awaited<ReturnType<FakeApiClient['onHistory']>>>()
+    api.onHistory = () => gate.promise
+    session.handleDisconnected()
+    expect(session.getSnapshot()).toMatchObject({ openState: 'open', syncing: true })
+    expect(session.getSnapshot().nodes.map(node => node.seq)).toEqual([1, 3])
+    const repair = session.resync()
+    await vi.waitFor(() => { expect(session.getSnapshot().syncing).toBe(true) })
+    expect(session.getSnapshot().nodes.map(node => node.seq)).toEqual([1, 3])
+    gate.resolve(await histResponse(plainTurn(6, 1, 'after', 'reconnect')))
+    await repair
+    expect(session.getSnapshot()).toMatchObject({ openState: 'open', syncing: false })
+    expect(session.getSnapshot().nodes.map(node => node.seq)).toEqual([7, 9])
   })
 
   it('re-mints a replayed requested frame as a fresh wait with the same key (old reference superseded)', async () => {

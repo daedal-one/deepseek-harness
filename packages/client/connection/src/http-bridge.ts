@@ -4,6 +4,7 @@
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { sendBuffer, type WebServer } from '@deepseek-ai/dsh-host-webserver'
 
 /** Default carrier cap for all HTTP RPC bodies: sized for the default
  * aggregate image limit (100 MiB) after base64 expansion plus envelope
@@ -28,12 +29,15 @@ export interface FetchHandler {
  * @param res - node:http response the bridge writes and owns to completion.
  * @param apiHandler - fetch-shaped API carrier the request is dispatched to.
  * @param maxRequestBodyBytes - maximum body bytes buffered before dispatch.
+ * @param sendComplete - complete-response writer; SSE bypasses it to stream.
+ * @returns when the response has completed or its stream has closed.
  */
 export async function bridge(
   req: IncomingMessage,
   res: ServerResponse,
   apiHandler: FetchHandler,
   maxRequestBodyBytes = DEFAULT_MAX_REQUEST_BODY_BYTES,
+  sendComplete: WebServer['sendBuffer'] = sendBuffer,
 ): Promise<void> {
   const abort = new AbortController()
   // Client-disconnect detection MUST hang off the response, not the request:
@@ -73,11 +77,17 @@ export async function bridge(
     signal: abort.signal,
   })
   const response = await apiHandler.fetch(request)
-  res.writeHead(response.status, Object.fromEntries(response.headers.entries()))
+  const headers = Object.fromEntries(response.headers.entries())
   if (response.body === null) {
+    res.writeHead(response.status, headers)
     res.end()
     return
   }
+  if (!response.headers.get('content-type')?.startsWith('text/event-stream')) {
+    await sendComplete(req, res, response.status, headers, Buffer.from(await response.arrayBuffer()))
+    return
+  }
+  res.writeHead(response.status, headers)
   for await (const chunk of response.body) {
     // Backpressure: a false return means the socket buffer is full — wait for drain
     // instead of buffering unboundedly (slow/suspended SSE consumers). 'close' also

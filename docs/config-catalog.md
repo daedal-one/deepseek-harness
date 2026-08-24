@@ -868,6 +868,10 @@ export interface Config {
    * @default 1024
    */
   coldBlankProbeMaxBytes?: number
+  /** Maximum complete serialized history response bytes. @default 524288 */
+  historyPageMaxBytes?: number
+  /** Maximum ordinary rows returned by one session-list request. @default 50 */
+  sessionListPageSize?: number
 }
 ```
 
@@ -914,10 +918,14 @@ export interface Config {
   host: '127.0.0.1' | '0.0.0.0'
   /** Listen port; zero requests an OS-assigned port. */
   port: number
+  /** Brotli quality for complete compressible responses. @default 9 */
+  brotliQuality?: number
+  /** gzip level for complete compressible responses. @default 6 */
+  gzipLevel?: number
 }
 ```
 
-Source: [`packages/host/webserver/src/index.ts:45`](../packages/host/webserver/src/index.ts)
+Source: [`packages/host/webserver/src/index.ts:123`](../packages/host/webserver/src/index.ts)
 
 <a id="deepseek-aidsh-invariants"></a>
 

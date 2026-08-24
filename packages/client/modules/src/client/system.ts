@@ -9,8 +9,10 @@ import type {
   ClientModuleSystemOptions, ClientPluginHandoff, DshWindow,
 } from './manifest.ts'
 
-/** Default bundle-load hook: same-origin external classic script. */
-const defaultLoadBundle = (url: string): Promise<void> => new Promise((resolve, reject) => {
+class ScriptLoadError extends Error {}
+
+/** Load one same-origin external classic script and remove its settled node. */
+const loadBundleScript = (url: string): Promise<void> => new Promise((resolve, reject) => {
   const el = document.createElement('script')
   el.async = true
   el.src = url
@@ -20,10 +22,20 @@ const defaultLoadBundle = (url: string): Promise<void> => new Promise((resolve, 
   }, { once: true })
   el.addEventListener('error', () => {
     el.remove()
-    reject(new Error(`client-modules: bundle script ${url} failed to load`))
+    reject(new ScriptLoadError(`client-modules: bundle script ${url} failed to load`))
   }, { once: true })
   document.head.append(el)
 })
+
+/** Default bundle-load hook: retry one external-script error before failing loud. */
+const defaultLoadBundle = async (url: string): Promise<void> => {
+  try {
+    await loadBundleScript(url)
+  } catch (error) {
+    if (!(error instanceof ScriptLoadError)) throw error
+    await loadBundleScript(url)
+  }
+}
 
 /**
  * A plugin bundle IS its package's client half: `<id>/client` (the exports
@@ -69,6 +81,9 @@ export class ClientModuleSystem implements ClientModuleLoader {
   private readonly materializing = new Set<string>()
   private readonly graphRows = new Map<string, BootModuleRow>()
   private readonly loadBundle: (url: string) => Promise<void>
+  private readonly bootBundleUrl: string
+  private bootLoaded = false
+  private bootArrival: Promise<void> | undefined
 
   /**
    * Build the module system over the parsed boot rows.
@@ -77,6 +92,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
   constructor(options: ClientModuleSystemOptions) {
     this.seed = new Map(Object.entries(options.staticModules))
     this.loadBundle = options.loadBundle ?? defaultLoadBundle
+    this.bootBundleUrl = options.bootBundleUrl
 
     for (const row of options.modules) {
       if (this.graphRows.has(row.id)) throw new Error(`client-modules: duplicate graph entry "${row.id}"`)
@@ -93,6 +109,23 @@ export class ClientModuleSystem implements ClientModuleLoader {
         this.factories.set(handoff.id, handoff.factory)
       },
     }
+  }
+
+  /** Load the graph registration script once and require every row to register. */
+  prefetchAll(): Promise<void> {
+    if (this.bootLoaded) return Promise.resolve()
+    if (this.bootArrival !== undefined) return this.bootArrival
+    const task = this.loadBundle(this.bootBundleUrl).then(() => {
+      const missing = [...this.graphRows.keys()].filter(id => !this.factories.has(id) && !this.statics.has(id))
+      if (missing.length > 0) {
+        throw new Error(`client-modules: graph bundle ${this.bootBundleUrl} omitted ${missing.join(', ')}`)
+      }
+      this.bootLoaded = true
+    }).finally(() => {
+      if (this.bootArrival === task) this.bootArrival = undefined
+    })
+    this.bootArrival = task
+    return task
   }
 
   /** Load one graph row so its factory is registered (idempotent per in-flight arrival). */

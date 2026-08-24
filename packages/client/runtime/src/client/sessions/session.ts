@@ -68,6 +68,8 @@ export class Session implements SessionFace {
   /** Wire views aligned with `events` by index (envelope-level annotations; undefined = no view).
    *  Kept parallel rather than merged so `events` stays the raw log slice (model-visible ⟺ logged). */
   private views: (ToolEventView | undefined)[] = []
+  private details: HistoryEntry['detail'][] = []
+  private readonly detailLoads = new Map<number, Promise<void>>()
   private baseSeq = 0
   private hasMore = false
   private openState: OpenState = 'cold'
@@ -105,6 +107,9 @@ export class Session implements SessionFace {
   private liveBuffer: { event: SessionEvent; view: ToolEventView | undefined }[] = []
   /** Gap repair in flight; live events detour to the buffer until the tail page lands. */
   private stitching = false
+  /** The current transport generation ended; cleared after its first history repair settles. */
+  private reconnecting = false
+  private repairPromise: Promise<void> | null = null
   /** subscribed.lastSeq baseline (gap detection; null when no subscribed frame arrived — degrade to the liveBuffer dedup path). */
   private subscribedLastSeq: number | null = null
 
@@ -388,8 +393,8 @@ export class Session implements SessionFace {
         return
       }
       const tail = older[older.length - 1]
-      if (tail === undefined || tail.event.seq + 1 !== this.baseSeq) {
-        // Continuity assertion: on violation drop the page fail-soft rather than render an out-of-order stream.
+      if (tail === undefined || tail.event.seq >= this.baseSeq) {
+        // Compacted history can omit settled chunks, but pages must remain strictly ordered and non-overlapping.
         console.error(`[web-runtime] history page discontinuous: tail seq ${tail?.event.seq} vs baseSeq ${this.baseSeq}`)
         this.hasMore = false
         this.conversation.prepend([], false)
@@ -397,6 +402,7 @@ export class Session implements SessionFace {
       }
       this.events = [...older.map(e => e.event), ...this.events]
       this.views = [...older.map(e => e.view), ...this.views]
+      this.details = [...older.map(e => e.detail), ...this.details]
       /* v8 ignore next -- the ?? arm needs older[0] undefined, but the empty-page branch above already returned. */
       this.baseSeq = older[0]?.event.seq ?? this.baseSeq
       this.hasMore = result.value.hasMore
@@ -409,10 +415,42 @@ export class Session implements SessionFace {
     }
   }
 
-  /** Reconnect rebuild (manager calls this on onConnected for instances that were opened):
-   *  reset the window and rerun open; pending waits for the baseline replay. Invalidates any
-   *  in-flight open first — its history request rode the dead connection and must not settle
-   *  the fresh generation into 'error'. */
+  /** Replace one deferred Tool result with its exact event and presenter view. */
+  loadHistoryDetail(seq: number): Promise<void> {
+    const existing = this.detailLoads.get(seq)
+    if (existing !== undefined) return existing
+    const task = (async () => {
+      const response = await this.api.sessions.historyDetail({ sessionId: this.sessionId, seq })
+      if (!response.result.ok) throw new Error(response.result.error.message)
+      const at = this.events.findIndex(event => event.seq === seq)
+      if (at === -1 || this.details[at] === undefined) return
+      this.events[at] = response.result.value.entry.event
+      this.views[at] = response.result.value.entry.view
+      this.details[at] = undefined
+      this.conversation.replaceWindow(this.events.map((event, index) => ({
+        event,
+        view: this.views[index],
+        ...this.details[index] === undefined ? {} : { detail: this.details[index] },
+      })), this.hasMore)
+      this.notifier.markDirty()
+    })().finally(() => { this.detailLoads.delete(seq) })
+    this.detailLoads.set(seq, task)
+    return task
+  }
+
+  /** Retry a failed initial history request on the existing Session object. */
+  retryOpen(): Promise<void> {
+    return this.open()
+  }
+
+  /** Mark an open transcript as retained-but-stale as soon as its transport generation ends. */
+  handleDisconnected(): void {
+    if (this.openState !== 'open' || this.reconnecting) return
+    this.reconnecting = true
+    this.notifier.markDirty()
+  }
+
+  /** Reconnect repair: retain the readable window until a bounded tail commits. */
   async resync(): Promise<void> {
     // The queue mirror is NOT cleared here: onConnected (which drives resync)
     // races the mux frames — the fresh generation's baseline may have landed
@@ -420,21 +458,24 @@ export class Session implements SessionFace {
     // session/subscribed frame instead (same stream as the queue snapshot
     // that follows it, so ordering is guaranteed).
     if (this.openState === 'cold') return // never opened: no window to rebuild (doOpen flips to 'loading' synchronously, so cold implies no in-flight open)
-    this.openGeneration++
-    this.openPromise = null
-    this.openState = 'cold'
-    this.openError = null
-    this.events = []
-    this.views = []
-    this.baseSeq = 0
+    if (this.openState !== 'open') {
+      this.openGeneration++
+      this.openPromise = null
+      this.openState = 'cold'
+      this.openError = null
+      this.notifier.markDirty()
+      await this.open()
+      return
+    }
     // Superseded, not settled: the baseline replay re-sends still-pending requested frames verbatim
     // (same rpcId), re-minting fresh waits; a stale reference's respond() still reaches the host.
     this.pending.clear()
     this.pendingRev++
     this.subscribedLastSeq = null
-    this.liveBuffer = []
+    this.openGeneration++
     this.notifier.markDirty()
-    await this.open()
+    if (this.repairPromise !== null) await this.repairPromise
+    await this.repairGap()
   }
 
   // ---- Subscription API (useSyncExternalStore direct wiring) ----
@@ -653,6 +694,7 @@ export class Session implements SessionFace {
   private installWindow(entries: HistoryEntry[], hasMore: boolean, projections?: ProjectionsBaseline): void {
     this.events = entries.map(e => e.event)
     this.views = entries.map(e => e.view)
+    this.details = entries.map(e => e.detail)
     this.baseSeq = this.events[0]?.seq ?? 0
     this.hasMore = hasMore
     if (this.events.some(event => event.type === 'turn/start')) this.firstPromptPendingTurn = false
@@ -670,6 +712,7 @@ export class Session implements SessionFace {
     if (tailSeq !== null && event.seq <= tailSeq) return 'none' // replay overlap, drop
     this.events.push(event)
     this.views.push(view)
+    this.details.push(undefined)
     if (event.type === 'turn/start') this.firstPromptPendingTurn = false
     const queueChanged = this.queueMirror.acceptDurable(event)
     const publication = this.conversation.append({ event, view })
@@ -678,9 +721,9 @@ export class Session implements SessionFace {
 
   /** Land a live session/event (open/repair in flight -> buffer; overlapping seq -> drop;
    *  a seq gap -> buffer + tail-page repull instead of appending a hole (a gap is an
-   *  expected reconnect-window artifact, repaired by refetch). The window stays one contiguous
-   *  raw range, which lets Conversation Definitions correlate every recorded event between its
-   *  ends and lets a compaction checkpoint resolve its cited summary event. */
+   *  expected reconnect-window artifact, repaired by refetch). A history projection may omit
+   *  redundant settled chunks, so the client requires increasing, non-overlapping pages rather
+   *  than a contiguous raw sequence. */
   private acceptLiveEvent(event: SessionEvent, view?: ToolEventView): void {
     if (this.openState === 'loading' || this.stitching) {
       this.liveBuffer.push({ event, view })
@@ -705,10 +748,16 @@ export class Session implements SessionFace {
   /** Resync-lite: repull the tail page and stitch the liveBuffer through the shared
    *  installWindow path. No openState transition — the UI keeps the current window (no loading
    *  flash); events arriving meanwhile detour to liveBuffer via the stitching flag. */
-  private async repairGap(): Promise<void> {
-    /* v8 ignore next -- re-entry guard: acceptLiveEvent already detours to liveBuffer while stitching, so no second call reaches here. */
-    if (this.stitching) return
+  private repairGap(): Promise<void> {
+    if (this.repairPromise !== null) return this.repairPromise
+    const task = this.runRepairGap()
+    this.repairPromise = task.finally(() => { this.repairPromise = null })
+    return this.repairPromise
+  }
+
+  private async runRepairGap(): Promise<void> {
     this.stitching = true
+    this.notifier.markDirty()
     const generation = this.openGeneration
     try {
       const { result } = await this.history({ maxMessages: PAGE_MESSAGES })
@@ -720,6 +769,8 @@ export class Session implements SessionFace {
       console.error('[web-runtime] gap repair failed:', error)
     } finally {
       this.stitching = false
+      this.reconnecting = false
+      this.notifier.markDirty()
     }
   }
 
@@ -758,6 +809,7 @@ export class Session implements SessionFace {
       ),
       removed: this.removed,
       openState: this.openState,
+      syncing: this.reconnecting || this.stitching,
       openError: this.openError,
       hasMore: this.hasMore,
       loadingOlder: this.loadingOlder,
@@ -781,7 +833,7 @@ export class Session implements SessionFace {
 
 /** Convert one wire history row into the assembler's transport-neutral input. */
 function conversationInput(entry: HistoryEntry): ConversationEventInput {
-  return { event: entry.event, view: entry.view }
+  return { event: entry.event, view: entry.view, ...entry.detail === undefined ? {} : { detail: entry.detail } }
 }
 
 /** A generic command row alone remains control-plane content; every other visible Chat Node activates the conversation. */

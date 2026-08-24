@@ -523,14 +523,17 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
 export const FOUNDATION_TYPE_NAMES: ReadonlySet<string> = new Set([
   'AbortSignal',
   'AsyncIterable',
+  'Buffer',
   'Context',
   'Error',
+  'IncomingMessage',
   'Map',
   'Partial',
   'Pick',
   'Promise',
   'Record',
   'Readonly',
+  'ServerResponse',
   'Uint8Array',
 ])
 
@@ -595,6 +598,8 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   Translate: 'service-local bound translator is owned by packages/client/i18n/src/index.ts',
   WebUpgradeRoute:
     'upgrade route registration contract is owned by packages/host/webserver/src/index.ts',
+  BufferResponseHeaders:
+    'complete HTTP response headers are owned by packages/host/webserver/src/index.ts',
   InvariantRegistration: 'service-local lifecycle handle is owned by packages/runtime-diagnostics/invariants/README.md',
   JsonValue: 'JSON value union is owned by packages/core/session/src/json.ts',
   KnobState: 'projection unit state fields are owned by packages/interaction/permission-presets/README.md',

@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { Readable } from 'node:stream'
+import { brotliDecompressSync } from 'node:zlib'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { describe, expect, it } from 'vitest'
 import { bridge } from '../src/http-bridge.ts'
@@ -71,5 +72,56 @@ describe('HTTP bridge abort', () => {
     response.emit('close')
     await pending
     expect(carrierSignal?.aborted).toBe(true)
+  })
+
+  it('compresses complete JSON responses while leaving streaming responses untouched', async () => {
+    const makeRequest = (): IncomingMessage => {
+      const request = Readable.from([]) as unknown as IncomingMessage
+      Object.assign(request, {
+        url: '/api/probe', method: 'GET', headers: { 'accept-encoding': 'br' },
+      })
+      return request
+    }
+    const record = (): {
+      response: ServerResponse
+      status: () => number
+      headers: () => Record<string, string | number>
+      body: () => Buffer
+    } => {
+      let status = 0
+      let headers: Record<string, string | number> = {}
+      const chunks: Buffer[] = []
+      const response = Object.assign(new EventEmitter(), {
+        writableEnded: false,
+        writeHead(nextStatus: number, nextHeaders?: Record<string, string | number>) {
+          status = nextStatus
+          headers = nextHeaders ?? {}
+          return this
+        },
+        write(chunk: Uint8Array) { chunks.push(Buffer.from(chunk)); return true },
+        end(this: { writableEnded: boolean }, chunk?: Uint8Array) {
+          if (chunk !== undefined) chunks.push(Buffer.from(chunk))
+          this.writableEnded = true
+          return this
+        },
+      }) as unknown as ServerResponse
+      return { response, status: () => status, headers: () => headers, body: () => Buffer.concat(chunks) }
+    }
+
+    const unary = record()
+    const source = JSON.stringify({ payload: 'x'.repeat(4_096) })
+    await bridge(makeRequest(), unary.response, {
+      fetch: () => Promise.resolve(new Response(source, { headers: { 'content-type': 'application/json' } })),
+    })
+    expect(unary.status()).toBe(200)
+    expect(unary.headers()).toMatchObject({ 'content-encoding': 'br', vary: 'Accept-Encoding' })
+    expect(brotliDecompressSync(unary.body()).toString()).toBe(source)
+
+    const stream = record()
+    await bridge(makeRequest(), stream.response, {
+      fetch: () => Promise.resolve(new Response('data: one\n\n', { headers: { 'content-type': 'text/event-stream' } })),
+    })
+    expect(stream.headers()).not.toHaveProperty('content-encoding')
+    expect(stream.body().toString()).toBe('data: one\n\n')
   })
 })

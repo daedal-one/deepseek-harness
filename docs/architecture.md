@@ -34,6 +34,12 @@ Any row it prints can be replaced by a patch of your own.
 
 Composition mechanics are in [app-boot](../packages/boot/app-boot/README.md#profiles); config fields are in the generated [config catalog](config-catalog.md).
 
+## Web delivery
+
+The production Web shell is a two-plane delivery path. Vite's content-addressed shell assets and one revision-addressed client-plugin registration bundle are immutable cache entries; index HTML remains `no-store` because it carries the current boot graph. Complete static, plugin, and unary API responses negotiate Brotli or gzip through `ctx.webServer.sendBuffer`, while SSE remains incremental and preserves socket backpressure. Individual plugin URLs remain available for HMR without restoring production boot request fan-out.
+
+The durable Session log remains complete, but the browser receives a bounded projection. History responses compact settled stream evidence, defer full Tool results to an exact-sequence detail request, and enforce a serialized-envelope byte budget. Session discovery uses a recency cursor, and reconnect repairs a retained transcript from its last contiguous sequence. These are transport and client-projection rules; model history, persistence, loopback binding, and the trusted-Host boundary do not change.
+
 ## Core packages
 
 Here are some core packages that contribute to the Cordis tree.

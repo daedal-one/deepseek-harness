@@ -4,7 +4,7 @@
  * registers the factory), materialization on first import/require with
  * memoization and recursive self-sequencing, the resolution branch order,
  * shared in-flight arrival, invalidate-refetch (HMR), style claiming, the
- * default transport hook, and the loud failure modes (duplicate
+ * default transport retry, and the loud failure modes (duplicate
  * registration, cycles, table misses, double boot).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -18,6 +18,7 @@ const win = globalThis as DshWindow
 type Factory = ClientPluginHandoff['factory']
 
 afterEach(() => {
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
   delete win.__ModuleLoader__
   for (const el of document.querySelectorAll('style, script')) el.remove()
@@ -45,6 +46,7 @@ function bench(
   const gates = new Map<string, () => void>()
   const loader = new ClientModuleSystem({
     modules: entries,
+    bootBundleUrl: '/plugins/boot.js?rev=0',
     staticModules: opts.seed ?? {},
     loadBundle: async (url) => {
       fetched.push(url)
@@ -61,6 +63,23 @@ function bench(
 }
 
 describe('lazy CJS arrival', () => {
+  it('prefetches the complete registration graph through one request', async () => {
+    const fetched: string[] = []
+    const loader = new ClientModuleSystem({
+      modules: [row('a'), row('b')],
+      bootBundleUrl: '/plugins/boot.js?rev=graph',
+      staticModules: {},
+      loadBundle: async (url) => {
+        fetched.push(url)
+        win.__ModuleLoader__?.load({ id: 'a', factory: () => ({}) })
+        win.__ModuleLoader__?.load({ id: 'b', factory: () => ({}) })
+      },
+    })
+    await Promise.all([loader.prefetchAll(), loader.prefetchAll()])
+    await loader.prefetchAll()
+    expect(fetched).toEqual(['/plugins/boot.js?rev=graph'])
+  })
+
   it('prefetch loads and registers but does not run the factory', async () => {
     const ran: string[] = []
     const b = bench([row('a')], { a: () => { ran.push('a'); return {} } })
@@ -218,7 +237,7 @@ describe('failure modes', () => {
 
   it('double boot is loud', () => {
     bench([])
-    expect(() => new ClientModuleSystem({ modules: [], staticModules: {} }))
+    expect(() => new ClientModuleSystem({ modules: [], bootBundleUrl: '/plugins/boot.js?rev=0', staticModules: {} }))
       .toThrow('already installed (double boot?)')
   })
 })
@@ -283,23 +302,50 @@ describe('default transport seam', () => {
         script.dispatchEvent(new Event('load'))
       })
     })
-    const loader: ClientModuleLoader = new ClientModuleSystem({ modules: [row('dee')], staticModules: {} })
+    const loader: ClientModuleLoader = new ClientModuleSystem({ modules: [row('dee')], bootBundleUrl: '/plugins/boot.js?rev=0', staticModules: {} })
     const exports = await loader.import('dee', '', {})
     expect((exports as { marker: string }).marker).toBe('via-script')
     expect(append).toHaveBeenCalledOnce()
     expect([...document.querySelectorAll('script')]).toEqual([])
   })
 
-  it('a script load failure is loud and removes the node', async () => {
-    vi.spyOn(document.head, 'append').mockImplementation((...nodes) => {
+  it('retries one script load error with a fresh node', async () => {
+    let attempts = 0
+    const append = vi.spyOn(document.head, 'append').mockImplementation((...nodes) => {
+      attempts++
+      const script = nodes[0]
+      if (!(script instanceof HTMLScriptElement)) throw new Error('expected script node')
+      queueMicrotask(() => {
+        if (attempts === 1) {
+          script.dispatchEvent(new Event('error'))
+          return
+        }
+        win.__ModuleLoader__?.load({ id: 'dee', factory: () => ({ marker: 'retried' }) })
+        script.dispatchEvent(new Event('load'))
+      })
+    })
+    const loader: ClientModuleLoader = new ClientModuleSystem({ modules: [row('dee')], bootBundleUrl: '/plugins/boot.js?rev=0', staticModules: {} })
+    const first = loader.import('dee', '', {})
+    const second = loader.import('dee', '', {})
+    const prefetched = loader.prefetch('dee')
+    const [firstExports, secondExports] = await Promise.all([first, second, prefetched])
+    expect(firstExports).toBe(secondExports)
+    expect((firstExports as { marker: string }).marker).toBe('retried')
+    expect(append).toHaveBeenCalledTimes(2)
+    expect([...document.querySelectorAll('script')]).toEqual([])
+  })
+
+  it('a repeated script load failure is loud and removes both nodes', async () => {
+    const append = vi.spyOn(document.head, 'append').mockImplementation((...nodes) => {
       const script = nodes[0]
       if (!(script instanceof HTMLScriptElement)) throw new Error('expected script node')
       queueMicrotask(() => { script.dispatchEvent(new Event('error')) })
     })
-    const loader = new ClientModuleSystem({ modules: [row('dee')], staticModules: {} })
+    const loader = new ClientModuleSystem({ modules: [row('dee')], bootBundleUrl: '/plugins/boot.js?rev=0', staticModules: {} })
     await expect(loader.prefetch('dee')).rejects.toThrow(
       'bundle script /plugins/dee/client.js?rev=0 failed to load',
     )
+    expect(append).toHaveBeenCalledTimes(2)
     expect([...document.querySelectorAll('script')]).toEqual([])
   })
 })

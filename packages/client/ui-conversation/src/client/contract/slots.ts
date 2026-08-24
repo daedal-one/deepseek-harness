@@ -360,6 +360,8 @@ export interface ChatNodeOwnerProps {
   cwd?: string | undefined
   openFile: (path: string) => void
   inspectCall: (callId: CallId) => void
+  /** Resolve a deferred Tool-result body by its event seq. */
+  loadToolResult?: ((seq: number) => void) | undefined
   forkAt: (seq: number) => void
   /** Resolve a session-authorized historical image for inline display. */
   loadImage: (attachment: ImageAttachmentRef) => Promise<string>
@@ -681,6 +683,10 @@ export interface ChatViewInjected {
    */
   openFile: (path: string) => void
   loadOlder: () => void
+  /** Retry a failed initial history request. */
+  retryOpen?: (() => void) | undefined
+  /** Resolve a deferred Tool-result body by its event seq. */
+  loadToolResult?: ((seq: number) => void) | undefined
   /** Resolve a session-authorized historical image for inline display. */
   loadImage: (attachment: ImageAttachmentRef) => Promise<string>
   /** Hand a call off to the trajectory view: write the one-shot inspect target and switch tabs. */

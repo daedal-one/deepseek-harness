@@ -195,6 +195,8 @@ export class ClientModuleRegistry extends Service {
   private readonly resolvePkgJson: (spec: string) => string
   private flushQueued = false
   private composed: WebBootGraph
+  /** Current graph bundle bytes, rebuilt only when graph membership or content revision changes. */
+  private bootBody = Buffer.alloc(0)
 
   /**
    * Build the service: subscribe, seed, and run the activation flush.
@@ -313,8 +315,13 @@ export class ClientModuleRegistry extends Service {
   }
 
   private compose(): WebBootGraph {
-    const entries = [...this.table.values()].map(record => record.entry)
-    return { rev: shortHash(JSON.stringify(entries)), entries }
+    const records = [...this.table.values()]
+    const entries = records.map(record => record.entry)
+    this.bootBody = Buffer.from(records.map(record =>
+      readFileSync(record.clientPath, 'utf8').replace(/^\/\/# sourceMappingURL=.*$/gm, ''),
+    ).join('\n;\n'))
+    const rev = shortHash(JSON.stringify(entries))
+    return { rev, bundleUrl: `/plugins/boot.js?rev=${rev}`, entries }
   }
 
   private notifyGraphChanged(): void {
@@ -426,6 +433,21 @@ export class ClientModuleRegistry extends Service {
     }
     /* v8 ignore next -- `?? '/'` arm: node:http always sets url on server requests. */
     const pathname = decodeURIComponent(new URL(req.url ?? '/', 'http://x').pathname)
+    const requestUrl = new URL(req.url ?? '/', 'http://x')
+    if (pathname === '/plugins/boot.js') {
+      try {
+        await this.ctx.webServer.sendBuffer(req, res, 200, {
+          'content-type': 'text/javascript; charset=utf-8',
+          'cache-control': requestUrl.searchParams.get('rev') === this.composed.rev
+            ? 'public, max-age=31536000, immutable'
+            : 'no-cache',
+        }, this.bootBody)
+      } catch {
+        res.writeHead(404)
+        res.end()
+      }
+      return
+    }
     // The id may contain a scope slash. Anything else under /plugins (including
     // /plugins/events when the HMR row is absent) is an unknown resource.
     const prefix = '/plugins/'
@@ -444,11 +466,12 @@ export class ClientModuleRegistry extends Service {
     }
     try {
       const body = await readFile(path)
-      res.writeHead(200, {
+      await this.ctx.webServer.sendBuffer(req, res, 200, {
         'content-type': isSourceMap ? 'application/json; charset=utf-8' : 'text/javascript; charset=utf-8',
-        'cache-control': 'no-cache',
-      })
-      res.end(body)
+        'cache-control': requestUrl.searchParams.get('rev') === this.table.get(pathname.slice(prefix.length, -suffix.length))?.entry.rev
+          ? 'public, max-age=31536000, immutable'
+          : 'no-cache',
+      }, body)
     } catch {
       // Registered but unreadable (bundle not built yet): loud 404 beats a silent SPA-fallback HTML page.
       res.writeHead(404)

@@ -34,6 +34,8 @@ export interface ISessions {
    * (fixture included) reports the same number.
    */
   readonly searchResultLimit: number
+  /** Fetch the next session-list continuation page. */
+  loadMore(): Promise<void>
   /**
    * Select a session as current.
    * @param id - session id (must exist in the list; unknown ids fail loud).

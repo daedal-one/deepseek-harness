@@ -7,7 +7,7 @@ import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { WebServer, WebRoute } from '@deepseek-ai/dsh-host-webserver'
+import { sendBuffer, type WebServer, type WebRoute } from '@deepseek-ai/dsh-host-webserver'
 import { ClientModuleRegistry } from '../src/index.ts'
 
 let root: string | undefined
@@ -49,8 +49,9 @@ function constructWithRoute(packageNames: string[]): { service: ClientModuleRegi
     },
   })
   let route: WebRoute | undefined
-  const webServer: Pick<WebServer, 'port' | 'register' | 'tapIndex'> = {
+  const webServer: Pick<WebServer, 'port' | 'register' | 'tapIndex' | 'sendBuffer'> = {
     port: 0,
+    sendBuffer,
     register: (candidate) => {
       if (candidate.path === '/plugins') route = candidate
       return () => {}
@@ -140,13 +141,56 @@ describe('client bundle activation', () => {
     await route.handler({
       method: 'GET',
       url: `/plugins/${packageName}/client.js.map`,
+      headers: {},
     } as IncomingMessage, response)
 
     expect(status).toBe(200)
-    expect(headers).toEqual({
+    expect(headers).toMatchObject({
       'content-type': 'application/json; charset=utf-8',
       'cache-control': 'no-cache',
+      'content-length': Buffer.byteLength(map),
     })
     expect(body).toBe(map)
+  })
+
+  it('serves every registration wrapper through one immutable graph bundle', async () => {
+    const first = '@fixture/boot-first'
+    const second = '@fixture/boot-second'
+    const firstPath = writePackage(first)
+    const secondPath = writePackage(second)
+    mkdirSync(dirname(firstPath), { recursive: true })
+    mkdirSync(dirname(secondPath), { recursive: true })
+    writeFileSync(firstPath, 'window.__ORDER__ = ["first"]\n//# sourceMappingURL=client.js.map\n')
+    writeFileSync(secondPath, 'window.__ORDER__.push("second")\n')
+    const { service, route } = constructWithRoute([first, second])
+    const graph = service.graph()
+    let status = 0
+    let headers: Record<string, string | number> = {}
+    let body = ''
+    const response = {
+      writeHead(nextStatus: number, nextHeaders?: Record<string, string | number>) {
+        status = nextStatus
+        headers = nextHeaders ?? {}
+        return response
+      },
+      end(chunk?: Uint8Array) {
+        body = chunk === undefined ? '' : Buffer.from(chunk).toString('utf8')
+        return response
+      },
+    } as unknown as ServerResponse
+
+    await route.handler({
+      method: 'GET', url: graph.bundleUrl, headers: {},
+    } as IncomingMessage, response)
+
+    expect(status).toBe(200)
+    expect(headers).toMatchObject({
+      'content-type': 'text/javascript; charset=utf-8',
+      'cache-control': 'public, max-age=31536000, immutable',
+    })
+    expect(body).toContain('window.__ORDER__ = ["first"]')
+    expect(body).toContain('window.__ORDER__.push("second")')
+    expect(body).not.toContain('sourceMappingURL')
+    expect(body.indexOf('first')).toBeLessThan(body.indexOf('second'))
   })
 })

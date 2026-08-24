@@ -11,12 +11,12 @@
  * @module @deepseek-ai/dsh-host-frontend-static
  */
 
-import type { ServerResponse } from 'node:http'
+import type { IncomingMessage, ServerResponse } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { dirname, extname, join, normalize, resolve, sep } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import type {} from '@deepseek-ai/dsh-host-webserver'
+import type { WebServer } from '@deepseek-ai/dsh-host-webserver'
 
 /** Stable Cordis plugin name. */
 export const name = 'frontend-static'
@@ -47,15 +47,19 @@ const MIME: Record<string, string> = {
 /**
  * Serve one GET/HEAD static request from the dist root.
  * @param pathname - decoded URL pathname of the request.
+ * @param req - incoming request carrying method and encoding preferences.
  * @param res - the node:http response to write.
  * @param distRoot - absolute dist root directory (resolved by the caller).
  * @param distIndex - absolute path of index.html inside distRoot.
  * @param renderIndex - produces the index.html body (index-tap injection) for
  * `/` and every SPA fallback.
+ * @param sendBuffer - complete-response writer using deployment compression.
+ * @returns when the response has completed.
  */
 export async function serveStatic(
-  pathname: string, res: ServerResponse, distRoot: string, distIndex: string,
+  pathname: string, req: IncomingMessage, res: ServerResponse, distRoot: string, distIndex: string,
   renderIndex: () => Promise<string>,
+  sendBuffer: WebServer['sendBuffer'],
 ): Promise<void> {
   const target = resolve(normalize(join(distRoot, pathname)))
   // Traversal rejection: the target must be distRoot itself (`/`) or stay under
@@ -68,8 +72,7 @@ export async function serveStatic(
   }
   const serveIndex = async (): Promise<void> => {
     const body = await renderIndex()
-    res.writeHead(200, { 'content-type': MIME['.html'] })
-    res.end(body)
+    await sendBuffer(req, res, 200, { 'content-type': MIME['.html'], 'cache-control': 'no-store' }, body)
   }
   if (target === distRoot || target === distIndex) {
     await serveIndex()
@@ -77,8 +80,10 @@ export async function serveStatic(
   }
   try {
     const body = await readFile(target)
-    res.writeHead(200, { 'content-type': MIME[extname(target)] ?? 'application/octet-stream' })
-    res.end(body)
+    await sendBuffer(req, res, 200, {
+      'content-type': MIME[extname(target)] ?? 'application/octet-stream',
+      'cache-control': pathname.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache',
+    }, body)
   } catch {
     // Miss (ENOENT/EISDIR) falls back to index.html with 200 (SPA routing).
     await serveIndex()
@@ -105,6 +110,10 @@ export function apply(ctx: Context, config: Config): void {
     }
     /* v8 ignore next -- node:http always sets url on server requests */
     const rawPath = new URL(req.url ?? '/', 'http://x').pathname
-    await serveStatic(decodeURIComponent(rawPath), res, distRoot, distIndex, renderIndex)
+    await serveStatic(
+      decodeURIComponent(rawPath), req, res, distRoot, distIndex, renderIndex,
+      (request, response, status, headers, body) =>
+        ctx.webServer.sendBuffer(request, response, status, headers, body),
+    )
   }), 'frontend-static: fallback seat')
 }

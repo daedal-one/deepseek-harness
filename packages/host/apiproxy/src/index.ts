@@ -16,7 +16,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
 import type { ApiProxy } from './api/index.ts'
-import { createApiProxy, DEFAULT_COLD_BLANK_PROBE_MAX_BYTES } from './api-proxy.ts'
+import { createApiProxy, DEFAULT_COLD_BLANK_PROBE_MAX_BYTES, DEFAULT_HISTORY_PAGE_MAX_BYTES, DEFAULT_SESSION_LIST_PAGE_SIZE } from './api-proxy.ts'
 import {
   DEFAULT_SESSION_LOG_COMPRESSION_LEVEL,
   type SessionLogCompressionLevel,
@@ -59,6 +59,10 @@ export interface Config {
    * @default 1024
    */
   coldBlankProbeMaxBytes?: number
+  /** Maximum complete serialized history response bytes. @default 524288 */
+  historyPageMaxBytes?: number
+  /** Maximum ordinary rows returned by one session-list request. @default 50 */
+  sessionListPageSize?: number
 }
 
 /**
@@ -77,6 +81,8 @@ export class ApiProxyService extends Service implements ApiProxy {
     sessionExportCompressionLevel: z.number().step(1).min(0).max(9)
       .default(DEFAULT_SESSION_LOG_COMPRESSION_LEVEL) as z<SessionLogCompressionLevel>,
     coldBlankProbeMaxBytes: z.natural().default(DEFAULT_COLD_BLANK_PROBE_MAX_BYTES),
+    historyPageMaxBytes: z.natural().min(1).default(DEFAULT_HISTORY_PAGE_MAX_BYTES),
+    sessionListPageSize: z.natural().min(1).default(DEFAULT_SESSION_LIST_PAGE_SIZE),
   })
 
   readonly sessions: ApiProxy['sessions']
@@ -106,6 +112,12 @@ export class ApiProxyService extends Service implements ApiProxy {
       ...(config.coldBlankProbeMaxBytes === undefined
         ? {}
         : { coldBlankProbeMaxBytes: config.coldBlankProbeMaxBytes }),
+      ...(config.historyPageMaxBytes === undefined
+        ? {}
+        : { historyPageMaxBytes: config.historyPageMaxBytes }),
+      ...(config.sessionListPageSize === undefined
+        ? {}
+        : { sessionListPageSize: config.sessionListPageSize }),
     })
     this.sessions = api.sessions
     this.subagents = api.subagents

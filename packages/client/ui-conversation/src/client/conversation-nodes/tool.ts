@@ -67,6 +67,7 @@ function rootResult(match: ConversationMatch, previous?: RunningToolCall): ToolR
     callView: previous?.callView ?? null,
     resultView: match.view?.for === 'result' ? match.view.view : null,
     subCalls: [],
+    ...match.detail?.kind === 'tool-result' ? { deferred: true as const } : {},
   }
 }
 

@@ -13,6 +13,8 @@
     "apps/web/tests/declared-reasoning.e2e.ts",
     "apps/web/tests/support.ts",
     "apps/web/tests/scaffold-hermetic.e2e.ts",
+    "apps/web/tests/client-plugin-load-recovery.e2e.ts",
+    "apps/web/tests/poor-connection.e2e.ts",
     "apps/web/tests/minimal-preset.snapshot.ts",
     "apps/web/tests/message-feedback-protocol.snapshot.ts",
     "apps/web/tests/live-interactions.e2e.ts",

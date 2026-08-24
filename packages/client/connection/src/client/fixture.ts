@@ -2187,7 +2187,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
 
   const api: ApiProxy = {
     sessions: {
-      list: request => ok(request, { items: [...sessions].sort((a, b) => b.updatedAt - a.updatedAt) }),
+      list: request => ok(request, { items: [...sessions].sort((a, b) => b.updatedAt - a.updatedAt), hasMore: false }),
       search: (request, signal) => {
         if (signal.aborted) {
           return err(request, {
@@ -2383,6 +2383,18 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay))
         if (doomed) throw new Error('fixture: simulated history transport failure')
         return ok(request, { ...page, ...projections === undefined ? {} : { projections } })
+      },
+      historyDetail: (request) => {
+        const event = (logs.get(request.payload.sessionId) ?? []).find(candidate => candidate.seq === request.payload.seq)
+        if (event?.type !== 'tool/result') {
+          return err(request, {
+            code: 'history-detail-not-found',
+            message: `no Tool result at ${String(request.payload.seq)}`,
+            details: { sessionId: request.payload.sessionId, seq: request.payload.seq },
+          })
+        }
+        const view = viewFor(event, logs.get(request.payload.sessionId) ?? [])
+        return ok(request, { entry: { event, ...view === undefined ? {} : { view } } })
       },
       models: request => ok(request, {
         current: modelSelections.get(request.payload.sessionId)
@@ -3115,6 +3127,7 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'session.search': return this.api.sessions.search(request, signal)
       case 'session.create': return this.api.sessions.create(request)
       case 'session.history': return this.api.sessions.history(request)
+      case 'session.historyDetail': return this.api.sessions.historyDetail(request)
       case 'session.models': return this.api.sessions.models(request)
       case 'session.selectModel': return this.api.sessions.selectModel(request)
       case 'session.rename': return this.api.sessions.rename(request)

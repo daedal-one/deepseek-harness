@@ -74,7 +74,11 @@ export class FakeApiClient implements IApiClient {
   readonly calls: { method: string; payload: unknown }[] = []
 
   // Programmable slots (defaults answer OK-empty); reassign per case.
-  onList: (payload: unknown) => Promise<RpcResponse<{ items: never[] }>> = () => Promise.resolve(ok({ items: [] }))
+  onList: (payload: unknown) => Promise<RpcResponse<{
+    items: never[]
+    hasMore?: boolean
+    nextCursor?: never
+  }>> = () => Promise.resolve(ok({ items: [] }))
   onSearch: (payload: unknown) => Promise<RpcResponse<{ items: SessionSearchItem[]; hasMore: boolean }>> =
     () => Promise.resolve(ok({ items: [], hasMore: false }))
   onCreate: (payload: unknown) => Promise<RpcResponse<{ sessionId: SessionId }>> = () => Promise.resolve(ok({ sessionId: 'fk-new' as SessionId }))
@@ -84,6 +88,7 @@ export class FakeApiClient implements IApiClient {
   onHistory: (payload: { sessionId: SessionId; beforeSeq?: number; maxMessages?: number })
   => Promise<RpcResponse<{ events: never[]; hasMore: boolean }>> =
     () => Promise.resolve(ok({ events: [], hasMore: false }))
+  onHistoryDetail: (payload: unknown) => Promise<RpcResponse<{ entry: never }>> = () => Promise.resolve(ok({ entry: undefined as never }))
 
   onModels: (payload: unknown) => Promise<RpcResponse<SessionModels>> = () => Promise.resolve(ok({
     current: this.defaultModel,
@@ -138,7 +143,11 @@ export class FakeApiClient implements IApiClient {
   // without built lib/, so IApiClient's indexed-access types collapse to any
   // and inferred parameters would trip no-unsafe-argument.
   readonly sessions: IApiClient['sessions'] = {
-    list: (payload: unknown) => this.record('session.list', payload, this.onList(payload)),
+    list: (payload: unknown) => this.record('session.list', payload, this.onList(payload).then(response => (
+      response.result.ok
+        ? { ...response, result: { ok: true as const, value: { hasMore: false, ...response.result.value } } }
+        : response
+    )) as ReturnType<IApiClient['sessions']['list']>),
     search: (payload: unknown, signal?: AbortSignal) => {
       this.lastSearchSignal = signal
       return this.record('session.search', payload, this.onSearch(payload))
@@ -146,6 +155,7 @@ export class FakeApiClient implements IApiClient {
     create: (payload: unknown) => this.record('session.create', payload, this.onCreate(payload)),
     history: (payload: { sessionId: SessionId; beforeSeq?: number; maxMessages?: number }) =>
       this.record('session.history', payload, this.onHistory(payload)),
+    historyDetail: (payload: unknown) => this.record('session.historyDetail', payload, this.onHistoryDetail(payload)),
     models: (payload: unknown) => this.record('session.models', payload, this.onModels(payload)),
     selectModel: (payload: { provider: string; model: string }) =>
       this.record('session.selectModel', payload, this.onSelectModel(payload)),

@@ -39,7 +39,8 @@ import type {} from '@deepseek-ai/dsh-tools'
 import type {
   ApiProxy, ConfigurableProviderView, CredentialView, GoalRef, HistoryEntry, HostFrame,
   ModelCatalogFailure, ModelProviderGroup,
-  ModelReasoning, MuxFrame, PromptContentPart, QuestionResponsePayload, SessionListMetadata, SessionProjectionsBlock, SessionSearchItem,
+  ModelReasoning, MuxFrame, PromptContentPart, QuestionResponsePayload, SessionListCursor,
+  SessionListMetadata, SessionProjectionsBlock, SessionSearchItem,
   QueuedInboxItem, SessionSummary, SettingsNamespaceView, SubagentAddress, JobView, ToolEventView,
   WorkspaceId, WorkspaceView,
 } from './api/index.ts'
@@ -113,6 +114,26 @@ import { canOpenNativePath, openNativePath, openNativeTextFile } from './native-
 
 /** Page size when history is called without maxMessages. */
 const DEFAULT_MAX_MESSAGES = 50
+
+/** Default complete serialized history-response limit. */
+export const DEFAULT_HISTORY_PAGE_MAX_BYTES = 512 * 1024
+
+/** Default number of recent Sessions transferred by one list request. */
+export const DEFAULT_SESSION_LIST_PAGE_SIZE = 50
+
+function encodeSessionListCursor(summary: SessionSummary): SessionListCursor {
+  return Buffer.from(JSON.stringify([summary.updatedAt, summary.sessionId])).toString('base64url') as SessionListCursor
+}
+
+function decodeSessionListCursor(cursor: SessionListCursor): { updatedAt: number; sessionId: string } | undefined {
+  try {
+    const value: unknown = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'))
+    if (!Array.isArray(value) || value.length !== 2 || typeof value[0] !== 'number' || typeof value[1] !== 'string') return undefined
+    return { updatedAt: value[0], sessionId: value[1] }
+  } catch {
+    return undefined
+  }
+}
 
 /**
  * Non-model settings namespaces intentionally served to the Web client. The
@@ -286,9 +307,11 @@ function isAborted(signal: AbortSignal): boolean {
  * conversation a reader sees — they restate a shadowed range for the model
  * alone — so they consume no quota; the page stays one contiguous raw range,
  * which keeps a compaction's log-only `compaction/summary` record on the same page as its
- * replacement. The cut is the starting seq of the oldest message group (chunks
- * group via sourceEventSeqs — never cut mid-message). The tail page naturally
- * includes the in-progress partial.
+ * replacement. The cut is the starting seq of the oldest message group
+ * (sourceEventSeqs can extend that group backward — never cut mid-message).
+ * A later wire projection may omit redundant settled chunks without changing
+ * these selection boundaries. The tail page naturally includes the
+ * in-progress partial.
  */
 function paginate(
   events: readonly SessionEvent[],
@@ -660,6 +683,10 @@ export interface ApiProxyDefaults {
   sessionExportCompressionLevel?: SessionLogCompressionLevel
   /** Maximum artifact size eligible for one cold blankness read. */
   coldBlankProbeMaxBytes?: number
+  /** Maximum complete serialized history response bytes. */
+  historyPageMaxBytes?: number
+  /** Maximum ordinary rows returned by one session-list request. */
+  sessionListPageSize?: number
   /**
    * Whether handing a path to the native opener can work at all — the
    * `hasDocument` capability the preset roster reports, and the switch
@@ -809,15 +836,83 @@ function historyPage(
   beforeSeq: number | undefined,
   maxMessages: number | undefined,
   scope?: ScopeKey,
+  deferDetails = false,
 ): { events: HistoryEntry[]; hasMore: boolean } {
   const page = paginate(events, beforeSeq, maxMessages ?? DEFAULT_MAX_MESSAGES)
+  const settled = new Set(page.events.flatMap(event =>
+    event.type === 'assistant/message' && isAppendSurfaceEvent(event)
+      ? [`${String(event.data.turn)}:${String(event.data.step)}`]
+      : []))
+  const firstChunk = new Set<string>()
+  const projected = page.events.filter((event) => {
+    if (event.type !== 'assistant/chunk') return true
+    const key = `${String(event.data.turn)}:${String(event.data.step)}`
+    if (!settled.has(key)) return true
+    if (firstChunk.has(key)) return false
+    firstChunk.add(key)
+    return true
+  })
   return {
-    events: page.events.map((event) => {
+    events: projected.map((event) => {
       const view = viewFor(ctx, event, callId => backscanArgs(page.events, callId), scope)
-      return { event, ...view === undefined ? {} : { view } }
+      if (!deferDetails || event.type !== 'tool/result' || !isAppendSurfaceEvent(event)) {
+        return { event, ...view === undefined ? {} : { view } }
+      }
+      const bytes = Buffer.byteLength(JSON.stringify(event), 'utf8')
+      const message = event.data.message
+      const deferred = {
+        ...event,
+        data: {
+          ...event.data,
+          message: {
+            ...message,
+            content: [{ ...message.content[0], content: [] }],
+          },
+        },
+      } as SessionEvent
+      return { event: deferred, detail: { kind: 'tool-result' as const, bytes } }
     }),
     hasMore: page.hasMore,
   }
+}
+
+/** Select complete message groups until the serialized RPC envelope fits. */
+function boundedHistoryResponse(
+  request: RpcRequest<unknown>,
+  ctx: Context,
+  events: readonly SessionEvent[],
+  beforeSeq: number | undefined,
+  maxMessages: number | undefined,
+  projections: SessionProjectionsBlock | undefined,
+  maxBytes: number,
+  scope?: ScopeKey,
+  deferDetails = true,
+): RpcResponse<{
+  events: HistoryEntry[]
+  hasMore: boolean
+  projections?: SessionProjectionsBlock
+  oversized?: { bytes: number }
+}> {
+  const availableMessages = events.filter(event =>
+    MESSAGE_TYPES.has(event.type) && isAppendSurfaceEvent(event)).length
+  const requested = Math.max(1, Math.min(maxMessages ?? DEFAULT_MAX_MESSAGES, availableMessages + 1))
+  for (let messages = requested; messages >= 1; messages--) {
+    const page = historyPage(ctx, events, beforeSeq, messages, scope, deferDetails)
+    const value = { ...page, ...projections === undefined ? {} : { projections } }
+    const response = ok(request, value)
+    const bytes = Buffer.byteLength(JSON.stringify(response), 'utf8')
+    if (bytes <= maxBytes || page.events.length === 0) return response
+    if (messages === 1) {
+      let reportedBytes = bytes
+      while (true) {
+        const oversized = ok(request, { ...value, oversized: { bytes: reportedBytes } })
+        const serializedBytes = Buffer.byteLength(JSON.stringify(oversized), 'utf8')
+        if (serializedBytes === reportedBytes) return oversized
+        reportedBytes = serializedBytes
+      }
+    }
+  }
+  throw new Error('history pagination failed to select a page')
 }
 
 /**
@@ -1109,6 +1204,8 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
     ?? DEFAULT_SESSION_LOG_COMPRESSION_LEVEL
   const coldBlankProbeMaxBytes = defaults.coldBlankProbeMaxBytes
     ?? DEFAULT_COLD_BLANK_PROBE_MAX_BYTES
+  const historyPageMaxBytes = defaults.historyPageMaxBytes ?? DEFAULT_HISTORY_PAGE_MAX_BYTES
+  const sessionListPageSize = defaults.sessionListPageSize ?? DEFAULT_SESSION_LIST_PAGE_SIZE
   /** The seed model each create/resume declares; re-read so it never goes stale. */
   const agentOptions = (agentPreset?: string): AgentOptions => {
     const { provider, model } = defaults.defaultModelSelection(agentPreset)
@@ -1765,7 +1862,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         items.push(...summaries)
       }
     }
-    items.sort((a, b) => b.updatedAt - a.updatedAt)
+    items.sort((a, b) => b.updatedAt - a.updatedAt || String(a.sessionId).localeCompare(String(b.sessionId)))
     return items
   }
 
@@ -2015,7 +2112,30 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
       // Logs without a cwd are not served; every session records its project
       // at create time.
       async list(request) {
-        return ok(request, { items: await listVisibleSessionSummaries() })
+        const all = await listVisibleSessionSummaries()
+        const cursor = request.payload.cursor === undefined ? undefined : decodeSessionListCursor(request.payload.cursor)
+        if (request.payload.cursor !== undefined && cursor === undefined) {
+          return err(request, { code: 'bad-request', message: 'session.list cursor is invalid', details: { issues: [] } })
+        }
+        const start = cursor === undefined
+          ? 0
+          : all.findIndex(summary => summary.updatedAt < cursor.updatedAt
+            || (summary.updatedAt === cursor.updatedAt && summary.sessionId > cursor.sessionId))
+        const offset = start === -1 ? all.length : start
+        const page = all.slice(offset, offset + sessionListPageSize)
+        const hasMore = offset + page.length < all.length
+        const selected = request.payload.includeSessionId === undefined
+          ? undefined
+          : all.find(summary => summary.sessionId === request.payload.includeSessionId)
+        const items = selected === undefined || page.some(summary => summary.sessionId === selected.sessionId)
+          ? page
+          : [...page, selected]
+        const tail = page.at(-1)
+        return ok(request, {
+          items,
+          hasMore,
+          ...hasMore && tail !== undefined ? { nextCursor: encodeSessionListCursor(tail) } : {},
+        })
       },
 
       async search(request, signal) {
@@ -2236,12 +2356,10 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           // at N with a baseline folded to N+1.
           const scope = await presenterScopeFor(sessionId, sourceSession(source))
           const cut = historyCutOf(source, beforeSeq === undefined)
-          const page = historyPage(ctx, cut.events, beforeSeq, maxMessages, scope)
-          return ok(request, {
-            events: page.events,
-            hasMore: page.hasMore,
-            ...cut.projections === undefined ? {} : { projections: cut.projections },
-          })
+          return boundedHistoryResponse(
+            request, ctx, cut.events, beforeSeq, maxMessages, cut.projections,
+            historyPageMaxBytes, scope,
+          )
         } catch (error: unknown) {
           if (error instanceof SessionNotFound) {
             return err(request, { code: 'session-not-found', message: error.message, details: { sessionId } })
@@ -2251,6 +2369,30 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             message: `history unavailable for session "${sessionId}": ${String(error)}`,
             details: {},
           })
+        }
+      },
+
+      async historyDetail(request) {
+        const { sessionId, seq } = request.payload
+        try {
+          const source = await historySourceFor(sessionId)
+          const scope = await presenterScopeFor(sessionId, sourceSession(source))
+          const cut = historyCutOf(source, false)
+          const event = cut.events.find(candidate => candidate.seq === seq)
+          if (event?.type !== 'tool/result') {
+            return err(request, {
+              code: 'history-detail-not-found',
+              message: `tool result ${String(seq)} is unavailable in session "${sessionId}"`,
+              details: { sessionId, seq },
+            })
+          }
+          const view = viewFor(ctx, event, callId => backscanArgs(cut.events, callId), scope)
+          return ok(request, { entry: { event, ...view === undefined ? {} : { view } } })
+        } catch (error: unknown) {
+          if (error instanceof SessionNotFound) {
+            return err(request, { code: 'session-not-found', message: error.message, details: { sessionId } })
+          }
+          return err(request, { code: 'internal', message: String(error), details: {} })
         }
       },
 
@@ -2715,8 +2857,10 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             details: { childSessionId },
           })
         }
-        const page = historyPage(ctx, events, beforeSeq, maxMessages)
-        return ok(request, { ...page, ...projections === undefined ? {} : { projections } })
+        return boundedHistoryResponse(
+          request, ctx, events, beforeSeq, maxMessages, projections,
+          historyPageMaxBytes, undefined, false,
+        )
       },
 
       async prompt(request, signal) {

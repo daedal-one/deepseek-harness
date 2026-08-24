@@ -14,6 +14,7 @@ import type { SessionProjectionMap } from '@deepseek-ai/dsh-session-projection/t
 import type { RpcId, RpcRequest, RpcResponse } from './rpc.ts'
 import type { ToolEventView } from './events.ts'
 import type { WorkspaceId } from './workspace.ts'
+import type { Branded } from '@deepseek-ai/dsh-brand'
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionMap {
@@ -64,6 +65,14 @@ declare module '@deepseek-ai/dsh-llm' {
 export interface HistoryEntry {
   event: SessionEvent
   view?: ToolEventView
+  /** Full tool-result content is available through session.historyDetail. */
+  detail?: { kind: 'tool-result'; bytes: number }
+}
+
+/** A group that alone exceeds the configured response limit is returned explicitly. */
+export interface OversizedHistoryGroup {
+  /** Serialized response bytes for the unavoidable one-group response. */
+  bytes: number
 }
 
 /**
@@ -221,6 +230,9 @@ export interface SessionSummary {
   projections?: SessionProjectionsBlock
 }
 
+/** Opaque continuation token for the stable recency ordering. */
+export type SessionListCursor = Branded<'session-list-cursor'>
+
 /** One session-content search result; display metadata stays owned by `session.list`. */
 export interface SessionSearchItem {
   sessionId: SessionId
@@ -230,8 +242,12 @@ export interface SessionSearchItem {
 
 /** Session-domain unary methods (the map keys session.* of RpcMethodMap). */
 export interface SessionsApi {
-  /** Lists persisted sessions (updatedAt descending). v1 returns everything; cursor is a reserved seat, unimplemented. */
-  list(request: RpcRequest<{ cursor?: string }>): Promise<RpcResponse<{ items: SessionSummary[] }>>
+  /** Lists one bounded recency page and optionally retains the restored selection. */
+  list(request: RpcRequest<{ cursor?: SessionListCursor; includeSessionId?: SessionId }>): Promise<RpcResponse<{
+    items: SessionSummary[]
+    hasMore: boolean
+    nextCursor?: SessionListCursor
+  }>>
 
   /**
    * Searches the current user/assistant/steering message surface across
@@ -268,9 +284,10 @@ export interface SessionsApi {
    * `maxMessages`, so a compaction's `compaction/summary` record stays on the page of its replacement. The tail
    * page (beforeSeq absent) additionally carries the in-flight
    * partial — chunk events already emitted for the last unfinalized message.
-   * Each entry pairs the raw SessionEvent with the host-computed view (tool events whose
-   * presenter produced one, evaluated against the registry at pagination time); the client
-   * rebuilds the surface from the events with the shared fold.
+   * Each entry carries the projected SessionEvent and, when retained, its host-computed view.
+   * Settled duplicate chunks and full Tool-result bodies may be omitted from this initial
+   * projection; a Tool result names its exact-detail path. The durable log remains unchanged,
+   * and the client rebuilds the surface from the entries with the shared fold.
    * The tail page — and only the tail page — additionally carries `projections`
    * when the deployment mounts the session-projection registry: every moment
    * the client needs a fresh baseline already pulls the tail page, and
@@ -280,7 +297,15 @@ export interface SessionsApi {
    * never resumes or publishes an Agent.
    */
   history(request: RpcRequest<{ sessionId: SessionId; beforeSeq?: number; maxMessages?: number }>):
-  Promise<RpcResponse<{ events: HistoryEntry[]; hasMore: boolean; projections?: SessionProjectionsBlock }>>
+  Promise<RpcResponse<{
+    events: HistoryEntry[]
+    hasMore: boolean
+    projections?: SessionProjectionsBlock
+    oversized?: OversizedHistoryGroup
+  }>>
+
+  /** Reads one exact full Tool result deferred by a history page. */
+  historyDetail(request: RpcRequest<{ sessionId: SessionId; seq: number }>): Promise<RpcResponse<{ entry: HistoryEntry }>>
 
   /**
    * Reads a fresh advisory model directory for an ordinary session. Provider

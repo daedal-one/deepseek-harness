@@ -72,6 +72,10 @@ export interface ISession {
    * @returns completion; failures land in snapshot.openState/loadingOlder.
    */
   loadOlder(): Promise<void>
+  /** Load one deferred Tool result and replace its history projection. */
+  loadHistoryDetail?(seq: number): Promise<void>
+  /** Retry a failed initial history open without reloading the page. */
+  retryOpen?(): Promise<void>
   /**
    * Execute one slash-command line against this session's agent — pure
    * admission semantics (the host executor durably logs the lifecycle).

@@ -174,7 +174,11 @@ export function apply(ctx: Context, config?: ConnectionConfig): void {
         res.end('forbidden')
         return
       }
-      await bridge(req, res, fetchHandler, maxRequestBodyBytes)
+      await bridge(
+        req, res, fetchHandler, maxRequestBodyBytes,
+        (request, response, status, headers, body) =>
+          ctx.webServer.sendBuffer(request, response, status, headers, body),
+      )
     },
   }
   ctx.effect(() => ctx.webServer.register(route), 'client-connection: /api route')

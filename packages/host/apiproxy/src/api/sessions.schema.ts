@@ -12,7 +12,7 @@ import type { RequestPayload, ResponseValue } from './rpc-map.ts'
 import type { Wire } from './rpc.schema.ts'
 import type {
   HistoryEntry, ModelCatalogFailure, ModelCatalogModel, ModelProviderGroup, ModelReasoning,
-  ModelReasoningEffort, ModelSelection, SessionListMetadata, SessionProjectionsBlock, SessionSearchItem, SessionSummary,
+  ModelReasoningEffort, ModelSelection, SessionListCursor, SessionListMetadata, SessionProjectionsBlock, SessionSearchItem, SessionSummary,
 } from './sessions.ts'
 import type { ToolEventView } from './events.ts'
 import type { AttachmentIdType, ImageAttachmentLimits, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
@@ -61,14 +61,19 @@ export const sessionSummarySchema = z.object({
   projections: z.lazy(() => sessionProjectionsBlockSchema).optional(),
 }) as unknown as z.ZodType<Wire<SessionSummary>>
 
-/** session.list request payload (cursor is a reserved seat, unimplemented in v1). */
+const sessionListCursorSchema = z.string() as unknown as z.ZodType<SessionListCursor>
+
+/** session.list request payload. */
 export const sessionListRequestSchema = z.object({
-  cursor: z.string().optional(),
+  cursor: sessionListCursorSchema.optional(),
+  includeSessionId: sessionIdSchema.optional(),
 }) satisfies z.ZodType<Wire<RequestPayload<'session.list'>>>
 
 /** session.list response value. */
 export const sessionListValueSchema: z.ZodType<Wire<ResponseValue<'session.list'>>> = z.object({
   items: z.array(sessionSummarySchema),
+  hasMore: z.boolean(),
+  nextCursor: sessionListCursorSchema.optional(),
 })
 
 /** Fixed wire bound for one interactive sidebar query. */
@@ -202,6 +207,7 @@ export const toolEventViewSchema = z.discriminatedUnion('for', [
 export const historyEntrySchema: z.ZodType<Wire<HistoryEntry>> = z.object({
   event: sessionEventSchema,
   view: toolEventViewSchema.optional(),
+  detail: z.object({ kind: z.literal('tool-result'), bytes: z.number().int().positive() }).optional(),
 }) as unknown as z.ZodType<Wire<HistoryEntry>>
 
 /**
@@ -239,6 +245,18 @@ export const sessionHistoryValueSchema: z.ZodType<Wire<ResponseValue<'session.hi
   events: z.array(historyEntrySchema),
   hasMore: z.boolean(),
   projections: sessionProjectionsBlockSchema.optional(),
+  oversized: z.object({ bytes: z.number().int().positive() }).optional(),
+})
+
+/** session.historyDetail request payload. */
+export const sessionHistoryDetailRequestSchema = z.object({
+  sessionId: sessionIdSchema,
+  seq: z.number().int().nonnegative(),
+}) satisfies z.ZodType<Wire<RequestPayload<'session.historyDetail'>>>
+
+/** session.historyDetail response value. */
+export const sessionHistoryDetailValueSchema: z.ZodType<Wire<ResponseValue<'session.historyDetail'>>> = z.object({
+  entry: historyEntrySchema,
 })
 
 /** session.models request payload. */

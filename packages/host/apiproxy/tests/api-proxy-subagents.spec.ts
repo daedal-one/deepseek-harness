@@ -28,6 +28,8 @@ function bench(options: {
   /** Every registered projection unit throws on this child's payloads. */
   projectionsThrow?: true
   historyParent?: SessionId
+  historyText?: string
+  historyPageMaxBytes?: number
 } = {}) {
   const parent = { id: PARENT }
   const child = options.childStatus === undefined
@@ -67,7 +69,7 @@ function bench(options: {
     version: 0, id: CHILD, createdAt: 1, cwd: '/proj', parentSession: options.historyParent ?? PARENT,
   } satisfies SessionHeader
   const childEvents = [
-    { type: 'user/message', seq: 0, time: 1, data: { content: [{ type: 'text', text: 'work' }], source: { kind: 'user' } } },
+    { type: 'user/message', seq: 0, time: 1, data: { content: [{ type: 'text', text: options.historyText ?? 'work' }], source: { kind: 'user' } } },
   ] as unknown as SessionEvent[]
   const inspect = vi.fn(() => Promise.resolve({ meta: childHeader, events: childEvents }))
   const liveBlock = { values: {}, asOfSeq: 3 }
@@ -104,6 +106,7 @@ function bench(options: {
   ctx.provide('userQuestions', { registerProvider: () => () => {} })
   const api = createApiProxy(ctx, {
     defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp',
+    ...options.historyPageMaxBytes === undefined ? {} : { historyPageMaxBytes: options.historyPageMaxBytes },
   })
   return { api, getAgent, listChildren, inspect, snapshot, restore, followup, interrupt, parent }
 }
@@ -162,6 +165,18 @@ describe('subagent gateway', () => {
     expect(inspect).toHaveBeenCalledWith(CHILD)
     expect(restore).toHaveBeenCalledTimes(1)
     expect(getAgent).not.toHaveBeenCalled()
+  })
+
+  it('applies the same complete-response bound without deferring subagent-only detail', async () => {
+    const limit = 600
+    const { api } = bench({ historyText: 'x'.repeat(2_000), historyPageMaxBytes: limit })
+    const response = await api.subagents.history(request({
+      parentSessionId: PARENT, childSessionId: CHILD, mode: 'continuable',
+    }))
+    if (!response.result.ok) throw new Error('subagent history failed')
+    expect(response.result.value.oversized?.bytes).toBe(Buffer.byteLength(JSON.stringify(response), 'utf8'))
+    expect(response.result.value.oversized!.bytes).toBeGreaterThan(limit)
+    expect(response.result.value.events[0]).not.toHaveProperty('detail')
   })
 
   it('serves a live child from the in-memory snapshot and the watermark projections', async () => {

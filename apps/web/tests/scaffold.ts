@@ -187,6 +187,8 @@ export interface WebScaffold {
   harnessHome: string
   /** Await a settled turn end: in-process turn/end, then the agent's idle flip (which follows the persistence flush). */
   whenTurnSettled(timeoutMs?: number): Promise<SessionId>
+  /** Close the browser's active host event streams so reconnect behavior can be exercised through the real carrier. */
+  breakEventStreams(): void
   /** Tear everything down; asserts the replay fixture was fully consumed first (replay/refresh). */
   close(): Promise<void>
 }
@@ -513,6 +515,7 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
   const ctx = new Context()
   let port = 0
   let replayHandle: ReplayHandle | undefined
+  const eventStreamBreakers = new Set<AbortController>()
   try {
     process.chdir(workspaceCwd)
     // The production module-resolution setup: an empty profile root inside the temp
@@ -559,6 +562,46 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
       throw new Error('web e2e scaffold: webServer service missing after settled boot')
     }
     port = boundPort
+
+    const events = ctx.apiProxy.events
+    const originalMux = events.mux.bind(events)
+    const originalHost = events.host.bind(events)
+    events.mux = (request, signal) => {
+      const controller = new AbortController()
+      const abort = (): void => { controller.abort() }
+      signal.addEventListener('abort', abort, { once: true })
+      eventStreamBreakers.add(controller)
+      const source = originalMux(request, controller.signal)
+      return (async function* () {
+        try {
+          yield* source
+        } finally {
+          eventStreamBreakers.delete(controller)
+          signal.removeEventListener('abort', abort)
+        }
+      })()
+    }
+    events.host = (request, signal) => {
+      const controller = new AbortController()
+      const abort = (): void => { controller.abort() }
+      signal.addEventListener('abort', abort, { once: true })
+      eventStreamBreakers.add(controller)
+      const source = originalHost(request, controller.signal)
+      return (async function* () {
+        try {
+          yield* source
+        } finally {
+          eventStreamBreakers.delete(controller)
+          signal.removeEventListener('abort', abort)
+        }
+      })()
+    }
+    ctx.effect(() => () => {
+      events.mux = originalMux
+      events.host = originalHost
+      for (const controller of eventStreamBreakers) controller.abort()
+      eventStreamBreakers.clear()
+    })
 
     // Add historical fixture routes on the settled root ctx. The shipped
     // OpenRouter route remains mounted for product configuration surfaces. The
@@ -618,6 +661,9 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
             .then(() => { resolveSettled(session.id) }, reject)
         })
       })
+    },
+    breakEventStreams(): void {
+      for (const controller of [...eventStreamBreakers]) controller.abort()
     },
     async close(): Promise<void> {
       const failures: unknown[] = []

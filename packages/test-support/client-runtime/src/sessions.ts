@@ -185,7 +185,7 @@ export class TestSessions implements ISessions {
   /** Calls observed on the service-level face, newest last. */
   readonly calls: {
     method: 'open' | 'openSubagent' | 'setSubagentCatalogOpen' | 'refreshSubagents'
-      | 'clear' | 'search' | 'fork'
+      | 'clear' | 'loadMore' | 'search' | 'fork'
     args: unknown[]
   }[] = []
 
@@ -455,6 +455,12 @@ export class TestSessions implements ISessions {
       draft.current = undefined
       draft.currentAddress = undefined
     })
+  }
+
+  /** Record an explicit continuation-page request; fixture callers drive rows explicitly. */
+  loadMore(): Promise<void> {
+    this.calls.push({ method: 'loadMore', args: [] })
+    return Promise.resolve()
   }
 
   /**

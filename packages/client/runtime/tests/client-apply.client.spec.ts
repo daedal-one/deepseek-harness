@@ -102,7 +102,7 @@ describe('runtime client apply', () => {
         createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
       }] as never[],
     }))
-    bench.api.onList = () => Promise.resolve(ok({ items: [] }))
+    bench.api.onList = () => Promise.resolve(ok({ items: [], hasMore: false }))
 
     bench.sinks?.onConnected?.({ version: '0', cwd: '/f', attachedSessions: 0, canOpenPath: true })
     await flushMicrotasks()

@@ -51,9 +51,10 @@ const bundles = new Map(PLUGINS.map(plugin => [
   plugin.url,
   readFileSync(join(process.cwd(), plugin.bundlePath), 'utf8'),
 ]))
+const bootBundle = [...bundles.values()].join('\n;\n')
 
 interface FixtureWindow extends Window {
-  __DSH_BOOT__?: { rev: string; entries: WebBootEntry[] }
+  __DSH_BOOT__?: { rev: string; bundleUrl: string; entries: WebBootEntry[] }
   __ModuleLoader__?: unknown
 }
 
@@ -117,11 +118,11 @@ export function mountAssembledApp(): void {
   const root = document.createElement('div')
   root.id = 'root'
   document.body.appendChild(root)
-  win.__DSH_BOOT__ = { rev: 'fx', entries: PLUGINS.map(({ bundlePath: _bundlePath, ...plugin }) => plugin) }
+  win.__DSH_BOOT__ = { rev: 'fx', bundleUrl: '/plugins/boot.js?rev=fx', entries: PLUGINS.map(({ bundlePath: _bundlePath, ...plugin }) => plugin) }
   act(() => {
     const entry = new AppWebEntry(root, {
       loadBundle: async (url) => {
-        const code = bundles.get(url)
+        const code = url === '/plugins/boot.js?rev=fx' ? bootBundle : bundles.get(url)
         if (code === undefined) throw new Error(`missing built bundle ${url}`)
         ;(0, eval)(code)
       },

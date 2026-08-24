@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /** ToolCallTree-owned root/subcall markers and selection projection. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render } from '@testing-library/react'
+import { cleanup, fireEvent, render } from '@testing-library/react'
 import type { ConversationSnapshot, ToolResultNode } from '@deepseek-ai/dsh-client-runtime/client'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
@@ -77,5 +77,18 @@ describe('ToolCallTree', () => {
     expect(view.container.querySelector('[data-chat-call-id="parent:code:1"]')?.hasAttribute('data-selected')).toBe(false)
     expect(view.container.querySelector('[data-chat-call-id="parent:code:1:code:1"]')?.getAttribute('data-selected')).toBe('true')
     expect(nests).toHaveLength(2)
+  })
+
+  it('requests deferred result detail on pointer or keyboard interaction', () => {
+    const block = { ...root('deferred', { name: 'bash', argsRaw: '{}' }), deferred: true as const }
+    const loadToolResult = vi.fn()
+    const view = render(<ToolCallTree {...props(block)} loadToolResult={loadToolResult} />)
+    const row = view.container.querySelector('[data-chat-call-id="deferred"]')!
+    fireEvent.pointerDown(row)
+    fireEvent.keyDown(row, { key: 'Enter' })
+    fireEvent.keyDown(row, { key: 'Escape' })
+    expect(loadToolResult).toHaveBeenNthCalledWith(1, 3)
+    expect(loadToolResult).toHaveBeenNthCalledWith(2, 3)
+    expect(loadToolResult).toHaveBeenCalledTimes(2)
   })
 })

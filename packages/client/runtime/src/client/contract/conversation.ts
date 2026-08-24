@@ -9,6 +9,7 @@ import type { ToolEventView } from '@deepseek-ai/dsh-api-remotes/client'
 export interface ConversationEventInput {
   readonly event: SessionEvent
   readonly view: ToolEventView | undefined
+  readonly detail?: { readonly kind: 'tool-result'; readonly bytes: number }
 }
 
 /** Definition-local identity and lifecycle role extracted from one event. */

@@ -32,7 +32,10 @@ export function RpcId(id: string): RpcId {
 export interface RpcErrorDetailsMap {
   'bad-request': { issues: ZodIssue[] }
   'cancelled': {}
+  'transport-timeout': {}
+  'network-unavailable': {}
   'session-not-found': { sessionId: SessionId }
+  'history-detail-not-found': { sessionId: SessionId; seq: number }
   'model-unavailable': { provider: string; model: string }
   'session-conflict': { sessionId: SessionId; requestedCwd: string; existingCwd?: string }
   'invalid-time-zone': { value: string }
@@ -125,9 +128,18 @@ export type RpcResult<T> = { ok: true; value: T } | { ok: false; error: RpcError
  * @returns the error branch of an RpcResult.
  */
 export function transportError<T>(error: unknown): RpcResult<T> {
+  const name = error instanceof Error ? error.name : ''
+  const message = error instanceof Error ? error.message : String(error)
+  const code = name === 'TimeoutError'
+    ? 'transport-timeout'
+    : name === 'AbortError'
+      ? 'cancelled'
+      : error instanceof TypeError
+        ? 'network-unavailable'
+        : 'internal'
   return {
     ok: false,
-    error: { code: 'internal', message: error instanceof Error ? error.message : String(error), details: {} },
+    error: { code, message, details: {} },
   }
 }
 

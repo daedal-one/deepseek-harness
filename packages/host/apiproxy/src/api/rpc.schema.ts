@@ -34,7 +34,10 @@ export const rpcIdSchema = z.string() as unknown as z.ZodType<RpcId>
 export const rpcErrorSchema: z.ZodType<RpcError> = z.discriminatedUnion('code', [
   z.object({ code: z.literal('bad-request'), message: z.string(), details: z.object({ issues: z.array(z.custom<ZodIssue>()) }) }),
   z.object({ code: z.literal('cancelled'), message: z.string(), details: z.object({}) }),
+  z.object({ code: z.literal('transport-timeout'), message: z.string(), details: z.object({}) }),
+  z.object({ code: z.literal('network-unavailable'), message: z.string(), details: z.object({}) }),
   z.object({ code: z.literal('session-not-found'), message: z.string(), details: z.object({ sessionId: z.string() }) }),
+  z.object({ code: z.literal('history-detail-not-found'), message: z.string(), details: z.object({ sessionId: z.string(), seq: z.number().int().nonnegative() }) }),
   z.object({ code: z.literal('model-unavailable'), message: z.string(), details: z.object({ provider: z.string(), model: z.string() }) }),
   z.object({ code: z.literal('session-conflict'), message: z.string(), details: z.object({ sessionId: z.string(), requestedCwd: z.string(), existingCwd: z.string().optional() }) }),
   z.object({ code: z.literal('invalid-time-zone'), message: z.string(), details: z.object({ value: z.string() }) }),

@@ -168,7 +168,7 @@ describe('mux live view computation', () => {
     expect(byCall.get('tool/result:c-gen')?.view).toEqual({ for: 'result', view: { card: 'generic', title: 'gen done' } })
   })
 
-  it('serves history entries with call/result views, backscan pairing, and soft-falls', async () => {
+  it('defers history result bodies and resolves the exact event and view on demand', async () => {
     const { ctx } = await harness()
     const api = createApiProxy(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
     const session = ctx.sessions.create()
@@ -230,10 +230,94 @@ describe('mux live view computation', () => {
         entry,
       ]))
     expect(byKey.get('tool/call:h-term')?.view).toEqual({ for: 'call', view: { card: 'terminal', title: 'ls' } })
-    expect(byKey.get('tool/result:h-term')?.view).toEqual({ for: 'result', view: { card: 'terminal', output: 'done' } })
+    const deferred = byKey.get('tool/result:h-term')
+    expect(deferred?.detail?.kind).toBe('tool-result')
+    expect(typeof deferred?.detail?.bytes).toBe('number')
+    expect('view' in (deferred ?? {})).toBe(false)
+    if (deferred?.event.type !== 'tool/result') throw new Error('expected deferred Tool result')
+    expect(deferred.event.data.message.content[0]?.content).toEqual([])
     expect('view' in (byKey.get('tool/result:h-orphan') ?? {})).toBe(false)
     expect('view' in (byKey.get('tool/result:h-bad') ?? {})).toBe(false)
     expect('view' in (byKey.get('tool/result:h-plain') ?? {})).toBe(false)
+
+    const detail = await api.sessions.historyDetail({
+      rpcId: RpcId('t-hist-detail'),
+      payload: { sessionId: session.id, seq: deferred.event.seq },
+    })
+    expect(detail.result).toMatchObject({
+      ok: true,
+      value: {
+        entry: {
+          event: { type: 'tool/result', data: { message: { content: [{ content: [{ type: 'text', text: 'ok' }] }] } } },
+          view: { for: 'result', view: { card: 'terminal', output: 'done' } },
+        },
+      },
+    })
+    expect((await api.sessions.historyDetail({
+      rpcId: RpcId('t-hist-detail-missing'),
+      payload: { sessionId: session.id, seq: deferred.event.seq + 100 },
+    })).result).toMatchObject({ ok: false, error: { code: 'history-detail-not-found' } })
+  })
+
+  it('bounds the complete response, marks an unavoidable group, and compacts only settled chunks', async () => {
+    const { ctx } = await harness()
+    const limit = 2_200
+    const api = createApiProxy(ctx, {
+      defaultModelSelection: () => ({ provider: 'p', model: 'm' }),
+      cwd: '/tmp',
+      historyPageMaxBytes: limit,
+    })
+    const compacted = ctx.sessions.create()
+    ctx.agents.register({ id: compacted.id, session: compacted, status: 'idle', ctx } as Agent)
+    compacted.append('turn/start', { turn: 1 })
+    compacted.append('assistant/chunk', { turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: 'settled-first' } })
+    compacted.append('assistant/chunk', { turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: 'settled-redundant' } })
+    appendAssistantText(compacted, 'settled-final', 1)
+    compacted.append('assistant/chunk', { turn: 1, step: 2, chunk: { type: 'text-delta', index: 0, text: 'live-first' } })
+    compacted.append('assistant/chunk', { turn: 1, step: 2, chunk: { type: 'text-delta', index: 0, text: 'live-second' } })
+    const compactedResponse = await api.sessions.history({
+      rpcId: RpcId('t-hist-compacted'), payload: { sessionId: compacted.id },
+    })
+    if (!compactedResponse.result.ok) throw new Error('compacted history failed')
+    expect(compactedResponse.result.value.events.flatMap(({ event }) =>
+      event.type === 'assistant/chunk' && event.data.chunk.type === 'text-delta'
+        ? [event.data.chunk.text]
+        : [])).toEqual(['settled-first', 'live-first', 'live-second'])
+
+    const session = ctx.sessions.create()
+    ctx.agents.register({ id: session.id, session, status: 'idle', ctx } as Agent)
+    session.append('turn/start', { turn: 1 })
+    appendUserText(session, `first-${'u'.repeat(550)}`)
+    session.append('assistant/chunk', { turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: 'settled-first' } })
+    session.append('assistant/chunk', { turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: 'settled-redundant' } })
+    appendAssistantText(session, `answer-${'a'.repeat(550)}`, 1)
+    session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+    session.append('turn/start', { turn: 2 })
+    appendUserText(session, `second-${'v'.repeat(550)}`)
+    session.append('assistant/chunk', { turn: 2, step: 1, chunk: { type: 'text-delta', index: 0, text: 'live-first' } })
+    session.append('assistant/chunk', { turn: 2, step: 1, chunk: { type: 'text-delta', index: 0, text: 'live-second' } })
+
+    const response = await api.sessions.history({
+      rpcId: RpcId('t-hist-bounded'), payload: { sessionId: session.id, maxMessages: 1_000_000 },
+    })
+    if (!response.result.ok) throw new Error('bounded history failed')
+    expect(Buffer.byteLength(JSON.stringify(response), 'utf8')).toBeLessThanOrEqual(limit)
+    expect(response.result.value.hasMore).toBe(true)
+    const chunkTexts = response.result.value.events.flatMap(({ event }) =>
+      event.type === 'assistant/chunk' && event.data.chunk.type === 'text-delta'
+        ? [event.data.chunk.text]
+        : [])
+    expect(chunkTexts).toEqual(['live-first', 'live-second'])
+
+    const oversizedSession = ctx.sessions.create()
+    ctx.agents.register({ id: oversizedSession.id, session: oversizedSession, status: 'idle', ctx } as Agent)
+    appendAssistantText(oversizedSession, 'z'.repeat(limit * 3), 1)
+    const oversized = await api.sessions.history({
+      rpcId: RpcId('t-hist-oversized'), payload: { sessionId: oversizedSession.id },
+    })
+    if (!oversized.result.ok) throw new Error('oversized history failed')
+    expect(oversized.result.value.oversized?.bytes).toBe(Buffer.byteLength(JSON.stringify(oversized), 'utf8'))
+    expect(oversized.result.value.oversized!.bytes).toBeGreaterThan(limit)
   })
 
   it('counts only append-origin messages toward maxMessages and keeps each compaction summary with its replacement', async () => {

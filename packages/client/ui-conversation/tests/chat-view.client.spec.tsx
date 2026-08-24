@@ -154,6 +154,7 @@ function makeHarness(init?: Partial<ConversationSnapshot>) {
   const openDetails = vi.fn<(t: SelectionTarget) => void>()
   const openFile = vi.fn<(path: string) => void>()
   const loadOlder = vi.fn()
+  const retryOpen = vi.fn()
   const inspectCall = vi.fn<(callId: string) => void>()
   // In-memory scroll memory matching the apply.ts per-session map contract.
   let savedScroll: ReturnType<ChatViewSlotProps['chatScroll']['read']> = null
@@ -283,6 +284,7 @@ function makeHarness(init?: Partial<ConversationSnapshot>) {
     openDetails,
     openFile,
     loadOlder,
+    retryOpen,
     loadImage: vi.fn(() => Promise.reject(new Error('not used'))),
     inspectCall,
     chatScroll,
@@ -294,7 +296,7 @@ function makeHarness(init?: Partial<ConversationSnapshot>) {
   }
   const setSelection = (next: SelectionTarget | null): void => { chat.actions.select(next) }
   return {
-    set, ChatView, props, openDetails, openFile, loadOlder, inspectCall,
+    set, ChatView, props, openDetails, openFile, loadOlder, retryOpen, inspectCall,
     chatScroll, forkAt, setSelection, toolOwners,
   }
 }
@@ -377,6 +379,19 @@ describe('Chat node rendering', () => {
 })
 
 describe('ChatView', () => {
+  it('offers an explicit history retry and labels transcript-preserving reconnect repair', () => {
+    const h = makeHarness({
+      openState: 'error',
+      openError: { code: 'transport-timeout', message: 'slow connection', details: {} },
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    fireEvent.click(view.getByRole('button', { name: 'Retry' }))
+    expect(h.retryOpen).toHaveBeenCalledOnce()
+    act(() => { h.set({ openState: 'open', openError: null, syncing: true, nodes: [user(1, 'still visible')] }) })
+    expect(view.getByText('still visible')).toBeTruthy()
+    expect(view.getByText('Reconnecting… showing the last loaded messages')).toBeTruthy()
+  })
+
   it('hands a windowless tool result to the Tool seat with an empty tool name', () => {
     const h = makeHarness({
       nodes: [{ ...toolResult(3, 'w1'), call: null }],

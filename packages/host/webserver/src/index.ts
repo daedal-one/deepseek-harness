@@ -9,11 +9,89 @@
  */
 
 import { createServer } from 'node:http'
-import type { IncomingMessage, ServerResponse, Server } from 'node:http'
+import type { IncomingMessage, OutgoingHttpHeaders, ServerResponse, Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import type { Duplex } from 'node:stream'
+import { promisify } from 'node:util'
+import { brotliCompress, constants as zlibConstants, gzip } from 'node:zlib'
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
+
+const compressBrotli = promisify(brotliCompress)
+const compressGzip = promisify(gzip)
+const MIN_COMPRESS_BYTES = 1_024
+const DEFAULT_BROTLI_QUALITY = 9
+const DEFAULT_GZIP_LEVEL = 6
+
+interface CompressionOptions {
+  brotliQuality: number
+  gzipLevel: number
+}
+
+/** Headers accepted by {@link sendBuffer}. */
+export type BufferResponseHeaders = OutgoingHttpHeaders
+
+function acceptsEncoding(header: string | undefined, encoding: 'br' | 'gzip'): boolean {
+  if (header === undefined) return false
+  const values = new Map(header.split(',').map((part) => {
+    const [name = '', ...params] = part.trim().split(';')
+    const q = params.map(value => value.trim()).find(value => value.startsWith('q='))
+    return [name.toLowerCase(), q === undefined ? 1 : Number(q.slice(2))] as const
+  }))
+  return (values.get(encoding) ?? values.get('*') ?? 0) > 0
+}
+
+function isCompressible(contentType: string | undefined): boolean {
+  if (contentType === undefined) return false
+  return /^(?:text\/|application\/(?:javascript|json|manifest\+json|xml)|image\/svg\+xml)/i.test(contentType)
+}
+
+/**
+ * Write a complete HTTP body with deterministic content negotiation. Brotli
+ * wins over gzip, tiny and incompressible bodies stay unchanged, and HEAD
+ * receives the headers of the selected representation without a body.
+ * @param req - incoming request carrying Accept-Encoding and the method.
+ * @param res - response owned by the caller.
+ * @param status - HTTP status.
+ * @param headers - response headers before representation negotiation.
+ * @param body - complete response bytes.
+ * @param compression - deployment compression levels.
+ * @returns when the selected representation has been written.
+ */
+export async function sendBuffer(
+  req: IncomingMessage,
+  res: ServerResponse,
+  status: number,
+  headers: BufferResponseHeaders,
+  body: string | Buffer,
+  compression: CompressionOptions = {
+    brotliQuality: DEFAULT_BROTLI_QUALITY,
+    gzipLevel: DEFAULT_GZIP_LEVEL,
+  },
+): Promise<void> {
+  const source = Buffer.isBuffer(body) ? body : Buffer.from(body)
+  const normalized: OutgoingHttpHeaders = { ...headers }
+  const contentTypeHeader = Object.entries(normalized).find(([name]) => name.toLowerCase() === 'content-type')?.[1]
+  const contentType = typeof contentTypeHeader === 'string' ? contentTypeHeader : undefined
+  const alreadyEncoded = Object.keys(normalized).some(name => name.toLowerCase() === 'content-encoding')
+  let payload = source
+  if (!alreadyEncoded && source.byteLength >= MIN_COMPRESS_BYTES && isCompressible(contentType ?? '')) {
+    const accept = req.headers['accept-encoding']
+    if (acceptsEncoding(accept, 'br')) {
+      payload = await compressBrotli(source, {
+        params: { [zlibConstants.BROTLI_PARAM_QUALITY]: compression.brotliQuality },
+      })
+      normalized['content-encoding'] = 'br'
+    } else if (acceptsEncoding(accept, 'gzip')) {
+      payload = await compressGzip(source, { level: compression.gzipLevel })
+      normalized['content-encoding'] = 'gzip'
+    }
+    normalized.vary = normalized.vary === undefined ? 'Accept-Encoding' : `${normalized.vary}, Accept-Encoding`
+  }
+  normalized['content-length'] = payload.byteLength
+  res.writeHead(status, normalized)
+  res.end(req.method === 'HEAD' ? undefined : payload)
+}
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -47,6 +125,10 @@ export interface Config {
   host: '127.0.0.1' | '0.0.0.0'
   /** Listen port; zero requests an OS-assigned port. */
   port: number
+  /** Brotli quality for complete compressible responses. @default 9 */
+  brotliQuality?: number
+  /** gzip level for complete compressible responses. @default 6 */
+  gzipLevel?: number
 }
 
 /**
@@ -60,6 +142,8 @@ export class WebServer extends Service {
   static Config: z<Config> = z.object({
     host: z.union([z.const('127.0.0.1'), z.const('0.0.0.0')]).required(),
     port: z.natural().max(65535).required(),
+    brotliQuality: z.natural().max(11).default(DEFAULT_BROTLI_QUALITY),
+    gzipLevel: z.natural().max(9).default(DEFAULT_GZIP_LEVEL),
   })
 
   private readonly exact = new Map<string, WebRoute>()
@@ -83,6 +167,28 @@ export class WebServer extends Service {
   /** The configured bind host (the loopback or all-interfaces literal). */
   get host(): Config['host'] {
     return this.config.host
+  }
+
+  /**
+   * Write one complete response using this deployment's compression policy.
+   * @param req - incoming request carrying representation preferences.
+   * @param res - response owned by the caller.
+   * @param status - HTTP status.
+   * @param headers - response headers before representation negotiation.
+   * @param body - complete response bytes.
+   * @returns when the selected representation has been written.
+   */
+  sendBuffer(
+    req: IncomingMessage,
+    res: ServerResponse,
+    status: number,
+    headers: BufferResponseHeaders,
+    body: string | Buffer,
+  ): Promise<void> {
+    return sendBuffer(req, res, status, headers, body, {
+      brotliQuality: this.config.brotliQuality ?? DEFAULT_BROTLI_QUALITY,
+      gzipLevel: this.config.gzipLevel ?? DEFAULT_GZIP_LEVEL,
+    })
   }
 
   /**

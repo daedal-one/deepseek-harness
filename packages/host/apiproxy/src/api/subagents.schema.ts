@@ -59,6 +59,7 @@ export const subagentHistoryValueSchema = z.object({
   events: z.array(historyEntrySchema),
   hasMore: z.boolean(),
   projections: sessionProjectionsBlockSchema.optional(),
+  oversized: z.object({ bytes: z.number().int().positive() }).optional(),
 }) as unknown as z.ZodType<Wire<ResponseValue<'subagent.history'>>>
 
 /** subagent.prompt request payload. */

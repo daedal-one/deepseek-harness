@@ -12,9 +12,10 @@ The graph is the wire single source between the Node and browser halves: the hos
 /**
  * One composed client entry pushed by the host (a graph row). Wire
  * single source: the host node half (package root) produces this same shape.
- * `immediately` marks stage-one prefetch; `inject` is informational graph
- * metadata (the authoritative edges live in each package's `dsh.client`
- * declaration and reach fibers through entry creation).
+ * `inject` and `immediately` are graph metadata (the
+ * production bundle registers every row before activation; the authoritative
+ * edges live in each package's `dsh.client` declaration and reach fibers
+ * through entry creation).
  */
 interface WebBootEntry {
   /** Entry name == package name. */
@@ -25,7 +26,7 @@ interface WebBootEntry {
   rev: string
   /** Package-name dependency edges, informational (preflight display / HMR diffing). */
   inject?: string[]
-  /** Stage-one prefetch mark: load the script for factory registration during module-face boot. */
+  /** Declared boot-tier mark exposed as graph metadata; production registration is graph-wide. */
   immediately?: boolean
 }
 ```
@@ -35,12 +36,14 @@ interface WebBootEntry {
 interface WebBootGraph {
   /** Consistency anchor over the whole graph (content + bundle hashes). */
   rev: string
+  /** One revision-addressed script registering every graph factory. */
+  bundleUrl: string
   /** Composed entries; order carries no semantics (activation order is fiber inject waiting). */
   entries: WebBootEntry[]
 }
 ```
 
-Each row's `rev` is the bundle's content hash and rides the URL as a cache-busting query; the graph `rev` hashes the composed rows, so any row change changes it. `immediately` marks the stage-one prefetch tier (fetch and execute during module-face boot, registration only); a lazy row is fetched on first import.
+Each row's `rev` is the bundle's content hash and rides the individual URL as a cache-busting query; the graph `rev` hashes the composed rows, so any row change changes it. Production loads `bundleUrl` once to register every factory before activation. `immediately` remains graph metadata, while individual row URLs serve targeted HMR reloads.
 
 ## The scan
 
@@ -52,7 +55,7 @@ Package metadata — including the negative "not a client package" verdict — i
 
 ## The bundle route and index tap
 
-`GET`/`HEAD /plugins/<id>/client.js` serves the registered bundle from disk with `no-cache` (the rev query, not HTTP caching, anchors consistency); other methods are 405. An unknown id — or a registered row whose bundle is unreadable because it has not been built yet — answers a loud 404 rather than letting the carrier's SPA fallback ship HTML as JavaScript. The index tap injects the current graph on every index render, so a reload always boots against the live composition.
+`GET`/`HEAD /plugins/boot.js?rev=<graph-rev>` serves the in-memory concatenation of all current registration wrappers with immutable caching; interior source-map trailers are removed so one wrapper cannot consume the next. `GET`/`HEAD /plugins/<id>/client.js?rev=<row-rev>` retains the targeted HMR path and is immutable only when its revision matches. Other methods are 405. An unknown id — or a registered row whose bundle is unreadable because it has not been built yet — answers a loud 404 rather than letting the carrier's SPA fallback ship HTML as JavaScript. The index tap injects the current graph on every index render, so a reload always boots against the live composition.
 
 ## The service
 

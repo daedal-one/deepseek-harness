@@ -32,11 +32,13 @@ async function loadComposition(): Promise<Context> {
   root = await mkdtemp(join(tmpdir(), 'dsh-frontend-static-'))
   const dist = join(root, 'dist')
   await mkdir(dist)
+  await mkdir(join(dist, 'assets'))
   const distIndex = join(dist, 'index.html')
   await writeFile(distIndex, '<head></head><body>shell</body>')
   await writeFile(join(dist, 'app.js'), 'export {}')
   await writeFile(join(dist, 'blob.bin'), 'BLOB')
   await writeFile(join(dist, 'manifest.webmanifest'), '{}')
+  await writeFile(join(dist, 'assets', 'app-hash.js'), `export default ${JSON.stringify('x'.repeat(4_096))}`)
   const configPath = join(root, 'cordis.yml')
   await writeFile(configPath, [
     "- name: '@deepseek-ai/dsh-host-webserver'",
@@ -74,11 +76,21 @@ async function loadComposition(): Promise<Context> {
 }
 
 /** GET (by default) one path against the running server; returns status, content-type, and a body prefix. */
-async function request(port: number, path: string, init?: RequestInit): Promise<{ status: number; type: string | null; body: string }> {
+async function request(port: number, path: string, init?: RequestInit): Promise<{
+  status: number
+  type: string | null
+  cache: string | null
+  encoding: string | null
+  length: string | null
+  body: string
+}> {
   const response = await fetch(`http://127.0.0.1:${String(port)}${path}`, init)
   return {
     status: response.status,
     type: response.headers.get('content-type'),
+    cache: response.headers.get('cache-control'),
+    encoding: response.headers.get('content-encoding'),
+    length: response.headers.get('content-length'),
     body: (await response.text()).slice(0, 80),
   }
 }
@@ -98,8 +110,23 @@ describe('real Loader composition', () => {
     expect(await request(port, '/manifest.webmanifest')).toMatchObject({
       status: 200,
       type: 'application/manifest+json',
+      cache: 'no-cache',
       body: '{}',
     })
+    const compressed = await request(port, '/assets/app-hash.js', {
+      headers: { 'accept-encoding': 'br' },
+    })
+    expect(compressed).toMatchObject({
+      status: 200,
+      cache: 'public, max-age=31536000, immutable',
+      encoding: 'br',
+    })
+    expect(Number(compressed.length)).toBeLessThan(4_096)
+    const head = await request(port, '/assets/app-hash.js', {
+      method: 'HEAD', headers: { 'accept-encoding': 'gzip' },
+    })
+    expect(head).toMatchObject({ status: 200, encoding: 'gzip', body: '' })
+    expect(Number(head.length)).toBeGreaterThan(0)
     await writeFile(join(root!, 'dist', 'app.js'), 'export const rebuilt = true')
     expect(await request(port, '/app.js')).toMatchObject({ status: 200, body: 'export const rebuilt = true' })
 
@@ -112,6 +139,7 @@ describe('real Loader composition', () => {
     for (const path of ['/', '/index.html', '/no/such/route']) {
       const got = await request(port, path)
       expect(got.status).toBe(200)
+      expect(got.cache).toBe('no-store')
       expect(got.body).toContain('__T__')
       expect(got.body).toContain('shell')
     }

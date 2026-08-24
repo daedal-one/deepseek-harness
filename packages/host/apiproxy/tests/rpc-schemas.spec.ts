@@ -49,9 +49,12 @@ describe('RpcId', () => {
 })
 
 describe('transportError', () => {
-  it('folds Error and non-Error throws into the internal error branch', () => {
+  it('distinguishes timeout, cancellation, and unavailable-network failures', () => {
     expect(transportError(new Error('wire down'))).toEqual({ ok: false, error: { code: 'internal', message: 'wire down', details: {} } })
     expect(transportError('raw')).toMatchObject({ ok: false, error: { code: 'internal', message: 'raw' } })
+    expect(transportError(new DOMException('slow', 'TimeoutError'))).toMatchObject({ ok: false, error: { code: 'transport-timeout' } })
+    expect(transportError(new DOMException('stopped', 'AbortError'))).toMatchObject({ ok: false, error: { code: 'cancelled' } })
+    expect(transportError(new TypeError('fetch failed'))).toMatchObject({ ok: false, error: { code: 'network-unavailable' } })
   })
 })
 
@@ -59,7 +62,10 @@ describe('rpcErrorSchema', () => {
   it('accepts every code branch with its required details', () => {
     expect(rpcErrorSchema.parse({ code: 'bad-request', message: 'm', details: { issues: [] } }).code).toBe('bad-request')
     expect(rpcErrorSchema.parse({ code: 'cancelled', message: 'm', details: {} }).code).toBe('cancelled')
+    expect(rpcErrorSchema.parse({ code: 'transport-timeout', message: 'm', details: {} }).code).toBe('transport-timeout')
+    expect(rpcErrorSchema.parse({ code: 'network-unavailable', message: 'm', details: {} }).code).toBe('network-unavailable')
     expect(rpcErrorSchema.parse({ code: 'session-not-found', message: 'm', details: { sessionId: 's' } }).code).toBe('session-not-found')
+    expect(rpcErrorSchema.parse({ code: 'history-detail-not-found', message: 'm', details: { sessionId: 's', seq: 1 } }).code).toBe('history-detail-not-found')
     expect(rpcErrorSchema.parse({ code: 'session-conflict', message: 'm', details: { sessionId: 's', requestedCwd: '/a', existingCwd: '/b' } }).code).toBe('session-conflict')
     expect(rpcErrorSchema.parse({ code: 'invalid-time-zone', message: 'm', details: { value: 'CST' } }).code).toBe('invalid-time-zone')
     expect(rpcErrorSchema.parse({ code: 'workspace-attach-failed', message: 'm', details: { sessionId: 's', workspaceId: 'w' } }).code).toBe('workspace-attach-failed')
@@ -160,7 +166,7 @@ describe('sessions domain schemas', () => {
   it('validates the per-method request/value pairs', () => {
     expect(sessionListRequestSchema.parse({})).toEqual({})
     expect(sessionListRequestSchema.parse({ cursor: 'c' }).cursor).toBe('c')
-    expect(sessionListValueSchema.parse({ items: [] }).items).toEqual([])
+    expect(sessionListValueSchema.parse({ items: [], hasMore: false }).items).toEqual([])
     expect(sessionSearchRequestSchema.parse({ query: '  exact phrase  ' })).toEqual({ query: 'exact phrase' })
     expect(() => sessionSearchRequestSchema.parse({ query: '   ' })).toThrow()
     expect(() => sessionSearchRequestSchema.parse({ query: 'bad\0query' })).toThrow(/NUL/)

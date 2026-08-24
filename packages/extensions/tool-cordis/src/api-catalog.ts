@@ -114,7 +114,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'agentModels',
     summary: 'Owns persistent Agent model selections and their lifecycle-safe directory.',
-    description: 'Owns persistent Agent model selections and their lifecycle-safe directory. The provider route is fixed by composition; settings select only a model and optional reasoning effort for each registered Agent target.',
+    description: 'Owns persistent Agent model selections and their lifecycle-safe directory. Each target\'s provider route is fixed by composition; settings select only a model and optional reasoning effort under that route.',
     methods: [
       {
         signature: 'registerTarget(target: AgentModelTarget): () => void',
@@ -129,20 +129,26 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'a detached complete selection.',
       },
       {
+        signature: 'mainSelection(presetId?: string): ModelSelection',
+        description: 'Read the current main-Agent route assigned to a preset.',
+        parameters: [{ name: 'presetId', description: 'effective preset id, or undefined without a roster.' }],
+        returns: 'assigned selection, falling back to the deployment-wide main route.',
+      },
+      {
         signature: 'optionsFor(id: AgentModelTargetId, fallback: AgentOptions = {}): AgentOptions',
         description: 'Apply one target\'s live selection over child options without disturbing independent limits such as `maxTokens`.',
         parameters: [{ name: 'id', description: 'registered named Agent target.' }, { name: 'fallback', description: 'deployment options carrying non-selection fields.' }],
         returns: 'detached child options with the current selection.',
       },
       {
-        signature: 'async saveSelection(next: ModelSelection): Promise<void>',
-        description: 'Save the main Agent selection after a session-local model switch.',
-        parameters: [{ name: 'next', description: 'resolved selection accepted by the session entry point.' }],
+        signature: 'async saveSelection(next: ModelSelection, presetId?: string): Promise<void>',
+        description: 'Save a preset\'s main-Agent selection after a session-local model switch.',
+        parameters: [{ name: 'next', description: 'resolved selection accepted by the session entry point.' }, { name: 'presetId', description: 'effective preset id, or undefined without a roster.' }],
         returns: 'fulfillment after the optional settings write settles.',
       },
       {
         signature: '@Remote(\'list\') async list(): Promise<AgentModelsSnapshot>',
-        description: 'Read the live target directory and fixed-provider model catalog.',
+        description: 'Read the live target directory and its distinct provider catalogs.',
         parameters: [],
         returns: 'point-in-time graphical settings snapshot.',
       },
@@ -2275,6 +2281,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'The browser HTTP carrier service. Activation listens immediately. Route registration order does not affect requests because configured named routes must be distinct, and the fallback handler answers anything not yet claimed during startup with 404 until its owner registers. A listen failure rejects initialization, and the boot process reports the failed fiber.',
     methods: [
       {
+        signature: 'sendBuffer( req: IncomingMessage, res: ServerResponse, status: number, headers: BufferResponseHeaders, body: string | Buffer, ): Promise<void>',
+        description: 'Write one complete response using this deployment\'s compression policy.',
+        parameters: [{ name: 'req', description: 'incoming request carrying representation preferences.' }, { name: 'res', description: 'response owned by the caller.' }, { name: 'status', description: 'HTTP status.' }, { name: 'headers', description: 'response headers before representation negotiation.' }, { name: 'body', description: 'complete response bytes.' }],
+        returns: 'when the selected representation has been written.',
+      },
+      {
         signature: 'register(route: WebRoute): () => void',
         description: 'Register a named route. Duplicate (kind, path) throws — route patterns are a composition-level contract, so a collision is a misconfiguration.',
         parameters: [{ name: 'route', description: 'kind, path, and the owning handler.' }],
@@ -2853,12 +2865,16 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface AgentHandle {\n    agent: Agent;\n    dispose(): Promise<void>;\n}',
   },
   {
+    name: 'AgentModelCatalogView',
+    declaration: 'export interface AgentModelCatalogView {\n    readonly provider: string;\n    readonly models: readonly AgentModelOption[];\n}',
+  },
+  {
     name: 'AgentModelOption',
     declaration: 'export interface AgentModelOption {\n    readonly id: string;\n    readonly name: string;\n    readonly description?: string;\n    readonly reasoningEfforts: readonly {\n        readonly id: string;\n        readonly name: string;\n        readonly description?: string;\n    }[];\n    readonly defaultReasoningEffort?: string;\n}',
   },
   {
     name: 'AgentModelsSnapshot',
-    declaration: 'export interface AgentModelsSnapshot {\n    readonly provider: string;\n    readonly writable: boolean;\n    readonly revision: number;\n    readonly targets: readonly AgentModelTargetView[];\n    readonly models: readonly AgentModelOption[];\n}',
+    declaration: 'export interface AgentModelsSnapshot {\n    readonly writable: boolean;\n    readonly revision: number;\n    readonly targets: readonly AgentModelTargetView[];\n    readonly catalogs: readonly AgentModelCatalogView[];\n}',
   },
   {
     name: 'AgentModelTarget',
@@ -2870,7 +2886,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'AgentModelTargetView',
-    declaration: 'export interface AgentModelTargetView {\n    readonly id: AgentModelTargetId;\n    readonly label: string;\n    readonly selection: StoredAgentModelSelection;\n    readonly defaultSelection: StoredAgentModelSelection;\n    readonly overridden: boolean;\n}',
+    declaration: 'export interface AgentModelTargetView {\n    readonly id: AgentModelTargetId;\n    readonly label: string;\n    readonly provider: string;\n    readonly selection: StoredAgentModelSelection;\n    readonly defaultSelection: StoredAgentModelSelection;\n    readonly overridden: boolean;\n}',
   },
   {
     name: 'AgentOptions',
@@ -2975,6 +2991,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'Branded',
     declaration: 'export type Branded<B extends string> = string & {\n    readonly [BRAND]: B;\n};',
+  },
+  {
+    name: 'BufferResponseHeaders',
+    declaration: 'export type BufferResponseHeaders = OutgoingHttpHeaders;',
   },
   {
     name: 'CancelOptions',
@@ -3978,7 +3998,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RpcErrorDetailsMap',
-    declaration: 'export interface RpcErrorDetailsMap {\n    \'bad-request\': {\n        issues: ZodIssue[];\n    };\n    \'cancelled\': {};\n    \'session-not-found\': {\n        sessionId: SessionId;\n    };\n    \'model-unavailable\': {\n        provider: string;\n        model: string;\n    };\n    \'session-conflict\': {\n        sessionId: SessionId;\n        requestedCwd: string;\n        existingCwd?: string;\n    };\n    \'invalid-time-zone\': {\n        value: string;\n    };\n    \'workspace-attach-failed\': {\n        sessionId: SessionId;\n        workspaceId: string;\n    };\n    \'workspace-not-found\': {\n        workspaceId: string;\n    };\n    \'workspace-invalid-path\': {\n        path: string;\n    };\n    \'workspace-name-conflict\': {\n        name: string;\n    };\n    \'workspace-move-invalid\': {\n        workspaceId: string;\n        sessionId: SessionId;\n        beforeSessionId?: SessionId;\n    };\n    \'directory-unreadable\': {\n        path: string;\n    };\n    \'directory-exists\': {\n        path: string;\n    };\n    \'directory-create-failed\': {\n        path: string;\n    };\n    \'directory-picker-unavailable\': {\n        capability: string;\n    };\n    \'agent-preset-read-only\': {\n        agentPreset: string;\n        reason: string;\n    };\n    \'agent-preset-locked\': {\n        sessionId: SessionId;\n        agentPreset: string;\n    };\n    \'agent-preset-conflict\': {\n        sessionId: SessionId;\n        requestedPreset: string;\n        existingPreset?: string;\n    };\n    \'agent-preset-not-found\': {\n        agentPreset: string;\n      /* …truncated — full shape in source */',
+    declaration: 'export interface RpcErrorDetailsMap {\n    \'bad-request\': {\n        issues: ZodIssue[];\n    };\n    \'cancelled\': {};\n    \'transport-timeout\': {};\n    \'network-unavailable\': {};\n    \'session-not-found\': {\n        sessionId: SessionId;\n    };\n    \'history-detail-not-found\': {\n        sessionId: SessionId;\n        seq: number;\n    };\n    \'model-unavailable\': {\n        provider: string;\n        model: string;\n    };\n    \'session-conflict\': {\n        sessionId: SessionId;\n        requestedCwd: string;\n        existingCwd?: string;\n    };\n    \'invalid-time-zone\': {\n        value: string;\n    };\n    \'workspace-attach-failed\': {\n        sessionId: SessionId;\n        workspaceId: string;\n    };\n    \'workspace-not-found\': {\n        workspaceId: string;\n    };\n    \'workspace-invalid-path\': {\n        path: string;\n    };\n    \'workspace-name-conflict\': {\n        name: string;\n    };\n    \'workspace-move-invalid\': {\n        workspaceId: string;\n        sessionId: SessionId;\n        beforeSessionId?: SessionId;\n    };\n    \'directory-unreadable\': {\n        path: string;\n    };\n    \'directory-exists\': {\n        path: string;\n    };\n    \'directory-create-failed\': {\n        path: string;\n    };\n    \'directory-picker-unavailable\': {\n        capability: string;\n    };\n    \'agent-preset-read-only\': {\n        agentPreset: string;\n        reason: string;\n    };\n    \'agent-preset-locked\': {\n        sessionId: SessionId;\n        agentPreset: string;\n    };\n    \'agent-preset-conflict\': {\n        sessionId /* …truncated — full shape in source */',
   },
   {
     name: 'RpcId',
@@ -4934,7 +4954,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'WebBootGraph',
-    declaration: 'export interface WebBootGraph {\n    rev: string;\n    entries: WebBootEntry[];\n}',
+    declaration: 'export interface WebBootGraph {\n    rev: string;\n    bundleUrl: string;\n    entries: WebBootEntry[];\n}',
   },
   {
     name: 'WebFetchBody',

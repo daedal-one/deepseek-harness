@@ -19,7 +19,7 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
     sessions: {
       async list(request) {
         if (overrides.crashOn === 'session.list') throw new Error('impl crashed')
-        return { rpcId: request.rpcId, result: { ok: true, value: { items: [] } } }
+        return { rpcId: request.rpcId, result: { ok: true, value: { items: [], hasMore: false } } }
       },
       async search(request, signal) {
         if (request.payload.query === 'hang') {
@@ -55,6 +55,9 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
           rpcId: request.rpcId,
           result: { ok: false, error: { code: 'session-not-found', message: 'nope', details: { sessionId: request.payload.sessionId } } },
         }
+      },
+      async historyDetail(request) {
+        return { rpcId: request.rpcId, result: { ok: false, error: { code: 'history-detail-not-found', message: 'missing', details: { sessionId: request.payload.sessionId, seq: request.payload.seq } } } }
       },
       async models(request) {
         return {
@@ -325,7 +328,7 @@ async function collect<F>(stream: AsyncIterable<RpcRequest<F>>): Promise<RpcRequ
 describe('unary round trip (handler ⇄ client, no network)', () => {
   it('carries a success result and echoes the minted rpcId', async () => {
     const response = await client().sessions.list({})
-    expect(response.result).toEqual({ ok: true, value: { items: [] } })
+    expect(response.result).toEqual({ ok: true, value: { items: [], hasMore: false } })
     expect(response.rpcId).toMatch(/[0-9a-f-]{36}/)
   })
 
@@ -412,6 +415,24 @@ describe('unary round trip (handler ⇄ client, no network)', () => {
     }
     const response = await client(api, 1).host.pickDirectory({})
     expect(response.result).toEqual({ ok: true, value: { path: '/tmp/project' } })
+  })
+
+  it('coalesces only concurrent settings descriptions', async () => {
+    const api = fakeApi()
+    const release = Promise.withResolvers<undefined>()
+    const describe = vi.fn(async (request: Parameters<ApiProxy['settings']['describe']>[0]) => {
+      await release.promise
+      return { rpcId: request.rpcId, result: { ok: true as const, value: { writable: true, hasDocument: false, namespaces: [] } } }
+    })
+    api.settings.describe = describe
+    const c = client(api)
+    const first = c.settings.describe({})
+    const second = c.settings.describe({})
+    await vi.waitFor(() => { expect(describe).toHaveBeenCalledOnce() })
+    release.resolve(undefined)
+    await Promise.all([first, second])
+    await c.settings.describe({})
+    expect(describe).toHaveBeenCalledTimes(2)
   })
 
   it('round-trips the browse listing and creation calls through the wire form', async () => {
@@ -738,7 +759,7 @@ describe('client respond and transport failures', () => {
 
   it('throws on an rpcId echo mismatch', async () => {
     const lying = new InProcessApiClient({
-      fetch: async () => Response.json({ type: 'server-response', rpcId: 'someone-else', result: { ok: true, value: { items: [] } } }),
+      fetch: async () => Response.json({ type: 'server-response', rpcId: 'someone-else', result: { ok: true, value: { items: [], hasMore: false } } }),
     })
     await expect(lying.sessions.list({})).rejects.toThrow('rpcId mismatch')
   })
@@ -789,7 +810,7 @@ describe('resolveBase', () => {
       urls: string[] = []
       protected async doFetch(input: URL): Promise<Response> {
         this.urls.push(input.href)
-        return Response.json({ type: 'server-response', rpcId: this.lastMinted, result: { ok: true, value: { items: [] } } })
+        return Response.json({ type: 'server-response', rpcId: this.lastMinted, result: { ok: true, value: { items: [], hasMore: false } } })
       }
 
       lastMinted = ''

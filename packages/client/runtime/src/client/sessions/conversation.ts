@@ -201,6 +201,8 @@ export interface ToolResultNode {
   resultView: ToolResultView | null
   /** Child calls owned by this call, in dispatch order. */
   subCalls: readonly ToolCallBlock[]
+  /** Initial history omitted the result body; interaction loads it by seq. */
+  deferred?: true
 }
 
 /**
@@ -458,6 +460,8 @@ export interface ConversationSnapshot {
   /** Set after host/session-removed; the UI grays out and disables input. */
   removed: boolean
   openState: OpenState
+  /** The connection is unavailable or reconnect repair is running while the last good transcript remains visible. */
+  syncing?: boolean
   openError: RpcError | null
   hasMore: boolean
   loadingOlder: boolean

@@ -39,6 +39,37 @@ function header(id: string, createdAt: number, extra: Partial<SessionHeader> = {
 }
 
 describe('sessions.list cold merge', () => {
+  it('pages a deterministic recency order and retains the requested restored Session', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(UserQuestionService)
+    await ctx.plugin(AgentRegistry)
+    for (const id of ['session-a', 'session-b', 'session-c', 'session-z']) {
+      ctx.sessions.create(sid(id), { meta: { cwd: '/proj', createdAt: 100 } })
+    }
+    const api = createApiProxy(ctx, {
+      defaultModelSelection: () => ({ provider: 'p', model: 'm' }),
+      cwd: '/tmp',
+      sessionListPageSize: 2,
+    })
+
+    const first = await api.sessions.list(request({ includeSessionId: sid('session-z') }))
+    if (!first.result.ok) throw new Error('first list page failed')
+    expect(first.result.value.items.map(item => item.sessionId))
+      .toEqual(['session-a', 'session-b', 'session-z'])
+    expect(first.result.value.hasMore).toBe(true)
+    expect(typeof first.result.value.nextCursor).toBe('string')
+
+    const second = await api.sessions.list(request({ cursor: first.result.value.nextCursor! }))
+    if (!second.result.ok) throw new Error('second list page failed')
+    expect(second.result.value.items.map(item => item.sessionId)).toEqual(['session-c', 'session-z'])
+    expect(second.result.value).toMatchObject({ hasMore: false })
+    expect(second.result.value.nextCursor).toBeUndefined()
+
+    const invalid = await api.sessions.list(request({ cursor: 'not-a-cursor' as never }))
+    expect(invalid.result).toMatchObject({ ok: false, error: { code: 'bad-request' } })
+  })
+
   it('verifies only small possibly-blank artifacts and treats every unavailable probe as visible', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)

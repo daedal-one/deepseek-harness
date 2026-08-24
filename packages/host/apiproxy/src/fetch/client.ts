@@ -22,6 +22,7 @@ import {
   sessionAttachmentValueSchema,
   sessionCreateValueSchema,
   sessionForkValueSchema,
+  sessionHistoryDetailValueSchema,
   sessionHistoryValueSchema,
   sessionListValueSchema,
   sessionModelsValueSchema,
@@ -99,6 +100,7 @@ export interface IApiClient {
     search(payload: RequestPayload<'session.search'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'session.search'>>>
     create(payload: RequestPayload<'session.create'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'session.create'>>>
     history(payload: RequestPayload<'session.history'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'session.history'>>>
+    historyDetail(payload: RequestPayload<'session.historyDetail'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'session.historyDetail'>>>
     models(payload: RequestPayload<'session.models'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'session.models'>>>
     selectModel(payload: RequestPayload<'session.selectModel'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'session.selectModel'>>>
     rename(payload: RequestPayload<'session.rename'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'session.rename'>>>
@@ -188,6 +190,7 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'session.search': sessionSearchValueSchema,
   'session.create': sessionCreateValueSchema,
   'session.history': sessionHistoryValueSchema,
+  'session.historyDetail': sessionHistoryDetailValueSchema,
   'session.models': sessionModelsValueSchema,
   'session.selectModel': sessionSelectModelValueSchema,
   'session.rename': sessionRenameValueSchema,
@@ -261,6 +264,7 @@ const INTERNAL_BASE = 'http://dsh.internal'
  * subclass whose doFetch is toFetchHandler(api).fetch never touches the network.
  */
 export abstract class AbstractApiClient implements IApiClient {
+  private settingsDescribeInFlight: Promise<RpcResponse<ResponseValue<'settings.describe'>>> | undefined
   /** Instance-owned observation buffer (module-level state would leak across instances/tests). */
   private envelopeBatch: RpcMessage[] = []
   private flushScheduled = false
@@ -433,6 +437,7 @@ export abstract class AbstractApiClient implements IApiClient {
     search: (payload, signal) => this.callUnary('session.search', payload, signal),
     create: (payload, signal) => this.callUnary('session.create', payload, signal),
     history: (payload, signal) => this.callUnary('session.history', payload, signal),
+    historyDetail: (payload, signal) => this.callUnary('session.historyDetail', payload, signal),
     models: (payload, signal) => this.callUnary('session.models', payload, signal),
     selectModel: (payload, signal) => this.callUnary('session.selectModel', payload, signal),
     rename: (payload, signal) => this.callUnary('session.rename', payload, signal),
@@ -500,7 +505,16 @@ export abstract class AbstractApiClient implements IApiClient {
   }
 
   readonly settings: IApiClient['settings'] = {
-    describe: (payload, signal) => this.callUnary('settings.describe', payload, signal),
+    describe: (payload, signal) => {
+      if (signal !== undefined) return this.callUnary('settings.describe', payload, signal)
+      const existing = this.settingsDescribeInFlight
+      if (existing !== undefined) return existing
+      const request = this.callUnary('settings.describe', payload).finally(() => {
+        if (this.settingsDescribeInFlight === request) this.settingsDescribeInFlight = undefined
+      })
+      this.settingsDescribeInFlight = request
+      return request
+    },
     openDocument: (payload, signal) => this.callUnary('settings.openDocument', payload, signal),
     update: (payload, signal) => this.callUnary('settings.update', payload, signal),
     replace: (payload, signal) => this.callUnary('settings.replace', payload, signal),

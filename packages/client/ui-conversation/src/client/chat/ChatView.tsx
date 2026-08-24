@@ -144,8 +144,8 @@ function TurnStatus({ startTime, t }: {
  * ordered business Node crosses the keyed renderer seat.
  */
 export function ChatView({
-  useSession, useSessions, useStore, renderSlot, sessionId, openFile, loadOlder, loadImage, inspectCall, chatScroll, forkAt,
-  fileMentions, t,
+  useSession, useSessions, useStore, renderSlot, sessionId, openFile, loadOlder, retryOpen,
+  loadToolResult, loadImage, inspectCall, chatScroll, forkAt, fileMentions, t,
 }: ChatViewSlotProps) {
   const order = useSession(s => s.chat.order)
   const nodeStore = useSession(s => s.chat.nodes)
@@ -156,6 +156,7 @@ export function ChatView({
   const running = useSession(s => s.running)
   const openState = useSession(s => s.openState)
   const openError = useSession(s => s.openError)
+  const syncing = useSession(s => s.syncing === true)
   const hasMore = useSession(s => s.hasMore)
   const loadingOlder = useSession(s => s.loadingOlder)
   const selectedCallId = useStore(s => s.selection?.callId)
@@ -369,9 +370,11 @@ export function ChatView({
           {openState === 'loading' && <div className={css.hint}>{t('chat.loadingHistory')}</div>}
           {openState === 'error' && openError !== null && (
             <div className={css.openError}>
-              {t('chat.loadError', { message: openError.message, code: openError.code })}
+              <span>{t('chat.loadError', { message: openError.message, code: openError.code })}</span>
+              <button type="button" onClick={retryOpen}>{t('chat.retry')}</button>
             </div>
           )}
+          {syncing && <div className={css.syncing}>{t('chat.reconnecting')}</div>}
           {hasMore && (
             <div className={css.older}>
               <button type="button" disabled={loadingOlder} onClick={loadOlderAnchored}>
@@ -388,6 +391,7 @@ export function ChatView({
               cwd={cwd}
               openFile={openFile}
               inspectCall={inspectCall}
+              loadToolResult={loadToolResult}
               forkAt={forkAt}
               loadImage={loadImage}
               fileMentions={fileMentions}
