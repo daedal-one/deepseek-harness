@@ -97,3 +97,72 @@
 .overlayLayer > * {
   pointer-events: auto;
 }
+
+.drawerScrim {
+  display: none;
+}
+
+/* Phone layout keeps the resident slot tree but removes panel widths from the
+   grid. The sidebar's collapsed shell remains the navigation trigger; opening
+   it expands over the conversation rather than squeezing the center column. */
+.frame[data-phone] {
+  grid-template-columns: minmax(0, 1fr);
+  height: 100dvh;
+}
+
+.frame[data-phone] .sidebarCol {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 40;
+  width: min(86vw, 320px);
+  border-right-color: var(--dsw-alias-border-l1);
+  box-shadow: var(--dsw-shadow-lv3);
+  transition: width var(--ds-transition-duration-slow) var(--ds-ease-in-out);
+}
+
+.frame[data-phone][data-sidebar-collapsed] .sidebarCol {
+  right: auto;
+  bottom: auto;
+  width: 56px;
+  height: 64px;
+  border-right: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.frame[data-phone] .rightbarCol {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  width: 100%;
+  border-left: none;
+  background: var(--dsw-alias-bg-base);
+  transform: translateX(0);
+  transition: transform var(--ds-transition-duration-slow) var(--ds-ease-in-out);
+}
+
+.frame[data-phone][data-rightbar-collapsed] .rightbarCol {
+  pointer-events: none;
+  transform: translateX(100%);
+}
+
+.frame[data-phone] .drawerScrim {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: block;
+  padding: 0;
+  border: none;
+  background: var(--dsw-alias-bg-mask-1);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .frame[data-phone] .sidebarCol,
+  .frame[data-phone] .rightbarCol {
+    transition: none;
+  }
+}

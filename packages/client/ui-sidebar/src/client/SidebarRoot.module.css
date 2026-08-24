@@ -415,6 +415,27 @@
   width: auto;
 }
 
+/* The phone frame overlays the collapsed shell at the top left. Keep the
+   localized panel toggle as its only focusable rail control; the full drawer
+   returns when that toggle expands the sidebar. */
+@media (max-width: 767px) {
+  .root.collapsed {
+    height: 64px;
+    padding: 14px 10px;
+    background: transparent;
+  }
+
+  .collapsed .logoRow {
+    margin-bottom: 0;
+  }
+
+  .collapsed .newSession,
+  .collapsed .regionArea,
+  .collapsed .footArea {
+    display: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .wide,
   .fading > *,

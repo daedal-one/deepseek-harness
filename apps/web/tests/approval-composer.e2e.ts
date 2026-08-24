@@ -80,6 +80,7 @@ describe('web e2e: approval takeover keeps its actions reachable', () => {
 
     const panel = page.locator('[data-approval-key]')
     await panel.waitFor({ timeout: MODE === 'record' ? 180_000 : 60_000 })
+    await expect.poll(() => page.evaluate(() => document.activeElement?.textContent?.trim())).toBe('Reject')
     const scroll = panel.locator('[data-approval-scroll]')
     await expect.poll(() => scroll.getByText(/tok/).count(), { timeout: 15_000 }).toBeGreaterThan(0)
 
@@ -88,8 +89,13 @@ describe('web e2e: approval takeover keeps its actions reachable', () => {
       await compareOrRefreshGolden(UI_EXPECTED, snapshot, MODE)
 
       const original = page.viewportSize() ?? { width: 1680, height: 1000 }
-      for (const height of [1000, 700]) {
-        await page.setViewportSize({ width: 900, height })
+      for (const viewport of [
+        { width: 900, height: 1000 },
+        { width: 900, height: 700 },
+        { width: 390, height: 844 },
+      ]) {
+        await page.setViewportSize(viewport)
+        await expect.poll(() => page.evaluate(() => document.activeElement?.textContent?.trim())).toBe('Reject')
         const geometry = await panel.evaluate((root) => {
           const region = root.querySelector<HTMLElement>('[data-approval-scroll]')
           const card = region?.parentElement ?? null

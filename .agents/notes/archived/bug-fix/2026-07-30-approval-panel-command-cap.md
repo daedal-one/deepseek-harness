@@ -15,7 +15,7 @@ The panel's justification and command move into one scroll region (`data-approva
 
 The cap is one value with two consumers, declared as `--dsh-composer-text-max-height: 336px` on `ConversationRoot`'s `.composerSeat` — the composer chain's only shared ancestor, since the fallback InputBar and an elected takeover render as siblings. `InputBar`'s draft scrollport and the panel's scroll region both read it, so the seat cannot cap its two states differently: what the designer asked for ("unify it with the input box's max height") is now a fact of the stylesheet rather than a number repeated in two files. The region is `box-sizing: border-box` so the cap is its outer height, the same box the composer's draft area occupies.
 
-The region is a tab stop (`tabIndex={0}`, named `role="group"`). Unlike the question composer's scroll body, whose option rows are focusable and pull the container along, this one holds nothing but text: without its own tab stop a keyboard-only user could reach the buttons and never the command's tail, and approve what they could not finish reading.
+The region is a tab stop (`tabIndex={0}`, named `role="group"`). Unlike the question composer's scroll body, whose option rows are focusable and pull the container along, this one holds nothing but text: without its own tab stop a keyboard-only user could reach the buttons and never the command's tail, and approve what they could not finish reading. The safe reject action receives focus when the takeover replaces the composer, so removing the textarea does not drop keyboard focus to the page.
 
 The panel's card rebinds `--dsh-scrollbar-thumb{,-hover}` to the l2 pair, as every scrolling surface on an elevated background must ([scrollbar contract](../../../../packages/client/ui-theme/src/styles/scrollbar.css)).
 
@@ -31,14 +31,14 @@ The panel's card rebinds `--dsh-scrollbar-thumb{,-hover}` to the l2 pair, as eve
 
 ## Consequences
 
-- A long command scrolls inside the card and the refuse/allow buttons stay on screen. Measured on the built client at 900x1000 and 900x700: the region reports `scrollHeight` past `clientHeight`, and both buttons stay inside the card and inside the viewport.
+- A long command scrolls inside the card and the refuse/allow buttons stay on screen. Measured on the built client at 900x1000, 900x700, and 390x844: the region reports `scrollHeight` past `clientHeight`, and both buttons stay inside the card and inside the viewport.
 - Electing the takeover no longer changes how tall the composer seat can get, so the transcript above it does not reflow by hundreds of pixels when an approval arrives or resolves.
 - The InputBar's 14-line cap now resolves through a custom property inherited from `.composerSeat`, on the box that scrolls its draft ([one scrollport for both text layers](../../archived/bug-fix/2026-07-31-composer-text-layers-share-one-scrollport.md) moved the declaration off the auto-grow mirror). Rendering the bar outside that seat would drop the declaration (an unresolved `var()` with no fallback), so a future composer host has to carry the property — which is why it is declared on the shared seat rather than the app root.
 - The scenario's recorded command is a 200-token blob, far longer than a round trip needs. That cost is deliberate: the cap is unfalsifiable without content that passes it, and the model compresses any regular payload (the first recording turned "alpha 400 times" into `printf 'alpha %.0s' {1..400}`, a one-line command that proves nothing).
 
 ## Verification
 
-`apps/web/tests/approval-composer.e2e.ts` drives the real composition: a read-only session, a denied write, the model's escalation retry, and the answer clicked through the panel. The geometry assertion runs on the live panel at two viewport heights and is guarded against holding vacuously — the region must actually be scrolling, and the measured cap must equal the composer's own, which the test reads off the live draft scrollport before sending rather than hardcoding the px value.
+`apps/web/tests/approval-composer.e2e.ts` drives the real composition: a read-only session, a denied write, the model's escalation retry, and the answer clicked through the panel. The geometry assertion runs on the live panel at desktop and phone viewports and is guarded against holding vacuously — the region must actually be scrolling, and the measured cap must equal the composer's own, which the test reads off the live draft scrollport before sending rather than hardcoding the px value. The same scenario pins focus on the safe reject action before and after each viewport change.
 
 Confirmed both directions against the built client. With the cap reverted, the region reports `scrolls: false` and grows to the command's full height (1798px for the recorded blob at 900x1000, against 336px capped); at 900x700 the card is 680px tall against a 700px viewport and the action row's bottom lands at y=749 — below the fold, the designer's report exactly. With the cap restored the scenario passes in replay.
 
