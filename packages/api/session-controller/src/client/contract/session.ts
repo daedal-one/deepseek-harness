@@ -122,6 +122,10 @@ export interface ISession {
    * @returns completion; failures land in snapshot.openState/loadingOlder.
    */
   loadOlder(): Promise<void>
+  /** Retry a failed history load. @returns completion of the new load. */
+  retryOpen(): Promise<void>
+  /** Fetch one exact deferred result. @param seq - result sequence. @returns completion of the window update. */
+  loadHistoryDetail(seq: number): Promise<void>
   /**
    * Page history backwards until the window covers `seq` (inclusive) — the
    * turn-jump loader. Repeated calls while a jump is paging lower its shared

@@ -198,7 +198,7 @@ export class TestSessions implements ISessions {
   /** Calls observed on the service-level face, newest last. */
   readonly calls: {
     method: 'create' | 'open' | 'openSubagent' | 'setSubagentCatalogOpen' | 'refreshSubagents'
-      | 'clear' | 'refresh' | 'search' | 'fork'
+      | 'clear' | 'refresh' | 'loadMore' | 'search' | 'fork'
     args: unknown[]
   }[] = []
 
@@ -477,6 +477,12 @@ export class TestSessions implements ISessions {
       draft.current = undefined
       draft.currentAddress = undefined
     })
+  }
+
+  /** Record a continuation request; fixtures supply its rows. */
+  loadMore(): Promise<void> {
+    this.calls.push({ method: 'loadMore', args: [] })
+    return Promise.resolve()
   }
 
   /** Record a list refresh; fixture callers publish list state explicitly. */

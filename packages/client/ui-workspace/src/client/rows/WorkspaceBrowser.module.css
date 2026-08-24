@@ -292,6 +292,21 @@
   overflow: visible;
 }
 
+.loadMore {
+  align-self: center;
+  border: 1px solid var(--dsw-alias-border-secondary);
+  border-radius: 14px;
+  padding: 4px 12px;
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+  cursor: pointer;
+}
+
+.loadMore:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
 .rail .listArea {
   margin-left: 0;
   margin-right: 0;

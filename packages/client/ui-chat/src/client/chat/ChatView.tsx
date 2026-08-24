@@ -216,7 +216,7 @@ const ChatNodeList = memo(function ChatNodeList({ order, ...seatProps }: ChatNod
  */
 export function ChatView({
   useSession, useChat, useChatNode, useChatNodeProcess, useSessions, useStore, actions, renderSlot,
-  sessionId, openFile, loadOlder, loadThrough, loadImage, openView, chatScroll, forkAt, fileMentions,
+  sessionId, openFile, loadOlder, retryOpen, loadThrough, loadToolResult, loadImage, openView, chatScroll, forkAt, fileMentions,
   useTranscriptView, useProjection, t,
 }: ChatViewSlotProps) {
   const order = useChat(s => s.order)
@@ -237,6 +237,7 @@ export function ChatView({
   // Workspace root off the session list row: path summaries display relative to it.
   const cwd = useSessions(s => s.byId[sessionId]?.cwd)
   const running = useSession(s => s.running)
+  const syncing = useSession(s => s.syncing === true)
   const openState = useSession(s => s.openState)
   const openError = useSession(s => s.openError)
   const hasMore = useSession(s => s.hasMore)
@@ -768,10 +769,12 @@ export function ChatView({
           t={t}
         />
         <div ref={columnRef} className={css.column} data-chat-flow="">
+          {syncing && <div className={css.hint} role="status">{t('chat.reconnecting')}</div>}
           {openState === 'loading' && <div className={css.hint}>{t('chat.loadingHistory')}</div>}
           {openState === 'error' && openError !== null && (
             <div className={css.openError}>
               {t('chat.loadError', { message: openError.message, code: openError.code })}
+              <button type="button" onClick={retryOpen}>{t('chat.retry')}</button>
             </div>
           )}
           {hasMore && (
@@ -793,6 +796,7 @@ export function ChatView({
             openFile={requestOpenFile}
             inspectCall={inspectCall}
             forkAt={forkAt}
+            loadToolResult={loadToolResult}
             loadImage={loadImage}
             renderMessageImages={renderMessageImages}
             fileMentions={fileMentions}

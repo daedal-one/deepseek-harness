@@ -88,6 +88,8 @@ export interface ChatNodeOwnerProps {
    * with only the durable references plus this loader, instead of receiving a
    * rendering closure.
    */
+  /** Fetch a deferred Tool result by its sequence. */
+  loadToolResult: (seq: number) => Promise<void>
   loadImage: MessageImageLoader
   renderMessageImages: RenderMessageImages
   fileMentions: (owner: TurnTailOwnerProps) => MarkdownFileMentions | undefined
@@ -140,8 +142,12 @@ export interface ChatViewInjected {
   }
   openFile: (path: string, options?: OpenFileOptions) => Promise<void>
   loadOlder: () => void
+  /** Retry a failed initial history load. */
+  retryOpen: () => void
   /** Jump loader: page history back through seq; resolves when the window covers it. */
   loadThrough: (seq: SessionSeq) => Promise<void>
+  /** Fetch a deferred Tool result by its sequence. */
+  loadToolResult: (seq: number) => Promise<void>
   loadImage: MessageImageLoader
   chatScroll: {
     save: (position: ChatScrollPosition | null) => void

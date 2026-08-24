@@ -92,6 +92,8 @@ export interface SessionSnapshot {
     readonly parentAvailable?: boolean
   } | null
   readonly removed: boolean
+  /** Last loaded transcript remains readable during carrier recovery. */
+  readonly syncing?: boolean
   readonly openState: OpenState
   readonly openError: RemoteFailure | null
   readonly hasMore: boolean

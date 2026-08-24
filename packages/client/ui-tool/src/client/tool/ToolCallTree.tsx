@@ -1,5 +1,5 @@
 /** Root/subcall Tool composition with one keyed atomic dispatch path. */
-import { memo, useMemo, type ReactNode } from 'react'
+import { memo, useMemo, useState, type ReactNode } from 'react'
 import type { ToolCallBlock } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { ToolCallOwnerProps, ToolTreeProps } from '../contract/slots.ts'
 import { GenericToolCard } from './toolviews/GenericToolCard.tsx'
@@ -12,14 +12,16 @@ function callName(node: ToolCallBlock): string {
 
 /** One atomic call dispatched through the Tool-owned keyed slot. */
 const ToolCall = memo(function ToolCall({
-  renderSlot, callId, toolName, block, openFile, cwd, home, inspectCall, loadImage, t, children,
-}: Pick<ToolTreeProps, 'renderSlot' | 'openFile' | 'cwd' | 'inspectCall' | 'loadImage' | 't'> & {
+  renderSlot, callId, toolName, block, openFile, cwd, home, inspectCall, loadToolResult, loadImage, t, children,
+}: Pick<ToolTreeProps, 'renderSlot' | 'openFile' | 'cwd' | 'inspectCall' | 'loadToolResult' | 'loadImage' | 't'> & {
   callId: string
   toolName: string
   block: ToolCallBlock
   home?: string | undefined
   children?: ReactNode
 }) {
+  const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const owner: ToolCallOwnerProps = useMemo(() => ({
     callId,
     toolName,
@@ -36,7 +38,19 @@ const ToolCall = memo(function ToolCall({
       data-chat-anchor-key={`call:${callId}`}
       data-chat-call-id={callId}
     >
-      {renderSlot('tool.call.toolview', owner, {
+      {'kind' in block && block.deferred === true && (
+        <div>
+          <button type="button" disabled={loading} onClick={() => {
+            setLoading(true)
+            setLoadError(null)
+            loadToolResult(block.seq).catch((error: unknown) => {
+              setLoadError(error instanceof Error ? error.message : String(error))
+            }).finally(() => { setLoading(false) })
+          }}>{loading ? t('loading') : t('tool.loadResult')}</button>
+          {loadError !== null && <span role="alert">{loadError}</span>}
+        </div>
+      )}
+      {renderSlot('tool.call.toolview' , owner, {
         entryKey: toolName,
         fallback: <GenericToolCard {...owner} t={t} />,
       })}
@@ -46,8 +60,8 @@ const ToolCall = memo(function ToolCall({
 })
 
 const ToolCallBranch = memo(function ToolCallBranch({
-  renderSlot, block, cwd, home, openFile, inspectCall, loadImage, t,
-}: Pick<ToolTreeProps, 'renderSlot' | 'cwd' | 'openFile' | 'inspectCall' | 'loadImage' | 't'> & {
+  renderSlot, block, cwd, home, openFile, inspectCall, loadToolResult, loadImage, t,
+}: Pick<ToolTreeProps, 'renderSlot' | 'cwd' | 'openFile' | 'inspectCall' | 'loadToolResult' | 'loadImage' | 't'> & {
   block: ToolCallBlock
   home?: string | undefined
 }) {
@@ -61,6 +75,7 @@ const ToolCallBranch = memo(function ToolCallBranch({
       cwd={cwd}
       home={home}
       inspectCall={inspectCall}
+      loadToolResult={loadToolResult}
       loadImage={loadImage}
       t={t}
     >
@@ -75,7 +90,8 @@ const ToolCallBranch = memo(function ToolCallBranch({
               home={home}
               openFile={openFile}
               inspectCall={inspectCall}
-              loadImage={loadImage}
+              loadToolResult={loadToolResult}
+      loadImage={loadImage}
               t={t}
             />
           ))}
@@ -92,7 +108,7 @@ const ToolCallBranch = memo(function ToolCallBranch({
  * @returns the Tool call tree.
  */
 export function ToolCallTree({
-  renderSlot, node, cwd, openFile, inspectCall, loadImage, useHostInfo, t,
+  renderSlot, node, cwd, openFile, inspectCall, loadToolResult, loadImage, useHostInfo, t,
 }: ToolTreeProps) {
   const home = useHostInfo(info => info.home)
   const block = node.data.root
@@ -104,6 +120,7 @@ export function ToolCallTree({
       home={home}
       openFile={openFile}
       inspectCall={inspectCall}
+      loadToolResult={loadToolResult}
       loadImage={loadImage}
       t={t}
     />

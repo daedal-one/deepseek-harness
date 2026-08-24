@@ -67,6 +67,8 @@ export interface IConversation {
    * @returns completion of the page pull.
    */
   loadOlder(): Promise<void>
+  /** Load one deferred Tool-result body into the current transcript. */
+  loadToolResult(seq: number): Promise<void>
 }
 
 /** Create one browser-only image draft descriptor; only its id enters input state. */
@@ -513,6 +515,11 @@ export class ConversationController extends Service implements IConversation {
   /** Pull one older history page for the scoped Session. */
   async loadOlder(): Promise<void> {
     await this.scopedSession('loadOlder').loadOlder()
+  }
+
+  /** Load one deferred Tool-result body into the current transcript. */
+  async loadToolResult(seq: number): Promise<void> {
+    await this.scopedSession('loadToolResult').loadHistoryDetail?.(seq)
   }
 
   /** Resolve the caller scope's session face or throw on root contexts. */

@@ -111,6 +111,8 @@ interface ConversationMatchOf<
   Role extends ConversationMatchResult['role'],
 > {
   readonly event: Event
+  /** Exact result omitted from the initial delivery. */
+  readonly detail?: { readonly kind: 'tool-result'; readonly bytes: number }
   readonly role: Role
   readonly location: ConversationLocation
 }

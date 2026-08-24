@@ -88,6 +88,8 @@ export class Session implements SessionFace {
   // ---- Window and derived state (all private; the snapshot is the only read API) ----
   private baseSeq = SessionLogOffset(0)
   private hasMore = false
+  private readonly detailLoads = new Map<number, Promise<void>>()
+  private syncing = false
   private openState: OpenState = 'cold'
   private openError: RemoteFailure | null = null
   private openPromise: Promise<void> | null = null
@@ -387,6 +389,28 @@ export class Session implements SessionFace {
     return promise
   }
 
+  /** Fetch an exact result and replace only its still-deferred entry. */
+  loadHistoryDetail(seq: number): Promise<void> {
+    const pending = this.detailLoads.get(seq)
+    if (pending !== undefined) return pending
+    const generation = this.openGeneration
+    const task = (async () => {
+      const result = await this.remote.session.historyDetail({ address: this.sessionAddress(), seq })
+      if (!result.ok) throw result.error
+      if (generation !== this.openGeneration) return
+      const window = this.eventSource.getSnapshot()
+      const entry = window.entries.find(value => value.event.seq === seq)
+      if (entry?.type !== 'event' || entry.detail === undefined) return
+      const replacement = result.value as unknown as SessionLiveEventEntry
+      this.eventSource.replace(window.entries.map(value => value === entry ? replacement : value), window.hasMore)
+    })().finally(() => { this.detailLoads.delete(seq) })
+    this.detailLoads.set(seq, task)
+    return task
+  }
+
+  /** Retry a failed initial history load. */
+  retryOpen(): Promise<void> { return this.open() }
+
   /** Page up: pull one earlier page with the window's first seq as beforeSeq and prepend. */
   async loadOlder(): Promise<void> {
     if (this.openState !== 'open' || !this.hasMore || this.loadingOlder) return
@@ -612,6 +636,10 @@ export class Session implements SessionFace {
         if (generation !== this.openGeneration || this.events !== events) return
         this.acceptEventChange(change)
       },
+      carrierFailed: () => {
+        this.syncing = true
+        this.notifier.markDirty()
+      },
       failed: (error) => {
         this.failEventStream(events, generation, error)
       },
@@ -636,6 +664,8 @@ export class Session implements SessionFace {
   private acceptEventChange(change: SessionJournalChange): void {
     switch (change.type) {
       case 'replace':
+        this.syncing = false
+        this.notifier.markDirty()
         this.installWindow(
           change.entries,
           change.hasMore,
@@ -806,6 +836,7 @@ export class Session implements SessionFace {
         },
       removed: this.removed,
       openState: this.openState,
+      syncing: this.syncing,
       openError: this.openError,
       hasMore: this.hasMore,
       loadingOlder: this.loadingOlder,

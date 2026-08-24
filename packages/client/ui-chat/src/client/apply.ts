@@ -137,6 +137,8 @@ export function apply(ctx: Context): void {
             await Promise.resolve()
           },
           loadOlder: () => { void session.loadOlder() },
+          retryOpen: () => { void session.retryOpen() },
+          loadToolResult: seq => session.loadHistoryDetail(seq),
           loadThrough: seq => session.loadThrough(seq),
           loadImage: Object.assign(
             (attachment: ImageAttachmentRef) => ctx.uiConversation.imageUrl(sessionId, attachment),

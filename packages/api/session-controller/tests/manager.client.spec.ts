@@ -64,6 +64,36 @@ describe('list lifecycle', () => {
     expect(snapshot.items.map(i => i.sessionId)).toEqual([S2, S1])
   })
 
+  it('loads continuation pages only on demand and seeds their projections', async () => {
+    const api = new FakeApiClient()
+    api.onList = async (payload) => {
+      const request = payload as { cursor?: string }
+      return request.cursor === undefined
+        ? ok({ items: [summary(S1)] as never[], hasMore: true, nextCursor: 'next' as never })
+        : ok({
+          items: [{
+            ...summary(S2, { running: true }),
+            projections: { asOfSeq: 4, values: { title: 'Later page' } },
+          }] as never[],
+          hasMore: false,
+        })
+    }
+    const manager = new SessionManager(api, fakeRemote())
+    await manager.refreshList()
+    expect(api.callsOf('session.list')).toEqual([{}])
+    expect(manager.getListSnapshot()).toMatchObject({ hasMore: true, loadingMore: false })
+    const resident = manager.get(S2)
+    expect(resident.getSnapshot().running).toBe(false)
+    await manager.loadMoreList()
+    expect(api.callsOf('session.list')).toEqual([{}, { cursor: 'next' }])
+    expect(manager.getListSnapshot()).toMatchObject({ hasMore: false, loadingMore: false })
+    expect(manager.getListSnapshot().items.map(item => item.sessionId)).toEqual([S1, S2])
+    expect(manager.getListSnapshot().items[1]?.title).toBe('Later page')
+    expect(resident.getSnapshot().running).toBe(true)
+    await manager.loadMoreList()
+    expect(api.callsOf('session.list')).toHaveLength(2)
+  })
+
   it('replays incremental frames over hydration and never batch-reorders established ids', async () => {
     const api = new FakeApiClient()
     const first = deferred<Awaited<ReturnType<FakeApiClient['onList']>>>()

@@ -38,10 +38,13 @@ import type {
   SessionForkRequest,
   SessionForkValue,
   SessionListRequest,
+  SessionListCursor,
   SessionListValue,
   SessionOpenWorkspacePathRequest,
   SessionOpenWorkspacePathValue,
   SessionPage,
+  SessionHistoryDetailRequest,
+  SessionEventEntry,
   SessionPageRequest,
   SessionPromptRequest,
   SessionPromptValue,
@@ -71,6 +74,10 @@ declare module '@deepseek-ai/cordis' {
 export interface Config {
   /** Override platform desktop-opener detection. */
   readonly nativeOpen?: boolean
+  /** Maximum serialized history page or opening snapshot, except one indivisible message group. */
+  readonly historyPageMaxBytes?: number
+  /** Maximum ordinary Session rows per list page. */
+  readonly sessionListPageSize?: number
 }
 
 /** Host integrations replaceable by direct unit tests. */
@@ -100,8 +107,11 @@ export class SessionController extends TypertRemoteService {
 
   static Config: z<Config> = z.object({
     nativeOpen: z.boolean(),
+    historyPageMaxBytes: z.number().step(1).min(1).default(512 * 1024),
+    sessionListPageSize: z.number().step(1).min(1).default(50),
   })
 
+  private readonly sessionListPageSize: number
   private readonly agents: ApiSessionAgentController
   private readonly commands: SessionCommandController
   private readonly controlState: SessionControlController
@@ -119,6 +129,7 @@ export class SessionController extends TypertRemoteService {
    */
   constructor(ctx: Context, config: Config, internals: SessionControllerInternals = {}) {
     super(ctx, 'sessionController', { namespace: 'session' })
+    this.sessionListPageSize = config.sessionListPageSize ?? 50
     installModelSelectionProjection(ctx)
     this.agents = new ApiSessionAgentController(ctx)
     this.commands = new SessionCommandController(ctx, this.agents, process.cwd())
@@ -133,7 +144,7 @@ export class SessionController extends TypertRemoteService {
     ctx.effect(() => async () => {
       await Promise.allSettled([...this.promotions])
     }, 'session-controller.promotions')
-    this.history = new SessionHistoryController(ctx, (observation) => { this.promote(observation) })
+    this.history = new SessionHistoryController(ctx, (observation) => { this.promote(observation) }, config.historyPageMaxBytes ?? 512 * 1024)
     this.listState = new ApiSessionList(ctx)
     this.openPath = internals.openPath ?? openNativePath
     this.revealPath = internals.revealPath ?? revealNativePath
@@ -220,8 +231,36 @@ export class SessionController extends TypertRemoteService {
    * @returns visible Session summaries ordered by activity.
    */
   @Remote('list')
-  async list(_request: SessionListRequest, signal: AbortSignal): Promise<SessionListValue> {
-    return { items: await this.listState.list(signal) }
+  async list(request: SessionListRequest, signal: AbortSignal): Promise<SessionListValue> {
+    const all = [...await this.listState.list(signal)].sort((a, b) =>
+      b.updatedAt - a.updatedAt || (a.sessionId < b.sessionId ? -1 : a.sessionId > b.sessionId ? 1 : 0))
+    let offset = 0
+    if (request.cursor !== undefined) {
+      let cursor: unknown
+      try {
+        cursor = JSON.parse(Buffer.from(request.cursor, 'base64url').toString('utf8'))
+      } catch {
+        throw new RemoteError('gateway/bad-request', 'Invalid session list cursor', {})
+      }
+      if (!Array.isArray(cursor) || cursor.length !== 2 || typeof cursor[0] !== 'number'
+        || !Number.isFinite(cursor[0]) || typeof cursor[1] !== 'string') {
+        throw new RemoteError('gateway/bad-request', 'Invalid session list cursor', {})
+      }
+      const [time, id] = cursor as [number, string]
+      const found = all.findIndex(row => row.updatedAt < time || (row.updatedAt === time && row.sessionId > id))
+      offset = found < 0 ? all.length : found
+    }
+    const page = all.slice(offset, offset + this.sessionListPageSize)
+    const hasMore = offset + page.length < all.length
+    const selected = all.find(row => row.sessionId === request.includeSessionId)
+    const tail = page.at(-1)
+    return {
+      items: selected !== undefined && !page.some(row => row.sessionId === selected.sessionId) ? [...page, selected] : page,
+      hasMore,
+      ...hasMore && tail !== undefined ? {
+        nextCursor: Buffer.from(JSON.stringify([tail.updatedAt, tail.sessionId])).toString('base64url') as SessionListCursor,
+      } : {},
+    }
   }
 
   /**
@@ -376,6 +415,17 @@ export class SessionController extends TypertRemoteService {
   @Remote('cancel')
   cancel(request: SessionCancelRequest): SessionCancelValue {
     return this.commands.cancel(request)
+  }
+
+  /**
+   * Read one original Tool result omitted from a history page.
+   * @param request - authorized address and result sequence.
+   * @param signal - cancellation for the read.
+   * @returns the exact original result event.
+   */
+  @Remote('historyDetail')
+  historyDetail(request: SessionHistoryDetailRequest, signal: AbortSignal): Promise<SessionEventEntry> {
+    return this.history.historyDetail(request, signal)
   }
 
   /**

@@ -154,6 +154,8 @@ export interface TurnMaxTokensNode {
 /** A tool result paired (when in-window) with its call head. */
 export interface ToolResultNode {
   kind: 'tool-result'
+  /** Original content is available through the Session detail reader. */
+  deferred?: true
   seq: number
   /** Unix epoch ms from the tool/result session event. */
   time: number

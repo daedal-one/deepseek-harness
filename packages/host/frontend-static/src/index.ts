@@ -101,7 +101,11 @@ export async function serveStatic(
     res.end()
     return
   }
-  res.writeHead(200, { 'content-type': type })
+  res.writeHead(200, {
+    'content-type': type,
+    'cache-control': type === HTML_MIME ? 'no-store'
+      : pathname.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache',
+  })
   res.end(body)
 }
 

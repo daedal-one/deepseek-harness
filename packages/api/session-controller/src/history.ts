@@ -26,6 +26,7 @@ import type {
   SessionFollowRequest,
   SessionFollowFrame,
   SessionHistoryRecord,
+  SessionHistoryDetailRequest,
   SessionPage,
   SessionPageRequest,
   SessionProjectionBaseline,
@@ -50,6 +51,7 @@ export class SessionHistoryController {
   constructor(
     private readonly ctx: Context,
     private readonly promote: (observation: SessionObservation) => void,
+    private readonly historyPageMaxBytes = 512 * 1024,
   ) {
     ctx.on('agent/assistant-stream', ({ agent, frame }) => {
       let stream = this.assistantStreams.get(agent.session.id)
@@ -97,17 +99,8 @@ export class SessionHistoryController {
     if (throughSeq >= 0 && sourceLog[throughSeq]?.seq !== throughSeq) {
       throw new RemoteError('gateway/internal', `session log does not contain through seq ${String(throughSeq)}`, {})
     }
-    const page = paginate(
-      sourceLog,
-      beforeSeq,
-      request.maxMessages ?? DEFAULT_MAX_MESSAGES,
-      throughSeq,
-    )
-    const records = pageRecords(page.events)
-    return {
-      records,
-      hasMore: page.hasMore,
-    }
+    return boundedPage(sourceLog, beforeSeq, request.maxMessages ?? DEFAULT_MAX_MESSAGES,
+      throughSeq, this.historyPageMaxBytes, page => page)
   }
 
   /**
@@ -179,7 +172,6 @@ export class SessionHistoryController {
       signal.throwIfAborted()
       const cursor = source.cursor
       snapshotCursor = cursor
-      const page = paginate(events, undefined, request.maxMessages ?? DEFAULT_MAX_MESSAGES)
       const assistantStream = request.assistantStream === true
         ? this.assistantStreams.get(target)?.snapshot() ?? { revision: 0 }
         : undefined
@@ -188,17 +180,17 @@ export class SessionHistoryController {
       // including larger revisions from a retired Agent; later revision
       // resets reach Client continuity validation.
       const assistantStreamOrdinalCut = assistantStreamOrdinal
-      yield {
-        type: 'snapshot',
+      yield boundedPage(events, undefined, request.maxMessages ?? DEFAULT_MAX_MESSAGES,
+        cursor, this.historyPageMaxBytes, page => ({
+        type: 'snapshot' as const,
         header: wireHeader(source.header),
         cursor,
-        records: pageRecords(page.events),
-        hasMore: page.hasMore,
+        ...page,
         projections: source.projections === undefined
           ? { asOfSeq: cursor, values: {} }
           : projectionBlock(source.projections),
         ...assistantStream === undefined ? {} : { assistantStream },
-      }
+      }))
       if (address.kind === 'session' && source.source === 'prepared') {
         const promotion = source.retain()
         try {
@@ -236,6 +228,23 @@ export class SessionHistoryController {
       disposeEvent()
       disposeAssistantStream?.()
     }
+  }
+
+  /**
+   * Read an original deferred result without activating its Agent.
+   * @param request - durable address and exact result sequence.
+   * @param signal - cancellation for the persistence read.
+   * @returns the complete original event.
+   */
+  async historyDetail(request: SessionHistoryDetailRequest, signal: AbortSignal): Promise<SessionEventEntry> {
+    const seq = SessionSeq(request.seq)
+    using source = await this.sourceFor(request.address, signal, false)
+    signal.throwIfAborted()
+    const event = source.events[seq]
+    if (event?.type !== 'tool/result') {
+      throw new RemoteError('session/history-detail-not-found', 'Tool result is unavailable', { seq })
+    }
+    return entryFor(event)
   }
 
   private async sourceFor(
@@ -421,7 +430,50 @@ function entryFor(event: SessionEvent): SessionEventEntry {
   }
 }
 
-/** Encode one bounded logical page without changing its pagination cut. */
-function pageRecords(events: readonly SessionEvent[]): SessionHistoryRecord[] {
-  return events.map(entryFor)
+
+/** Select a complete message group before reporting an unavoidable oversized payload. */
+function boundedPage<T extends SessionPage>(
+  events: readonly SessionEvent[],
+  beforeSeq: SessionLogOffsetType | undefined,
+  maxMessages: number,
+  throughSeq: SessionSeqCursor,
+  maxBytes: number,
+  decorate: (page: SessionPage) => T,
+): T {
+  const available = events.filter(event => MESSAGE_TYPES.has(event.type) && isAppendSurfaceEvent(event)).length
+  for (let messages = Math.max(1, Math.min(maxMessages, available + 1)); messages >= 1; messages--) {
+    const selected = paginate(events, beforeSeq, messages, throughSeq)
+    const records = selected.events.map((event): SessionHistoryRecord => {
+      if (event.type !== 'tool/result') return entryFor(event)
+      const entry = entryFor(event)
+      return {
+        ...entry,
+        event: {
+          ...entry.event,
+          data: {
+            ...event.data,
+            message: {
+              ...event.data.message,
+              content: [{ ...event.data.message.content[0], content: [] }],
+            },
+          } as JsonValue,
+        },
+        detail: { kind: 'tool-result', bytes: Buffer.byteLength(JSON.stringify(event), 'utf8') },
+      }
+    })
+    const page = { records, hasMore: selected.hasMore }
+    const response = decorate(page)
+    const bytes = Buffer.byteLength(JSON.stringify(response), 'utf8')
+    if (bytes <= maxBytes || messages === 1 || records.length === 0) {
+      if (bytes <= maxBytes) return response
+      let reported = bytes
+      while (true) {
+        const oversized = decorate({ ...page, oversized: { bytes: reported } })
+        const actual = Buffer.byteLength(JSON.stringify(oversized), 'utf8')
+        if (actual === reported) return oversized
+        reported = actual
+      }
+    }
+  }
+  throw new Error('History pagination produced no page')
 }

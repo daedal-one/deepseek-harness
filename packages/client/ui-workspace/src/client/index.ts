@@ -106,6 +106,7 @@ export function apply(ctx: Context): void {
     open: openSession,
     searchSessions,
     searchResultLimit: sessions.searchResultLimit,
+    loadMoreSessions: () => { void sessions.loadMore() },
     renameSession: async (sessionId, title) => {
       // Row → session-face hop: rename is a per-session verb (ISession), not
       // a list-service verb; the binding resolves any listed session.

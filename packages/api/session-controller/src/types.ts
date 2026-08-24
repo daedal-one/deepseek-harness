@@ -238,14 +238,20 @@ export interface SkillListValue {
   readonly skills: readonly SkillEntry[]
 }
 
+/** Opaque cursor in stable Session recency order. */
+export type SessionListCursor = import('@deepseek-ai/dsh-brand').Branded<'session-list-cursor'>
+
 /** Session list request. */
 export interface SessionListRequest {
-  readonly cursor?: string
+  readonly cursor?: SessionListCursor
+  readonly includeSessionId?: SessionId
 }
 
 /** Session list response value. */
 export interface SessionListValue {
   readonly items: readonly SessionSummary[]
+  readonly hasMore: boolean
+  readonly nextCursor?: SessionListCursor
 }
 
 /** Session search request. */
@@ -393,6 +399,8 @@ export type SessionAddress =
 export interface SessionEventEntry {
   readonly type: 'event'
   readonly event: SessionWireEvent
+  /** The original result is fetched on demand through historyDetail. */
+  readonly detail?: { readonly kind: 'tool-result'; readonly bytes: number }
 }
 
 /** Current logical Session metadata carried on the browser wire. */
@@ -432,6 +440,12 @@ export interface SessionWireEvent {
   readonly sourceEventSeqs?: JsonValue
   /** Canonical placement on current surface events; opaque JSON on unknown ignorable events. */
   readonly surfaceOp?: JsonValue
+}
+
+/** Exact deferred result request; the address preserves child authorization. */
+export interface SessionHistoryDetailRequest {
+  readonly address: SessionAddress
+  readonly seq: number
 }
 
 /** One message-aligned backwards-history request. */
@@ -507,6 +521,8 @@ export type SessionAssistantStreamFrame =
 export interface SessionPage {
   readonly records: readonly SessionHistoryRecord[]
   readonly hasMore: boolean
+  /** One complete message group exceeds the configured byte limit. */
+  readonly oversized?: { readonly bytes: number }
 }
 
 /** Complete opening window followed by ordered durable events and opted-in assistant frames. */
@@ -517,6 +533,7 @@ export type SessionFollowFrame =
     readonly cursor: number
     readonly records: readonly SessionHistoryRecord[]
     readonly hasMore: boolean
+    readonly oversized?: { readonly bytes: number }
     readonly projections: SessionProjectionBaseline
     readonly assistantStream?: SessionAssistantStreamBaseline
   }

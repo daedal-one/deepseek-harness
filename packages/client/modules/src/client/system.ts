@@ -10,8 +10,10 @@ import type {
   ClientModuleSystemOptions,
 } from './manifest.ts'
 
-/** Default bundle-load hook: same-origin external classic script. */
-const defaultLoadBundle = (url: string): Promise<void> => new Promise((resolve, reject) => {
+class ScriptLoadError extends Error {}
+
+/** Load one same-origin external classic script. */
+const loadBundleScript = (url: string): Promise<void> => new Promise((resolve, reject) => {
   const el = document.createElement('script')
   el.async = true
   el.src = url
@@ -21,10 +23,20 @@ const defaultLoadBundle = (url: string): Promise<void> => new Promise((resolve, 
   }, { once: true })
   el.addEventListener('error', () => {
     el.remove()
-    reject(new Error(`client-modules: bundle script ${url} failed to load`))
+    reject(new ScriptLoadError(`client-modules: bundle script ${url} failed to load`))
   }, { once: true })
   document.head.append(el)
 })
+
+/** Retry one failed script transport before reporting a module load failure. */
+const defaultLoadBundle = async (url: string): Promise<void> => {
+  try {
+    await loadBundleScript(url)
+  } catch (error) {
+    if (!(error instanceof ScriptLoadError)) throw error
+    await loadBundleScript(url)
+  }
+}
 
 /** Replace the rev query while preserving absolute, protocol-relative, or path-relative form. */
 function atRevision(url: string, rev: string): string {

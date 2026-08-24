@@ -857,6 +857,7 @@ export function WorkspaceBrowser({
   createWorkspace,
   searchSessions,
   searchResultLimit,
+  loadMoreSessions,
   useDirectoryFlow,
   useHostInfo,
   renderSlot,
@@ -867,6 +868,8 @@ export function WorkspaceBrowser({
   const workspacePhase = useWorkspaces(state => state.phase)
   const workspaceStreamState = useWorkspaces(state => state.state)
   const archivedSessionIds = useWorkspaces(state => state.archivedSessionIds)
+  const hasMoreSessions = useSessions(state => state.hasMore === true)
+  const loadingMoreSessions = useSessions(state => state.loadingMore === true)
   // Live occupancy of this surface's directory-flow hole (the same source the
   // flow reads): a composition without a picking affordance can add nothing.
   const directoryFlowAvailable = useDirectoryFlow(occupied => occupied)
@@ -1324,6 +1327,16 @@ export function WorkspaceBrowser({
                 }}
               />
             ))}
+        {wide && normalizedQuery === '' && hasMoreSessions && (
+          <button
+            type="button"
+            className={css.loadMore}
+            disabled={loadingMoreSessions}
+            onClick={loadMoreSessions}
+          >
+            {loadingMoreSessions ? t('sessions.loadingMore') : t('sessions.loadMore')}
+          </button>
+        )}
       </div>
 
       <Modal

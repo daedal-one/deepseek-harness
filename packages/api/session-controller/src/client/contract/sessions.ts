@@ -27,6 +27,8 @@ export interface ISessions {
    * (fixture included) reports the same number.
    */
   readonly searchResultLimit: number
+  /** Fetch the next session-list continuation page. */
+  loadMore(): Promise<void>
   /**
    * Create or adopt a Session on the Host.
    * @param opts - target workspace, directory, and optional preallocated identity.

@@ -21,5 +21,6 @@ The desktop shell keeps a collapsed sidebar rail and fixed three-column geometry
 - {#c-conversation} The transcript and composer MUST fit the phone viewport without horizontal page overflow, MUST keep the composer reachable when the visible viewport changes, MUST preserve readable touch and input targets, and MUST keep the access-mode control from overlapping the model selector.
 - {#c-settings} The settings dialog MUST fit within the phone viewport, MUST keep its section navigation and close action reachable, and MUST scroll section content independently.
 - {#c-accessibility} Responsive behavior MUST preserve keyboard focus visibility, browser zoom, accessible names, and reduced-motion preferences; a tool-approval takeover MUST move focus from the replaced composer to its safe rejection action.
+- {#c-boot-recovery} Web boot MUST retry one failed client-plugin script arrival before showing the fail-loud loading report, including on phone-sized viewports.
 - {#c-desktop} At and above the phone breakpoint, the existing three-column sizing, collapsible control rail, resize handles, composer geometry, details behavior, and settings layout MUST remain unchanged.
 :::

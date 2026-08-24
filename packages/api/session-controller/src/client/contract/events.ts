@@ -21,7 +21,7 @@ export type SessionEventLike = SessionEvent | AssistantLiveChunkEvent
 
 /** Client history entry retaining its coarse transport discriminator. */
 export type SessionEventLikeEntry =
-  | { readonly type: 'event'; readonly event: SessionEvent }
+  | { readonly type: 'event'; readonly event: SessionEvent; readonly detail?: { readonly kind: 'tool-result'; readonly bytes: number } }
   | { readonly type: 'transient'; readonly event: AssistantLiveChunkEvent }
 
 /** Scalar live entry accepted by append-only Client paths. */
