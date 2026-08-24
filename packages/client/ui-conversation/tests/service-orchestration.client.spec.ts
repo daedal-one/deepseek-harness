@@ -116,6 +116,28 @@ describe('ConversationController', () => {
     await b.runtime.dispose()
   })
 
+  it('creates draft images without secure-context randomUUID', async () => {
+    const b = await bench()
+    vi.stubGlobal('crypto', {
+      getRandomValues(bytes: Uint8Array) {
+        return bytes.fill(0xab)
+      },
+    })
+    const created = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:draft-insecure-origin')
+    try {
+      const [attachment] = b.root.createDrafts(b.runtime.sessions.binding('s1')!.session.sessionId, [
+        new File([Uint8Array.of(1)], 'pasted.png', { type: 'image/png' }),
+      ])
+      expect(attachment?.id).toBe('abababab-abab-4bab-abab-abababababab')
+       if (attachment?.kind !== 'image') throw new Error('expected an image draft')
+      expect(attachment?.previewUrl).toBe('blob:draft-insecure-origin')
+    } finally {
+      created.mockRestore()
+      vi.unstubAllGlobals()
+      await b.runtime.dispose()
+    }
+  })
+
   it('releases an image removed from the rail by an unsettled optimistic send', async () => {
     const b = await bench()
     const created = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:detached')
