@@ -302,9 +302,41 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
       expect(geometry.frameWidth).toBe(390)
       expect(geometry.conversationWidth).toBe(390)
 
+      await page.evaluate(() => {
+        const firstRow = document.querySelector<HTMLElement>('[data-chat-flow-key]')
+        if (firstRow === null || firstRow.parentElement === null) throw new Error('chat flow did not render')
+        const probe = document.createElement('div')
+        probe.dataset.documentScrollProbe = ''
+        probe.style.height = '1200px'
+        probe.style.flex = 'none'
+        firstRow.parentElement.append(probe)
+      })
+      await expect.poll(() => page.evaluate(() => document.scrollingElement!.scrollHeight > window.innerHeight)).toBe(true)
+      await page.evaluate(() => { document.scrollingElement!.scrollTop = 300 })
+      await expect.poll(() => page.evaluate(() => document.scrollingElement!.scrollTop)).toBeGreaterThan(0)
+      const scrollGeometry = await page.evaluate(() => {
+        const host = document.querySelector<HTMLElement>('[data-conversation-scroll]')!
+        const composer = document.querySelector<HTMLElement>('[data-composer-seat]')!
+        const composerBox = composer.getBoundingClientRect()
+        return {
+          hostOverflowY: getComputedStyle(host).overflowY,
+          hostScrollTop: host.scrollTop,
+          documentScrollTop: document.scrollingElement!.scrollTop,
+          composerTop: composerBox.top,
+          composerBottom: composerBox.bottom,
+          viewportHeight: window.innerHeight,
+        }
+      })
+      expect(scrollGeometry.hostOverflowY).toBe('visible')
+      expect(scrollGeometry.hostScrollTop).toBe(0)
+      expect(scrollGeometry.documentScrollTop).toBeGreaterThan(0)
+      expect(scrollGeometry.composerTop).toBeGreaterThanOrEqual(0)
+      expect(scrollGeometry.composerBottom).toBeLessThanOrEqual(scrollGeometry.viewportHeight)
       await page.getByRole('button', { name: 'Open sidebar' }).click()
       const scrim = page.locator('[data-sidebar-scrim]')
       await scrim.waitFor({ timeout: 10_000 })
+      const scrimBox = await scrim.boundingBox()
+      expect(scrimBox).toMatchObject({ x: 0, y: 0, width: 390, height: 844 })
       expect(await page.locator('[data-conversation-scroll]').evaluate(element => element.getBoundingClientRect().width)).toBe(390)
       await scrim.click()
       await expect.poll(() => scrim.count()).toBe(0)
@@ -322,6 +354,10 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
       expect(tripwire.pageErrors).toEqual([])
       expect(tripwire.warnings).toEqual([])
     } finally {
+      await page.evaluate(() => {
+        document.querySelector('[data-document-scroll-probe]')?.remove()
+        if (document.scrollingElement !== null) document.scrollingElement.scrollTop = 0
+      }).catch(() => undefined)
       await page.setViewportSize(originalViewport)
     }
   })

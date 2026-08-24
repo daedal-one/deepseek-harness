@@ -1,3 +1,4 @@
+import { conversationFlowTop as flowTop, conversationScroller as scrollerOf, conversationScrollEventTargets, conversationViewport } from '@deepseek-ai/dsh-client-ui-conversation/client'
 // An enclosing `[data-conversation-scroll]` owns scrolling when present;
 // otherwise this view owns it. Each row subscribes to one stable node key.
 
@@ -19,10 +20,6 @@ import css from './ChatView.module.css'
 const FOLLOW_THRESHOLD = 24
 const SCROLL_SAMPLE_INTERVAL_MS = 500
 
-/** Active column host when present; otherwise the view-local scroller. */
-function scrollerOf(from: HTMLElement): HTMLElement {
-  return (from.closest('[data-conversation-scroll]')) ?? from
-}
 
 /** Browser shrink clamps and recorded writes do not transfer scroll ownership. */
 function readerMovedScroll(top: number, floor: number, observedTop: number): boolean {
@@ -71,14 +68,11 @@ function turnAtLine(list: HTMLElement, line: number): number | null {
 }
 
 /** Row position in scrollport coordinates (viewport-independent). */
-function flowTop(row: HTMLElement, scrollport: HTMLElement): number {
-  return row.getBoundingClientRect().top - scrollport.getBoundingClientRect().top
-}
 
 /** Select a visible stable node/call identity, falling back only when layout
  * has not exposed a visible box yet. */
 function pagingAnchor(list: HTMLElement, scrollport: HTMLElement): HTMLElement | null {
-  const viewport = scrollport.getBoundingClientRect()
+  const viewport = conversationViewport(scrollport)
   const composer = scrollport.querySelector<HTMLElement>('[data-composer-seat]')
   const visibleBottom = composer?.getBoundingClientRect().top ?? viewport.bottom
   // The leading edge preserves nested call identity when it hits a row.
@@ -359,7 +353,7 @@ export function ChatView({
       setActiveTurn(current => current === latest ? current : latest)
       return
     }
-    const readingLine = el.getBoundingClientRect().top + Math.min(96, el.clientHeight * 0.2)
+    const readingLine = conversationViewport(el).top + Math.min(96, el.clientHeight * 0.2)
     const reading = turnAtLine(local, readingLine)
     // No row reaches the line yet: the flow head still owns the mark. Otherwise
     // the row's Turn may be one the rail does not offer (all its nodes hidden),
@@ -597,6 +591,7 @@ export function ChatView({
       setScrollSampleTick(tick => tick + 1)
     }
     const onScroll = (): void => {
+      const el = scrollerOf(local)
       scrollSamplePendingRef.current = true
       if (atBottomRef.current) {
         const floor = Math.max(0, el.scrollHeight - el.clientHeight)
@@ -607,11 +602,16 @@ export function ChatView({
       }
       sampleTimer ??= window.setTimeout(sample, SCROLL_SAMPLE_INTERVAL_MS)
     }
-    el.addEventListener('scroll', onScroll, { passive: true })
-    el.addEventListener('scrollend', sample, { passive: true })
+    const targets = conversationScrollEventTargets(local)
+    for (const target of targets) {
+      target.addEventListener('scroll', onScroll, { passive: true })
+      target.addEventListener('scrollend', sample, { passive: true })
+    }
     return () => {
-      el.removeEventListener('scroll', onScroll)
-      el.removeEventListener('scrollend', sample)
+      for (const target of targets) {
+        target.removeEventListener('scroll', onScroll)
+        target.removeEventListener('scrollend', sample)
+      }
       if (sampleTimer !== undefined) window.clearTimeout(sampleTimer)
       scrollSamplePendingRef.current = false
     }

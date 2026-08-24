@@ -22,7 +22,7 @@ Browser zoom, native navigation gestures, and tooltips remain browser- and compo
 
 **Hide the sidebar completely and add a new mobile navigation bar.** Rejected because the sidebar already owns a localized, keyboard-accessible toggle. Keeping that control as the collapsed phone seat avoids duplicate navigation state and preserves the existing action path.
 
-**Move phone scrolling from the transcript to the main document.** Main-document scrolling can trigger mobile browser toolbar retraction, but it would replace the scroll owner used by transcript following, anchoring, sticky composer placement, and composer-overlay views. The responsive shell retains the nested conversation scrollport and does not simulate toolbar state through `window.scrollTo()`.
+**Move phone scrolling from the transcript to the main document.** The initial shell retained the nested owner because transcript following, anchoring, sticky composer placement, and composer-overlay views all targeted it. The [phone document-scroller decision](2026-08-22-phone-document-scroll.md) reverses this alternative with one responsive owner abstraction while preserving those behaviors.
 
 ## Consequences
 

@@ -107,11 +107,19 @@
    it expands over the conversation rather than squeezing the center column. */
 .frame[data-phone] {
   grid-template-columns: minmax(0, 1fr);
-  height: 100dvh;
+  grid-template-rows: minmax(100dvh, auto);
+  min-height: 100dvh;
+  height: auto;
+  overflow: visible;
+}
+
+.frame[data-phone] .centerCol {
+  min-height: 100dvh;
+  overflow: visible;
 }
 
 .frame[data-phone] .sidebarCol {
-  position: absolute;
+  position: fixed;
   top: 0;
   bottom: 0;
   left: 0;
@@ -133,7 +141,7 @@
 }
 
 .frame[data-phone] .rightbarCol {
-  position: absolute;
+  position: fixed;
   inset: 0;
   z-index: 50;
   width: 100%;
@@ -149,7 +157,7 @@
 }
 
 .frame[data-phone] .drawerScrim {
-  position: absolute;
+  position: fixed;
   inset: 0;
   z-index: 30;
   display: block;
@@ -158,6 +166,10 @@
   background: var(--dsw-alias-bg-mask-1);
   cursor: pointer;
   touch-action: manipulation;
+}
+
+.frame[data-phone] .overlayLayer {
+  position: fixed;
 }
 
 @media (prefers-reduced-motion: reduce) {

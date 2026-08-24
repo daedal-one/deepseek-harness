@@ -34,6 +34,7 @@ import { DecoratorPortals } from '../input/editor/DecoratorPortals.tsx'
 import { registerComposerKeymap } from '../input/editor/keymap.ts'
 import { resolveSubmitMode } from '../input/submission-policy.ts'
 import { attachmentErrorText, imageSizeText } from '../image-labels.ts'
+import { conversationScroller } from '../scroll-owner.ts'
 import { ContextMeter } from './ContextMeter.tsx'
 import { PermissionSelect } from './PermissionSelect.tsx'
 import css from './InputBar.module.css'
@@ -210,13 +211,13 @@ export const InputBar = memo(function InputBar({
     const el = scrollRef.current
     if (el === null) return
     const onWheel = (e: WheelEvent): void => {
-      const host = el.closest('[data-conversation-scroll]')
-      if (!(host instanceof HTMLElement) || e.deltaY === 0) return
+      const host = el.closest<HTMLElement>('[data-conversation-scroll]')
+      if (host === null || e.deltaY === 0) return
       const atTop = el.scrollTop <= 0
       const atEnd = el.scrollTop + el.clientHeight >= el.scrollHeight - 1
       if ((e.deltaY < 0 && !atTop) || (e.deltaY > 0 && !atEnd)) return
       e.preventDefault()
-      host.scrollTop += e.deltaY
+      conversationScroller(host).scrollTop += e.deltaY
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => { el.removeEventListener('wheel', onWheel) }
