@@ -12,6 +12,16 @@ This plugin is the DeepSeek Harness implementation of `forge.agent.session/v1`. 
 - Reads are allowed. Workspace mutations and commands ask through the Harness approval seam; `approve` resolves the pending Forge decision without blocking the Temporal command activity.
 - The complete executor policy is immutable for the session. `workspace_apply` requires that exact capability in `tools`; `workspace_run` requires its first executable name in `tools`. A later command cannot widen either list.
 - `close` reconciles external changes and records watermarks before disposing the session. Evidence or cleanup failure is a terminal outcome, never a successful close.
+- A deployment may set `commandSandbox: landlock`. The adapter then configures
+  the compatible action MCP to clear each `workspace_run` child environment
+  and wrap the exact argv with the shipped Landlock launcher. Runtime roots are
+  read-only; only the exact allocated workspace, a lease-specific temporary
+  directory, `/dev/null`, and the exact credential socket are writable.
+- A `forgejo:project:write` scope requires a Forge-owned Unix socket at
+  `<credentialSocketRoot>/<executor_lease_id>/agent.sock` plus its Forge-owned
+  `known_hosts` file. The action MCP receives that `SSH_AUTH_SOCK`, a fixed
+  strict-host-key Git command, and the private temporary-directory variables;
+  private key bytes never cross the Forge session protocol.
 
 The runnable composition is [`examples/forge-adapter/cordis.yml`](../../../examples/forge-adapter/cordis.yml). Its bearer token, session state, adapter state, Intellect ledger root, graph database, action-MCP executable, and listen port are deployment configuration.
 
@@ -47,7 +57,11 @@ The roster is fixed and prefix-stable for the session. Action results are append
 
 ## Known Limitations and Deferred Work
 
-- **Executor isolation is supplied, not created** — Forge must allocate and mount a canonical absolute workspace with bounded network, credentials, tools, and lifetime. Forge Intellect is an accountability gateway, not a sandbox.
+- **The executor world is supplied, not created** — Forge must allocate and
+  mount the canonical workspace, credential socket, network, resources, and
+  lifetime. This adapter confines model-requested child file access when the
+  Landlock mode is enabled; it does not create worktrees, credentials, network
+  namespaces, or cgroups.
 - **Pause/resume commands are not advertised** — durable process restart uses Harness session resume, but operator pause semantics remain a Forge adapter protocol extension.
 - **One approval is pending per session** — shipped compositions use serial tool calls. A concurrent second question fails closed as unavailable.
 - **Diff content is retained as evidence** — the protocol returns Intellect artifact and watermark references rather than embedding an unbounded patch.

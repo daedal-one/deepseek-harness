@@ -25,6 +25,7 @@ function request(): Record<string, unknown> {
       tools: ['git', 'spec'],
       credential_scopes: ['forgejo:project:write'],
       workspace: '/workspaces/session-1',
+      executor_lease_id: 'agent-0123456789abcdef01234567',
     },
   }
 }

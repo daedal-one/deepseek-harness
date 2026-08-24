@@ -53,3 +53,5 @@
     intellectCommand: !!js process.env.FORGE_INTELLECT_ACTION_MCP ?? 'forge-intellect-action-mcp'
     intellectStateRoot: !!js process.env.FORGE_INTELLECT_STATE_ROOT ?? '/state/intellect'
     intellectGraphDb: !!js process.env.FORGE_INTELLECT_GRAPH_DB ?? '/state/intellect/graph.sqlite'
+    credentialSocketRoot: !!js process.env.DSH_FORGE_CREDENTIAL_SOCKET_ROOT ?? '/run/forge-agent-credentials'
+    commandSandbox: !!js process.env.DSH_FORGE_COMMAND_SANDBOX ?? 'landlock'

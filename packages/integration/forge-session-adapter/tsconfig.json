@@ -5,6 +5,7 @@
   "references": [
     { "path": "../../../vendor/cordis" },
     { "path": "../../../vendor/schemastery" },
+    { "path": "../../../native/landlock-run/packages/entry" },
     { "path": "../../util/atomic-write" },
     { "path": "../../core/agent" },
     { "path": "../../core/session" },

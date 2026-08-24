@@ -6,11 +6,13 @@
  */
 
 import { randomUUID, timingSafeEqual } from 'node:crypto'
-import { readFile, realpath } from 'node:fs/promises'
+import { chmod, lstat, mkdir, readFile, realpath, rm } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { join } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
+import { grantArgs, launcherPath, probe } from '@deepseek-ai/node-addon-landlock-run'
 import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
 import { CallId, createUserMessage } from '@deepseek-ai/dsh-llm'
 import * as McpClient from '@deepseek-ai/dsh-mcp-client'
@@ -74,6 +76,12 @@ export interface Config {
   intellectExcludes: string[]
   /** Timeout for each action-tool call. */
   intellectToolCallTimeoutMs: number
+  /** Root containing Forge-owned per-lease SSH-agent sockets. */
+  credentialSocketRoot: string
+  /** Child-command confinement mechanism. */
+  commandSandbox: 'disabled' | 'landlock'
+  /** Runtime roots visible read-only to confined commands. */
+  commandReadRoots: string[]
 }
 
 export const Config: z<Config> = z.object({
@@ -87,6 +95,9 @@ export const Config: z<Config> = z.object({
   intellectGraphDb: z.string().required(),
   intellectExcludes: z.array(String).default(['.git']),
   intellectToolCallTimeoutMs: z.number().min(1).default(60_000),
+  credentialSocketRoot: z.string().default('/run/forge-agent-credentials'),
+  commandSandbox: z.union(['disabled', 'landlock'] as const).default('disabled'),
+  commandReadRoots: z.array(String).default(['/usr', '/bin', '/lib', '/lib64', '/etc']),
 })
 
 interface StoredSession {
@@ -122,6 +133,7 @@ interface LiveSession {
   tail: Promise<void>
   pendingApproval?: PendingApproval
   approvalBoundary: PromiseWithResolvers<void>
+  commandTempRoot?: string
 }
 
 declare module '@deepseek-ai/cordis' {
@@ -204,8 +216,12 @@ export class ForgeSessionAdapter extends Service {
       unregisterSessions()
       offEvent()
       offStatus()
-      const handles = [...this.sessions.values()].flatMap(record => record.handle === undefined ? [] : [record.handle])
+      const records = [...this.sessions.values()]
+      const handles = records.flatMap(record => record.handle === undefined ? [] : [record.handle])
       await Promise.allSettled(handles.map(handle => handle.dispose()))
+      await Promise.allSettled(records.flatMap(record => record.commandTempRoot === undefined
+        ? []
+        : [rm(record.commandTempRoot, { recursive: true, force: true })]))
       await this.stateTail
     }, 'forgeSessionAdapter.lifecycle')
   }
@@ -238,15 +254,25 @@ export class ForgeSessionAdapter extends Service {
       ['stateFile', this.config.stateFile],
       ['intellectStateRoot', this.config.intellectStateRoot],
       ['intellectGraphDb', this.config.intellectGraphDb],
+      ['credentialSocketRoot', this.config.credentialSocketRoot],
     ]
     for (const [label, value] of paths) {
       if (!value.startsWith('/')) throw new Error(`forge-session-adapter: ${label} must be absolute`)
+    }
+    if (!/^\/[A-Za-z0-9._/-]+$/.test(this.config.credentialSocketRoot)) {
+      throw new Error('forge-session-adapter: credentialSocketRoot contains unsafe characters')
     }
     if (!/^\/[A-Za-z0-9._/-]*[A-Za-z0-9._-]$/.test(this.config.routePrefix)) {
       throw new Error('forge-session-adapter: routePrefix must be an absolute path without a trailing slash')
     }
     if (new Set(this.config.intellectExcludes).size !== this.config.intellectExcludes.length) {
       throw new Error('forge-session-adapter: intellectExcludes must be unique')
+    }
+    if (this.config.commandReadRoots.some(path => !path.startsWith('/'))) {
+      throw new Error('forge-session-adapter: commandReadRoots must be absolute')
+    }
+    if (this.config.commandSandbox === 'landlock' && probe() === 'unusable') {
+      throw new Error('forge-session-adapter: Landlock command sandbox is unavailable')
     }
   }
 
@@ -414,7 +440,8 @@ export class ForgeSessionAdapter extends Service {
       || stored.executorPolicy.max_minutes !== request.executor_policy.max_minutes
       || stored.executorPolicy.network !== request.executor_policy.network
       || stored.executorPolicy.tools.join('\0') !== request.executor_policy.tools.join('\0')
-      || stored.executorPolicy.credential_scopes.join('\0') !== request.executor_policy.credential_scopes.join('\0')) {
+      || stored.executorPolicy.credential_scopes.join('\0') !== request.executor_policy.credential_scopes.join('\0')
+      || stored.executorPolicy.executor_lease_id !== request.executor_policy.executor_lease_id) {
       throw new ProtocolError('session identity or allocated workspace changed', 409, 'policy_denied')
     }
     if (stored.closed) throw new ProtocolError('session is closed', 409)
@@ -539,6 +566,74 @@ export class ForgeSessionAdapter extends Service {
   private async ensureHandle(record: LiveSession): Promise<Agent> {
     const current = record.handle?.agent
     if (current !== undefined && this.ctx.agents.get(current.id) === current) return current
+    const credentialEnvironment: Record<string, string> = {}
+    const commandArguments: string[] = []
+    if (record.stored.executorPolicy.credential_scopes.includes('forgejo:project:write')) {
+      const credentialDirectory = join(
+        this.config.credentialSocketRoot,
+        record.stored.executorPolicy.executor_lease_id,
+      )
+      const socket = join(credentialDirectory, 'agent.sock')
+      const knownHosts = join(credentialDirectory, 'known_hosts')
+      const [socketMetadata, knownHostsMetadata] = await Promise.all([
+        lstat(socket).catch(() => undefined),
+        lstat(knownHosts).catch(() => undefined),
+      ])
+      if (socketMetadata?.isSocket() !== true || knownHostsMetadata?.isFile() !== true) {
+        throw new ProtocolError('Forge workload credential socket is unavailable', 409, 'policy_denied')
+      }
+      credentialEnvironment.SSH_AUTH_SOCK = socket
+      credentialEnvironment.GIT_SSH_COMMAND = [
+        'ssh',
+        '-oBatchMode=yes',
+        '-oStrictHostKeyChecking=yes',
+        `-oUserKnownHostsFile=${knownHosts}`,
+      ].join(' ')
+    }
+    if (this.config.commandSandbox === 'landlock') {
+      const commandTempRoot = join('/tmp', `forge-${record.stored.executorPolicy.executor_lease_id}`)
+      await mkdir(commandTempRoot, { recursive: true, mode: 0o700 })
+      if (await realpath(commandTempRoot) !== commandTempRoot) {
+        throw new ProtocolError('Forge command temporary directory must be canonical', 409, 'policy_denied')
+      }
+      await chmod(commandTempRoot, 0o700)
+      record.commandTempRoot = commandTempRoot
+      credentialEnvironment.TMPDIR = commandTempRoot
+      credentialEnvironment.TMP = commandTempRoot
+      credentialEnvironment.TEMP = commandTempRoot
+      const readWrite = ['/dev/null', commandTempRoot, record.stored.workspace]
+      if (credentialEnvironment.SSH_AUTH_SOCK !== undefined) {
+        readWrite.push(credentialEnvironment.SSH_AUTH_SOCK)
+      }
+      const readOnly = [...this.config.commandReadRoots]
+      if (credentialEnvironment.GIT_SSH_COMMAND !== undefined) {
+        readOnly.push(join(
+          this.config.credentialSocketRoot,
+          record.stored.executorPolicy.executor_lease_id,
+          'known_hosts',
+        ))
+      }
+      commandArguments.push(
+        '--command-wrapper-json',
+        JSON.stringify([
+          launcherPath(),
+          ...grantArgs({ readOnly, readWrite }),
+          '--',
+        ]),
+        '--command-clear-env',
+      )
+      if (credentialEnvironment.SSH_AUTH_SOCK !== undefined) {
+        commandArguments.push(
+          '--command-inherit-env', 'SSH_AUTH_SOCK',
+          '--command-inherit-env', 'GIT_SSH_COMMAND',
+        )
+      }
+      commandArguments.push(
+        '--command-inherit-env', 'TMPDIR',
+        '--command-inherit-env', 'TMP',
+        '--command-inherit-env', 'TEMP',
+      )
+    }
     const setup = async (agentCtx: Context): Promise<void> => {
       await agentCtx.plugin(McpClient, {
         transport: 'stdio',
@@ -553,8 +648,9 @@ export class ForgeSessionAdapter extends Service {
           '--session', stableUuid(`forge-session:${record.stored.sessionId}`),
           '--actor', 'agent:deepseek-harness',
           ...this.config.intellectExcludes.flatMap(path => ['--exclude', path]),
+          ...commandArguments,
         ],
-        env: {},
+        env: credentialEnvironment,
         cwd: record.stored.workspace,
         toolCallTimeoutMs: this.config.intellectToolCallTimeoutMs,
         processGraceMs: 2_000,
@@ -714,6 +810,10 @@ export class ForgeSessionAdapter extends Service {
     try {
       await handle.dispose()
       delete record.handle
+      if (record.commandTempRoot !== undefined) {
+        await rm(record.commandTempRoot, { recursive: true, force: true })
+        delete record.commandTempRoot
+      }
       record.stored.closed = true
       this.append(record, 'session.closed', { evidence })
       return this.response(record, startSequence, 'terminal', 'succeeded', evidence)
