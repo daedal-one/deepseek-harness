@@ -292,6 +292,8 @@ describe('headless stream-json snapshots', () => {
         expect(session).toBe(await readFile(daedalSessionExpected, 'utf8'))
         expect(session).toContain('"agentPreset":"daedal"')
         expect(session).toContain('"type":"tool-policy/decision"')
+        expect(session).toContain('Automatic policy review denied this call without asking the user (attempt 1/3)')
+        expect(session).toContain('Automatic policy review denied this call without asking the user (attempt 2/3)')
         expect(session).toContain('"type":"approval/asked"')
         expect(session).toContain('"outcome":"allowed-once"')
         expect(session).toContain('The assembled Daedal profile completed its guarded shell round trip.')

@@ -78,6 +78,7 @@ async function load(configureEnforcer = true): Promise<Context> {
     "- name: '@deepseek-ai/dsh-tool-policy-enforcer'",
     ...(configureEnforcer ? [
       '  config:',
+      '    approvalThreshold: 3',
       '    enforceWhen:',
       '      sandboxModes: [danger-full-access]',
       '      approvalPolicies: [ask]',

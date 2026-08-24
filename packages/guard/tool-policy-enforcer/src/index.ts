@@ -25,6 +25,8 @@ export interface EnforcementCondition {
 export interface Config {
   /** Optional conjunction over the session's durable permission values. */
   readonly enforceWhen?: EnforcementCondition
+  /** Consecutive identical ask verdicts required before human approval. */
+  readonly approvalThreshold?: number
 }
 
 const enforcementCondition = z.object({
@@ -32,11 +34,12 @@ const enforcementCondition = z.object({
   approvalPolicies: z.array(z.union(APPROVAL_POLICIES as ApprovalPolicy[])).min(1),
 })
 
-/** Runtime schema for the stateless enforcer. */
+/** Runtime schema for the event-derived enforcer. */
 export const Config: z<Config> = z.object({
   // The union wrapper keeps an omitted property absent instead of constructing
   // the nested object's empty array defaults.
   enforceWhen: z.union([enforcementCondition]),
+  approvalThreshold: z.number().step(1).min(2).default(3),
 }) as z<Config>
 
 /**
@@ -70,17 +73,96 @@ function currentTurn(exec: ToolExecution): number {
   return boundary?.type === 'turn/start' ? boundary.data.turn : 0
 }
 
-function appendDecision(exec: ToolExecution, opinion: ToolPolicyOpinion, stage: 'provider' | 'effective', effective: ToolPolicyOpinion['decision']): void {
+function appendDecision(
+  exec: ToolExecution,
+  opinion: ToolPolicyOpinion,
+  stage: 'provider' | 'effective',
+  effective: ToolPolicyOpinion['decision'],
+  reason = opinion.reason,
+): void {
   exec.agent?.session.append('tool-policy/decision', {
     turn: currentTurn(exec), callId: exec.callId, toolName: exec.name, stage,
     policyDecision: opinion.decision, effectiveDecision: effective,
     providerId: opinion.providerId, risk: opinion.risk,
-    categories: [...opinion.categories], reason: opinion.reason,
+    categories: [...opinion.categories], reason,
   })
+}
+
+/**
+ * Canonical JSON identity for one parsed tool-argument value. ToolRuntime has
+ * already enforced lossless JSON; malformed model argument text is a string.
+ */
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`
+  if (value !== null && typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    return `{${Object.keys(record).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(record[key])}`).join(',')}}`
+  }
+  return JSON.stringify(value) as string
+}
+
+/** Match the agent loop's raw-argument parsing for durable prior calls. */
+function parseArguments(raw: string): unknown {
+  try {
+    return raw.length === 0 ? {} : JSON.parse(raw)
+  } catch {
+    return raw
+  }
+}
+
+function callKey(toolName: string, argumentsValue: unknown): string {
+  return JSON.stringify([toolName, canonicalJson(argumentsValue)])
+}
+
+/** Count the uninterrupted prior ask denials for this exact call in the open turn. */
+function consecutiveAskDenials(exec: ToolExecution): number {
+  const events = exec.agent?.session.events ?? []
+  const turn = currentTurn(exec)
+  const key = callKey(exec.name, exec.arguments)
+  const currentCallIndex = events.findLastIndex(event => event.type === 'tool/call' && event.data.callId === exec.callId)
+  const before = currentCallIndex < 0 ? events.length : currentCallIndex
+  const decisions = new Map<ToolExecution['callId'], SessionEvent<'tool-policy/decision'>>()
+  const failedResults = new Map<ToolExecution['callId'], boolean>()
+  let count = 0
+  for (let index = before - 1; index >= 0; index -= 1) {
+    const event = events[index]
+    if (event?.type === 'turn/start' || event?.type === 'turn/end') break
+    if (event?.type === 'tool-policy/decision' && event.data.stage === 'effective') {
+      if (!decisions.has(event.data.callId)) decisions.set(event.data.callId, event)
+      continue
+    }
+    if (event?.type === 'tool/result') {
+      const result = event.data.message.content[0]
+      if (result?.type === 'tool-result' && !failedResults.has(result.toolCallId)) {
+        failedResults.set(result.toolCallId, result.isError === true)
+      }
+      continue
+    }
+    if (event?.type !== 'tool/call') continue
+    if (event.data.turn !== turn || callKey(event.data.name, parseArguments(event.data.arguments)) !== key) break
+    const decision = decisions.get(event.data.callId)
+    if (decision?.data.policyDecision !== 'ask') break
+    if (decision.data.effectiveDecision === 'deny') {
+      count += 1
+    } else if (decision.data.effectiveDecision === 'ask'
+      && failedResults.get(event.data.callId) === true) {
+      count += 1
+    } else {
+      break
+    }
+    decisions.delete(event.data.callId)
+    failedResults.delete(event.data.callId)
+  }
+  return count
+}
+
+function deferredReason(reason: string, attempt: number, threshold: number): string {
+  return `Automatic policy review denied this call without asking the user (attempt ${attempt}/${threshold}): ${reason}. Change approach or retry this exact tool call; attempt ${threshold} asks the user.`
 }
 
 /** Install the policy consumer on `tools/pre-execute`. */
 export function apply(ctx: Context, config: Config = {}): void {
+  const approvalThreshold = config.approvalThreshold ?? 3
   const lifetime = new AbortController()
   const disposePrewarm = ctx.on('session/event', (session, event) => {
     const directUser = event.type === 'user/message' && event.data.source.kind === 'user'
@@ -120,6 +202,12 @@ export function apply(ctx: Context, config: Config = {}): void {
     if (verdict.decision === 'deny') {
       appendDecision(exec, verdict, 'effective', 'deny')
       return { kind: 'deny', reason: verdict.reason }
+    }
+    const attempt = consecutiveAskDenials(exec) + 1
+    if (attempt < approvalThreshold) {
+      const reason = deferredReason(verdict.reason, attempt, approvalThreshold)
+      appendDecision(exec, verdict, 'effective', 'deny', reason)
+      return { kind: 'deny', reason }
     }
     appendDecision(exec, verdict, 'effective', 'ask')
     return { kind: 'ask', reason: verdict.reason }

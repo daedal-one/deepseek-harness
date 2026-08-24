@@ -18,13 +18,44 @@ function fakeAgent() {
   return { agent: { session } as unknown as Agent, events }
 }
 
+async function executeLogged(
+  ctx: Context,
+  agent: Agent,
+  events: Array<Record<string, unknown>>,
+  id: string,
+  argumentsValue: Record<string, unknown>,
+  rawArguments = JSON.stringify(argumentsValue),
+) {
+  const callId = CallId(id)
+  const boundary = events.findLast(event => event.type === 'turn/start' || event.type === 'turn/end')
+  const turn = boundary?.type === 'turn/start' ? (boundary.data as { turn: number }).turn : 0
+  events.push({ type: 'tool/call', data: { turn, step: 1, callId, name: 'probe', arguments: rawArguments } })
+  const result = await ctx.tools.execute({
+    callId, name: 'probe', arguments: argumentsValue, agent,
+    signal: new AbortController().signal,
+  })
+  events.push({
+    type: 'tool/result',
+    data: {
+      turn,
+      step: 1,
+      message: {
+        content: [{ type: 'tool-result', toolCallId: callId, content: result.content, isError: result.isError }],
+      },
+    },
+  })
+  return result
+}
+
 describe('tool-policy enforcement through ToolRuntime', () => {
   it('accepts an omitted activation condition but rejects explicit empty lists', () => {
-    expect(Config({})).toEqual({})
+    expect(Config({})).toEqual({ approvalThreshold: 3 })
     expect(() => Config({ enforceWhen: { sandboxModes: [] } }))
       .toThrow(/sandboxModes/)
     expect(() => Config({ enforceWhen: { approvalPolicies: [] } }))
       .toThrow(/approvalPolicies/)
+    expect(() => Config({ approvalThreshold: 1 })).toThrow(/approvalThreshold/)
+    expect(() => Config({ approvalThreshold: 2.5 })).toThrow(/approvalThreshold/)
   })
 
   it('matches configured durable permission values and keeps enforcement when they are absent', () => {
@@ -43,13 +74,16 @@ describe('tool-policy enforcement through ToolRuntime', () => {
     expect(shouldEnforce(events('danger-full-access', 'never'), condition)).toBe(false)
   })
 
-  it('delegates allow and enters approval on the first ask while denials remain non-approvable', async () => {
+  it('defers identical asks twice, prompts from the third denial, and resets after success', async () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ApprovalService)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(ToolPolicyService, {})
-    let current: ToolPolicyVerdict | undefined
+    const current: ToolPolicyVerdict = {
+      providerId: ToolPolicyProviderId('fake'), decision: 'ask', risk: 60,
+      categories: [], reason: 'network access needs review', opinions: [],
+    }
     ctx.toolPolicy.register(ToolPolicyProviderId('fake'), { evaluate: async () => current })
     apply(ctx)
     const prompted = vi.fn()
@@ -64,24 +98,136 @@ describe('tool-policy enforcement through ToolRuntime', () => {
       execute: async () => { executions += 1; return 'ran' },
     }))
     const { agent, events } = fakeAgent()
-    const execute = (id: string) => ctx.tools.execute({
-      callId: CallId(id), name: 'probe', arguments: { stable: true }, agent,
-      signal: new AbortController().signal,
+    const first = await executeLogged(ctx, agent, events, 'ask-1', {
+      command: 'curl example', options: { beta: 2, alpha: 1 },
     })
-
-    await expect(execute('unsupported')).resolves.toMatchObject({ isError: false })
-    current = { providerId: ToolPolicyProviderId('fake'), decision: 'allow', risk: 0, categories: [], reason: 'safe', opinions: [] }
-    await expect(execute('allow')).resolves.toMatchObject({ isError: false })
-    current = { providerId: ToolPolicyProviderId('fake'), decision: 'deny', risk: 90, categories: [], reason: 'blocked', opinions: [] }
-    await expect(execute('deny')).resolves.toMatchObject({ isError: true, content: [{ text: 'Error: blocked' }] })
+    expect(first).toMatchObject({
+      isError: true,
+      content: [{ text: 'Error: Automatic policy review denied this call without asking the user (attempt 1/3): network access needs review. Change approach or retry this exact tool call; attempt 3 asks the user.' }],
+    })
+    const second = await executeLogged(
+      ctx,
+      agent,
+      events,
+      'ask-2',
+      { options: { alpha: 1, beta: 2 }, command: 'curl example' },
+      '{"options":{"beta":2,"alpha":1},"command":"curl example"}',
+    )
+    expect(second).toMatchObject({ isError: true, content: [{ text: expect.stringContaining('(attempt 2/3)') }] })
     expect(prompted).not.toHaveBeenCalled()
-    current = { providerId: ToolPolicyProviderId('fake'), decision: 'ask', risk: 60, categories: [], reason: 'review', opinions: [] }
-    await expect(execute('ask')).resolves.toMatchObject({ isError: false })
+    await expect(executeLogged(ctx, agent, events, 'ask-3', {
+      command: 'curl example', options: { alpha: 1, beta: 2 },
+    })).resolves.toMatchObject({ isError: false })
     expect(prompted).toHaveBeenCalledOnce()
-    expect(executions).toBe(3)
+    const afterSuccess = await executeLogged(ctx, agent, events, 'ask-4', {
+      command: 'curl example', options: { alpha: 1, beta: 2 },
+    })
+    expect(afterSuccess).toMatchObject({ isError: true, content: [{ text: expect.stringContaining('(attempt 1/3)') }] })
+    expect(prompted).toHaveBeenCalledOnce()
+    expect(executions).toBe(1)
     expect(events.filter(event => event.type === 'approval/asked')).toHaveLength(1)
     expect(events.filter(event => event.type === 'approval/decided')).toHaveLength(1)
-    expect(events.filter(event => event.type === 'tool-policy/decision')).toHaveLength(6)
+    const effective = events
+      .filter(event => event.type === 'tool-policy/decision')
+      .map(event => event.data as { stage: string; effectiveDecision: string; reason: string })
+      .filter(event => event.stage === 'effective')
+    expect(effective.map(event => event.effectiveDecision)).toEqual(['deny', 'deny', 'ask', 'deny'])
+    expect(effective[0]?.reason).toContain('network access needs review')
+  })
+
+  it('breaks the denial chain on an intervening call or turn and keeps deterministic denies unapprovable', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ApprovalService)
+    await ctx.plugin(ToolRuntime)
+    await ctx.plugin(ToolPolicyService, {})
+    let current: ToolPolicyVerdict = {
+      providerId: ToolPolicyProviderId('fake'), decision: 'ask', risk: 60,
+      categories: [], reason: 'review', opinions: [],
+    }
+    ctx.toolPolicy.register(ToolPolicyProviderId('fake'), { evaluate: async () => current })
+    apply(ctx)
+    const prompted = vi.fn(() => Promise.resolve<ApprovalOutcome>('allowed-once'))
+    ctx.on('approval/request', prompted)
+    ctx.tools.register(defineTool({
+      name: 'probe', description: 'probe', parameters: {},
+      output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
+      execute: async () => 'ran',
+    }))
+    const { agent, events } = fakeAgent()
+
+    await expect(executeLogged(ctx, agent, events, 'a-1', { command: 'a' }))
+      .resolves.toMatchObject({ content: [{ text: expect.stringContaining('(attempt 1/3)') }] })
+    await expect(executeLogged(ctx, agent, events, 'b-1', { command: 'b' }))
+      .resolves.toMatchObject({ content: [{ text: expect.stringContaining('(attempt 1/3)') }] })
+    await expect(executeLogged(ctx, agent, events, 'a-2', { command: 'a' }))
+      .resolves.toMatchObject({ content: [{ text: expect.stringContaining('(attempt 1/3)') }] })
+    events.push({ type: 'turn/end', data: { turn: 1 } }, { type: 'turn/start', data: { turn: 2 } })
+    await expect(executeLogged(ctx, agent, events, 'a-next-turn', { command: 'a' }))
+      .resolves.toMatchObject({ content: [{ text: expect.stringContaining('(attempt 1/3)') }] })
+    current = {
+      providerId: ToolPolicyProviderId('fake'), decision: 'deny', risk: 90,
+      categories: [], reason: 'forbidden', opinions: [],
+    }
+    await expect(executeLogged(ctx, agent, events, 'deny', { command: 'a' }))
+      .resolves.toMatchObject({ isError: true, content: [{ text: 'Error: forbidden' }] })
+    expect(prompted).not.toHaveBeenCalled()
+  })
+
+  it('keeps exact asks approval-eligible after the user rejects at the threshold', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ApprovalService)
+    await ctx.plugin(ToolRuntime)
+    await ctx.plugin(ToolPolicyService, {})
+    ctx.toolPolicy.register(ToolPolicyProviderId('fake'), { evaluate: async () => ({
+      providerId: ToolPolicyProviderId('fake'), decision: 'ask', risk: 60,
+      categories: [], reason: 'review', opinions: [],
+    }) })
+    apply(ctx)
+    const prompted = vi.fn(() => Promise.resolve<ApprovalOutcome>('rejected'))
+    ctx.on('approval/request', prompted)
+    ctx.tools.register(defineTool({
+      name: 'probe', description: 'probe', parameters: {},
+      output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
+      execute: async () => 'ran',
+    }))
+    const { agent, events } = fakeAgent()
+
+    await executeLogged(ctx, agent, events, 'reject-1', { command: 'same' })
+    await executeLogged(ctx, agent, events, 'reject-2', { command: 'same' })
+    await expect(executeLogged(ctx, agent, events, 'reject-3', { command: 'same' }))
+      .resolves.toMatchObject({ isError: true, content: [{ text: 'Error: the user rejected tool "probe"' }] })
+    await expect(executeLogged(ctx, agent, events, 'reject-4', { command: 'same' }))
+      .resolves.toMatchObject({ isError: true, content: [{ text: 'Error: the user rejected tool "probe"' }] })
+    expect(prompted).toHaveBeenCalledTimes(2)
+  })
+
+  it('uses the configured approval threshold', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ApprovalService)
+    await ctx.plugin(ToolRuntime)
+    await ctx.plugin(ToolPolicyService, {})
+    ctx.toolPolicy.register(ToolPolicyProviderId('fake'), { evaluate: async () => ({
+      providerId: ToolPolicyProviderId('fake'), decision: 'ask', risk: 60,
+      categories: [], reason: 'review', opinions: [],
+    }) })
+    apply(ctx, { approvalThreshold: 2 })
+    const prompted = vi.fn(() => Promise.resolve<ApprovalOutcome>('allowed-once'))
+    ctx.on('approval/request', prompted)
+    ctx.tools.register(defineTool({
+      name: 'probe', description: 'probe', parameters: {},
+      output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
+      execute: async () => 'ran',
+    }))
+    const { agent, events } = fakeAgent()
+
+    await expect(executeLogged(ctx, agent, events, 'configured-1', { command: 'same' }))
+      .resolves.toMatchObject({ isError: true, content: [{ text: expect.stringContaining('(attempt 1/2)') }] })
+    await expect(executeLogged(ctx, agent, events, 'configured-2', { command: 'same' }))
+      .resolves.toMatchObject({ isError: false })
+    expect(prompted).toHaveBeenCalledOnce()
   })
 
   it('bypasses providers outside configured permission values', async () => {

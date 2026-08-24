@@ -24,7 +24,7 @@ Preparation has its own timeout outside tool execution. One decision deadline co
 
 Classifier-request events store the route, purpose, fixed system prompt, reconstruction selectors, and input bounds before dispatch. A validated `tool-policy/intent-context` event is the short model-visible handoff. Raw user text remains in `user/message`; acting-model intent and raw tool arguments remain in `tool/call`. The invariant verifies the user-message-to-context-to-tool-call chain, current tool-time turn, matching call, and purpose/input selector agreement. This retains exact reconstructibility without keeping a second raw copy.
 
-An effective `ask` immediately enters the existing approval service. The enforcer has no retry threshold or process-local opportunity state. A grant applies to the exact call once; deterministic denials never become approvable.
+Approval timing is owned by the [deferred tool-policy approval decision](../feature/2026-08-24-deferred-tool-policy-approval.md). The enforcer derives its consecutive exact-call threshold from durable events instead of process-local opportunity state. A grant applies to the exact call once; deterministic denials never become approvable.
 
 ## Alternatives considered
 
@@ -36,7 +36,7 @@ An effective `ask` immediately enters the existing approval service. The enforce
 
 **Let reviewers return open-ended effects.** Rejected because synonyms and invented categories make host policy ambiguous and reproduce the original model-owned threshold problem. The closed list costs category maintenance but makes every accepted result executable by deterministic code.
 
-**Retain the exact-call retry before approval.** Rejected because repeating identical arguments adds no evidence, creates model-visible friction on false positives, and duplicates the one-shot ownership already provided by `ctx.approval`.
+**Route every ask directly to approval.** Independent evidence originally used this rule because an unconditional exact-call retry added no reviewer evidence. The [deferred-approval decision](../feature/2026-08-24-deferred-tool-policy-approval.md) supersedes only the timing choice: its bounded reason gives the acting agent an autonomous alternative, while consecutive identical retries explicitly signal escalation and `ctx.approval` still owns the human outcome.
 
 ## Consequences
 
@@ -44,6 +44,6 @@ Common literal inspection pipelines avoid tool-time auxiliary latency. Other com
 
 The closed effect vocabulary may need deliberate extension as new shell capabilities appear. Unknown effects fail closed, so an omitted category causes approval rather than permission. The read parser likewise favors false negatives: unsupported flags or syntax use model evidence instead of expanding the deterministic grant surface by guesswork.
 
-False-positive `ask` decisions now reach a person on the first call. This can surface more approval prompts when classifiers are uncertain, but it removes the mandatory retry turn and keeps the existing durable approval audit as the only human-decision mechanism.
+False-positive `ask` decisions return their bounded reason to the acting agent before human escalation. The deferred-approval threshold adds model turns only when the exact call is repeated, and keeps the existing durable approval audit as the only human-decision mechanism.
 
-Focused unit tests cover strict evidence parsing, host combination rules, compound read escape cases, policy-gated prewarming, failed-preparation recovery, context handoff, same-route review, fallback, the shared tool-time deadline, cancellation, and disposal. A real Loader composition covers the full provider-consumer lifecycle, and the keyless Daedal snapshot drives the assembled profile from malformed preparation through a recovered context and effect review. Self-skipping real-provider tests use terse continuation and status histories plus synthetic paths under the platform temporary directory to verify intent framing and distinguish workspace Git inspection from a named outside-workspace read and an approval-requiring network effect without disclosing repository content.
+Focused unit tests cover strict evidence parsing, host combination rules, compound read escape cases, policy-gated prewarming, failed-preparation recovery, context handoff, same-route review, fallback, the shared tool-time deadline, cancellation, disposal, and deferred approval. A real Loader composition covers the full provider-consumer lifecycle, and the keyless Daedal snapshot drives the assembled profile from malformed preparation through a recovered context, repeated effect review, and thresholded approval. Self-skipping real-provider tests use terse continuation and status histories plus synthetic paths under the platform temporary directory to verify intent framing and distinguish workspace Git inspection from a named outside-workspace read and an approval-requiring network effect without disclosing repository content.

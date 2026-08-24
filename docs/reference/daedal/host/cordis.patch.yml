@@ -539,6 +539,7 @@
     - id: daedal-tool-policy-enforcer
       name: '@deepseek-ai/dsh-tool-policy-enforcer'
       config:
+        approvalThreshold: 3
         enforceWhen:
           sandboxModes: [danger-full-access]
           approvalPolicies: [ask]
