@@ -58,11 +58,15 @@ export interface IConversation {
   loadOlder(): Promise<void>
 }
 
-/** Create one browser-only draft descriptor; only its id enters input state. */
+/** Create one browser-only draft descriptor; only its opaque id enters input state. */
 function browserDraftAttachment(file: File): ComposerAttachment {
+  const id = Array.from(
+    globalThis.crypto.getRandomValues(new Uint8Array(16)),
+    byte => byte.toString(16).padStart(2, '0'),
+  ).join('') as DraftAttachmentId
   return {
     kind: 'image',
-    id: crypto.randomUUID() as DraftAttachmentId,
+    id,
     previewUrl: URL.createObjectURL(file),
     file,
   }
