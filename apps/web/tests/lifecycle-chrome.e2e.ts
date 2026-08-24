@@ -217,6 +217,54 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
     expect((turnEnds[0] as SessionEvent & { data: { reason: { kind: string } } }).data.reason.kind).toBe('completed')
   }, 60_000)
 
+  it.skipIf(MODE === 'record')('keeps the conversation full-width while phone navigation and settings overlay it', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-lifecycle-phone-layout'))
+    const originalViewport = page.viewportSize() ?? { width: 1680, height: 1000 }
+    await page.setViewportSize({ width: 390, height: 844 })
+    try {
+      const frame = page.locator('[data-phone="true"]')
+      await frame.waitFor({ timeout: 10_000 })
+      const geometry = await page.evaluate(() => {
+        const phoneFrame = document.querySelector<HTMLElement>('[data-phone="true"]')
+        const conversation = document.querySelector<HTMLElement>('[data-conversation-scroll]')
+        if (phoneFrame === null || conversation === null) throw new Error('phone shell did not render')
+        const frameBox = phoneFrame.getBoundingClientRect()
+        const conversationBox = conversation.getBoundingClientRect()
+        return {
+          documentWidth: document.documentElement.scrollWidth,
+          viewportWidth: window.innerWidth,
+          frameWidth: frameBox.width,
+          conversationWidth: conversationBox.width,
+        }
+      })
+      expect(geometry.documentWidth).toBeLessThanOrEqual(geometry.viewportWidth)
+      expect(geometry.frameWidth).toBe(390)
+      expect(geometry.conversationWidth).toBe(390)
+
+      await page.getByRole('button', { name: 'Open sidebar' }).click()
+      const scrim = page.locator('[data-sidebar-scrim]')
+      await scrim.waitFor({ timeout: 10_000 })
+      expect(await page.locator('[data-conversation-scroll]').evaluate(element => element.getBoundingClientRect().width)).toBe(390)
+      await scrim.click()
+      await expect.poll(() => scrim.count()).toBe(0)
+
+      await page.getByRole('button', { name: 'Open sidebar' }).click()
+      await page.getByRole('button', { name: 'Settings' }).click()
+      const dialog = page.getByRole('dialog')
+      const dialogBox = await dialog.boundingBox()
+      expect(dialogBox).not.toBeNull()
+      expect(dialogBox!.x).toBe(0)
+      expect(dialogBox!.y).toBe(0)
+      expect(dialogBox!.width).toBe(390)
+      expect(dialogBox!.height).toBe(844)
+      await page.getByRole('button', { name: 'Close' }).click()
+      expect(tripwire.pageErrors).toEqual([])
+      expect(tripwire.warnings).toEqual([])
+    } finally {
+      await page.setViewportSize(originalViewport)
+    }
+  })
+
   it.skipIf(MODE === 'record')('recovers the whole surface across a reload from the log alone', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-lifecycle-reload'))
     const warningStart = tripwire.warnings.length

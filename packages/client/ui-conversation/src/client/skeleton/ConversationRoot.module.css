@@ -363,3 +363,55 @@
 .root[data-phase='settling'] .composerSeat {
   visibility: hidden;
 }
+
+@media (max-width: 767px) {
+  .root {
+    --dsh-composer-side-clearance: 12px;
+    height: 100dvh;
+  }
+
+  /* The collapsed sidebar toggle floats over this corner. Active-session
+     chrome reserves its hit target while the centered Hero remains below it. */
+  .header {
+    padding: 10px 12px 0 64px;
+  }
+
+  .titleRow {
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .titleCluster {
+    min-width: 0;
+  }
+
+  .headerActions {
+    gap: 4px;
+  }
+
+  .headerUtilities {
+    gap: 4px;
+    margin-left: 4px;
+  }
+
+  .tabs {
+    gap: 24px;
+    margin-right: -12px;
+    margin-left: -52px;
+    padding-left: 52px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollBody {
+    overscroll-behavior-y: contain;
+  }
+
+  .composerSeat {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}

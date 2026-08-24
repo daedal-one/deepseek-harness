@@ -63,4 +63,9 @@ describe('SidebarRoot.module.css', () => {
     expect(declarations('.collapsed .newSession')?.get('align-self')).toBe('flex-start')
     expect(declarations('.collapsed .newSession')?.get('width')).toBe('36px')
   })
+
+  it('keeps only the panel toggle in the collapsed phone rail', () => {
+    expect(css).toMatch(/@media \(max-width: 767px\)[\s\S]*?\.root\.collapsed\s*\{[\s\S]*?height: 64px;/)
+    expect(css).toMatch(/\.collapsed \.newSession,\s*\.collapsed \.regionArea,\s*\.collapsed \.footArea\s*\{\s*display: none;/)
+  })
 })

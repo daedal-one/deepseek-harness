@@ -11,9 +11,10 @@
  * zero self-made hooks.
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
 import type { PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
-import { computeColumns, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_DEFAULT } from './columns.ts'
+import {
+  computeColumns, PHONE_BREAKPOINT, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_COLLAPSED, SIDEBAR_DEFAULT,
+} from './columns.ts'
 import type { createLayoutStore } from './stores.ts'
 import css from './AppFrame.module.css'
 
@@ -22,16 +23,6 @@ export type AppFrameProps =
   & PropsRuntime<'root'>
   & PropsRenderSlots<'sidebar' | 'conversation' | 'details' | 'shell.overlay'>
   & PropsStore<ReturnType<typeof createLayoutStore>>
-
-/** Center column grid item (session-body building block). */
-function CenterColumn(props: { children?: ReactNode }) {
-  return <div className={css.centerCol}>{props.children}</div>
-}
-
-/** Details column grid item; width 0 keeps the subtree mounted (never unmount on close). */
-function DetailsColumn(props: { children?: ReactNode }) {
-  return <div className={css.detailsCol}>{props.children}</div>
-}
 
 /**
  * One drag handle: pointer capture, rAF-throttled dx reports against the drag-start origin.
@@ -133,13 +124,29 @@ export function AppFrame({
   // solver stays breakpoint-free: a narrow re-expand passes the preference
   // (or the default when the wide preference is closed) and the center
   // absorbs the squeeze.
+  const phone = window.innerWidth < PHONE_BREAKPOINT
   const narrow = viewport < SIDEBAR_AUTO_COLLAPSE
   useEffect(() => { actions.setNarrow(narrow) }, [actions, narrow])
   const sidebarCollapsed = narrow ? !panels.narrowExpanded : panels.sidebar === 0
   const sidebarPreference = sidebarCollapsed
     ? 0
     : panels.sidebar === 0 ? SIDEBAR_DEFAULT : panels.sidebar
-  const cols = computeColumns(viewport, sidebarPreference, detailsSession === undefined ? 0 : panels.details)
+  const detailsPreference = detailsSession === undefined ? 0 : panels.details
+  const cols = computeColumns(viewport, sidebarPreference, detailsPreference)
+  const detailsOpen = phone ? detailsPreference > 0 : cols.details > 0
+  const centerBlocked = phone && (!sidebarCollapsed || detailsOpen)
+  const centerRef = useRef<HTMLDivElement>(null)
+  const detailsRef = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    if (centerRef.current !== null) centerRef.current.inert = centerBlocked
+    if (detailsRef.current !== null) detailsRef.current.inert = phone && !detailsOpen
+  }, [centerBlocked, phone, detailsOpen])
+  useEffect(() => {
+    if (phone && detailsOpen && !sidebarCollapsed) actions.toggleSidebar()
+  }, [actions, detailsOpen, phone, sidebarCollapsed])
+  const sidebarWidth = phone
+    ? sidebarCollapsed ? SIDEBAR_COLLAPSED : Math.min(320, Math.round(viewport * 0.86))
+    : cols.sidebar
   const colsRef = useRef(cols)
   colsRef.current = cols
 
@@ -165,9 +172,10 @@ export function AppFrame({
     <div
       ref={frameRef}
       className={css.frame}
-      style={{ gridTemplateColumns: `${cols.sidebar}px minmax(0, 1fr) ${cols.details}px` }}
+      style={{ gridTemplateColumns: phone ? 'minmax(0, 1fr)' : `${cols.sidebar}px minmax(0, 1fr) ${cols.details}px` }}
+      data-phone={phone || undefined}
       data-sidebar-collapsed={sidebarCollapsed || undefined}
-      data-details-collapsed={cols.details === 0 || undefined}
+      data-details-collapsed={!detailsOpen || undefined}
       data-dragging={dragging || undefined}
     >
       <div className={css.sidebarCol}>
@@ -178,7 +186,7 @@ export function AppFrame({
             renders the rail UI too). */}
         {renderSlot('sidebar', {
           collapsed: sidebarCollapsed,
-          width: cols.sidebar,
+          width: sidebarWidth,
         })}
       </div>
       <>
@@ -187,15 +195,27 @@ export function AppFrame({
             the shell's own pending rendering. The conversation
             is session-maybe; the strict details entry naturally renders
             empty while no session is current. */}
-        <CenterColumn>{renderSlot('conversation', {})}</CenterColumn>
-        <DetailsColumn>{renderSlot('details', {})}</DetailsColumn>
+        <div ref={centerRef} className={css.centerCol}>
+          {renderSlot('conversation', {})}
+        </div>
+        <div ref={detailsRef} className={css.detailsCol} aria-hidden={phone && !detailsOpen || undefined}>
+          {renderSlot('details', {})}
+        </div>
       </>
+      {phone && !sidebarCollapsed && (
+        <div
+          className={css.drawerScrim}
+          data-sidebar-scrim=""
+          aria-hidden="true"
+          onClick={() => { actions.toggleSidebar() }}
+        />
+      )}
       <div className={css.overlayLayer} data-shell-overlay>
         {renderSlot('shell.overlay', {})}
       </div>
       {/* The collapsed rail is fixed-width: no resize handle while closed. */}
-      {!sidebarCollapsed && <DragHandle side="sidebar" left={cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />}
-      {cols.details > 0 && <DragHandle side="details" left={viewport - cols.details} onStart={onDetailsStart} onDrag={onDetailsDrag} onEnd={onDragEnd} />}
+      {!phone && !sidebarCollapsed && <DragHandle side="sidebar" left={cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />}
+      {!phone && cols.details > 0 && <DragHandle side="details" left={viewport - cols.details} onStart={onDetailsStart} onDrag={onDetailsDrag} onEnd={onDragEnd} />}
     </div>
   )
 }

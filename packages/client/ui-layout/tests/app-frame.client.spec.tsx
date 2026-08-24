@@ -11,7 +11,7 @@
  * resizes are driven through the ResizeObserver stub.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { useSyncExternalStore } from 'react'
 import { AppFrame } from '@deepseek-ai/dsh-client-ui-layout/src/client/AppFrame.tsx'
 import type { AppFrameProps } from '@deepseek-ai/dsh-client-ui-layout/src/client/AppFrame.tsx'
@@ -325,6 +325,68 @@ describe('AppFrame — narrow-viewport auto-collapse', () => {
     frameWidth = 1920
     act(() => { fireResize?.(); vi.advanceTimersByTime(20) })
     expect(tracks(frame)).toEqual([400, 0])
+  })
+})
+
+describe('AppFrame — phone overlays', () => {
+  it('keeps the conversation as the sole grid track and exposes only the collapsed sidebar trigger', () => {
+    frameWidth = 390
+    const { frame, slotCalls } = mountFrame()
+    expect(frame.getAttribute('data-phone')).toBe('true')
+    expect(frame.style.gridTemplateColumns).toBe('minmax(0, 1fr)')
+    expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(true)
+    expect(slotCalls.filter(c => c.key === 'sidebar').at(-1)!.props).toEqual({
+      collapsed: true,
+      width: SIDEBAR_COLLAPSED,
+    })
+    expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(0)
+  })
+
+  it('opens the sidebar over the single conversation track and closes it through the scrim', () => {
+    frameWidth = 390
+    const { frame, instance, getByTestId, slotCalls } = mountFrame()
+    const center = getByTestId('center-content').parentElement!
+    act(() => { instance.actions.toggleSidebar() })
+    expect(frame.style.gridTemplateColumns).toBe('minmax(0, 1fr)')
+    expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(false)
+    expect(center.inert).toBe(true)
+    expect(slotCalls.filter(c => c.key === 'sidebar').at(-1)!.props).toEqual({
+      collapsed: false,
+      width: 320,
+    })
+    fireEvent.click(frame.querySelector('[data-sidebar-scrim]')!)
+    expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(true)
+    expect(center.inert).toBe(false)
+  })
+
+  it('closes the sidebar when details takes over the phone viewport', () => {
+    frameWidth = 390
+    const { frame, instance } = mountFrame()
+    act(() => { instance.actions.toggleSidebar() })
+    expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(false)
+    act(() => { instance.actions.openDetails() })
+    expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(true)
+    expect(frame.querySelector('[data-sidebar-scrim]')).toBeNull()
+    expect(frame.hasAttribute('data-details-collapsed')).toBe(false)
+  })
+
+  it('keeps requested details open as an inert-free overlay despite desktop concession', () => {
+    frameWidth = 390
+    const { frame, instance, getByTestId } = mountFrame()
+    const center = getByTestId('center-content').parentElement!
+    const details = getByTestId('details-content').parentElement!
+    expect(details.inert).toBe(true)
+    expect(details.getAttribute('aria-hidden')).toBe('true')
+    act(() => { instance.actions.openDetails() })
+    expect(frame.style.gridTemplateColumns).toBe('minmax(0, 1fr)')
+    expect(frame.hasAttribute('data-details-collapsed')).toBe(false)
+    expect(center.inert).toBe(true)
+    expect(details.inert).toBe(false)
+    expect(details.hasAttribute('aria-hidden')).toBe(false)
+    act(() => { instance.actions.closeDetails() })
+    expect(frame.hasAttribute('data-details-collapsed')).toBe(true)
+    expect(center.inert).toBe(false)
+    expect(details.inert).toBe(true)
   })
 })
 

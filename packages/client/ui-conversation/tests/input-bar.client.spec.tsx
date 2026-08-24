@@ -1208,6 +1208,17 @@ describe('command launcher chrome and control seats', () => {
     expect((view.getByLabelText(/^Access mode/) as HTMLButtonElement).disabled).toBe(false)
   })
 
+  it('renders a compactable glyph for the Policy Reviewed access mode', () => {
+    const permissions = {
+      options: [{ value: 'policy-reviewed', name: 'policy-reviewed' }],
+      currentValue: 'policy-reviewed',
+    }
+    const { view } = bench({ permissions })
+    const trigger = view.getByLabelText(/^Access mode/) as HTMLButtonElement
+    expect(trigger.textContent).toBe('Policy Reviewed')
+    expect(trigger.querySelector('[class*="triggerIcon"] svg')).not.toBeNull()
+  })
+
   it('requires explicit risk acknowledgement before submitting Full access', async () => {
     const command = vi.fn(() => Promise.resolve(true))
     const permissions = {

@@ -7,7 +7,9 @@
 // a right-aligned refuse/allow action row. Justification and command are
 // unbounded model text, so they scroll inside the card at the shared composer
 // cap (`data-approval-scroll`) and the action row stays outside it — the
-// buttons must be reachable no matter how long the command is.
+// buttons must be reachable no matter how long the command is. The safe reject
+// action receives focus when the takeover replaces the composer, including on
+// mobile where the removed textarea would otherwise leave focus on the page.
 // One-shot: the buttons disable
 // after a click and the panel leaves (the InputBar returns) on the broadcast
 // resolved frame.
@@ -74,7 +76,7 @@ function ApprovalFlow({ pending, command, t }: {
           {command !== undefined && <div className={css.command}>{command}</div>}
         </div>
         <div className={css.actionRow}>
-          <Button variant="outline" className={css.reject} disabled={answered} onClick={() => { answer('rejected') }}>
+          <Button autoFocus variant="outline" className={css.reject} disabled={answered} onClick={() => { answer('rejected') }}>
             {t('approval.reject')}
           </Button>
           <Button variant="primary" disabled={answered} onClick={() => { answer('allowed-once') }}>
