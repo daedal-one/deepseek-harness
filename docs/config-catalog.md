@@ -678,7 +678,7 @@ Requires: `agents` · `sessionPersistence` · `tools` · `webServer`
 ```ts config-catalog
 /** Runtime configuration for the authenticated Forge session bridge. */
 export interface Config {
-  /** Bearer token required on every adapter route. */
+  /** Deployment token required in X-Forge-Adapter-Token on every adapter route. */
   token: string
   /** Absolute private JSON file retaining adapter sequencing and idempotency. */
   stateFile: string
@@ -698,10 +698,16 @@ export interface Config {
   intellectExcludes: string[]
   /** Timeout for each action-tool call. */
   intellectToolCallTimeoutMs: number
+  /** Root containing Forge-owned per-lease SSH-agent sockets. */
+  credentialSocketRoot: string
+  /** Child-command confinement mechanism. */
+  commandSandbox: 'disabled' | 'landlock'
+  /** Runtime roots visible read-only to confined commands. */
+  commandReadRoots: string[]
 }
 ```
 
-Source: [`packages/integration/forge-session-adapter/src/index.ts:56`](../packages/integration/forge-session-adapter/src/index.ts)
+Source: [`packages/integration/forge-session-adapter/src/index.ts:58`](../packages/integration/forge-session-adapter/src/index.ts)
 
 <a id="deepseek-aidsh-fs-local"></a>
 

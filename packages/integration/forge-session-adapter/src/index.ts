@@ -56,7 +56,7 @@ export const inject = ['agents', 'sessionPersistence', 'tools', 'webServer']
 
 /** Runtime configuration for the authenticated Forge session bridge. */
 export interface Config {
-  /** Bearer token required on every adapter route. */
+  /** Deployment token required in X-Forge-Adapter-Token on every adapter route. */
   token: string
   /** Absolute private JSON file retaining adapter sequencing and idempotency. */
   stateFile: string
@@ -309,8 +309,8 @@ export class ForgeSessionAdapter extends Service {
   }
 
   private authorized(req: IncomingMessage): boolean {
-    const header = req.headers.authorization
-    const token = header?.startsWith('Bearer ') ? header.slice('Bearer '.length) : undefined
+    const header = req.headers['x-forge-adapter-token']
+    const token = typeof header === 'string' ? header : undefined
     return safeEqual(token, this.config.token)
   }
 

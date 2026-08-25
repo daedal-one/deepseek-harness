@@ -5,6 +5,7 @@ This plugin is the DeepSeek Harness implementation of `forge.agent.session/v1`. 
 ## Runtime contract
 
 - `GET /v1/capabilities` reports the protocol, command set, approval semantics, checkpoint support, limitations, and evidence versions.
+- Every route requires the deployment-owned token in `X-Forge-Adapter-Token`. The adapter does not accept generic `Authorization`, so a lifecycle reverse proxy can strip ambient credentials without stripping adapter authentication.
 - `POST /v1/sessions/{id}/commands` accepts normalized, idempotent Forge commands. Provider-native fields are never required.
 - `start` fails closed unless the render is `forge-spec-v0.6.0`, its SHA-256 digest matches, lint reported zero errors, the render revision equals the session intent revision, the render target equals the durable work id, and the preflight carries `forge.intellect.action/v2` evidence.
 - Each agent scope launches `forge-intellect-action-mcp` and exposes exactly `workspace_read`, `workspace_apply`, `workspace_run`, `workspace_reconcile`, and `workspace_watermarks` under the `mcp__forge_intellect__*` namespace.
@@ -23,7 +24,7 @@ This plugin is the DeepSeek Harness implementation of `forge.agent.session/v1`. 
   strict-host-key Git command, and the private temporary-directory variables;
   private key bytes never cross the Forge session protocol.
 
-The runnable composition is [`examples/forge-adapter/cordis.yml`](../../../examples/forge-adapter/cordis.yml). Its bearer token, session state, adapter state, Intellect ledger root, graph database, action-MCP executable, and listen port are deployment configuration.
+The runnable composition is [`examples/forge-adapter/cordis.yml`](../../../examples/forge-adapter/cordis.yml). Its dedicated adapter token, session state, adapter state, Intellect ledger root, graph database, action-MCP executable, and listen port are deployment configuration.
 
 ## Model Experience
 

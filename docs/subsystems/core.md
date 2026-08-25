@@ -786,7 +786,7 @@ Forge protocol bridge and owner of all adapter-created agent handles.
 capability(): Record<string, unknown>
 ```
 
-Source: [`packages/integration/forge-session-adapter/src/index.ts:171`](../../packages/integration/forge-session-adapter/src/index.ts)
+Source: [`packages/integration/forge-session-adapter/src/index.ts:183`](../../packages/integration/forge-session-adapter/src/index.ts)
 
 <a id="agent-events"></a>
 
