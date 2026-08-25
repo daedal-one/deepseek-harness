@@ -75,7 +75,13 @@ describe('Forge session adapter composition', () => {
       commandSandbox: 'disabled',
       commandReadRoots: ['/usr', '/bin'],
     })
-    const headers = { authorization: 'Bearer test-adapter-token', 'content-type': 'application/json' }
+    const headers = { 'x-forge-adapter-token': 'test-adapter-token', 'content-type': 'application/json' }
+    const bearerOnly = await fetch(`http://127.0.0.1:${ctx.webServer.port}/v1/capabilities`, {
+      headers: { authorization: 'Bearer test-adapter-token' },
+    })
+    expect(bearerOnly.status).toBe(401)
+    const authenticated = await fetch(`http://127.0.0.1:${ctx.webServer.port}/v1/capabilities`, { headers })
+    expect(authenticated.status).toBe(200)
     const sessionId = 'forge-session-test'
     const rendered = '<spec-bundle id="TASK:work" />\n'
     const intent = {

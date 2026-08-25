@@ -16,7 +16,9 @@ related: [REQ:integration/forge-runtime]
 - {#c-health} The adapter MUST expose authenticated health and capability
   discovery that name its implementation version, supported Forge protocol,
   commands, checkpoint support, approval semantics, evidence protocol, and
-  limitations.
+  limitations. Every route MUST authenticate the deployment-owned adapter token
+  through `X-Forge-Adapter-Token`; generic `Authorization` credentials MUST NOT
+  authenticate the adapter.
 - {#c-command} `POST /v1/sessions/{id}/commands` MUST accept one idempotent
   normalized command and return only events after the caller's acknowledged
   sequence plus the current normalized state and optional terminal outcome.
