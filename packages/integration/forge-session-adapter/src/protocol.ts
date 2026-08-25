@@ -40,6 +40,7 @@ export interface ExecutorPolicy {
   readonly tools: string[]
   readonly credential_scopes: string[]
   readonly workspace: string
+  readonly executor_lease_id: string
 }
 
 /** Exact Forge Spec render and Forge Intellect evidence accepted at startup. */
@@ -168,6 +169,10 @@ export function parseCommandRequest(value: unknown): ForgeCommandRequest {
   }
   const tools = stringArray(policy.tools, 'executor_policy.tools')
   const credentialScopes = stringArray(policy.credential_scopes, 'executor_policy.credential_scopes')
+  const executorLeaseId = string(policy.executor_lease_id, 'executor_policy.executor_lease_id')
+  if (!/^agent-[a-f0-9]{24}$/.test(executorLeaseId)) {
+    throw new ProtocolError('executor_policy.executor_lease_id is invalid')
+  }
   if (tools.some(item => item === '*' || item === 'docker.sock' || item === 'root')) {
     throw new ProtocolError('executor policy requests forbidden tool authority', 403, 'policy_denied')
   }
@@ -190,6 +195,7 @@ export function parseCommandRequest(value: unknown): ForgeCommandRequest {
       tools,
       credential_scopes: credentialScopes,
       workspace,
+      executor_lease_id: executorLeaseId,
     },
   }
 }

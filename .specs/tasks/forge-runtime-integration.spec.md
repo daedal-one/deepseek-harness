@@ -30,3 +30,11 @@ scenario with an actual Forge Intellect action provider.
 The Web composition accepts an authenticated Forge project catalog, reconciles
 one managed Workspace per entry, and honors a registered-workspace deep link
 without falling back to a different project.
+
+The released adapter additionally derives one Forge-owned credential socket
+from the immutable executor lease, refuses missing or non-socket endpoints,
+passes only that endpoint to the action MCP, and configures Forge Intellect to
+wrap each model-requested child command in the shipped Landlock launcher with
+read access to the runtime and write access only to that session workspace and
+temporary directory. Ambient credentials and sibling executor roots remain
+unavailable to the child process.
