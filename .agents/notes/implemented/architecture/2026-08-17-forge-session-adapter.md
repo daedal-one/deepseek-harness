@@ -14,6 +14,8 @@ Each adapter-created Agent receives a scoped `dsh-mcp-client` instance connected
 
 Adapter event sequences, causality, and command responses are durable and idempotent across process restart. Checkpoint and diff commands publish Intellect evidence. Close reconciles external bytes and reads final watermarks before disposal; evidence and cleanup failures are explicit terminal outcomes.
 
+The ARM64 release container is built from an exact committed Harness archive and an exact committed Forge Intellect named context. Its OCI labels retain both revisions, and the image compiles the action gateway into the runtime instead of reaching into a mutable sibling checkout.
+
 ## Alternatives considered
 
 **Let Forge call the existing JSON-RPC coding-agent demo.** Rejected because that surface neither negotiates Forge capabilities nor composes per-session Intellect tools and approvals.
@@ -24,4 +26,4 @@ Adapter event sequences, causality, and command responses are durable and idempo
 
 ## Consequences
 
-Harness-native events and persistence remain behind one versioned adapter while Forge owns durable work and lifecycle. Exact intent is model-visible and every workspace capability is attributable. A released adapter image must package a compatible action-MCP binary, and Forge must supply an isolated executor; a mutable sibling checkout is never a deployment dependency.
+Harness-native events and persistence remain behind one versioned adapter while Forge owns durable work and lifecycle. Exact intent is model-visible and every workspace capability is attributable. The released adapter image packages a revision-labelled compatible action-MCP binary, and Forge supplies the isolated executor; local builds take longer because the exact Harness and Intellect closures are compiled together, but a mutable sibling checkout is never a deployment dependency.

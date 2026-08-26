@@ -38,3 +38,10 @@ wrap each model-requested child command in the shipped Landlock launcher with
 read access to the runtime and write access only to that session workspace and
 temporary directory. Ambient credentials and sibling executor roots remain
 unavailable to the child process.
+
+## Implemented artifact
+
+`containers/forge-runtime/Dockerfile` builds the ARM64 Harness adapter from the
+exact committed Harness context and a named exact Forge Intellect context. The
+runtime image contains the compatible action gateway and records both source
+revisions as OCI labels; it does not read a mutable sibling checkout.

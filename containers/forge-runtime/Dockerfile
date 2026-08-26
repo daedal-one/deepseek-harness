@@ -48,9 +48,11 @@ RUN chmod 0755 /opt/deepseek-harness/apps/cli/lib/bin.js \
     && ln -s /opt/deepseek-harness/apps/cli/lib/bin.js /usr/local/bin/dsh
 
 ARG VCS_REF=unknown
+ARG FORGE_INTELLECT_REF=unknown
 LABEL org.opencontainers.image.source="https://github.com/daedal-one/deepseek-harness" \
       org.opencontainers.image.revision="$VCS_REF" \
-      org.opencontainers.image.title="DeepSeek Harness Forge runtime"
+      org.opencontainers.image.title="DeepSeek Harness Forge runtime" \
+      io.daedal-one.forge-intellect.revision="$FORGE_INTELLECT_REF"
 
 WORKDIR /opt/deepseek-harness/examples/forge-adapter
 CMD ["node", "/opt/deepseek-harness/vendor/cordis/bin.js"]
