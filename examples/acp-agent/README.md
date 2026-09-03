@@ -15,6 +15,10 @@ Stdout carries only newline-delimited ACP JSON-RPC. `@deepseek-ai/dsh-acp-demo` 
 
 The automation contract — supported methods, baseline prompt content, committed-text output, and the intentionally absent UI surfaces — lives in [`@deepseek-ai/dsh-acp`](../../packages/acp/acp/README.md).
 
+## Third-party client proof
+
+The [Paseo compatibility tutorial](paseo/README.md) generates an isolated client home and reuses a committed replay fixture to check local Web and encrypted mobile-relay transport without an API key.
+
 ## Session workspaces and permissions
 
 Each `session/new` supplies an absolute `cwd`. Sandboxed bash and filesystem mutations resolve `workspace-write` against that session cwd, so concurrent sessions can use separate project roots; platform temporary roots remain shared writable scratch space ([sandbox contract](../../packages/sandbox/sandbox/README.md)). `DSH_PERMISSION_MODE` selects `workspace-write` or `danger-full-access` for the deployment.
