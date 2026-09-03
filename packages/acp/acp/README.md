@@ -178,3 +178,5 @@ These limits define when this package is a poor fit or needs special operational
 None.
 
 </details>
+
+The [Paseo compatibility proof](../../../apps/cli/config/examples/paseo/README.md) exercises an isolated client with a committed replay fixture.

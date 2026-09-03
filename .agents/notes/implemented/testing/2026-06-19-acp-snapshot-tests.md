@@ -46,6 +46,10 @@ Recording runs the scenario with the real `llm-deepseek` adapter and the JSONL p
 
 Replay uses a `cordis.snapshot.yml` overlay that replaces the real adapter with `llm-replay` while retaining the live composition. Recording uses the ordinary config and a harness-supplied persistence root. Replay mode skips `.env` loading, so a stray API key cannot trigger a live call. See the [single-source config Agent Note](../../archived/testing/2026-07-04-single-source-acp-replay-config.md).
 
+### External ACP clients reuse committed fixtures
+
+The [Paseo compatibility proof](../../../../apps/cli/config/examples/paseo/README.md) generates an isolated third-party client home that launches the built ACP example with the committed text-turn fixture. Generated client credentials and session state stay under ignored `tmp/`. The proof checks transport compatibility without expanding ACP beyond its automation-only contract or claiming model discovery and session-resume support.
+
 ### Two outputs: normalize, then compare
 
 A snapshot run asserts **two** normalized outputs, because the harness's external APIs are distinct:
