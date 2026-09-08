@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import {
   FORGE_SESSION_PROTOCOL,
+  FORGE_SPEC_BASELINES,
   ProtocolError,
   parseCommandRequest,
   parseStartPayload,
@@ -45,12 +46,12 @@ describe('Forge protocol validation', () => {
     expect(() => parseCommandRequest(input)).toThrow(ProtocolError)
   })
 
-  it('binds the Spec render to exact bytes, revision, and Intellect evidence', () => {
+  it.each(FORGE_SPEC_BASELINES)('binds %s to exact bytes, revision, and Intellect evidence', (baseline) => {
     const parsed = parseCommandRequest(request())
     const rendered = '<spec-bundle />\n'
     parsed.payload.intent = {
       protocol: 'forge.spec.preflight/v1',
-      baseline: 'forge-spec-v0.6.0',
+      baseline,
       workspace_revision: parsed.intent_revision,
       target: parsed.work_id,
       rendered,
@@ -62,7 +63,13 @@ describe('Forge protocol validation', () => {
         digest: 'digest-1',
       },
     }
-    expect(parseStartPayload(parsed).intent.rendered).toBe(rendered)
+    expect(parseStartPayload(parsed).intent).toMatchObject({ baseline, rendered })
+    ;(parsed.payload.intent as Record<string, unknown>).baseline = 'forge-spec-v0.8.0'
+    expect(() => parseStartPayload(parsed)).toThrow(/baseline/)
+    ;(parsed.payload.intent as Record<string, unknown>).baseline = baseline
+    ;(parsed.payload.intent as Record<string, unknown>).workspace_revision = 'b'.repeat(40)
+    expect(() => parseStartPayload(parsed)).toThrow(/revision/)
+    ;(parsed.payload.intent as Record<string, unknown>).workspace_revision = parsed.intent_revision
     ;(parsed.payload.intent as Record<string, unknown>).rendered_sha256 = 'wrong'
     expect(() => parseStartPayload(parsed)).toThrow(/digest/)
   })

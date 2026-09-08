@@ -1,9 +1,11 @@
 import { createHash } from 'node:crypto'
-import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
+import Loader from '@deepseek-ai/cordis-plugin-loader'
+import Include from '@deepseek-ai/cordis-plugin-include'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import WebServer from '@deepseek-ai/dsh-host-webserver'
@@ -54,27 +56,40 @@ describe('Forge session adapter composition', () => {
     const canonicalWorkspace = await realpath(workspace)
     const ctx = new Context()
     await mountAgentLoopTestDependencies(ctx)
-    await ctx.plugin(JsonlSessionPersistence, { root: join(state, 'sessions'), compression: 'none' })
-    await ctx.plugin(AgentLoop, { agents: [] })
-    await ctx.plugin(LocalSubprocessRuntime)
-    await ctx.plugin(UserApproval, { policy: 'ask' })
-    await ctx.plugin(WebServer, { host: '127.0.0.1', port: 0 })
     const fixture = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'action-mcp.mjs')
-    await ctx.plugin(ForgeSessionAdapter, {
-      token: 'test-adapter-token',
-      stateFile: join(state, 'adapter.json'),
-      routePrefix: '/v1',
-      maxRequestBytes: 1024 * 1024,
-      intellectCommand: process.execPath,
-      intellectCommandPrefixArgs: [fixture],
-      intellectStateRoot: join(state, 'intellect'),
-      intellectGraphDb: join(state, 'intellect', 'graph.sqlite'),
-      intellectExcludes: ['.git'],
-      intellectToolCallTimeoutMs: 10_000,
-      credentialSocketRoot: join(state, 'credentials'),
-      commandSandbox: 'disabled',
-      commandReadRoots: ['/usr', '/bin'],
-    })
+    const configFile = join(state, 'cordis.yml')
+    await writeFile(configFile, JSON.stringify([
+      { name: 'persistence', config: { root: join(state, 'sessions'), compression: 'none' } },
+      { name: 'agent-loop', config: { agents: [] } },
+      { name: 'subprocess' }, { name: 'approval', config: { policy: 'ask' } },
+      { name: 'webserver', config: { host: '127.0.0.1', port: 0 } },
+      { name: 'forge-adapter', config: {
+        token: 'test-adapter-token', stateFile: join(state, 'adapter.json'),
+        routePrefix: '/v1', maxRequestBytes: 1024 * 1024,
+        intellectCommand: process.execPath, intellectCommandPrefixArgs: [fixture],
+        intellectStateRoot: join(state, 'intellect'),
+        intellectGraphDb: join(state, 'intellect', 'graph.sqlite'),
+        intellectExcludes: ['.git'], intellectToolCallTimeoutMs: 10_000,
+        credentialSocketRoot: join(state, 'credentials'), commandSandbox: 'disabled',
+        commandReadRoots: ['/usr', '/bin'],
+      } },
+    ]))
+    const modules = new Map<string, unknown>([
+      ['persistence', JsonlSessionPersistence], ['agent-loop', AgentLoop],
+      ['subprocess', LocalSubprocessRuntime], ['approval', UserApproval],
+      ['webserver', WebServer], ['forge-adapter', ForgeSessionAdapter],
+    ])
+    await ctx.plugin(Loader)
+    ctx.loader.builtins.include = Include
+    ctx.loader.internal = {
+      version: 'v2',
+      async import(specifier: string) {
+        if (!modules.has(specifier)) throw new Error(`unexpected module ${specifier}`)
+        return modules.get(specifier)
+      },
+    } as unknown as NonNullable<typeof ctx.loader.internal>
+    await ctx.loader.create({ name: 'cordis:include', config: { path: pathToFileURL(configFile).href } })
+    await ctx.loader.await()
     const headers = { 'x-forge-adapter-token': 'test-adapter-token', 'content-type': 'application/json' }
     const bearerOnly = await fetch(`http://127.0.0.1:${ctx.webServer.port}/v1/capabilities`, {
       headers: { authorization: 'Bearer test-adapter-token' },
@@ -82,11 +97,18 @@ describe('Forge session adapter composition', () => {
     expect(bearerOnly.status).toBe(401)
     const authenticated = await fetch(`http://127.0.0.1:${ctx.webServer.port}/v1/capabilities`, { headers })
     expect(authenticated.status).toBe(200)
+    const capability = await authenticated.json() as { spec_baselines: string[] }
+    expect(capability.spec_baselines).toMatchInlineSnapshot(`
+      [
+        "forge-spec-v0.6.0",
+        "forge-spec-v0.7.0",
+      ]
+    `)
     const sessionId = 'forge-session-test'
     const rendered = '<spec-bundle id="TASK:work" />\n'
     const intent = {
       protocol: 'forge.spec.preflight/v1',
-      baseline: 'forge-spec-v0.6.0',
+      baseline: 'forge-spec-v0.7.0',
       workspace_revision: 'a'.repeat(40),
       target: 'TASK:work',
       rendered,

@@ -22,7 +22,7 @@ assignee: carlo
 
 ## Acceptance
 
-The repository has a valid forge-spec v0.6 tree backed by Forge Intellect. The
+The repository has a valid forge-spec v0.7 tree backed by Forge Intellect. The
 adapter boots through a real Cordis composition, rejects incompatible or
 unaccountable startup, translates supported commands and durable events, keeps
 idempotent retries side-effect free, and passes a keyless Forge conformance
@@ -38,3 +38,6 @@ wrap each model-requested child command in the shipped Landlock launcher with
 read access to the runtime and write access only to that session workspace and
 temporary directory. Ambient credentials and sibling executor roots remain
 unavailable to the child process.
+
+The adapter preserves the committed v0.6 or v0.7 baseline supplied by Forge and
+rejects unsupported formats without relabeling the rendered intent.

@@ -9,8 +9,8 @@ export const FORGE_SESSION_PROTOCOL = 'forge.agent.session/v1'
 export const FORGE_EVIDENCE_PROTOCOL = 'forge.intellect.action/v2'
 /** Forge Intellect MCP tool surface exposed inside adapter-created agents. */
 export const FORGE_ACTION_TOOLS_PROTOCOL = 'forge-intellect-action-tools/v1'
-/** Forge Spec baseline accepted by the adapter preflight boundary. */
-export const FORGE_SPEC_BASELINE = 'forge-spec-v0.6.0'
+/** Forge Spec baselines accepted without rewriting the caller's intent. */
+export const FORGE_SPEC_BASELINES = ['forge-spec-v0.6.0', 'forge-spec-v0.7.0'] as const
 /** Forge preflight envelope required by the start command. */
 export const FORGE_PREFLIGHT_PROTOCOL = 'forge.spec.preflight/v1'
 
@@ -46,7 +46,7 @@ export interface ExecutorPolicy {
 /** Exact Forge Spec render and Forge Intellect evidence accepted at startup. */
 export interface ForgePreflight {
   readonly protocol: typeof FORGE_PREFLIGHT_PROTOCOL
-  readonly baseline: typeof FORGE_SPEC_BASELINE
+  readonly baseline: typeof FORGE_SPEC_BASELINES[number]
   readonly workspace_revision: string
   readonly target: string
   readonly rendered: string
@@ -211,8 +211,9 @@ export function parseStartPayload(request: ForgeCommandRequest): StartPayload {
   if (intent.protocol !== FORGE_PREFLIGHT_PROTOCOL) {
     throw new ProtocolError(`payload.intent.protocol must be ${FORGE_PREFLIGHT_PROTOCOL}`, 409)
   }
-  if (intent.baseline !== FORGE_SPEC_BASELINE) {
-    throw new ProtocolError(`payload.intent.baseline must be ${FORGE_SPEC_BASELINE}`, 409)
+  const baseline = intent.baseline
+  if (baseline !== FORGE_SPEC_BASELINES[0] && baseline !== FORGE_SPEC_BASELINES[1]) {
+    throw new ProtocolError(`payload.intent.baseline must be one of ${FORGE_SPEC_BASELINES.join(', ')}`, 409)
   }
   const revision = string(intent.workspace_revision, 'payload.intent.workspace_revision')
   if (revision !== request.intent_revision) {
@@ -243,7 +244,7 @@ export function parseStartPayload(request: ForgeCommandRequest): StartPayload {
   return {
     intent: {
       protocol: FORGE_PREFLIGHT_PROTOCOL,
-      baseline: FORGE_SPEC_BASELINE,
+      baseline,
       workspace_revision: revision,
       target,
       rendered,

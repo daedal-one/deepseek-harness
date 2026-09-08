@@ -662,12 +662,14 @@ export interface Config {
   forgejoBaseUrl: string
   /** Forgejo token sent only through the Git child process environment. */
   forgejoToken: string
-  /** Maximum accepted JSON request bytes. */
+  /** Deadline in milliseconds for each local Git identity read. */
+  gitReadTimeoutMs: number
+  /** Maximum accepted JSON request bytes and local Git output bytes. */
   maxRequestBytes: number
 }
 ```
 
-Source: [`packages/integration/forge-project-workspaces/src/index.ts:25`](../packages/integration/forge-project-workspaces/src/index.ts)
+Source: [`packages/integration/forge-project-workspaces/src/index.ts:28`](../packages/integration/forge-project-workspaces/src/index.ts)
 
 <a id="deepseek-aidsh-forge-session-adapter"></a>
 
@@ -707,7 +709,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/integration/forge-session-adapter/src/index.ts:58`](../packages/integration/forge-session-adapter/src/index.ts)
+Source: [`packages/integration/forge-session-adapter/src/index.ts:59`](../packages/integration/forge-session-adapter/src/index.ts)
 
 <a id="deepseek-aidsh-fs-local"></a>
 

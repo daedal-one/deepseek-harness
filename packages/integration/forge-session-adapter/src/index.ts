@@ -25,6 +25,7 @@ import {
   FORGE_COMMANDS,
   FORGE_EVIDENCE_PROTOCOL,
   FORGE_SESSION_PROTOCOL,
+  FORGE_SPEC_BASELINES,
   ProtocolError,
   parseCommandRequest,
   parseStartPayload,
@@ -241,6 +242,8 @@ export class ForgeSessionAdapter extends Service {
       approval_semantics: 'explicit-allow-deny',
       evidence_protocol: FORGE_EVIDENCE_PROTOCOL,
       action_tools_protocol: FORGE_ACTION_TOOLS_PROTOCOL,
+      spec_baseline: FORGE_SPEC_BASELINES[1],
+      spec_baselines: [...FORGE_SPEC_BASELINES],
       limitations: [
         'pause and resume commands are not advertised',
         'the adapter requires a Forge-allocated executor workspace',

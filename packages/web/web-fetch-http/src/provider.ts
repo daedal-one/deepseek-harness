@@ -39,7 +39,15 @@ interface FetchInit {
   readonly signal: AbortSignal
   readonly dispatcher: Dispatcher
 }
-type FetchTransport = (url: URL, init: FetchInit) => Promise<Response>
+interface FetchResponse {
+  readonly status: number
+  readonly headers: Pick<Response['headers'], 'get'>
+  readonly body: {
+    cancel(): Promise<void>
+    getReader(): Pick<ReadableStreamDefaultReader<Uint8Array>, 'read' | 'cancel' | 'releaseLock'>
+  } | null
+}
+type FetchTransport = (url: URL, init: FetchInit) => Promise<FetchResponse>
 type DispatcherFactory = () => Dispatcher
 
 /** Source-only transport override used by deterministic provider tests. */
@@ -66,7 +74,7 @@ export function installHttpFetchTestTransport(transport: HttpFetchTestTransport)
   }
 }
 
-const productionFetch: FetchTransport = async (url, init) => await undiciFetch(url, init) as Response
+const productionFetch: FetchTransport = async (url, init) => await undiciFetch(url, init)
 
 function productionDispatcher(): Dispatcher {
   return new Agent({
@@ -158,7 +166,7 @@ export class HttpFetchProvider implements WebFetchProvider {
     }
   }
 
-  private async requestOnce(url: URL, signal: AbortSignal, dispatcher: Dispatcher, transport: FetchTransport): Promise<Response> {
+  private async requestOnce(url: URL, signal: AbortSignal, dispatcher: Dispatcher, transport: FetchTransport): Promise<FetchResponse> {
     try {
       assertPublicLiteral(url.hostname)
       return await transport(url, {
@@ -174,7 +182,7 @@ export class HttpFetchProvider implements WebFetchProvider {
   }
 
   /** Read, byte-cap, classify, and decode the final response body. */
-  private async readBody(response: Response, finalUrl: URL, signal: AbortSignal): Promise<WebFetchResult> {
+  private async readBody(response: FetchResponse, finalUrl: URL, signal: AbortSignal): Promise<WebFetchResult> {
     const contentType = response.headers.get('content-type')
     const kind = classifyContentType(contentType)
     if (kind === undefined) {
@@ -212,7 +220,7 @@ export class HttpFetchProvider implements WebFetchProvider {
    * past the cap is cut short (`truncatedByBytes`) rather than rejected, so a
    * server that under-reports still yields a bounded usable body.
    */
-  private async readCapped(response: Response, signal: AbortSignal): Promise<{ bytes: Uint8Array; truncatedByBytes: boolean }> {
+  private async readCapped(response: FetchResponse, signal: AbortSignal): Promise<{ bytes: Uint8Array; truncatedByBytes: boolean }> {
     const declared = response.headers.get('content-length')
     if (declared !== null) {
       const length = Number(declared)

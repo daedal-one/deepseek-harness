@@ -16,7 +16,7 @@ related: [IFC:integration/forge-session-adapter]
   requiring DeepSeek Harness native fields in the Forge command, event, or
   outcome records.
 - {#c-intent} A session MUST reject dispatch unless its exact workspace revision
-  passes forge-spec v0.6 lint and its accepted work plus affected durable intent
+  passes lint for its declared forge-spec v0.6 or v0.7 baseline and its accepted work plus affected durable intent
   are rendered before the first model request.
 - {#c-actions} Model-visible workspace reads, mutations, and commands MUST pass
   through `forge-intellect-action-tools/v1`; a missing or incompatible action
