@@ -130,4 +130,4 @@ LABEL org.opencontainers.image.source="https://github.com/daedal-one/deepseek-ha
       io.daedal-one.forge-intellect.revision="$FORGE_INTELLECT_REF"
 
 WORKDIR /opt/deepseek-harness/examples/forge-adapter
-CMD ["node", "/opt/deepseek-harness/vendor/cordis/bin.js"]
+CMD ["node", "--expose-internals", "/opt/deepseek-harness/vendor/cordis/bin.js"]
