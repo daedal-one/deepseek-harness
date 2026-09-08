@@ -1,4 +1,6 @@
-import { mkdir, mkdtemp, realpath, rm, stat } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
@@ -7,6 +9,7 @@ import { WorkspaceId, type Workspace, type WorkspaceRegistry } from '@deepseek-a
 import { afterEach, describe, expect, it } from 'vitest'
 import ForgeProjectWorkspaces, { internals } from '../src/index.ts'
 
+const exec = promisify(execFile)
 const roots: string[] = []
 const originalClone = internals.cloneRepository
 
@@ -69,7 +72,9 @@ describe('Forge project workspace composition', () => {
     ctx.provide('workspaceRegistry', workspaces)
     await ctx.plugin(WebServer, { host: '127.0.0.1', port: 0 })
     internals.cloneRepository = async (path) => {
-      await mkdir(join(path, '.git'), { recursive: true })
+      await mkdir(path, { recursive: true })
+      await exec('git', ['init', path])
+      await exec('git', ['-C', path, 'remote', 'add', 'origin', 'http://forgejo:3000/apps/atlas.git'])
       return 'created'
     }
     await ctx.plugin(ForgeProjectWorkspaces, {
@@ -78,6 +83,7 @@ describe('Forge project workspace composition', () => {
       workspaceRoot,
       forgejoBaseUrl: 'http://forgejo:3000',
       forgejoToken: 'forgejo-project-token',
+      gitReadTimeoutMs: 5000,
       maxRequestBytes: 1024 * 1024,
     })
     const url = `http://127.0.0.1:${String(ctx.webServer.port)}/forge/v1/projects/sync`
@@ -105,6 +111,26 @@ describe('Forge project workspace composition', () => {
       ],
     })
     expect(workspaces.list().map(item => item.title)).toEqual(['Atlas', 'Beacon'])
+    expect((await fetch(url)).status).toBe(401)
+    await writeFile(join(workspaceRoot, 'atlas', 'dirty.txt'), 'keep my edits')
+    const before = workspaces.list().map(item => ({ id: item.id, title: item.title }))
+    const status = await fetch(url, { headers })
+    expect(status.status).toBe(200)
+    expect(await status.json()).toMatchObject({ projects: [
+      { project_id: 'PROJECT:atlas', repository: 'apps/atlas', materialized: 'existing' },
+      { project_id: 'PROJECT:beacon', repository: null },
+    ] })
+    expect(workspaces.list().map(item => ({ id: item.id, title: item.title }))).toEqual(before)
+    expect(await readFile(join(workspaceRoot, 'atlas', 'dirty.txt'), 'utf8')).toBe('keep my edits')
+    await expect(originalClone(await realpath(join(workspaceRoot, 'atlas')), 'apps/other', {
+      token: 'forge-project-token', routePath: '/forge/v1/projects/sync', workspaceRoot,
+      forgejoBaseUrl: 'http://forgejo:3000', forgejoToken: 'forgejo-project-token', gitReadTimeoutMs: 5000, maxRequestBytes: 1024,
+    })).rejects.toThrow('different Forgejo repository')
+
+    await exec('git', ['-C', join(workspaceRoot, 'atlas'), 'remote', 'set-url', 'origin', 'https://other.example/apps/atlas.git'])
+    expect((await fetch(url, { headers })).status).toBe(422)
+    expect(workspaces.list().map(item => ({ id: item.id, title: item.title }))).toEqual(before)
+    await exec('git', ['-C', join(workspaceRoot, 'atlas'), 'remote', 'set-url', 'origin', 'http://forgejo:3000/apps/atlas.git'])
 
     const second = await fetch(url, {
       method: 'PUT',
@@ -131,6 +157,7 @@ describe('Forge project workspace composition', () => {
       workspaceRoot: join(root, 'workspaces'),
       forgejoBaseUrl: 'http://forgejo:3000',
       forgejoToken: 'forgejo-project-token',
+      gitReadTimeoutMs: 5000,
       maxRequestBytes: 1024,
     })
     const response = await fetch(`http://127.0.0.1:${String(ctx.webServer.port)}/forge/v1/projects/sync`, {

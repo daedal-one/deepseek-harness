@@ -6,7 +6,8 @@
  */
 
 import { timingSafeEqual } from 'node:crypto'
-import { spawn } from 'node:child_process'
+import { spawn, execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { mkdir, readdir, realpath, stat } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { isAbsolute, join, relative, resolve } from 'node:path'
@@ -14,6 +15,8 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Workspace } from '@deepseek-ai/dsh-workspace'
 import type {} from '@deepseek-ai/dsh-host-webserver'
+
+const execFileAsync = promisify(execFile)
 
 const PROJECT_SLUG = /^[a-z0-9][a-z0-9-]{1,38}$/
 const REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/
@@ -33,7 +36,9 @@ export interface Config {
   forgejoBaseUrl: string
   /** Forgejo token sent only through the Git child process environment. */
   forgejoToken: string
-  /** Maximum accepted JSON request bytes. */
+  /** Deadline in milliseconds for each local Git identity read. */
+  gitReadTimeoutMs: number
+  /** Maximum accepted JSON request bytes and local Git output bytes. */
   maxRequestBytes: number
 }
 
@@ -43,6 +48,7 @@ export const Config: z<Config> = z.object({
   workspaceRoot: z.string().default('/workspaces/forge'),
   forgejoBaseUrl: z.string().default('http://forgejo:3000'),
   forgejoToken: z.string().required(),
+  gitReadTimeoutMs: z.number().min(1).default(5000),
   maxRequestBytes: z.number().min(1).max(4 * 1024 * 1024).default(1024 * 1024),
 })
 
@@ -167,17 +173,49 @@ async function runGit(args: string[], token: string): Promise<void> {
   })
 }
 
+function repositoryUrl(repository: string, config: Config): string {
+  const [owner, name] = repository.split('/') as [string, string]
+  return `${config.forgejoBaseUrl.replace(/\/$/, '')}/${encodeURIComponent(owner)}/${encodeURIComponent(name)}.git`
+}
+
+async function observedRepository(path: string, config: Config): Promise<string | null> {
+  if (!await pathExists(join(path, '.git'))) return null
+  // Local metadata reads never receive provider or repository credentials.
+  const env = { PATH: process.env.PATH, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' }
+  let origin: string
+  try {
+    const result = await execFileAsync('git', ['-C', path, 'config', '--local', '--no-includes', '--get', 'remote.origin.url'], {
+      env, timeout: config.gitReadTimeoutMs, maxBuffer: config.maxRequestBytes,
+    })
+    origin = result.stdout.trim()
+    const top = await execFileAsync('git', ['-C', path, 'rev-parse', '--show-toplevel'], {
+      env, timeout: config.gitReadTimeoutMs, maxBuffer: config.maxRequestBytes,
+    })
+    if (await realpath(top.stdout.trim()) !== path) throw new Error('repository root mismatch')
+  } catch {
+    throw new Error(`workspace ${path} has no readable Git origin`)
+  }
+  const prefix = `${config.forgejoBaseUrl.replace(/\/$/, '')}/`
+  const repository = origin.startsWith(prefix) ? origin.slice(prefix.length).replace(/\.git$/, '') : ''
+  if (!REPOSITORY.test(repository) || origin !== repositoryUrl(repository, config)) {
+    throw new Error(`workspace ${path} is not linked to the configured Forgejo origin`)
+  }
+  return repository
+}
+
 async function cloneRepository(path: string, repository: string, config: Config): Promise<'created' | 'existing'> {
-  const gitDir = join(path, '.git')
-  if (await pathExists(gitDir)) return 'existing'
+  if (await pathExists(join(path, '.git'))) {
+    if (await observedRepository(path, config) !== repository) {
+      throw new Error(`workspace ${path} is linked to a different Forgejo repository`)
+    }
+    return 'existing'
+  }
   const exists = await pathExists(path)
   if (exists && (await readdir(path)).length > 0) {
     throw new Error(`workspace ${path} is non-empty but is not a Git repository`)
   }
   await mkdir(resolve(path, '..'), { recursive: true })
-  const [owner, name] = repository.split('/') as [string, string]
-  const url = `${config.forgejoBaseUrl.replace(/\/$/, '')}/${encodeURIComponent(owner)}/${encodeURIComponent(name)}.git`
-  await runGit(['clone', '--', url, path], config.forgejoToken)
+  await runGit(['clone', '--', repositoryUrl(repository, config), path], config.forgejoToken)
   return 'created'
 }
 
@@ -247,6 +285,14 @@ export class ForgeProjectWorkspaces extends Service {
       json(res, 401, { error: 'unauthorized' })
       return
     }
+    if (req.method === 'GET') {
+      try {
+        json(res, 200, await this.serialize(() => this.catalog()))
+      } catch (error) {
+        json(res, 422, { error: error instanceof Error ? error.message : String(error) })
+      }
+      return
+    }
     if (req.method !== 'PUT') {
       json(res, 405, { error: 'method not allowed' })
       return
@@ -273,8 +319,38 @@ export class ForgeProjectWorkspaces extends Service {
     return path
   }
 
+  private async catalog(): Promise<SyncResponse> {
+    const projects: ReconciledProject[] = []
+    for (const workspace of this.ctx.workspaceRegistry.list()) {
+      const slug = relative(this.canonicalWorkspaceRoot, workspace.path)
+      if (!PROJECT_SLUG.test(slug)) continue
+      if (projects.length >= 500) throw new Error('managed catalog exceeds the 500-project limit')
+      if (workspace.path !== this.managedPath(slug) || await realpath(workspace.path) !== workspace.path) {
+        throw new Error(`workspace ${workspace.path} does not resolve to its exact Forge-managed identity`)
+      }
+      projects.push({
+        project_id: `PROJECT:${slug}`, slug, workspace_id: String(workspace.id), path: workspace.path,
+        repository: await observedRepository(workspace.path, this.config), materialized: 'existing',
+      })
+      if (Buffer.byteLength(JSON.stringify({ protocol: 'dsh-forge-project-workspaces/v1', projects })) > this.config.maxRequestBytes) {
+        throw new Error('managed catalog exceeds the response byte limit')
+      }
+    }
+    const response: SyncResponse = { protocol: 'dsh-forge-project-workspaces/v1', projects }
+    if (Buffer.byteLength(JSON.stringify(response)) > this.config.maxRequestBytes) {
+      throw new Error('managed catalog exceeds the response byte limit')
+    }
+    return response
+  }
+
   private async materialize(project: ForgeProjectWorkspaceInput, path: string): Promise<'created' | 'existing'> {
+    if (await pathExists(path) && await realpath(path) !== path) {
+      throw new Error(`workspace ${path} does not resolve to its exact Forge-managed identity`)
+    }
     if (project.repository !== null) return internals.cloneRepository(path, project.repository, this.config)
+    if (await observedRepository(path, this.config) !== null) {
+      throw new Error(`workspace ${path} has a repository but the Forge project does not`)
+    }
     const existed = await pathExists(path)
     await mkdir(path, { recursive: true })
     return existed ? 'existing' : 'created'
