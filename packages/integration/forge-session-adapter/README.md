@@ -8,6 +8,7 @@ This plugin is the DeepSeek Harness implementation of `forge.agent.session/v1`. 
 - Every route requires the deployment-owned token in `X-Forge-Adapter-Token`. The adapter does not accept generic `Authorization`, so a lifecycle reverse proxy can strip ambient credentials without stripping adapter authentication.
 - `POST /v1/sessions/{id}/commands` accepts normalized, idempotent Forge commands. Provider-native fields are never required.
 - `start` fails closed unless the declared baseline is `forge-spec-v0.6.0` or `forge-spec-v0.7.0`, its SHA-256 digest matches, lint reported zero errors, the render revision equals the session intent revision, the render target equals the durable work id, and the preflight carries `forge.intellect.action/v2` evidence.
+- Recovered starts additionally require `payload.execution` with protocol `forge.executor.recovery/v1`, advertised in `recovery_protocols`. The authenticated Forge worker verifies the private restore receipt and current restored tree before dispatch. The adapter binds its lease and intent revision to the command, validates checkpoint/source/digest/evidence fields, and persists that execution identity independently of `payload.intent`; source commits and unfinished bytes never replace the clean intent preflight. Receipt changes, including replay of the same idempotency key, and receipt fields on later commands are rejected.
 - Each agent scope launches `forge-intellect-action-mcp` and exposes exactly `workspace_read`, `workspace_apply`, `workspace_run`, `workspace_reconcile`, and `workspace_watermarks` under the `mcp__forge_intellect__*` namespace.
 - Workspace and session ledger identities use the same URL-namespace UUIDv5 derivation as Forge's preflight worker, so preflight and agent actions remain one provenance stream.
 - Reads are allowed. Workspace mutations and commands ask through the Harness approval seam; `approve` resolves the pending Forge decision without blocking the Temporal command activity.
@@ -24,11 +25,11 @@ The runnable composition is [`examples/forge-adapter/cordis.yml`](../../../examp
 
 #### What the model sees
 
-Before any user prompt can drive a model request, the session receives the exact Forge Spec agent render, durable work id, workspace revision, target, and Forge Intellect preflight action id as plugin-sourced context.
+Before any user prompt can drive a model request, the session receives the exact Forge Spec agent render, durable work id, immutable intent revision, target, and Forge Intellect preflight action id as plugin-sourced context. A recovered start also names the checkpoint, recovered source revision, checkpoint/tree digests and verification action, with an explicit distinction from accepted intent. Every normalized recovery event and the inspection response retain the receipt; adapter restart does not replace it.
 
 #### Token effect
 
-The complete accepted render is paid once in the retained session context and remains until compaction. Forge controls render depth and therefore its size.
+The recovery receipt adds a bounded context block when present. The complete accepted render is paid once in the retained session context and remains until compaction. Forge controls render depth and therefore its size.
 
 #### KV Cache effect
 
@@ -50,7 +51,7 @@ The roster is fixed and prefix-stable for the session. Action results are append
 
 ## Known Limitations and Deferred Work
 
-- **The executor world is supplied, not created** — Forge must allocate and mount the canonical workspace, credential socket, network, resources, and lifetime. This adapter confines model-requested child file access when the Landlock mode is enabled; it does not create worktrees, credentials, network namespaces, or cgroups.
+- **The executor world is supplied, not created** — recovery receipts are authenticated worker attestations, not independent adapter scans of restored bytes. Forge must verify them immediately before dispatch.  Forge must allocate and mount the canonical workspace, credential socket, network, resources, and lifetime. This adapter confines model-requested child file access when the Landlock mode is enabled; it does not create worktrees, credentials, network namespaces, or cgroups.
 - **Pause/resume commands are not advertised** — durable process restart uses Harness session resume, but operator pause semantics remain a Forge adapter protocol extension.
 - **One approval is pending per session** — shipped compositions use serial tool calls. A concurrent second question fails closed as unavailable.
 - **Diff content is retained as evidence** — the protocol returns Intellect artifact and watermark references rather than embedding an unbounded patch.

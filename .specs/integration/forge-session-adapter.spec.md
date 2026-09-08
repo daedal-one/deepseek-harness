@@ -16,7 +16,7 @@ related: [REQ:integration/forge-runtime]
 - {#c-health} The adapter MUST expose authenticated health and capability
   discovery that name its implementation version, supported Forge protocol,
   commands, checkpoint support, approval semantics, evidence protocol, and
-  limitations. Every route MUST authenticate the deployment-owned adapter token
+  limitations and supported recovered-execution receipt protocols. Every route MUST authenticate the deployment-owned adapter token
   through `X-Forge-Adapter-Token`; generic `Authorization` credentials MUST NOT
   authenticate the adapter.
 - {#c-command} `POST /v1/sessions/{id}/commands` MUST accept one idempotent
@@ -30,5 +30,8 @@ related: [REQ:integration/forge-runtime]
   interface.
 - {#c-recovery} A restarted adapter MUST resume the persisted session and Forge
   Intellect workspace state or return an explicit unsupported or evidence
-  incomplete outcome; it MUST NOT create a second logical session silently.
+  incomplete outcome; it MUST NOT create a second logical session silently. A new
+  session started from an executor checkpoint MUST bind the separate
+  `forge.executor.recovery/v1` receipt to the allocated lease and immutable
+  intent revision, and reject receipt replacement even on an idempotent retry.
 :::

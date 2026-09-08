@@ -15,9 +15,14 @@ related: [IFC:integration/forge-session-adapter]
 - {#c-protocol} The adapter MUST implement `forge.agent.session/v1` without
   requiring DeepSeek Harness native fields in the Forge command, event, or
   outcome records.
-- {#c-intent} A session MUST reject dispatch unless its exact workspace revision
+- {#c-intent} A session MUST reject dispatch unless its exact immutable intent revision
   passes lint for its declared forge-spec v0.6 or v0.7 baseline and its accepted work plus affected durable intent
   are rendered before the first model request.
+- {#c-recovery} Restored execution MUST retain a distinct versioned receipt binding its
+  allocated lease, checkpoint, recovered source revision and tree digest to the
+  unchanged accepted intent revision and attributable recovery verification. The
+  adapter MUST advertise the recovery protocol and retain that identity through
+  context, events and restart; recovery MUST NOT relabel source bytes as intent.
 - {#c-actions} Model-visible workspace reads, mutations, and commands MUST pass
   through `forge-intellect-action-tools/v1`; a missing or incompatible action
   provider MUST stop session startup.

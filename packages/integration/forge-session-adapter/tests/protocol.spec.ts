@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   FORGE_SESSION_PROTOCOL,
   FORGE_SPEC_BASELINES,
+  FORGE_RECOVERY_PROTOCOL,
   ProtocolError,
   parseCommandRequest,
   parseStartPayload,
@@ -93,6 +94,40 @@ describe('Forge protocol validation', () => {
     }
 
     expect(() => parseStartPayload(parsed)).toThrow(/target/)
+  })
+
+  it('keeps recovered execution distinct from immutable intent and rejects malformed receipts', () => {
+    const parsed = parseCommandRequest(request())
+    const rendered = '<spec-bundle />\n'
+    parsed.payload.intent = {
+      protocol: 'forge.spec.preflight/v1', baseline: 'forge-spec-v0.7.0',
+      workspace_revision: parsed.intent_revision, target: parsed.work_id, rendered,
+      rendered_sha256: createHash('sha256').update(rendered).digest('hex'), lint_errors: 0,
+      evidence: { protocol: 'forge.intellect.action/v2', action_id: 'preflight-1', digest: 'preflight-digest' },
+    }
+    const execution = {
+      protocol: FORGE_RECOVERY_PROTOCOL, lease_id: parsed.executor_policy.executor_lease_id,
+      checkpoint_id: 'checkpoint-agent-aaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbb',
+      checkpoint_digest: 'c'.repeat(64), source_revision: 'b'.repeat(40), tree_digest: 'd'.repeat(64),
+      intent_revision: parsed.intent_revision,
+      evidence: { protocol: 'forge.intellect.action/v2', action_id: 'recovery-action', digest: 'e'.repeat(64) },
+    }
+    parsed.payload.execution = execution
+    expect(parseStartPayload(parsed)).toMatchObject({ execution, intent: { workspace_revision: 'a'.repeat(40) } })
+    for (const invalid of [
+      { protocol: 'forge.executor.recovery/v0' }, { lease_id: 'agent-bbbbbbbbbbbbbbbbbbbbbbbb' },
+      { intent_revision: 'b'.repeat(40) }, { checkpoint_id: '../checkpoint' },
+      { checkpoint_digest: 'ABC' }, { source_revision: 'main' }, { tree_digest: 'dirty' },
+      { evidence: { ...execution.evidence, digest: 'invalid' } },
+      { evidence: { ...execution.evidence, protocol: 'unattributed' } },
+      { evidence: { ...execution.evidence, action_id: 'x'.repeat(257) } }, { arbitrary_authority: true },
+    ]) {
+      parsed.payload.execution = { ...execution, ...invalid }
+      expect(() => parseStartPayload(parsed)).toThrow(ProtocolError)
+    }
+    parsed.payload.execution = execution
+    ;(parsed.payload.intent as Record<string, unknown>).workspace_revision = execution.source_revision
+    expect(() => parseStartPayload(parsed)).toThrow(/revision/)
   })
 
   it('derives stable UUID identities for the action gateway', () => {

@@ -8,6 +8,7 @@ progress: in-progress
 addresses:
   - REQ:integration/forge-runtime#c-protocol
   - REQ:integration/forge-runtime#c-intent
+  - REQ:integration/forge-runtime#c-recovery
   - REQ:integration/forge-runtime#c-actions
   - REQ:integration/forge-runtime#c-evidence
   - REQ:integration/forge-runtime#c-policy
@@ -44,3 +45,5 @@ The adapter preserves the committed v0.6 or v0.7 baseline supplied by Forge and
 rejects unsupported formats without relabeling the rendered intent.
 
 Forge Code's explicit confidential tool mode confines every repository command to its persisted session workspace and private temporary directory. Synthetic Linux acceptance covers direct and symlinked credential-file reads, same-UID parent environment reads, late alternate tool registrations, source search/edit/test/commit, nonzero exits, bounded longer builds, cancellation, mandatory parent-network denial, and source Git filter confinement. The Forge preset prevents automatic instruction-file reads outside that boundary; generic Harness tool and preset defaults remain unchanged.
+
+Recovered executor starts preserve the original clean intent preflight and carry a separate `forge.executor.recovery/v1` receipt. Capability negotiation, lease/revision binding, immutable retry identity, model context, event provenance and restart persistence are covered by keyless protocol and real Loader tests; the Forge worker owns checkout restoration and live-tree receipt verification.

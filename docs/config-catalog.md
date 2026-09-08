@@ -719,7 +719,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/integration/forge-session-adapter/src/index.ts:59`](../packages/integration/forge-session-adapter/src/index.ts)
+Source: [`packages/integration/forge-session-adapter/src/index.ts:60`](../packages/integration/forge-session-adapter/src/index.ts)
 
 <a id="deepseek-aidsh-fs-local"></a>
 

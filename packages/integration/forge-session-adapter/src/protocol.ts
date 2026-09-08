@@ -13,6 +13,8 @@ export const FORGE_ACTION_TOOLS_PROTOCOL = 'forge-intellect-action-tools/v1'
 export const FORGE_SPEC_BASELINES = ['forge-spec-v0.6.0', 'forge-spec-v0.7.0'] as const
 /** Forge preflight envelope required by the start command. */
 export const FORGE_PREFLIGHT_PROTOCOL = 'forge.spec.preflight/v1'
+/** Trusted Forge receipt binding restored source to an immutable intent revision. */
+export const FORGE_RECOVERY_PROTOCOL = 'forge.executor.recovery/v1'
 
 /** Complete command vocabulary advertised by the Forge session adapter. */
 export const FORGE_COMMANDS = [
@@ -59,9 +61,26 @@ export interface ForgePreflight {
   }
 }
 
+/** Verified restored executor identity supplied only by the authenticated Forge worker. */
+export interface ForgeRecoveredExecution {
+  readonly protocol: typeof FORGE_RECOVERY_PROTOCOL
+  readonly lease_id: string
+  readonly checkpoint_id: string
+  readonly checkpoint_digest: string
+  readonly source_revision: string
+  readonly tree_digest: string
+  readonly intent_revision: string
+  readonly evidence: {
+    readonly protocol: typeof FORGE_EVIDENCE_PROTOCOL
+    readonly action_id: string
+    readonly digest: string
+  }
+}
+
 /** Validated payload for the first command of a Forge-owned session. */
 export interface StartPayload extends Record<string, unknown> {
   readonly intent: ForgePreflight
+  readonly execution?: ForgeRecoveredExecution
   readonly prompt?: string
   readonly llm?: {
     readonly provider?: string
@@ -200,6 +219,56 @@ export function parseCommandRequest(value: unknown): ForgeCommandRequest {
   }
 }
 
+function recoveredExecution(value: unknown, request: ForgeCommandRequest): ForgeRecoveredExecution {
+  const input = object(value, 'payload.execution')
+  const fields = [
+    'protocol', 'lease_id', 'checkpoint_id', 'checkpoint_digest', 'source_revision', 'tree_digest', 'intent_revision', 'evidence',
+  ]
+  if (Object.keys(input).some(key => !fields.includes(key))) throw new ProtocolError('payload.execution contains unsupported fields')
+  if (input.protocol !== FORGE_RECOVERY_PROTOCOL) {
+    throw new ProtocolError(`payload.execution.protocol must be ${FORGE_RECOVERY_PROTOCOL}`, 409)
+  }
+  const lease = string(input.lease_id, 'payload.execution.lease_id')
+  const revision = string(input.intent_revision, 'payload.execution.intent_revision')
+  if (lease !== request.executor_policy.executor_lease_id || revision !== request.intent_revision) {
+    throw new ProtocolError('recovered execution does not match the allocated lease and intent revision', 409, 'policy_denied')
+  }
+  const checkpoint = string(input.checkpoint_id, 'payload.execution.checkpoint_id')
+  if (!/^checkpoint-agent-[a-f0-9]{24}-[a-f0-9]{12}$/.test(checkpoint)) {
+    throw new ProtocolError('payload.execution.checkpoint_id is invalid')
+  }
+  const source = string(input.source_revision, 'payload.execution.source_revision')
+  if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(source)) {
+    throw new ProtocolError('payload.execution.source_revision must be an exact Git revision')
+  }
+  const digest = (value: unknown, label: string): string => {
+    const result = string(value, label)
+    if (!/^[a-f0-9]{64}$/.test(result)) throw new ProtocolError(`${label} must be a lowercase SHA-256 digest`)
+    return result
+  }
+  const evidence = object(input.evidence, 'payload.execution.evidence')
+  if (evidence.protocol !== FORGE_EVIDENCE_PROTOCOL) {
+    throw new ProtocolError(`payload.execution.evidence.protocol must be ${FORGE_EVIDENCE_PROTOCOL}`, 409)
+  }
+  if (Object.keys(evidence).some(key => !['protocol', 'action_id', 'digest'].includes(key))) {
+    throw new ProtocolError('payload.execution.evidence contains unsupported fields')
+  }
+  const action = string(evidence.action_id, 'payload.execution.evidence.action_id')
+  if (action.length > 256 || /[\x00-\x1f\x7f]/.test(action)) throw new ProtocolError('payload.execution.evidence.action_id is invalid')
+  return {
+    protocol: FORGE_RECOVERY_PROTOCOL,
+    lease_id: lease,
+    checkpoint_id: checkpoint,
+    checkpoint_digest: digest(input.checkpoint_digest, 'payload.execution.checkpoint_digest'),
+    source_revision: source,
+    tree_digest: digest(input.tree_digest, 'payload.execution.tree_digest'),
+    intent_revision: revision,
+    evidence: {
+      protocol: FORGE_EVIDENCE_PROTOCOL, action_id: action, digest: digest(evidence.digest, 'payload.execution.evidence.digest'),
+    },
+  }
+}
+
 /**
  * Validate the exact Forge Spec render and its Forge Intellect preflight evidence.
  * @param request - Parsed start command whose payload carries the preflight.
@@ -242,6 +311,7 @@ export function parseStartPayload(request: ForgeCommandRequest): StartPayload {
     throw new ProtocolError('payload.llm.max_tokens must be a positive safe integer')
   }
   return {
+    ...payload.execution === undefined ? {} : { execution: recoveredExecution(payload.execution, request) },
     intent: {
       protocol: FORGE_PREFLIGHT_PROTOCOL,
       baseline,

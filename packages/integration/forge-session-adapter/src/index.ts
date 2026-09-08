@@ -26,6 +26,7 @@ import {
   FORGE_EVIDENCE_PROTOCOL,
   FORGE_SESSION_PROTOCOL,
   FORGE_SPEC_BASELINES,
+  FORGE_RECOVERY_PROTOCOL,
   ProtocolError,
   parseCommandRequest,
   parseStartPayload,
@@ -113,6 +114,7 @@ interface StoredSession {
   closed: boolean
   nextSequence: number
   llm?: StartPayload['llm']
+  execution?: StartPayload['execution']
   idempotency: Record<string, ForgeCommandResponse>
   idempotencyOrder: string[]
 }
@@ -239,6 +241,7 @@ export class ForgeSessionAdapter extends Service {
       protocols: [FORGE_SESSION_PROTOCOL],
       commands: [...FORGE_COMMANDS],
       checkpoint_support: true,
+      recovery_protocols: [FORGE_RECOVERY_PROTOCOL],
       approval_semantics: 'explicit-allow-deny',
       evidence_protocol: FORGE_EVIDENCE_PROTOCOL,
       action_tools_protocol: FORGE_ACTION_TOOLS_PROTOCOL,
@@ -390,13 +393,21 @@ export class ForgeSessionAdapter extends Service {
   }
 
   private dispatch(request: ForgeCommandRequest): Promise<ForgeCommandResponse> {
+    // Validate startup before creating state or replaying a cached response.
+    const startup = request.command === 'start' ? parseStartPayload(request) : undefined
+    if (startup === undefined && request.payload.execution !== undefined) {
+      throw new ProtocolError('recovered execution is accepted only by start', 409, 'policy_denied')
+    }
     let record = this.sessions.get(request.session_id)
     if (record === undefined) {
-      if (request.command !== 'start') throw new ProtocolError('session has not been started', 404)
-      record = this.createRecord(request)
+      if (startup === undefined) throw new ProtocolError('session has not been started', 404)
+      record = this.createRecord(request, startup)
     }
     const activeRecord = record
     this.assertIdentity(activeRecord, request)
+    if (startup !== undefined && JSON.stringify(startup.execution) !== JSON.stringify(activeRecord.stored.execution)) {
+      throw new ProtocolError('session recovered execution changed', 409, 'policy_denied')
+    }
     const cached = activeRecord.stored.idempotency[request.idempotency_key]
     if (cached !== undefined) return Promise.resolve(cached)
     if (request.command === 'approve') return this.executeAndRemember(activeRecord, request)
@@ -405,7 +416,7 @@ export class ForgeSessionAdapter extends Service {
     return result
   }
 
-  private createRecord(request: ForgeCommandRequest): LiveSession {
+  private createRecord(request: ForgeCommandRequest, startup: StartPayload): LiveSession {
     const stored: StoredSession = {
       sessionId: request.session_id,
       projectId: request.project_id,
@@ -418,6 +429,7 @@ export class ForgeSessionAdapter extends Service {
         tools: [...request.executor_policy.tools],
         credential_scopes: [...request.executor_policy.credential_scopes],
       },
+      ...startup.execution === undefined ? {} : { execution: startup.execution },
       started: false,
       closed: false,
       nextSequence: 1,
@@ -543,10 +555,18 @@ export class ForgeSessionAdapter extends Service {
       content: [{
         type: 'text',
         text: [
-          'Forge accepted the following durable intent at the exact allocated workspace revision.',
+          'Forge accepted the following durable intent at its immutable repository revision.',
           `Work: ${record.stored.workId}`,
           `Target: ${payload.intent.target}`,
-          `Revision: ${payload.intent.workspace_revision}`,
+          `Intent revision: ${payload.intent.workspace_revision}`,
+          ...payload.execution === undefined ? [] : [
+            `Recovered source revision: ${payload.execution.source_revision}`,
+            `Recovery checkpoint: ${payload.execution.checkpoint_id}`,
+            `Recovery checkpoint digest: ${payload.execution.checkpoint_digest}`,
+            `Recovered tree digest: ${payload.execution.tree_digest}`,
+            `Recovery verification action: ${payload.execution.evidence.action_id}`,
+            'The recovered source may contain later commits and unfinished edits; it does not replace accepted intent.',
+          ],
           `Forge Intellect preflight action: ${payload.intent.evidence.action_id}`,
           '',
           payload.intent.rendered,
@@ -847,7 +867,7 @@ export class ForgeSessionAdapter extends Service {
       session_id: record.stored.sessionId,
       causality_id: record.stored.causalityId,
       time: new Date().toISOString(),
-      data,
+      data: { ...data, ...record.stored.execution === undefined ? {} : { execution: record.stored.execution } },
     }
     record.events.push(event)
     if (record.events.length > MAX_RETAINED_EVENTS) record.events.splice(0, record.events.length - MAX_RETAINED_EVENTS)
@@ -879,6 +899,7 @@ export class ForgeSessionAdapter extends Service {
       project_id: record.stored.projectId,
       work_id: record.stored.workId,
       intent_revision: record.stored.intentRevision,
+      ...record.stored.execution === undefined ? {} : { execution: record.stored.execution },
       causality_id: record.stored.causalityId,
       status: this.status(record),
       last_sequence: record.stored.nextSequence - 1,
