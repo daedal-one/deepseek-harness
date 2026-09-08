@@ -66,7 +66,9 @@ RUN --mount=type=cache,target=/root/.cache \
     && rm -rf .github .changeset containers docs scripts website \
     && find . -type f \( -name '*.tsbuildinfo' -o -name '*.map' \) -delete
 
-FROM oven/bun:1.3.11@sha256:0733e50325078969732ebe3b15ce4c4be5082f18c4ac1a0f0ca4839c2e4e42a7 AS bun-tools
+# The official musl build discovers its stack without reading denied procfs
+# metadata. This ARM64 digest is exercised through the real confined Forge tool.
+FROM oven/bun:1.4.2-alpine@sha256:df7bf53d29008d89d195925aad82ca7e51dad114c6cd65b32cf8c3e0c186bb30 AS bun-tools
 FROM python:3.12.12-slim-bookworm@sha256:593bd06efe90efa80dc4eee3948be7c0fde4134606dd40d8dd8dbcade98e669c AS python-tools
 
 FROM node:24-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03
@@ -85,7 +87,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libuuid1 \
         openssh-client \
         pkg-config \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && test ! -e /lib/ld-musl-aarch64.so.1 \
+    && test ! -e /etc/ld-musl-aarch64.path \
+    && test ! -e /usr/local/lib/forge-bun-musl
 COPY --from=build /opt/deepseek-harness /opt/deepseek-harness
 COPY --from=intellect-builder /build/release/forge-intellect-action-mcp /usr/local/bin/forge-intellect-action-mcp
 COPY --from=intellect-builder /build/release/forge-intellect /usr/local/bin/forge-intellect
@@ -93,13 +98,20 @@ COPY --from=spec-builder /build/release/spec /usr/local/bin/spec
 COPY --from=spec-source /usr/local/rustup /usr/local/rustup
 COPY --from=spec-source /usr/local/cargo/bin /usr/local/cargo/bin
 COPY --from=bun-tools /usr/local/bin/bun /usr/local/bin/bun
+COPY --from=bun-tools /lib/ld-musl-aarch64.so.1 /lib/ld-musl-aarch64.so.1
+# Keep musl dependencies outside glibc's loader cache and library directories.
+COPY --from=bun-tools /usr/lib/libstdc++.so.6.0.33 /usr/local/lib/forge-bun-musl/libstdc++.so.6
+COPY --from=bun-tools /usr/lib/libgcc_s.so.1 /usr/local/lib/forge-bun-musl/libgcc_s.so.1
 COPY --from=python-tools /usr/local/bin/python3.12 /usr/local/bin/python3.12
 COPY --from=python-tools /usr/local/lib/python3.12 /usr/local/lib/python3.12
 COPY --from=python-tools /usr/local/lib/libpython3.12.so.1.0 /usr/local/lib/libpython3.12.so.1.0
 COPY --from=ghcr.io/astral-sh/uv:0.11.3@sha256:90bbb3c16635e9627f49eec6539f956d70746c409209041800a0280b93152823 /uv /uvx /usr/local/bin/
 ENV RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/tmp/forge-cargo \
     BUN_INSTALL_CACHE_DIR=/tmp/forge-bun UV_CACHE_DIR=/tmp/forge-uv COREPACK_HOME=/usr/local/share/corepack
-RUN ldconfig && ln -s python3.12 /usr/local/bin/python3 && ln -s python3.12 /usr/local/bin/python \
+RUN ln -s ld-musl-aarch64.so.1 /lib/libc.musl-aarch64.so.1 \
+    && printf '/usr/local/lib/forge-bun-musl\n/lib\n' > /usr/local/lib/forge-bun-musl/loader-path \
+    && ln -s /usr/local/lib/forge-bun-musl/loader-path /etc/ld-musl-aarch64.path \
+    && ldconfig && ln -s python3.12 /usr/local/bin/python3 && ln -s python3.12 /usr/local/bin/python \
     && ln -s bun /usr/local/bin/bunx \
     && corepack enable && corepack prepare pnpm@11.7.0 --activate
 RUN --mount=type=bind,source=containers/forge-runtime/toolchain-environment.sh,target=/tmp/toolchain-environment.sh \
@@ -115,7 +127,7 @@ RUN --mount=type=bind,source=containers/forge-runtime/toolchain-environment.sh,t
     && spec --version && env -i PATH=/usr/local/bin:/usr/bin:/bin TMPDIR=/tmp rustc --version \
     && env -i PATH=/usr/local/bin:/usr/bin:/bin TMPDIR=/tmp cargo --version \
     && env -i PATH=/usr/local/bin:/usr/bin:/bin TMPDIR=/tmp pnpm --version \
-    && env -i PATH=/usr/local/bin:/usr/bin:/bin TMPDIR=/tmp bun --version \
+    && env -i PATH=/usr/local/bin:/usr/bin:/bin TMPDIR=/tmp bun --version | grep -Fx '1.4.2' \
     && env -i PATH=/usr/local/bin:/usr/bin:/bin TMPDIR=/tmp uv --version
 RUN chmod 0755 /opt/deepseek-harness/apps/cli/lib/bin.js \
     && ln -s /opt/deepseek-harness/apps/cli/lib/bin.js /usr/local/bin/dsh

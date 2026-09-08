@@ -51,7 +51,7 @@ Enabling publication adds one stable tool schema; confidential mode adds the fix
 ## Known Limitations and Deferred Work
 
 - **Confidential mode requires Linux enforcement** — other platforms, Landlock ABI below 3, or unavailable socket denial reject startup. The Web host process remains under deployment authority; only the declared model command boundary is confined.
-- **Bun 1.3.11 is not supported inside the confined command boundary** — the keyless Linux fixture observes `CouldntReadCurrentDirectory` for TypeScript execution and `StackOverflow` while parsing the offline install manifest. The same commands pass without confinement; an explicit working directory does not fix them. Workspace ancestors and private process paths remain denied. Rust fmt/clippy/test, Python/uv, Git and an offline pnpm local-package install pass through the actual confined tool; complete Forge application checks remain a separate release gate.
+- **Application checks require separate verification** — the pinned official musl Bun 1.4.2 build passes evaluation, TypeScript, package scripts, builtin tests and offline installation through the actual confined tool. Rust fmt/clippy/test, Python/uv, Git and offline pnpm installation also pass. Complete Forge application checks still require the exact project dependencies and their own results.
 - **Existing repositories are not refreshed** — reconciliation preserves local edits and branches by leaving an existing `.git` directory untouched.
 - **Removed directories are retained** — replacement removes only the Harness registration so an accidental catalog omission cannot delete source or Session data.
 
