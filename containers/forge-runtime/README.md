@@ -25,3 +25,10 @@ selected Forge Spec commit through a local transport mirror. The resulting
 image labels record all three source revisions. The Forge release builder runs
 a no-network, read-only-root toolchain smoke check before returning local image
 identities.
+
+The native tool entry points explicitly derive HOME, XDG caches, Cargo state,
+Bun's install cache and uv's Python/tool/cache directories from the command's
+`TMPDIR`. They work after the accountable gateway clears ambient environment
+variables, without granting access to `/root` or changing Landlock read roots.
+The release smoke installs a local package offline with Bun and pnpm and creates
+a Python environment through uv under the same cleared environment.

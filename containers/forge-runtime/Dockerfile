@@ -102,17 +102,20 @@ ENV RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/tmp/forge-cargo \
 RUN ldconfig && ln -s python3.12 /usr/local/bin/python3 && ln -s python3.12 /usr/local/bin/python \
     && ln -s bun /usr/local/bin/bunx \
     && corepack enable && corepack prepare pnpm@11.7.0 --activate
-RUN for tool in cargo rustc rustdoc rustfmt cargo-fmt cargo-clippy clippy-driver; do \
-        printf '#!/bin/sh\nexport RUSTUP_HOME=/usr/local/rustup\nexport CARGO_HOME="${TMPDIR:-/tmp}/forge-cargo"\nexec /usr/local/cargo/bin/%s "$@"\n' "$tool" > "/usr/local/bin/$tool"; \
-        chmod 0755 "/usr/local/bin/$tool"; \
+RUN --mount=type=bind,source=containers/forge-runtime/toolchain-environment.sh,target=/tmp/toolchain-environment.sh \
+    mkdir -p /usr/local/lib/forge-tools \
+    && mv /usr/local/bin/bun /usr/local/bin/uv /usr/local/bin/uvx /usr/local/lib/forge-tools/ \
+    && cp /tmp/toolchain-environment.sh /usr/local/lib/forge-runtime-toolchain \
+    && chmod 0755 /usr/local/lib/forge-runtime-toolchain \
+    && for tool in cargo rustc rustdoc rustfmt cargo-fmt cargo-clippy clippy-driver bun bunx uv uvx pnpm; do \
+        rm -f "/usr/local/bin/$tool"; \
+        ln -s /usr/local/lib/forge-runtime-toolchain "/usr/local/bin/$tool"; \
     done \
-    && rm /usr/local/bin/pnpm \
-    && printf '#!/bin/sh\nexport COREPACK_HOME=/usr/local/share/corepack\nexec node /usr/local/lib/node_modules/corepack/dist/pnpm.js "$@"\n' > /usr/local/bin/pnpm \
-    && chmod 0755 /usr/local/bin/pnpm \
     && spec --version && env -i PATH=/usr/local/bin:/usr/bin:/bin TMPDIR=/tmp rustc --version \
     && env -i PATH=/usr/local/bin:/usr/bin:/bin TMPDIR=/tmp cargo --version \
     && env -i PATH=/usr/local/bin:/usr/bin:/bin TMPDIR=/tmp pnpm --version \
-    && bun --version && python --version && uv --version
+    && env -i PATH=/usr/local/bin:/usr/bin:/bin TMPDIR=/tmp bun --version \
+    && env -i PATH=/usr/local/bin:/usr/bin:/bin TMPDIR=/tmp uv --version
 RUN chmod 0755 /opt/deepseek-harness/apps/cli/lib/bin.js \
     && ln -s /opt/deepseek-harness/apps/cli/lib/bin.js /usr/local/bin/dsh
 
