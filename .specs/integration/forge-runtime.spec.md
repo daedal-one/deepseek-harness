@@ -42,4 +42,9 @@ related: [IFC:integration/forge-session-adapter]
   obey Forgejo branch protection, and verify the resulting remote revision. Credentials MUST remain
   in controlled Git child environments and MUST NOT enter workspace files or model
   results; editable repository Git configuration MUST NOT redirect publication.
+  Forge Code model tools MUST NOT read private Harness state, parent process credentials,
+  or sibling workspaces through direct paths or filesystem aliases; repository reads
+  and searches MUST share the confined command boundary. Code commands and source
+  Git preflight MUST deny new network endpoints, including parent-service loopback
+  and Unix sockets; trusted approved publication remains a separate transport path.
 :::

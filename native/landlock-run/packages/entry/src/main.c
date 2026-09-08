@@ -39,6 +39,8 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdint.h>
+#include <stddef.h>
+#include <sys/socket.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -132,6 +134,7 @@ static int fail_usage(const char *message, const char *detail) {
 /* Parsed CLI: either a probe, or grants plus the command argv after `--`. */
 struct cli {
   int probe;
+  int confidential;
   const char **ro;
   size_t ro_count;
   const char **rw;
@@ -152,11 +155,15 @@ static int parse(int argc, char **argv, struct cli *cli) {
   int index = 1;
   while (index < argc) {
     const char *arg = argv[index];
-    if (strcmp(arg, "--probe") == 0) {
+    if (strcmp(arg, "--probe") == 0 || strcmp(arg, "--probe-confidential") == 0) {
       if (argc != 2) {
         return fail_usage("--probe takes no other arguments", NULL);
       }
       cli->probe = 1;
+      cli->confidential = strcmp(arg, "--probe-confidential") == 0;
+      index += 1;
+    } else if (strcmp(arg, "--confidential") == 0) {
+      cli->confidential = 1;
       index += 1;
     } else if (strcmp(arg, "--ro") == 0 || strcmp(arg, "--rw") == 0) {
       if (index + 1 >= argc) {
@@ -234,6 +241,7 @@ static int restrict_self(const struct cli *cli, int *partial) {
      * Either way: not enforceable — fail CLOSED, never exec unconfined. */
     return fail(NOT_ENFORCED_MESSAGE, NULL);
   }
+  if (cli->confidential && abi < 3) return fail("confidential mode requires Landlock ABI 3 or newer", NULL);
   *partial = abi < MAX_ABI;
   uint64_t handled = fs_mask_for_abi(abi < MAX_ABI ? abi : MAX_ABI);
 
@@ -261,6 +269,63 @@ static int restrict_self(const struct cli *cli, int *partial) {
   return 0;
 }
 
+/* Seccomp UAPI layouts/constants from linux/filter.h and linux/seccomp.h.
+ * Only the native 64-bit syscall ABI is admitted; otherwise syscall-number
+ * filtering can be bypassed with a compatibility calling convention.
+ */
+struct forge_sock_filter { uint16_t code; uint8_t jt; uint8_t jf; uint32_t k; };
+struct forge_sock_fprog { unsigned short len; struct forge_sock_filter *filter; };
+#define F_STMT(code, k) { code, 0, 0, k }
+#define F_JUMP(code, k, jt, jf) { code, jt, jf, k }
+#define F_DENY(nr) F_JUMP(0x15, nr, 0, 1), F_STMT(0x06, 0x00050000U | EPERM)
+#if defined(__x86_64__) && !defined(__ILP32__)
+#define FORGE_AUDIT_ARCH 0xc000003eU
+#elif defined(__aarch64__)
+#define FORGE_AUDIT_ARCH 0xc00000b7U
+#else
+#error Unsupported confidential-mode syscall architecture
+#endif
+#ifndef __NR_io_uring_setup
+#define __NR_io_uring_setup 425
+#endif
+#ifndef __NR_pidfd_getfd
+#define __NR_pidfd_getfd 438
+#endif
+
+/* Deny new endpoint creation/connection, alternate async socket creation and
+ * descriptor stealing. socketpair remains available for descendant IPC, but
+ * callers must pass only stdin/stdout/stderr pipes, never an existing socket.
+ * Landlock and this filter are inherited by every fork/exec descendant.
+ */
+static int deny_network(void) {
+  struct forge_sock_filter filter[] = {
+    F_STMT(0x20, 4), /* seccomp_data.arch */
+    F_JUMP(0x15, FORGE_AUDIT_ARCH, 1, 0),
+    F_STMT(0x06, 0x80000000U), /* KILL_PROCESS */
+    F_STMT(0x20, 0), /* seccomp_data.nr */
+#if defined(__x86_64__)
+    F_JUMP(0x45, 0x40000000U, 0, 1), /* reject x32 syscall bit */
+    F_STMT(0x06, 0x80000000U),
+#endif
+    F_DENY(__NR_socket),
+    F_DENY(__NR_connect),
+    F_DENY(__NR_io_uring_setup),
+    F_DENY(__NR_pidfd_getfd),
+    F_DENY(__NR_ptrace),
+    F_DENY(__NR_process_vm_readv),
+    F_DENY(__NR_process_vm_writev),
+    F_STMT(0x06, 0x7fff0000U), /* ALLOW */
+  };
+  struct forge_sock_fprog program = {
+    .len = (unsigned short)(sizeof filter / sizeof filter[0]), .filter = filter,
+  };
+  if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) < 0
+      || prctl(PR_SET_SECCOMP, 2, &program) < 0) {
+    return fail("confidential socket denial could not be enforced", strerror(errno));
+  }
+  return 0;
+}
+
 int main(int argc, char **argv) {
   struct cli cli = { 0 };
   int code = parse(argc, argv, &cli);
@@ -274,10 +339,19 @@ int main(int argc, char **argv) {
      * report line is part of the launcher CLI contract — the executor reads
      * enforcement completeness from it. */
     static const char *probe_root = "/";
-    struct cli probe = { .ro = &probe_root, .ro_count = 1 };
+    struct cli probe = { .ro = &probe_root, .ro_count = 1, .confidential = cli.confidential };
     int partial = 0;
     code = restrict_self(&probe, &partial);
     if (code != 0) return code;
+    if (cli.confidential) {
+      code = deny_network();
+      if (code != 0) return code;
+      errno = 0;
+      int socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+      if (socket_fd != -1 || errno != EPERM) return fail("confidential socket denial probe failed", NULL);
+      printf("landlock: confidential filesystem and socket denial enforced\n");
+      return 0;
+    }
     printf("landlock: %s\n", partial ? "partially enforced (older ABI)" : "fully enforced");
     return 0;
   }
@@ -285,7 +359,11 @@ int main(int argc, char **argv) {
   int partial = 0;
   code = restrict_self(&cli, &partial);
   if (code != 0) return code;
-  if (partial) {
+  if (cli.confidential) {
+    code = deny_network();
+    if (code != 0) return code;
+  }
+  if (partial && !cli.confidential) {
     /* Older ABI: some handled accesses are not governed (e.g. truncate
      * before ABI 3). Still confined for everything the kernel supports —
      * report, do not refuse. */

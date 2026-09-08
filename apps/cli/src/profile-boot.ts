@@ -139,7 +139,7 @@ function allPatches(composed: ComposedProfile): PatchOptions[] {
  * @param patchFiles - `--patch` overlay paths, in argv order.
  * @returns the profile, its patch layers, and the composed row index.
  */
-function composeProfile(
+export function composeProfile(
   name: string,
   patchFiles: readonly string[],
 ): ComposedProfile {
@@ -156,7 +156,7 @@ function composeProfile(
   // sits beside this app's own config, in both the source and built layouts.
   // The writable root the roster appends is `dsh-agent-presets`' own, so a
   // launcher that never reaches this patch still finds a person's presets.
-  if (rows.has('agent-presets')) {
+  if (rows.has('agent-presets') && (rows.get('agent-presets')?.config as { roots?: unknown } | undefined)?.roots === undefined) {
     composedOverlays.push({
       id: 'agent-presets',
       config: {

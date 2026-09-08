@@ -2,7 +2,7 @@
 
 A [Landlock](https://landlock.io/) self-restrict-then-exec launcher for confining subprocesses on Linux, distributed as prebuilt per-platform npm packages plus a thin JS entry package that resolves the binary and speaks its CLI contract. Built for agent harnesses and other hosts that need to run untrusted commands under a filesystem allow-list without confining themselves.
 
-The tool is **`landlock-run`** — a self-restrict-then-exec [Landlock](https://landlock.io/) launcher (~300 lines of C11 over the raw kernel UAPI, statically linked against musl). It installs a Landlock ruleset on itself and `exec`s the wrapped command; the ruleset is inherited across `execve`, so the command and every process it spawns run confined while the invoking process stays unrestricted. Fail-closed: if the kernel cannot enforce, it exits without running the command.
+The tool is **`landlock-run`** — a self-restrict-then-exec [Landlock](https://landlock.io/) launcher (C11 over the raw kernel UAPI, statically linked against musl). It installs a Landlock ruleset on itself and `exec`s the wrapped command; the ruleset is inherited across `execve`, so the command and every process it spawns run confined while the invoking process stays unrestricted. Fail-closed: if the kernel cannot enforce, it exits without running the command.
 
 ## Install
 
@@ -56,3 +56,7 @@ pnpm test
 ```
 
 Binaries are git-ignored and built natively per architecture — locally for your own machine, by CI's per-arch runners as the builders of record. Release flow: [docs/release.md](docs/release.md).
+
+## Confidential command profile
+
+Version 0.1.2 adds `probeConfidential()` and `grantArgs({ confidential: true, ... })` for callers that require Landlock ABI 3 filesystem rights and mandatory denial of new network endpoints. It blocks access to a parent service through TCP, UDP or Unix sockets while preserving local descendant IPC with `socketpair`. Pass only ordinary files or pipes to the launched process; never pass a connected socket. This opt-in profile does not change ordinary partial/full probing. See the [CLI contract](docs/cli-contract.md#confidential-mode-012) for the required guarantees and limitations.

@@ -161,7 +161,7 @@ Forge-owned catalog reconciler and authenticated HTTP route owner.
 managed(): readonly string[]
 ```
 
-Source: [`packages/integration/forge-project-workspaces/src/index.ts:210`](../../packages/integration/forge-project-workspaces/src/index.ts)
+Source: [`packages/integration/forge-project-workspaces/src/index.ts:234`](../../packages/integration/forge-project-workspaces/src/index.ts)
 
 <a id="ctxworkspaceregistry--workspaceregistry"></a>
 

@@ -13,14 +13,29 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
+import { DirectoryPicker } from '@deepseek-ai/dsh-host-directory-picker'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { CallId } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-user-approval'
+import { confidentialToolGuard, registerConfidentialTools } from './confidential-tools.ts'
 import { cloneManagedRepository, preparePublication, publishBranch } from './git-push.ts'
 import type { Workspace } from '@deepseek-ai/dsh-workspace'
 import type {} from '@deepseek-ai/dsh-host-webserver'
+
+declare module '@deepseek-ai/dsh-host-directory-picker' {
+  interface DirectoryPickerCapabilities {
+    'forge-managed': { kind: 'forge-managed' }
+  }
+}
+
+/** Closed picker seam: Forge catalog registration supplies directories. */
+class ManagedDirectoryPicker extends DirectoryPicker {
+  private readonly managed = Object.freeze({ kind: 'forge-managed' as const })
+  /** Return a stable capability with no host browsing or adoption operations. */
+  capability(): { kind: 'forge-managed' } { return this.managed }
+}
 
 const execFileAsync = promisify(execFile)
 
@@ -48,6 +63,12 @@ export interface Config {
   gitPushTimeoutMs: number
   /** Deadline in milliseconds for each local Git identity read. */
   gitReadTimeoutMs: number
+  /** Explicit Forge-only model confidentiality: exclusive confined shell and approved publication. */
+  confidentialTools?: boolean
+  /** Supply a closed directory-picker capability for catalog-managed Web hosts. */
+  managedDirectoryPicker?: boolean
+  /** Immutable runtime/system read roots; excludes workspace parents and private Harness state. */
+  toolReadRoots?: string[]
   /** Maximum accepted JSON request bytes and local Git output bytes. */
   maxRequestBytes: number
 }
@@ -61,6 +82,9 @@ export const Config: z<Config> = z.object({
   publicationStateFile: z.string(),
   gitPushTimeoutMs: z.number().min(1).default(60_000),
   gitReadTimeoutMs: z.number().min(1).default(5000),
+  confidentialTools: z.boolean().default(false),
+  managedDirectoryPicker: z.boolean().default(false),
+  toolReadRoots: z.array(z.string()).default([]),
   maxRequestBytes: z.number().min(1).max(4 * 1024 * 1024).default(1024 * 1024),
 })
 
@@ -236,9 +260,23 @@ export class ForgeProjectWorkspaces extends Service {
   }
 
   async [Service.init](): Promise<void> {
+    if (this.config.managedDirectoryPicker) this.ctx.plugin(ManagedDirectoryPicker)
+    if (this.config.confidentialTools) {
+      const tools = this.ctx.get('tools')
+      if (tools === undefined) throw new Error('Forge confidential tools require the tool registry')
+      this.ctx.effect(() => tools.guard(exec => confidentialToolGuard(exec)
+        ?? (tools.get(exec.name, exec.agent) !== tools.get(exec.name) ? 'Forge tool implementation cannot be replaced by a session preset' : undefined)), 'forgeConfidentialTools.guard')
+    }
     await mkdir(this.config.workspaceRoot, { recursive: true })
     this.canonicalWorkspaceRoot = await realpath(this.config.workspaceRoot)
     if (this.config.publicationStateFile !== undefined) await this.initializePublication()
+    if (this.config.confidentialTools) {
+      if (this.config.publicationStateFile === undefined) throw new Error('Forge confidential tools require persisted repository bindings')
+      await registerConfidentialTools(this.ctx, {
+        readRoots: this.config.toolReadRoots ?? [], workspaceRoot: this.canonicalWorkspaceRoot,
+        privateStateFile: this.config.publicationStateFile,
+      }, agent => this.boundRepository(agent).path)
+    }
     const unregister = this.ctx.webServer.register({
       kind: 'exact',
       path: this.config.routePath,

@@ -9,6 +9,7 @@
 import { globSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
+import { createConfidentialShellTool } from '../packages/integration/forge-project-workspaces/src/confidential-tools.ts'
 import ForgeProjectWorkspaces from '@deepseek-ai/dsh-forge-project-workspaces'
 import Approval from '@deepseek-ai/dsh-user-approval'
 import type { WorkspaceRegistry } from '@deepseek-ai/dsh-workspace'
@@ -210,6 +211,8 @@ const TOOL_PACKAGES: ToolPackage[] = [
       ctx.provide('webServer', { register: () => () => {} } as unknown as WebServer)
       ctx.provide('workspaceRegistry', { list: () => [] } as unknown as WorkspaceRegistry)
       await ctx.plugin(Approval, { policy: 'never' })
+      await ctx.plugin(LocalSubprocessRuntime)
+      ctx.tools.register(createConfidentialShellTool(ctx.subprocess, [], () => { throw new Error('schema harvest cannot execute commands') }, new AbortController().signal))
       await ctx.plugin(ForgeProjectWorkspaces, {
         token: 'catalog-placeholder-token', forgejoToken: 'catalog-placeholder-token',
         routePath: '/forge/v1/projects/sync', forgejoBaseUrl: 'http://forgejo:3000',
@@ -217,7 +220,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
         workspaceRoot: join(temporary, 'workspaces'), publicationStateFile: join(temporary, 'catalog.json'),
       })
     },
-    note: 'Only configured Forge Web deployments expose this tool. Publication never returns or persists the Forgejo credential, and rejects the default branch, force updates, tags and deletions; Forgejo applies additional branch protection.',
+    note: 'Only configured Forge Web deployments expose these tools. The command tool requires fully enforced Linux Landlock, persisted workspace bindings and immutable deployment read roots; the catalog constructs its exact definition without executing it. Publication never returns or persists the Forgejo credential, and rejects the default branch, force updates, tags and deletions; Forgejo applies additional branch protection.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-ask-user',

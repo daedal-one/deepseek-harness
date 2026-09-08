@@ -668,12 +668,18 @@ export interface Config {
   gitPushTimeoutMs: number
   /** Deadline in milliseconds for each local Git identity read. */
   gitReadTimeoutMs: number
+  /** Explicit Forge-only model confidentiality: exclusive confined shell and approved publication. */
+  confidentialTools?: boolean
+  /** Supply a closed directory-picker capability for catalog-managed Web hosts. */
+  managedDirectoryPicker?: boolean
+  /** Immutable runtime/system read roots; excludes workspace parents and private Harness state. */
+  toolReadRoots?: string[]
   /** Maximum accepted JSON request bytes and local Git output bytes. */
   maxRequestBytes: number
 }
 ```
 
-Source: [`packages/integration/forge-project-workspaces/src/index.ts:34`](../packages/integration/forge-project-workspaces/src/index.ts)
+Source: [`packages/integration/forge-project-workspaces/src/index.ts:49`](../packages/integration/forge-project-workspaces/src/index.ts)
 
 <a id="deepseek-aidsh-forge-session-adapter"></a>
 

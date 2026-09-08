@@ -15,6 +15,7 @@ import {
   grantArgs,
   launcherPath,
   probe,
+  probeConfidential,
 } from '@deepseek-ai/node-addon-landlock-run';
 
 // --- constants are part of the CLI contract ---
@@ -23,6 +24,7 @@ assert.equal(LAUNCHER_FAILURE_EXIT, 125);
 
 // --- grantArgs: flag spelling, ordering, and empty grants ---
 assert.deepEqual(grantArgs({}), []);
+assert.deepEqual(grantArgs({ confidential: true, readOnly: ['/usr'] }), ['--confidential', '--ro', '/usr']);
 assert.deepEqual(grantArgs({ readOnly: ['/'] }), ['--ro', '/']);
 assert.deepEqual(
   grantArgs({ readOnly: ['/', '/opt'], readWrite: ['/tmp/work'] }),
@@ -69,6 +71,10 @@ if (process.platform !== 'win32') {
   assert.equal(probe(fake('partial', 'echo "landlock: partially enforced (older ABI)"; exit 0')), 'partial');
   assert.equal(probe(fake('failing', `exit ${LAUNCHER_FAILURE_EXIT}`)), 'unusable');
   assert.equal(probe(fake('hanging', 'sleep 10'), { timeoutMs: 200 }), 'unusable');
+
+  assert.equal(probeConfidential(fake('confidential', 'test \"$1\" = --probe-confidential; echo \"landlock: confidential filesystem and socket denial enforced\"')), true);
+  assert.equal(probeConfidential(fake('old', 'echo \"landlock: fully enforced\"')), false);
+  assert.equal(probeConfidential(fake('denied', 'exit 125')), false);
 
   fs.rmSync(fakeDir, { recursive: true, force: true });
 }

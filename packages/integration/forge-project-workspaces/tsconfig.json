@@ -37,6 +37,15 @@
     },
     {
       "path": "../../util/atomic-write"
+    },
+    {
+      "path": "../../subprocess/subprocess"
+    },
+    {
+      "path": "../../../native/landlock-run/packages/entry"
+    },
+    {
+      "path": "../../host/directory-picker"
     }
   ]
 }

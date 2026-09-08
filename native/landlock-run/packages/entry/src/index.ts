@@ -45,6 +45,8 @@ export type LandlockEnforcement = 'full' | 'partial' | 'unusable'
  * Landlock rulesets are allow-lists.
  */
 export interface LauncherGrants {
+  /** Require ABI>=3 filesystem rights and seccomp denial of new network endpoints. */
+  readonly confidential?: boolean
   /** Roots granted read + execute beneath (the launcher's `--ro`). */
   readonly readOnly?: readonly string[]
   /** Roots granted full filesystem access beneath (the launcher's `--rw`). */
@@ -93,6 +95,7 @@ export function launcherPath(
  */
 export function grantArgs(grants: LauncherGrants): string[] {
   return [
+    ...grants.confidential ? ['--confidential'] : [],
     ...(grants.readOnly ?? []).flatMap(root => ['--ro', root]),
     ...(grants.readWrite ?? []).flatMap(root => ['--rw', root]),
   ]
@@ -124,4 +127,17 @@ export function probe(
   })
   if (result.status !== 0) return 'unusable'
   return /partially enforced/.test(result.stdout) ? 'partial' : 'full'
+}
+
+/**
+ * Functionally verify ABI>=3 filesystem confinement and mandatory socket denial.
+ * Ordinary partial/full probing remains available separately through probe().
+ * @param launcher - Trusted installed launcher path; test override by parameter only.
+ * @returns True only after both policies were installed and socket creation denied.
+ */
+export function probeConfidential(launcher: string = launcherPath()): boolean {
+  const result = spawnSync(launcher, ['--probe-confidential'], {
+    timeout: 2000, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
+  })
+  return result.status === 0 && result.stdout.trim() === 'landlock: confidential filesystem and socket denial enforced'
 }

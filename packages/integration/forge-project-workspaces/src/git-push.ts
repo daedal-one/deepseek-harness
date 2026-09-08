@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process'
 import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { grantArgs, launcherPath, probeConfidential } from '@deepseek-ai/node-addon-landlock-run'
 
 /** Exact local publication selected before approval. */
 export interface BranchPublication {
@@ -20,6 +21,10 @@ export interface GitPublicationConfig {
   readonly forgejoToken: string
   readonly gitPushTimeoutMs: number
   readonly maxRequestBytes: number
+  /** Forge-only confinement of every source-repository Git subprocess. */
+  readonly confidentialTools?: boolean
+  /** Immutable read roots validated by confidential-tool startup. */
+  readonly toolReadRoots?: string[]
 }
 
 function baseEnvironment(): NodeJS.ProcessEnv {
@@ -36,15 +41,18 @@ function baseEnvironment(): NodeJS.ProcessEnv {
  * @param config - Deployment deadline and output bounds.
  * @param extra - Explicit credential environment for clean temporary Git metadata only.
  * @param signal - Owning tool cancellation.
+ * @param command - Trusted executable prefix; source Git uses the Landlock launcher.
  * @returns Captured UTF-8 stdout after successful completion.
  */
 export async function publicationGit(
   args: string[], config: GitPublicationConfig,
-  extra: NodeJS.ProcessEnv = {}, signal?: AbortSignal,
+  extra: NodeJS.ProcessEnv = {}, signal?: AbortSignal, command: readonly string[] = ['git'],
 ): Promise<string> {
   if (signal?.aborted) throw new Error('Git publication cancelled')
+  const executable = command[0]
+  if (executable === undefined) throw new Error('Git publication requires a trusted executable')
   return new Promise((resolve, reject) => {
-    const child = spawn('git', args, {
+    const child = spawn(executable, [...command.slice(1), ...args], {
       env: { ...baseEnvironment(), ...extra }, detached: process.platform !== 'win32',
       stdio: ['ignore', 'pipe', 'pipe'],
     })
@@ -83,6 +91,21 @@ export async function publicationGit(
   })
 }
 
+async function sourceGit(workspace: string, args: string[], config: GitPublicationConfig, signal?: AbortSignal): Promise<string> {
+  if (!config.confidentialTools) return publicationGit(localArguments(workspace, args), config, {}, signal)
+  if (process.platform !== 'linux' || !probeConfidential() || !config.toolReadRoots?.length) {
+    throw new Error('Forge source Git requires Linux filesystem and socket-denial enforcement and bounded runtime roots')
+  }
+  const temporary = await realpath(await mkdtemp(join(tmpdir(), 'forge-git-read-')))
+  try {
+    return await publicationGit(localArguments(workspace, args), config, {
+      PATH: '/usr/local/bin:/usr/bin:/bin', HOME: temporary, TMPDIR: temporary, TMP: temporary, TEMP: temporary,
+    }, signal, [launcherPath(), ...grantArgs({ confidential: true, readOnly: config.toolReadRoots, readWrite: [workspace, temporary, '/dev/null'] }), '--', 'git'])
+  } finally {
+    await rm(temporary, { recursive: true, force: true })
+  }
+}
+
 function localArguments(workspace: string, args: string[]): string[] {
   return ['-C', workspace, '-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', ...args]
 }
@@ -98,7 +121,7 @@ function localArguments(workspace: string, args: string[]): string[] {
 export async function preparePublication(
   workspace: string, repository: string, config: GitPublicationConfig, signal?: AbortSignal,
 ): Promise<BranchPublication> {
-  const run = (args: string[]): Promise<string> => publicationGit(localArguments(workspace, args), config, {}, signal)
+  const run = (args: string[]): Promise<string> => sourceGit(workspace, args, config, signal)
   if (await realpath(workspace) !== workspace) throw new Error('Managed workspace identity changed')
   const gitDir = (await run(['rev-parse', '--absolute-git-dir'])).trim()
   if (gitDir !== join(workspace, '.git') || await realpath(gitDir) !== gitDir) {

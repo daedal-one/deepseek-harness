@@ -22,6 +22,7 @@ import {
   grantArgs,
   launcherPath,
   probe,
+  probeConfidential,
 } from '@deepseek-ai/node-addon-landlock-run';
 
 const FATAL_PREFIX = 'landlock-run: ';
@@ -132,6 +133,28 @@ const expectedNotice = enforcement === 'partial' ? `${PARTIAL_NOTICE}\n` : '';
   assert.ok(badGrant.stderr.startsWith(FATAL_PREFIX));
   assert.match(badGrant.stderr, /cannot open rule path/);
   assert.ok(!fs.existsSync(marker), 'the command must never run when the launcher fails');
+}
+
+// The opt-in profile is exact: required filesystem ABI plus new endpoint denial.
+if (probeConfidential(launcher)) {
+  const script = `
+    const assert = require('node:assert/strict');
+    const net = require('node:net');
+    const dgram = require('node:dgram');
+    const attempts = [
+      new Promise(resolve => { const s=net.connect({host:'127.0.0.1',port:9}); s.once('error',e=>{assert.equal(e.code,'EPERM');resolve()}); }),
+      new Promise(resolve => { const s=net.connect('/tmp/forge-synthetic.sock'); s.once('error',e=>{assert.equal(e.code,'EPERM');resolve()}); }),
+      new Promise(resolve => { const s=dgram.createSocket('udp4'); const denied=e=>{assert.equal(e.code,'EPERM');try{s.close()}catch{}resolve()}; s.once('error',denied); s.send('synthetic',9,'127.0.0.1',e=>{if(e)denied(e)}); }),
+    ];
+    Promise.all(attempts).then(()=>console.log('network-denied'));
+  `;
+  const denied = run([...grantArgs({ confidential: true, readOnly: ['/'] }), '--', process.execPath, '-e', script]);
+  assert.equal(denied.status, 0, denied.stderr);
+  assert.equal(denied.stdout, 'network-denied\n');
+} else if (process.env.NALR_REQUIRE_CONFIDENTIAL === '1') {
+  throw new Error('Required confidential filesystem/socket enforcement unavailable');
+} else {
+  console.log('launcher.test: confidential mode unavailable on this kernel');
 }
 
 console.log('launcher.test: ok');

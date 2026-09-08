@@ -39,6 +39,7 @@ async function boot(root: string): Promise<Context> {
     { name: 'workspaces' }, { name: 'webserver', config: { host: '127.0.0.1', port: 0 } },
     { name: 'agents' }, { name: 'prompt' }, { name: 'tools' }, { name: 'approval', config: { policy: 'never' } },
     { name: 'forge-projects', config: {
+      managedDirectoryPicker: true,
       token: 'test-catalog-token', workspaceRoot: join(root, 'workspaces'),
       publicationStateFile: join(root, 'catalog.json'),
       forgejoBaseUrl: 'http://forgejo:3000', forgejoToken: 'test-forgejo-token',
@@ -65,6 +66,7 @@ test('real Loader serves persisted project identities after restart without chan
   const headers = { authorization: 'Bearer test-catalog-token', 'content-type': 'application/json' }
   try {
     ctx = await boot(root)
+    expect(ctx.directoryPicker.capability()).toEqual({ kind: 'forge-managed' })
     let url = `http://127.0.0.1:${String(ctx.webServer.port)}/forge/v1/projects/sync`
     expect((await fetch(url)).status).toBe(401)
     const replacement = await fetch(url, { method: 'PUT', headers, body: JSON.stringify({ projects: [
