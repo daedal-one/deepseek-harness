@@ -6,20 +6,26 @@
  */
 
 import { timingSafeEqual } from 'node:crypto'
-import { spawn, execFile } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { mkdir, readdir, realpath, stat } from 'node:fs/promises'
+import { mkdir, readFile, readdir, realpath, stat } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
+import { defineTool } from '@deepseek-ai/dsh-tools'
+import { writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
+import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { CallId } from '@deepseek-ai/dsh-llm'
+import type {} from '@deepseek-ai/dsh-user-approval'
+import { cloneManagedRepository, preparePublication, publishBranch } from './git-push.ts'
 import type { Workspace } from '@deepseek-ai/dsh-workspace'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 
 const execFileAsync = promisify(execFile)
 
 const PROJECT_SLUG = /^[a-z0-9][a-z0-9-]{1,38}$/
-const REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/
+const REPOSITORY = /^[A-Za-z0-9][A-Za-z0-9_.-]*\/[A-Za-z0-9][A-Za-z0-9_.-]*$/
 
 /** Cordis services required by the reconciler. */
 export const inject = ['webServer', 'workspaceRegistry']
@@ -36,6 +42,10 @@ export interface Config {
   forgejoBaseUrl: string
   /** Forgejo token sent only through the Git child process environment. */
   forgejoToken: string
+  /** Trusted catalog binding file outside all managed workspaces; enables approved branch publication. */
+  publicationStateFile?: string
+  /** Deadline in milliseconds for each bounded publication Git command. */
+  gitPushTimeoutMs: number
   /** Deadline in milliseconds for each local Git identity read. */
   gitReadTimeoutMs: number
   /** Maximum accepted JSON request bytes and local Git output bytes. */
@@ -48,6 +58,8 @@ export const Config: z<Config> = z.object({
   workspaceRoot: z.string().default('/workspaces/forge'),
   forgejoBaseUrl: z.string().default('http://forgejo:3000'),
   forgejoToken: z.string().required(),
+  publicationStateFile: z.string(),
+  gitPushTimeoutMs: z.number().min(1).default(60_000),
   gitReadTimeoutMs: z.number().min(1).default(5000),
   maxRequestBytes: z.number().min(1).max(4 * 1024 * 1024).default(1024 * 1024),
 })
@@ -145,34 +157,6 @@ async function pathExists(path: string): Promise<boolean> {
   }
 }
 
-async function runGit(args: string[], token: string): Promise<void> {
-  await new Promise<void>((resolvePromise, reject) => {
-    const child = spawn('git', args, {
-      stdio: ['ignore', 'ignore', 'pipe'],
-      env: {
-        ...process.env,
-        GIT_TERMINAL_PROMPT: '0',
-        GIT_CONFIG_COUNT: '1',
-        GIT_CONFIG_KEY_0: 'http.extraHeader',
-        GIT_CONFIG_VALUE_0: `Authorization: token ${token}`,
-      },
-    })
-    let diagnostic = ''
-    child.stderr.setEncoding('utf8')
-    child.stderr.on('data', (chunk: string) => {
-      if (diagnostic.length < 16_384) diagnostic += chunk.slice(0, 16_384 - diagnostic.length)
-    })
-    child.once('error', reject)
-    child.once('exit', (code, signal) => {
-      if (code === 0) {
-        resolvePromise()
-        return
-      }
-      reject(new Error(`git clone failed (${signal ?? String(code)}): ${diagnostic.trim() || 'no diagnostic'}`))
-    })
-  })
-}
-
 function repositoryUrl(repository: string, config: Config): string {
   const [owner, name] = repository.split('/') as [string, string]
   return `${config.forgejoBaseUrl.replace(/\/$/, '')}/${encodeURIComponent(owner)}/${encodeURIComponent(name)}.git`
@@ -215,7 +199,7 @@ async function cloneRepository(path: string, repository: string, config: Config)
     throw new Error(`workspace ${path} is non-empty but is not a Git repository`)
   }
   await mkdir(resolve(path, '..'), { recursive: true })
-  await runGit(['clone', '--', repositoryUrl(repository, config), path], config.forgejoToken)
+  await cloneManagedRepository(path, repository, config)
   return 'created'
 }
 
@@ -230,6 +214,8 @@ export class ForgeProjectWorkspaces extends Service {
   private tail: Promise<void> = Promise.resolve()
   private managedPaths = new Set<string>()
   private canonicalWorkspaceRoot!: string
+  private publicationBindings = new Map<string, ForgeProjectWorkspaceInput>()
+  private readonly publicationAbort = new AbortController()
 
   constructor(ctx: Context, private readonly config: Config) {
     super(ctx, 'forgeProjectWorkspaces')
@@ -252,12 +238,100 @@ export class ForgeProjectWorkspaces extends Service {
   async [Service.init](): Promise<void> {
     await mkdir(this.config.workspaceRoot, { recursive: true })
     this.canonicalWorkspaceRoot = await realpath(this.config.workspaceRoot)
+    if (this.config.publicationStateFile !== undefined) await this.initializePublication()
     const unregister = this.ctx.webServer.register({
       kind: 'exact',
       path: this.config.routePath,
       handler: (req, res) => this.handle(req, res),
     })
     this.ctx.effect(() => unregister, 'forgeProjectWorkspaces.route')
+  }
+
+
+  private async initializePublication(): Promise<void> {
+    const file = this.config.publicationStateFile
+    if (file === undefined) return
+    if (!isAbsolute(file) || resolve(file) === this.canonicalWorkspaceRoot || resolve(file).startsWith(`${this.canonicalWorkspaceRoot}/`)) {
+      throw new Error('Publication catalog state must be absolute and outside managed workspaces')
+    }
+    await mkdir(resolve(file, '..'), { recursive: true })
+    const parent = await realpath(resolve(file, '..'))
+    if (parent === this.canonicalWorkspaceRoot || parent.startsWith(`${this.canonicalWorkspaceRoot}/`)
+      || (await pathExists(file) && await realpath(file) !== resolve(file))) {
+      throw new Error('Publication catalog state resolves inside managed workspaces or through a symlink')
+    }
+    const origin = new URL(this.config.forgejoBaseUrl)
+    if (!['http:', 'https:'].includes(origin.protocol) || origin.username || origin.password || origin.search || origin.hash || origin.pathname !== '/') {
+      throw new Error('Forgejo publication requires an HTTP(S) origin without credentials or path')
+    }
+    if (process.platform === 'win32') throw new Error('Forge publication requires POSIX process-group isolation')
+    if (await pathExists(file)) {
+      if ((await stat(file)).size > this.config.maxRequestBytes) throw new Error('Publication catalog exceeds its byte limit')
+      const saved: unknown = JSON.parse(await readFile(file, 'utf8'))
+      const object = asObject(saved, 'publication catalog')
+      if (object.protocol !== 'forge-publication-catalog/v1') throw new Error('Unsupported publication catalog')
+      this.publicationBindings = new Map(parseCatalog(object).map(project => [this.managedPath(project.slug), project]))
+    }
+    const tools = this.ctx.get('tools')
+    const approval = this.ctx.get('approval')
+    if (tools === undefined || approval === undefined) throw new Error('Forge publication requires tools and approval services')
+    this.ctx.effect(() => tools.register(defineTool({
+      name: 'forge_push_branch',
+      description: 'Publish the current committed codex/ or forge/ development branch to this session workspace’s registered Forge repository. First run tests, inspect the diff, and commit through the existing shell tools. Requires a clean clone and explicit approval. Refuses the remote default branch, force updates, tags, or deletions; Forgejo enforces additional branch protection. The result verifies the remote commit; open that branch in Forgejo to request review.',
+      parameters: {},
+      output: {
+        schema: { type: 'object', additionalProperties: false, properties: {
+          repository: { type: 'string', required: true }, branch: { type: 'string', required: true },
+          commit: { type: 'string', required: true },
+        } },
+        render: (_args, result) => [{ type: 'text', text: `Published ${result.repository} branch ${result.branch} at ${result.commit}. Remote revision verified.` }],
+      },
+      execute: async (args, exec) => {
+        if (Object.keys(args).length !== 0) throw new Error('Forge publication accepts no branch, destination, or force arguments')
+        if (exec.agent === undefined) throw new Error('Forge publication requires an initiating agent')
+        return this.pushCurrentBranch(exec.agent, exec.callId, exec.signal)
+      },
+      presentCall: () => ({ card: 'generic', title: 'Publish development branch', kind: 'other' }),
+    })), 'forgeProjectWorkspaces.pushTool')
+    this.ctx.effect(() => async () => {
+      this.publicationAbort.abort()
+      await this.tail
+    }, 'forgeProjectWorkspaces.publication')
+  }
+
+  private boundRepository(agent: Agent): { path: string; project: ForgeProjectWorkspaceInput } {
+    const path = agent.session.header.cwd
+    const workspace = this.ctx.workspaceRegistry.list()
+      .find(item => item.path === path && item.sessionIds.includes(agent.session.id))
+    const project = path === undefined ? undefined : this.publicationBindings.get(path)
+    if (workspace === undefined || project?.repository === null || project === undefined) {
+      throw new Error('This session has no persisted Forge repository binding; synchronize its project catalog first')
+    }
+    return { path: workspace.path, project }
+  }
+
+  private async pushCurrentBranch(
+    agent: Agent, callId: CallId, signal?: AbortSignal,
+  ): Promise<{ repository: string; branch: string; commit: string }> {
+    const cancellation = signal === undefined ? this.publicationAbort.signal : AbortSignal.any([signal, this.publicationAbort.signal])
+    const { path, project } = this.boundRepository(agent)
+    if (project.repository === null) throw new Error('This Forge project has no repository')
+    const selected = await preparePublication(path, project.repository, this.config, cancellation)
+    const approval = this.ctx.get('approval')
+    if (approval === undefined) throw new Error('Repository approval service is unavailable')
+    const outcome = await approval.request({
+      agent, callId, toolName: 'forge_push_branch', signal: cancellation,
+      reason: `Publish ${selected.commit} to ${selected.repository} branch ${selected.branch}. This updates the remote development branch.`,
+    })
+    if (outcome !== 'allowed-once') throw new Error('Repository publication was not approved')
+    return this.serialize(async () => {
+      const current = this.boundRepository(agent)
+      if (current.path !== selected.workspace || current.project.repository !== selected.repository) {
+        throw new Error('Forge repository binding changed after publication approval')
+      }
+      const commit = await publishBranch(selected, this.config, cancellation)
+      return { repository: selected.repository, branch: selected.branch, commit }
+    })
   }
 
   private authorized(req: IncomingMessage): boolean {
@@ -382,6 +456,13 @@ export class ForgeProjectWorkspaces extends Service {
     for (const row of [...rows].reverse()) {
       await this.ctx.workspaceRegistry.insertBefore(row.workspace.id, before)
       before = row.workspace.id
+    }
+    if (this.config.publicationStateFile !== undefined) {
+      const saved = JSON.stringify({ protocol: 'forge-publication-catalog/v1', projects })
+      if (Buffer.byteLength(saved) > this.config.maxRequestBytes) throw new Error('Publication catalog exceeds its byte limit')
+      await mkdir(resolve(this.config.publicationStateFile, '..'), { recursive: true })
+      await writeFileAtomic(this.config.publicationStateFile, saved, { mode: 0o600 })
+      this.publicationBindings = new Map(projects.map(project => [this.managedPath(project.slug), project]))
     }
     this.managedPaths = desired
     return {

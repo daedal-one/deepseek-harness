@@ -662,6 +662,10 @@ export interface Config {
   forgejoBaseUrl: string
   /** Forgejo token sent only through the Git child process environment. */
   forgejoToken: string
+  /** Trusted catalog binding file outside all managed workspaces; enables approved branch publication. */
+  publicationStateFile?: string
+  /** Deadline in milliseconds for each bounded publication Git command. */
+  gitPushTimeoutMs: number
   /** Deadline in milliseconds for each local Git identity read. */
   gitReadTimeoutMs: number
   /** Maximum accepted JSON request bytes and local Git output bytes. */
@@ -669,7 +673,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/integration/forge-project-workspaces/src/index.ts:28`](../packages/integration/forge-project-workspaces/src/index.ts)
+Source: [`packages/integration/forge-project-workspaces/src/index.ts:34`](../packages/integration/forge-project-workspaces/src/index.ts)
 
 <a id="deepseek-aidsh-forge-session-adapter"></a>
 

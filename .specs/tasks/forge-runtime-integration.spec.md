@@ -14,6 +14,7 @@ addresses:
   - REQ:integration/forge-runtime#c-lifecycle
   - REQ:integration/forge-runtime#c-compatibility
   - REQ:integration/forge-runtime#c-project-workspaces
+  - REQ:integration/forge-runtime#c-publication
 labels: [forge, adapter, forge-spec, forge-intellect, conformance]
 assignee: carlo
 ---

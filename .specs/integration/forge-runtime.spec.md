@@ -36,4 +36,10 @@ related: [IFC:integration/forge-session-adapter]
   managed Harness workspace for each Forge-supplied `ProjectId`, slug, title,
   and repository, and MUST select only an already reconciled workspace from a
   Hub deep link; it MUST NOT create an independent Forge project authority.
+- {#c-publication} Code publication MUST bind the calling Session to its persisted
+  Forge repository, require explicit approval of the selected development commit,
+  refuse default branches, force updates, tags, deletions and alternate destinations,
+  obey Forgejo branch protection, and verify the resulting remote revision. Credentials MUST remain
+  in controlled Git child environments and MUST NOT enter workspace files or model
+  results; editable repository Git configuration MUST NOT redirect publication.
 :::

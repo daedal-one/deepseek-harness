@@ -6,8 +6,13 @@
  * `.agents/notes/implemented/process/2026-07-02-tool-schema-catalog.md`.
  */
 
-import { globSync, readFileSync, writeFileSync } from 'node:fs'
-import { basename, resolve } from 'node:path'
+import { globSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { basename, join, resolve } from 'node:path'
+import { tmpdir } from 'node:os'
+import ForgeProjectWorkspaces from '@deepseek-ai/dsh-forge-project-workspaces'
+import Approval from '@deepseek-ai/dsh-user-approval'
+import type { WorkspaceRegistry } from '@deepseek-ai/dsh-workspace'
+import type WebServer from '@deepseek-ai/dsh-host-webserver'
 import { Context } from '@deepseek-ai/cordis'
 import type { ToolSchema } from '@deepseek-ai/dsh-llm'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
@@ -193,6 +198,27 @@ export interface ToolPackage {
  * guard proves it is exhaustive against the on-disk glob.
  */
 const TOOL_PACKAGES: ToolPackage[] = [
+  {
+    pkg: '@deepseek-ai/dsh-forge-project-workspaces', dir: 'forge-project-workspaces',
+    source: 'packages/integration/forge-project-workspaces/src/index.ts',
+    requires: ['ctx.tools', 'ctx.approval', 'a persisted Forge project binding and registered agent workspace'],
+    writes: ['approval/asked', 'approval/decided', 'registered repository development branch'],
+    async mount(ctx) {
+      const temporary = mkdtempSync(join(tmpdir(), 'forge-tool-catalog-'))
+      ctx.effect(() => () => { rmSync(temporary, { recursive: true, force: true }) })
+      // Schema harvest installs routes but never accepts a request or executes publication.
+      ctx.provide('webServer', { register: () => () => {} } as unknown as WebServer)
+      ctx.provide('workspaceRegistry', { list: () => [] } as unknown as WorkspaceRegistry)
+      await ctx.plugin(Approval, { policy: 'never' })
+      await ctx.plugin(ForgeProjectWorkspaces, {
+        token: 'catalog-placeholder-token', forgejoToken: 'catalog-placeholder-token',
+        routePath: '/forge/v1/projects/sync', forgejoBaseUrl: 'http://forgejo:3000',
+        gitPushTimeoutMs: 60_000, gitReadTimeoutMs: 5000, maxRequestBytes: 1024 * 1024,
+        workspaceRoot: join(temporary, 'workspaces'), publicationStateFile: join(temporary, 'catalog.json'),
+      })
+    },
+    note: 'Only configured Forge Web deployments expose this tool. Publication never returns or persists the Forgejo credential, and rejects the default branch, force updates, tags and deletions; Forgejo applies additional branch protection.',
+  },
   {
     pkg: '@deepseek-ai/dsh-tool-ask-user',
     dir: 'tool-ask-user',

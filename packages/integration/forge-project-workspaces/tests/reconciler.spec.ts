@@ -83,7 +83,7 @@ describe('Forge project workspace composition', () => {
       workspaceRoot,
       forgejoBaseUrl: 'http://forgejo:3000',
       forgejoToken: 'forgejo-project-token',
-      gitReadTimeoutMs: 5000,
+      gitPushTimeoutMs: 60_000, gitReadTimeoutMs: 5000,
       maxRequestBytes: 1024 * 1024,
     })
     const url = `http://127.0.0.1:${String(ctx.webServer.port)}/forge/v1/projects/sync`
@@ -124,7 +124,7 @@ describe('Forge project workspace composition', () => {
     expect(await readFile(join(workspaceRoot, 'atlas', 'dirty.txt'), 'utf8')).toBe('keep my edits')
     await expect(originalClone(await realpath(join(workspaceRoot, 'atlas')), 'apps/other', {
       token: 'forge-project-token', routePath: '/forge/v1/projects/sync', workspaceRoot,
-      forgejoBaseUrl: 'http://forgejo:3000', forgejoToken: 'forgejo-project-token', gitReadTimeoutMs: 5000, maxRequestBytes: 1024,
+      forgejoBaseUrl: 'http://forgejo:3000', forgejoToken: 'forgejo-project-token', gitPushTimeoutMs: 60_000, gitReadTimeoutMs: 5000, maxRequestBytes: 1024,
     })).rejects.toThrow('different Forgejo repository')
 
     await exec('git', ['-C', join(workspaceRoot, 'atlas'), 'remote', 'set-url', 'origin', 'https://other.example/apps/atlas.git'])
@@ -157,7 +157,7 @@ describe('Forge project workspace composition', () => {
       workspaceRoot: join(root, 'workspaces'),
       forgejoBaseUrl: 'http://forgejo:3000',
       forgejoToken: 'forgejo-project-token',
-      gitReadTimeoutMs: 5000,
+      gitPushTimeoutMs: 60_000, gitReadTimeoutMs: 5000,
       maxRequestBytes: 1024,
     })
     const response = await fetch(`http://127.0.0.1:${String(ctx.webServer.port)}/forge/v1/projects/sync`, {

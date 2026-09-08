@@ -1,8 +1,16 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { pathToFileURL } from 'node:url'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { Context } from '@deepseek-ai/cordis'
+import AgentRegistry, { Inbox, type Agent } from '@deepseek-ai/dsh-agent'
+import { CallId } from '@deepseek-ai/dsh-llm'
+import { SessionId } from '@deepseek-ai/dsh-session'
+import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import Tools from '@deepseek-ai/dsh-tools'
+import Approval from '@deepseek-ai/dsh-user-approval'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import Storage from '@deepseek-ai/dsh-storage'
@@ -19,6 +27,7 @@ const modules = new Map<string, unknown>([
   ['storage', Storage], ['storage-json', StorageJson], ['storage-domain', StorageDomain],
   ['sessions', Sessions], ['persistence', Persistence], ['workspaces', Workspaces],
   ['webserver', WebServer], ['forge-projects', ForgeProjectWorkspaces],
+  ['agents', AgentRegistry], ['prompt', SystemPrompt], ['tools', Tools], ['approval', Approval],
 ])
 
 async function boot(root: string): Promise<Context> {
@@ -28,8 +37,10 @@ async function boot(root: string): Promise<Context> {
     { name: 'storage-domain', config: { backend: 'json' } }, { name: 'sessions' },
     { name: 'persistence', config: { root: join(root, 'sessions'), compression: 'none' } },
     { name: 'workspaces' }, { name: 'webserver', config: { host: '127.0.0.1', port: 0 } },
+    { name: 'agents' }, { name: 'prompt' }, { name: 'tools' }, { name: 'approval', config: { policy: 'never' } },
     { name: 'forge-projects', config: {
       token: 'test-catalog-token', workspaceRoot: join(root, 'workspaces'),
+      publicationStateFile: join(root, 'catalog.json'),
       forgejoBaseUrl: 'http://forgejo:3000', forgejoToken: 'test-forgejo-token',
     } },
   ]))
@@ -49,7 +60,7 @@ async function boot(root: string): Promise<Context> {
 }
 
 test('real Loader serves persisted project identities after restart without changing files or registry', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'forge-catalog-loader-'))
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'forge-catalog-loader-')))
   let ctx: Context | undefined
   const headers = { authorization: 'Bearer test-catalog-token', 'content-type': 'application/json' }
   try {
@@ -76,6 +87,84 @@ test('real Loader serves persisted project identities after restart without chan
     await ctx.fiber.dispose()
     ctx = undefined
     await expect(fetch(url, { headers })).rejects.toThrow()
+  } finally {
+    await ctx?.fiber.dispose()
+    await rm(root, { recursive: true, force: true })
+  }
+}, 30_000)
+
+
+test('real Loader publication uses persisted session bindings and explicit approval, refusing an edited origin', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'forge-publish-loader-')))
+  const exec = promisify(execFile)
+  const path = join(root, 'workspaces', 'atlas')
+  let ctx: Context | undefined
+  try {
+    await mkdir(path, { recursive: true })
+    const git = (...args: string[]): Promise<{ stdout: string }> => exec('git', ['-C', path, ...args])
+    await git('init', '--initial-branch=codex/change')
+    await git('config', 'user.name', 'Fixture')
+    await git('config', 'user.email', 'fixture@example.invalid')
+    await git('remote', 'add', 'origin', 'http://forgejo:3000/apps/atlas.git')
+    await writeFile(join(path, 'file.txt'), 'committed content')
+    await git('add', '.')
+    await git('commit', '-m', 'fixture')
+    ctx = await boot(root)
+    const url = `http://127.0.0.1:${String(ctx.webServer.port)}/forge/v1/projects/sync`
+    expect((await fetch(url, { method: 'PUT', headers: {
+      authorization: 'Bearer test-catalog-token', 'content-type': 'application/json',
+    }, body: JSON.stringify({ projects: [{ project_id: 'PROJECT:atlas', slug: 'atlas', title: 'Atlas', repository: 'apps/atlas' }] }) })).status).toBe(200)
+    await ctx.fiber.dispose()
+    ctx = await boot(root)
+    const session = ctx.sessions.create(SessionId('publication'), { meta: { cwd: path } })
+    const workspace = ctx.workspaceRegistry.list()[0]!
+    const owner: Agent = {
+      id: session.id, options: {}, session,
+      inbox: new Inbox(session, { inserted: () => {}, discarded: () => {}, claimed: () => {} }),
+      status: 'idle', ctx, followup() {}, steer() {}, inject() {}, send() {}, cancel() {},
+      runMaintenance: operation => operation(new AbortController().signal), whenIdle: () => Promise.resolve(),
+    }
+    ctx.agents.register(owner)
+    session.append('turn/start', { turn: 1 })
+    let callNumber = 0
+    const call = (args: Record<string, unknown> = {}) => ctx!.tools.execute({
+      agent: owner, signal: new AbortController().signal, callId: CallId(`publish-${String(++callNumber)}`), name: 'forge_push_branch', arguments: args,
+    })
+    expect(ctx.tools.schemas().find(tool => tool.name === 'forge_push_branch')?.parameters).toMatchInlineSnapshot(`
+      {
+        "properties": {},
+        "type": "object",
+      }
+    `)
+    expect(JSON.stringify(await call())).toContain('persisted Forge repository binding')
+    expect(session.events.filter(event => event.type === 'approval/asked')).toHaveLength(0)
+    await workspace.attachSession(session.id)
+    expect(JSON.stringify(await call({ force: true }))).toContain('accepts no branch')
+    const rejected = await call()
+    expect(rejected.isError).toBe(true)
+    expect(JSON.stringify(rejected)).toContain('not approved')
+    expect(session.events.filter(event => event.type === 'approval/asked')).toHaveLength(1)
+    expect(session.events.find(event => event.type === 'approval/decided')?.data).toMatchObject({ outcome: 'rejected' })
+    await git('remote', 'set-url', 'origin', 'http://forgejo:3000/apps/other.git')
+    expect(JSON.stringify(await call())).toContain('registered Forge repository')
+    expect(session.events.filter(event => event.type === 'approval/asked')).toHaveLength(1)
+    await git('remote', 'set-url', 'origin', 'http://forgejo:3000/apps/atlas.git')
+    ctx.approval.setPolicy(owner, 'ask')
+    ctx.on('approval/request', async (req) => {
+      expect(req.toolName).toBe('forge_push_branch')
+      expect(req.reason).toContain('apps/atlas branch codex/change')
+      await writeFile(join(path, 'file.txt'), 'changed while waiting for approval')
+      await git('add', '.')
+      await git('commit', '-m', 'changed')
+      return 'allowed-once'
+    })
+    expect(JSON.stringify(await call())).toContain('changed after publication approval')
+    expect(session.events.filter(event => event.type === 'approval/decided').at(-1)?.data)
+      .toMatchObject({ outcome: 'allowed-once' })
+    const registry = ctx.tools
+    await ctx.fiber.dispose()
+    ctx = undefined
+    expect(registry.schemas().some(tool => tool.name === 'forge_push_branch')).toBe(false)
   } finally {
     await ctx?.fiber.dispose()
     await rm(root, { recursive: true, force: true })
