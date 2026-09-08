@@ -103,7 +103,8 @@ RUN ldconfig && ln -s python3.12 /usr/local/bin/python3 && ln -s python3.12 /usr
     && ln -s bun /usr/local/bin/bunx \
     && corepack enable && corepack prepare pnpm@11.7.0 --activate
 RUN --mount=type=bind,source=containers/forge-runtime/toolchain-environment.sh,target=/tmp/toolchain-environment.sh \
-    mkdir -p /usr/local/lib/forge-tools \
+    /usr/local/cargo/bin/rustup component add rustfmt clippy \
+    && mkdir -p /usr/local/lib/forge-tools \
     && mv /usr/local/bin/bun /usr/local/bin/uv /usr/local/bin/uvx /usr/local/lib/forge-tools/ \
     && cp /tmp/toolchain-environment.sh /usr/local/lib/forge-runtime-toolchain \
     && chmod 0755 /usr/local/lib/forge-runtime-toolchain \
