@@ -9,6 +9,7 @@
 import { globSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
+import { createForgeFetchTool } from '../packages/integration/forge-project-workspaces/src/git-fetch.ts'
 import { createConfidentialShellTool } from '../packages/integration/forge-project-workspaces/src/confidential-tools.ts'
 import ForgeProjectWorkspaces from '@deepseek-ai/dsh-forge-project-workspaces'
 import Approval from '@deepseek-ai/dsh-user-approval'
@@ -203,7 +204,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
     pkg: '@deepseek-ai/dsh-forge-project-workspaces', dir: 'forge-project-workspaces',
     source: 'packages/integration/forge-project-workspaces/src/index.ts',
     requires: ['ctx.tools', 'ctx.approval', 'a persisted Forge project binding and registered agent workspace'],
-    writes: ['approval/asked', 'approval/decided', 'registered repository development branch'],
+    writes: ['approval/asked', 'approval/decided', 'registered repository development branch', 'verified origin remote-tracking refs'],
     async mount(ctx) {
       const temporary = mkdtempSync(join(tmpdir(), 'forge-tool-catalog-'))
       ctx.effect(() => () => { rmSync(temporary, { recursive: true, force: true }) })
@@ -213,6 +214,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
       await ctx.plugin(Approval, { policy: 'never' })
       await ctx.plugin(LocalSubprocessRuntime)
       ctx.tools.register(createConfidentialShellTool(ctx.subprocess, [], () => { throw new Error('schema harvest cannot execute commands') }, new AbortController().signal))
+      ctx.tools.register(createForgeFetchTool(async () => { throw new Error('schema harvest cannot fetch repositories') }))
       await ctx.plugin(ForgeProjectWorkspaces, {
         token: 'catalog-placeholder-token', forgejoToken: 'catalog-placeholder-token',
         routePath: '/forge/v1/projects/sync', forgejoBaseUrl: 'http://forgejo:3000',
@@ -220,7 +222,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
         workspaceRoot: join(temporary, 'workspaces'), publicationStateFile: join(temporary, 'catalog.json'),
       })
     },
-    note: 'Only configured Forge Web deployments expose these tools. The command tool requires fully enforced Linux Landlock, persisted workspace bindings and immutable deployment read roots; the catalog constructs its exact definition without executing it. Publication never returns or persists the Forgejo credential, and rejects the default branch, force updates, tags and deletions; Forgejo applies additional branch protection.',
+    note: 'Only configured Forge Web deployments expose these tools. The command tool requires Linux Landlock ABI 3 or newer with mandatory socket denial, persisted workspace bindings and immutable deployment read roots; the catalog constructs its exact definition without executing it. Fetch preserves local development state and updates remote-tracking refs without pruning or forcing divergence. Publication never returns or persists the Forgejo credential, and rejects the default branch, force updates, tags and deletions; Forgejo applies additional branch protection.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-ask-user',

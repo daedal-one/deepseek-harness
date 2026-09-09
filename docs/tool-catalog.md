@@ -15,7 +15,7 @@ This table connects model-visible tool names to the plugin package and service s
 
 | Tool package | Model-visible names | Requires | Writes / affects | Shipped aliases | Deployment note |
 | --- | --- | --- | --- | --- | --- |
-| `@deepseek-ai/dsh-forge-project-workspaces` | `forge_push_branch`, `forge_shell` | `ctx.tools`, `ctx.approval`, `a persisted Forge project binding and registered agent workspace` | `approval/asked`, `approval/decided`, `registered repository development branch` | - | Only configured Forge Web deployments expose these tools. The command tool requires fully enforced Linux Landlock, persisted workspace bindings and immutable deployment read roots; the catalog constructs its exact definition without executing it. Publication never returns or persists the Forgejo credential, and rejects the default branch, force updates, tags and deletions; Forgejo applies additional branch protection. |
+| `@deepseek-ai/dsh-forge-project-workspaces` | `forge_fetch`, `forge_push_branch`, `forge_shell` | `ctx.tools`, `ctx.approval`, `a persisted Forge project binding and registered agent workspace` | `approval/asked`, `approval/decided`, `registered repository development branch`, `verified origin remote-tracking refs` | - | Only configured Forge Web deployments expose these tools. The command tool requires Linux Landlock ABI 3 or newer with mandatory socket denial, persisted workspace bindings and immutable deployment read roots; the catalog constructs its exact definition without executing it. Fetch preserves local development state and updates remote-tracking refs without pruning or forcing divergence. Publication never returns or persists the Forgejo credential, and rejects the default branch, force updates, tags and deletions; Forgejo applies additional branch protection. |
 | `@deepseek-ai/dsh-tool-ask-user` | `ask_user_question` | `ctx.tools`, `ctx.userQuestions` | `tool/call`, `tool/result after a UI/provider answers the question` | - | ask_user_question pauses the tool call until the active UI provider returns a human answer. |
 | `@deepseek-ai/dsh-tools` | `run_code` | `ctx.tools`, `ctx.codeRuntime (execution time)`, `ctx.systemPrompt` | `tool/call`, `one tool/code-dispatch-start + tool/code-dispatch pair per bridged sub-call`, `tool/result` | - | Owned by the tool registry as a reserved transport outside filterable capability layers under `mode: code` / `mode: both` (see the Code Mode Agent Note). Under `code` it is the registry's only wire contribution; the other visible capabilities are declared in a generated SDK section in the loaded runtime's language, and a program calls them through bindings scheduled under the native concurrency contract (submission-ordered starts and policy; concurrency-safe bodies overlap up to `maxParallelSubCalls`) that re-enter the complete guarded tool pipeline and link each nested execution to this outer result. |
 | `@deepseek-ai/dsh-plan-mode` | `exit_plan_mode` | `ctx.tools`, `ctx.systemPrompt`, `ctx.userQuestions (execution time, opportunistic)` | `tool/call`, `plan/mode inactive on an approved review`, `tool/result` | - | exit_plan_mode stays in the model-facing schema while planning is inactive so transitions add no tool-catalog churn on top of the plan-policy change. Its execute path rejects calls outside plan mode; in plan mode it presents the plan over the user-questions seam (approve / keep planning with feedback), and approval logs plan mode inactive at the step boundary. |
@@ -47,6 +47,19 @@ This table connects model-visible tool names to the plugin package and service s
 
 ## `@deepseek-ai/dsh-forge-project-workspaces`
 
+### `forge_fetch`
+
+Refresh origin remote-tracking branches for this session’s registered Forge repository. Uses a fixed trusted transport without exposing credentials. Preserves HEAD, index, working files and local branches. No pull, checkout, reset, stash, pruning, force update or arbitrary destination. Divergent tracking refs stop the refresh without updating refs. After fetching, inspect and integrate desired commits explicitly through forge_shell.
+
+```json
+{
+  "type": "object",
+  "properties": {}
+}
+```
+
+Source: [`packages/integration/forge-project-workspaces/src/index.ts`](../packages/integration/forge-project-workspaces/src/index.ts)
+
 ### `forge_push_branch`
 
 Publish the current committed codex/ or forge/ development branch to this session workspace’s registered Forge repository. First run tests, inspect the diff, and commit through the existing shell tools. Requires a clean clone and explicit approval. Refuses the remote default branch, force updates, tags, or deletions; Forgejo enforces additional branch protection. The result verifies the remote commit; open that branch in Forgejo to request review.
@@ -62,7 +75,7 @@ Source: [`packages/integration/forge-project-workspaces/src/index.ts`](../packag
 
 ### `forge_shell`
 
-Run a bounded Bash command in this session’s registered Forge repository. Use cat, grep, find and standard command-line tools to inspect, search, edit, test and commit. The command can read its repository and immutable installed tools, and write only its repository and private temporary files. Harness credentials, other projects and parent processes are inaccessible. Commands default to 60 seconds and may request up to 10 minutes; output is limited to 256 KiB per stream. No background sessions or permission escalation. Use forge_push_branch after tests and a clean development-branch commit to request publication approval.
+Run a bounded Bash command in this session’s registered Forge repository. Use cat, grep, find and standard command-line tools to inspect, search, edit, test and commit. The command can read its repository and immutable installed tools, and write only its repository and private temporary files. Harness credentials, other projects and parent processes are inaccessible. Commands default to 60 seconds and may request up to 10 minutes; output is limited to 256 KiB per stream. No background sessions or permission escalation. Use forge_fetch to refresh registered remote branches, and forge_push_branch after tests and a clean development-branch commit to request publication approval.
 
 ```json
 {
@@ -85,7 +98,7 @@ Run a bounded Bash command in this session’s registered Forge repository. Use 
 
 Source: [`packages/integration/forge-project-workspaces/src/index.ts`](../packages/integration/forge-project-workspaces/src/index.ts)
 
-Only configured Forge Web deployments expose these tools. The command tool requires fully enforced Linux Landlock, persisted workspace bindings and immutable deployment read roots; the catalog constructs its exact definition without executing it. Publication never returns or persists the Forgejo credential, and rejects the default branch, force updates, tags and deletions; Forgejo applies additional branch protection.
+Only configured Forge Web deployments expose these tools. The command tool requires Linux Landlock ABI 3 or newer with mandatory socket denial, persisted workspace bindings and immutable deployment read roots; the catalog constructs its exact definition without executing it. Fetch preserves local development state and updates remote-tracking refs without pruning or forcing divergence. Publication never returns or persists the Forgejo credential, and rejects the default branch, force updates, tags and deletions; Forgejo applies additional branch protection.
 
 <a id="deepseek-aidsh-tool-ask-user"></a>
 

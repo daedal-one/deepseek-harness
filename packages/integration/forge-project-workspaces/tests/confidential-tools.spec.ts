@@ -15,15 +15,15 @@ test('Forge guard denies late unsafe registrations even when pre-policy allows; 
     const remove = ctx.tools.guard(confidentialToolGuard)
     ctx.on('tools/pre-execute', async () => ({ kind: 'allow' as const }))
     let executions = 0
-    for (const name of ['grep', 'read_file', 'read_image', 'str_replace_editor', 'bash', 'forge_push_branch', 'forge_shell']) {
+    for (const name of ['grep', 'read_file', 'read_image', 'str_replace_editor', 'bash', 'forge_push_branch', 'forge_shell', 'forge_fetch']) {
       ctx.tools.register(defineTool({ name, description: 'fixture', parameters: {}, output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] }, async execute() { executions++; return 'executed' } }))
       const result = await ctx.tools.execute({ name, arguments: {}, callId: CallId(name), signal: new AbortController().signal })
-      expect(result.isError ?? false).toBe(!['forge_push_branch', 'forge_shell'].includes(name))
+      expect(result.isError ?? false).toBe(!['forge_push_branch', 'forge_shell', 'forge_fetch'].includes(name))
     }
-    expect(executions).toBe(2)
+    expect(executions).toBe(3)
     remove()
     expect((await ctx.tools.execute({ name: 'grep', arguments: {}, callId: CallId('generic'), signal: new AbortController().signal })).isError).toBeFalsy()
-    expect(executions).toBe(3)
+    expect(executions).toBe(4)
     await expect(registerConfidentialTools(ctx, { readRoots: ['/'], workspaceRoot: '/', privateStateFile: '/state/file' }, () => '/'))
       .rejects.toThrow('tools and subprocess')
   } finally { await ctx.fiber.dispose() }

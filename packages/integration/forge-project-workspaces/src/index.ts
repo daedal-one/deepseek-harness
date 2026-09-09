@@ -5,6 +5,7 @@
  * @module @deepseek-ai/dsh-forge-project-workspaces
  */
 
+import { createForgeFetchTool, fetchBranches } from './git-fetch.ts'
 import { timingSafeEqual } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -331,6 +332,14 @@ export class ForgeProjectWorkspaces extends Service {
       },
       presentCall: () => ({ card: 'generic', title: 'Publish development branch', kind: 'other' }),
     })), 'forgeProjectWorkspaces.pushTool')
+    if (this.config.confidentialTools) this.ctx.effect(() => tools.register(createForgeFetchTool((agent, signal) => {
+      const cancellation = AbortSignal.any([signal, this.publicationAbort.signal])
+      return this.serialize(async () => {
+        const { path, project } = this.boundRepository(agent)
+        if (project.repository === null) throw new Error('This Forge project has no repository')
+        return fetchBranches(path, project.repository, this.config, cancellation)
+      })
+    })), 'forgeProjectWorkspaces.fetchTool')
     this.ctx.effect(() => async () => {
       this.publicationAbort.abort()
       await this.tail

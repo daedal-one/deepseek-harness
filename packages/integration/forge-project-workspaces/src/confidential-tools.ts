@@ -8,7 +8,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 
-const TOOL_NAMES = new Set(['forge_shell', 'forge_push_branch'])
+const TOOL_NAMES = new Set(['forge_shell', 'forge_push_branch', 'forge_fetch'])
 /**
  * Monotonic dispatch guard shared by every Forge model session and preset.
  * @param exec - The pending model tool dispatch.
@@ -68,7 +68,7 @@ export function createConfidentialShellTool(
 ): ToolDefinition {
   return defineTool({
     name: 'forge_shell',
-    description: 'Run a bounded Bash command in this session’s registered Forge repository. Use cat, grep, find and standard command-line tools to inspect, search, edit, test and commit. The command can read its repository and immutable installed tools, and write only its repository and private temporary files. Harness credentials, other projects and parent processes are inaccessible. Commands default to 60 seconds and may request up to 10 minutes; output is limited to 256 KiB per stream. No background sessions or permission escalation. Use forge_push_branch after tests and a clean development-branch commit to request publication approval.',
+    description: 'Run a bounded Bash command in this session’s registered Forge repository. Use cat, grep, find and standard command-line tools to inspect, search, edit, test and commit. The command can read its repository and immutable installed tools, and write only its repository and private temporary files. Harness credentials, other projects and parent processes are inaccessible. Commands default to 60 seconds and may request up to 10 minutes; output is limited to 256 KiB per stream. No background sessions or permission escalation. Use forge_fetch to refresh registered remote branches, and forge_push_branch after tests and a clean development-branch commit to request publication approval.',
     parameters: { command: { type: 'string', description: 'Bash command to execute in the registered repository.', required: true }, timeout_ms: { type: 'integer', description: 'Optional command deadline in milliseconds: 1–600000; default 60000. Use a longer bound for builds.' } },
     output: {
       schema: { type: 'object', additionalProperties: false, properties: {

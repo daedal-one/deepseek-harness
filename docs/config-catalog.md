@@ -679,7 +679,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/integration/forge-project-workspaces/src/index.ts:49`](../packages/integration/forge-project-workspaces/src/index.ts)
+Source: [`packages/integration/forge-project-workspaces/src/index.ts:50`](../packages/integration/forge-project-workspaces/src/index.ts)
 
 <a id="deepseek-aidsh-forge-session-adapter"></a>
 

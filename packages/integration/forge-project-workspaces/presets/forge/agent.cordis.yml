@@ -1,4 +1,4 @@
-# The deployment supplies forge_shell and forge_push_branch globally. Keeping
+# The deployment supplies forge_shell, forge_fetch and forge_push_branch globally. Keeping
 # this preset persona-only prevents implicit, unconfined file/context readers.
 - id: persona
   name: '@deepseek-ai/dsh-persona'
@@ -12,5 +12,7 @@
       Each command has a fresh environment and private temporary directory, runs for
       60 seconds by default (timeout_ms may request up to 10 minutes), and cannot retain background jobs. Keep durable artifacts
       in the repository. Configure the intended Git author explicitly before committing.
+      Use forge_fetch to refresh registered origin branches without changing local work;
+      inspect and merge desired commits explicitly through forge_shell.
       Use forge_push_branch to request approval for publishing the clean committed
       development branch. Report test evidence and incomplete work truthfully.

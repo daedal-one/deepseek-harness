@@ -1,7 +1,7 @@
 /** Credential-bearing publication runs against clean Git metadata, never repository configuration. */
 
 import { spawn } from 'node:child_process'
-import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { lstat, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { grantArgs, launcherPath, probeConfidential } from '@deepseek-ai/node-addon-landlock-run'
@@ -42,11 +42,12 @@ function baseEnvironment(): NodeJS.ProcessEnv {
  * @param extra - Explicit credential environment for clean temporary Git metadata only.
  * @param signal - Owning tool cancellation.
  * @param command - Trusted executable prefix; source Git uses the Landlock launcher.
+ * @param input - Optional server-generated transaction bytes written to stdin.
  * @returns Captured UTF-8 stdout after successful completion.
  */
 export async function publicationGit(
   args: string[], config: GitPublicationConfig,
-  extra: NodeJS.ProcessEnv = {}, signal?: AbortSignal, command: readonly string[] = ['git'],
+  extra: NodeJS.ProcessEnv = {}, signal?: AbortSignal, command: readonly string[] = ['git'], input?: string | Buffer,
 ): Promise<string> {
   if (signal?.aborted) throw new Error('Git publication cancelled')
   const executable = command[0]
@@ -54,8 +55,10 @@ export async function publicationGit(
   return new Promise((resolve, reject) => {
     const child = spawn(executable, [...command.slice(1), ...args], {
       env: { ...baseEnvironment(), ...extra }, detached: process.platform !== 'win32',
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ['pipe', 'pipe', 'pipe'],
     })
+    child.stdin?.on('error', () => { /* Git exit status owns rejected transaction input. */ })
+    child.stdin?.end(input)
     const chunks: Buffer[] = []
     let bytes = 0
     let failure: string | undefined
@@ -91,8 +94,21 @@ export async function publicationGit(
   })
 }
 
-async function sourceGit(workspace: string, args: string[], config: GitPublicationConfig, signal?: AbortSignal): Promise<string> {
-  if (!config.confidentialTools) return publicationGit(localArguments(workspace, args), config, {}, signal)
+/**
+ * Run credential-free repository commands inside Forge's existing child boundary.
+ * @param workspace - Canonical managed clone.
+ * @param args - Server-owned Git argv.
+ * @param config - Validated confinement and timeout settings.
+ * @param signal - Owning operation cancellation.
+ * @param extraReadRoots - Trusted private object-import directories; never model paths.
+ * @param input - Optional server-generated ref transaction.
+ * @returns Bounded successful Git stdout.
+ */
+export async function sourceGit(
+  workspace: string, args: string[], config: GitPublicationConfig, signal?: AbortSignal,
+  extraReadRoots: string[] = [], input?: string | Buffer,
+): Promise<string> {
+  if (!config.confidentialTools) return publicationGit(localArguments(workspace, args), config, {}, signal, ['git'], input)
   if (process.platform !== 'linux' || !probeConfidential() || !config.toolReadRoots?.length) {
     throw new Error('Forge source Git requires Linux filesystem and socket-denial enforcement and bounded runtime roots')
   }
@@ -100,14 +116,48 @@ async function sourceGit(workspace: string, args: string[], config: GitPublicati
   try {
     return await publicationGit(localArguments(workspace, args), config, {
       PATH: '/usr/local/bin:/usr/bin:/bin', HOME: temporary, TMPDIR: temporary, TMP: temporary, TEMP: temporary,
-    }, signal, [launcherPath(), ...grantArgs({ confidential: true, readOnly: config.toolReadRoots, readWrite: [workspace, temporary, '/dev/null'] }), '--', 'git'])
+    }, signal, [launcherPath(), ...grantArgs({ confidential: true, readOnly: [...config.toolReadRoots, ...extraReadRoots], readWrite: [workspace, temporary, '/dev/null'] }), '--', 'git'], input)
   } finally {
     await rm(temporary, { recursive: true, force: true })
   }
 }
 
 function localArguments(workspace: string, args: string[]): string[] {
-  return ['-C', workspace, '-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', ...args]
+  return ['--no-replace-objects', '-C', workspace, '-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'gc.auto=0', '-c', 'maintenance.auto=false', ...args]
+}
+
+/**
+ * Verify the exact clone and registered origin without consulting credentialed Git.
+ * @param workspace - Persisted canonical managed path.
+ * @param repository - Persisted owner/repository identity.
+ * @param config - Deployment Git origin and command boundary.
+ * @param signal - Owning operation cancellation.
+ * @returns The verified canonical Git directory.
+ */
+export async function validateManagedClone(
+  workspace: string, repository: string, config: GitPublicationConfig, signal?: AbortSignal,
+): Promise<string> {
+  const run = (args: string[]): Promise<string> => sourceGit(workspace, args, config, signal)
+  if (await realpath(workspace) !== workspace) throw new Error('Managed workspace identity changed')
+  const gitDir = (await run(['rev-parse', '--absolute-git-dir'])).trim()
+  if (gitDir !== join(workspace, '.git') || await realpath(gitDir) !== gitDir) {
+    throw new Error('Forge requires the exact managed clone Git directory')
+  }
+  if ((await run(['rev-parse', '--path-format=absolute', '--git-common-dir'])).trim() !== gitDir) throw new Error('Shared Git metadata prevents managed repository operations')
+  for (const relative of ['commondir', 'objects/info/alternates', 'objects/info/http-alternates']) {
+    const exists = await lstat(join(gitDir, relative)).catch((error: unknown) => {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+      throw error
+    })
+    if (exists) throw new Error('Shared Git metadata prevents managed repository operations')
+  }
+  const url = `${config.forgejoBaseUrl.replace(/\/$/, '')}/${repository}.git`
+  if ((await run(['config', '--local', '--no-includes', '--get', 'remote.origin.url'])).trim() !== url) {
+    throw new Error('Workspace origin does not match its registered Forge repository')
+  }
+  if ((await run(['rev-parse', '--show-toplevel'])).trim() !== workspace) throw new Error('Managed clone worktree identity changed')
+  if (await realpath(join(gitDir, 'objects')) !== join(gitDir, 'objects')) throw new Error('Managed Git object directory escaped its clone')
+  return gitDir
 }
 
 /**
@@ -122,15 +172,7 @@ export async function preparePublication(
   workspace: string, repository: string, config: GitPublicationConfig, signal?: AbortSignal,
 ): Promise<BranchPublication> {
   const run = (args: string[]): Promise<string> => sourceGit(workspace, args, config, signal)
-  if (await realpath(workspace) !== workspace) throw new Error('Managed workspace identity changed')
-  const gitDir = (await run(['rev-parse', '--absolute-git-dir'])).trim()
-  if (gitDir !== join(workspace, '.git') || await realpath(gitDir) !== gitDir) {
-    throw new Error('Publication requires the exact managed clone Git directory')
-  }
-  const url = `${config.forgejoBaseUrl.replace(/\/$/, '')}/${repository}.git`
-  if ((await run(['config', '--local', '--no-includes', '--get', 'remote.origin.url'])).trim() !== url) {
-    throw new Error('Workspace origin does not match its registered Forge repository')
-  }
+  const gitDir = await validateManagedClone(workspace, repository, config, signal)
   const branch = (await run(['symbolic-ref', '--short', 'HEAD'])).trim()
   if (!/^(?:codex|forge)\/[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(branch)) {
     throw new Error('Publish only a codex/ or forge/ development branch; protected branches are not accepted')
@@ -184,7 +226,13 @@ export async function publishBranch(
   }
 }
 
-function transportEnvironment(url: string, config: GitPublicationConfig): NodeJS.ProcessEnv {
+/**
+ * Supply credential authority only to fresh, private Git metadata.
+ * @param url - Exact registered HTTP(S) repository URL.
+ * @param config - Deployment-owned transport credential.
+ * @returns Private child environment; never persist or return these values.
+ */
+export function transportEnvironment(url: string, config: GitPublicationConfig): NodeJS.ProcessEnv {
   const settings: [string, string][] = [
     ['core.hooksPath', '/dev/null'], ['core.fsmonitor', 'false'], ['credential.helper', ''],
     ['protocol.allow', 'never'], ['protocol.http.allow', 'always'], ['protocol.https.allow', 'always'],

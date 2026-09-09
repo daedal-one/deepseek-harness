@@ -41,6 +41,12 @@ related: [IFC:integration/forge-session-adapter]
   managed Harness workspace for each Forge-supplied `ProjectId`, slug, title,
   and repository, and MUST select only an already reconciled workspace from a
   Hub deep link; it MUST NOT create an independent Forge project authority.
+- {#c-refresh} Forge Code remote refresh MUST bind to the persisted session repository,
+  keep credentials in clean private Git transport, and import only objects plus
+  verified prepared compare-and-swap remote-tracking ref updates through the confined command boundary.
+  It MUST preserve local branches, HEAD, index and working files, refuse divergent
+  or aliased tracking updates, and MUST NOT prune, pull, reset or select arbitrary
+  remote destinations.
 - {#c-publication} Code publication MUST bind the calling Session to its persisted
   Forge repository, require explicit approval of the selected development commit,
   refuse default branches, force updates, tags, deletions and alternate destinations,
