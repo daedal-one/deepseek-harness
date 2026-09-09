@@ -8,7 +8,7 @@ export const FORGE_SESSION_PROTOCOL = 'forge.agent.session/v1'
 /** Forge Intellect evidence protocol required for accountable actions. */
 export const FORGE_EVIDENCE_PROTOCOL = 'forge.intellect.action/v2'
 /** Forge Intellect MCP tool surface exposed inside adapter-created agents. */
-export const FORGE_ACTION_TOOLS_PROTOCOL = 'forge-intellect-action-tools/v1'
+export const FORGE_ACTION_TOOLS_PROTOCOL = 'forge-intellect-action-tools/v2'
 /** Forge Spec baselines accepted without rewriting the caller's intent. */
 export const FORGE_SPEC_BASELINES = ['forge-spec-v0.6.0', 'forge-spec-v0.7.0'] as const
 /** Forge preflight envelope required by the start command. */

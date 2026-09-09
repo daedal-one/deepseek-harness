@@ -68,7 +68,8 @@ describe('Forge session adapter composition', () => {
         { name: 'forge-adapter', config: {
           token: 'test-adapter-token', stateFile: join(state, 'adapter.json'),
           routePrefix: '/v1', maxRequestBytes: 1024 * 1024,
-          intellectCommand: process.execPath, intellectCommandPrefixArgs: [fixture],
+          intellectCommand: process.env.FORGE_TEST_ACTION_MCP ?? process.execPath,
+          intellectCommandPrefixArgs: process.env.FORGE_TEST_ACTION_MCP ? [] : [fixture],
           intellectStateRoot: join(state, 'intellect'),
           intellectGraphDb: join(state, 'intellect', 'graph.sqlite'),
           intellectExcludes: ['.git'], intellectToolCallTimeoutMs: 10_000,
@@ -102,7 +103,11 @@ describe('Forge session adapter composition', () => {
     expect(bearerOnly.status).toBe(401)
     const authenticated = await fetch(`http://127.0.0.1:${ctx.webServer.port}/v1/capabilities`, { headers })
     expect(authenticated.status).toBe(200)
-    const capability = await authenticated.json() as { spec_baselines: string[]; recovery_protocols: string[] }
+    const capability = await authenticated.json() as {
+      spec_baselines: string[]
+      recovery_protocols: string[]
+      action_tools_protocol: string
+    }
     expect(capability.spec_baselines).toMatchInlineSnapshot(`
       [
         "forge-spec-v0.6.0",
@@ -110,6 +115,7 @@ describe('Forge session adapter composition', () => {
       ]
     `)
     expect(capability.recovery_protocols).toEqual(['forge.executor.recovery/v1'])
+    expect(capability.action_tools_protocol).toBe('forge-intellect-action-tools/v2')
     const sessionId = 'forge-session-test'
     const rendered = '<spec-bundle id="TASK:work" />\n'
     const intent = {
@@ -170,7 +176,7 @@ describe('Forge session adapter composition', () => {
     const checkpointed = await fetch(url, { method: 'POST', headers, body: JSON.stringify(checkpointRequest) })
     expect(checkpointed.status).toBe(200)
     const checkpointBody = await checkpointed.json() as { evidence: { protocol_version: string }; events: { sequence: number }[] }
-    expect(checkpointBody.evidence.protocol_version).toBe('forge-intellect-action-tools/v1')
+    expect(checkpointBody.evidence.protocol_version).toBe('forge-intellect-action-tools/v2')
     expect(checkpointBody.events.at(-1)?.sequence).toBeGreaterThan(startBody.events.at(-1)?.sequence ?? 0)
 
     const replayed = await fetch(url, { method: 'POST', headers, body: JSON.stringify(checkpointRequest) })

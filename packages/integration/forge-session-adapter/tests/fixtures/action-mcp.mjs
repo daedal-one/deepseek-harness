@@ -26,9 +26,9 @@ for await (const line of createInterface({ input: process.stdin })) {
     result = { tools }
   } else if (request.method === 'tools/call') {
     result = {
-      content: [{ type: 'text', text: JSON.stringify({ protocol_version: 'forge-intellect-action-tools/v1' }) }],
+      content: [{ type: 'text', text: JSON.stringify({ protocol_version: 'forge-intellect-action-tools/v2' }) }],
       structuredContent: {
-        protocol_version: 'forge-intellect-action-tools/v1',
+        protocol_version: 'forge-intellect-action-tools/v2',
         action_id: '00000000-0000-4000-8000-000000000001',
         watermarks: { ledger_sequence: 1, tree_digest: 'fixture-tree' },
       },
