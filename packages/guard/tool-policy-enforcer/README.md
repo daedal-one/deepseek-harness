@@ -1,4 +1,25 @@
+---
+description: "Apply a tool-policy decision before a tool executes."
+kind: "package-reference"
+---
+
 # dsh-tool-policy-enforcer
+
+## Summary
+
+Apply a tool-policy decision before a tool executes. The enforcer permits accepted calls, requests approval for uncertain calls, and rejects prohibited calls while recording the decision. Policy providers own classification; the enforcer owns the execution gate.
+
+## Table of Contents
+
+- [Use this package](#use-this-package)
+- [Approval threshold](#approval-threshold)
+- [Model Experience](#model-experience)
+- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+- [Dev Note](#dev-note)
+
+-----
+
+## Use this package
 
 This consumer enforces `ctx.toolPolicy` on `tools/pre-execute`. Unsupported and allowed tools delegate with `next()`; denial short-circuits execution. An `ask` verdict first returns its bounded reason to the acting agent, then enters the existing approval pipeline when the configured consecutive-identical threshold is reached, so `ctx.approval` remains the sole owner of the human decision and its durable audit.
 
@@ -13,6 +34,8 @@ When an enforced session accepts a direct user message, the enforcer calls `ctx.
 The enforcer derives the chain from the current turn's durable `tool/call`, effective `tool-policy/decision`, and `tool/result` events instead of process-local state. Deep key sorting makes argument-object order irrelevant. An intervening call, turn boundary, unsupported or non-ask verdict, or successful approved execution breaks the chain. A rejected approval remains a denial in the same chain, so the next identical call stays approval-eligible rather than becoming permanently blocked.
 
 Every provider opinion and effective result is recorded as `tool-policy/decision`, including bounded risk, categories, and the provider or deferred reason but no copied raw arguments. Policy failure becomes `ask`; caller cancellation is rethrown and remains cancellation. Deterministic provider denials never enter approval.
+
+No invariant companion is published because the tool-policy service owns the durable decision relationships.
 
 ## Model Experience
 
@@ -33,3 +56,7 @@ Policy feedback is append-only after the existing conversation prefix and does n
 ## Known Limitations and Deferred Work
 
 - Tool calls without an agent delegate because no session or human approval route exists.
+
+### Dev Note
+
+None.

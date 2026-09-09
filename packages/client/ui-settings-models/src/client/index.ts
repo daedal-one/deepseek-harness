@@ -1,6 +1,6 @@
 /**
  * Models settings and product-onboarding plugin, browser half. It registers
- * the Models page plus the ordered internal-testing and official-DeepSeek
+ * the Models and Agents pages plus the ordered internal-testing and OpenRouter
  * onboarding dialogs, whose UI shares this package's modal wrapper. The Host
  * settings and credential contracts stay behind their existing wire APIs.
  * Export discipline:
@@ -9,7 +9,7 @@
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { AgentsSection, type AgentsSectionInjected } from './AgentsSection.tsx'
-import { en as agentEn, zh as agentZh, type AgentModelsKey } from './agent-locales.ts'
+import { agentEn, agentZh, type AgentModelsKey } from './agent-locales.ts'
 // Type-only: pulls the shell's SlotMap merge (the 'settings.section' entry).
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
@@ -20,8 +20,8 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import { ModelsSection } from './ModelsSection.tsx'
 import type { ModelsSectionInjected } from './ModelsSection.tsx'
-import { DeepSeekOnboardingDialog } from './DeepSeekOnboardingDialog.tsx'
-import type { DeepSeekOnboardingInjected } from './DeepSeekOnboardingDialog.tsx'
+import { OpenRouterOnboardingDialog } from './OpenRouterOnboardingDialog.tsx'
+import type { OpenRouterOnboardingInjected } from './OpenRouterOnboardingDialog.tsx'
 import { WelcomeNotice } from './WelcomeNotice.tsx'
 import type { WelcomeNoticeInjected } from './WelcomeNotice.tsx'
 import { decodeWelcomeSection, WelcomeNoticeStore } from './welcome-store.ts'
@@ -96,7 +96,7 @@ export function apply(ctx: ClientContext): void {
     schema,
     t,
   })
-  const deepSeekOnboardingInjected = (): DeepSeekOnboardingInjected => ({
+  const openRouterOnboardingInjected = (): OpenRouterOnboardingInjected => ({
     controller,
     hooks: { models: controller.store },
     operations,
@@ -185,8 +185,8 @@ export function apply(ctx: ClientContext): void {
   }, WelcomeNotice))
   ctx.slots.inject('settings.onboarding', () => ctx.slots.register({
     name: 'settings.onboarding',
-    id: 'deepseek-official',
+    id: 'openrouter',
     order: 0,
-    inject: deepSeekOnboardingInjected,
-  }, DeepSeekOnboardingDialog))
+    inject: openRouterOnboardingInjected,
+  }, OpenRouterOnboardingDialog))
 }

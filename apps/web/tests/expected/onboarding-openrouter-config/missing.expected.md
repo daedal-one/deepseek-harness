@@ -1,0 +1,8 @@
+- dialog "Add an API key to get started":
+  - heading "Add an API key to get started" [level=2]
+  - paragraph: Add your OpenRouter API key to use the configured Agent models.
+  - text: API key
+  - textbox "API key":
+    - /placeholder: Enter an API key, or leave blank to use environment authentication
+  - button "Configure later"
+  - button "Save and continue" [disabled]

@@ -10,7 +10,7 @@ These costs make bandwidth and round-trip time correctness inputs: at 400 kbit/s
 
 ## Decision
 
-The production graph carries one content-addressed registration-bundle URL. The Host caches the concatenated classic registration wrappers in memory without materializing them, and the browser loads that bundle once before Loader activation; individual plugin endpoints remain the HMR reload path. Hashed shell assets, graph bundles, and revision-addressed plugin files are immutable. Index HTML remains uncacheable. The static and API HTTP owners negotiate Brotli then gzip, preserve `Vary: Accept-Encoding`, and leave SSE, already encoded, incompressible, and tiny bodies untouched.
+The production graph carries revision-addressed bootstrap and application combo URLs. The Host caches the concatenated classic registration wrappers in memory without materializing them, and the browser loads each combo once before Loader activation; single-resource combo endpoints remain the HMR reload path. Hashed shell assets, graph bundles, and revision-addressed plugin files are immutable. Index HTML remains uncacheable. The static and API HTTP owners negotiate Brotli then gzip, preserve `Vary: Accept-Encoding`, and leave SSE, already encoded, incompressible, and tiny bodies untouched.
 
 History is a bounded wire projection over the unchanged durable Session log. Settled Assistant steps retain their final message plus the first token evidence needed for latency and streamed-text classification; incomplete and interrupted steps retain every chunk. Tool-result history rows carry a valid minimal result plus a deferred-detail marker, while an exact-sequence detail RPC returns the complete event and presenter view when the user opens that Tool row. Page selection applies the configured byte bound to the serialized RPC envelope, removes oldest complete message groups until it fits, and returns one marked oversized group when the newest group cannot fit alone.
 
@@ -22,7 +22,7 @@ The client keeps an open transcript during connection-generation repair, stitche
 
 **Install a service worker for offline caching.** The retained iPhone endpoint is a plain HTTP tailnet address and therefore cannot depend on a secure-context-only worker. Ordinary immutable HTTP caching covers the content-addressed assets without changing the trust boundary.
 
-**Activate plugins progressively.** The current application treats the composed graph as one UI and several plugins contribute required shell seats. One registration request removes the latency fan-out while preserving the existing all-active commit point; progressive activation remains unnecessary unless the measured production bundle misses the agreed budget.
+**Activate plugins progressively.** The current application treats the composed graph as one UI and several plugins contribute required shell seats. Combo registration requests remove the per-plugin latency fan-out while preserving the existing all-active commit point; progressive activation remains unnecessary unless the measured production bundle misses the agreed budget.
 
 **Rewrite or compact the durable Session log.** Raw chunks and Tool results are required for replay and model-history fidelity. The bounded projection changes only what the browser initially receives and retains an exact on-demand path to the original event.
 
@@ -30,7 +30,7 @@ The client keeps an open transcript during connection-generation repair, stitche
 
 ## Consequences
 
-- The production graph reaches the browser through one revision-addressed registration request, while HMR can still invalidate and fetch one plugin.
+- The production graph reaches the browser through revision-addressed bootstrap and application combo requests, while HMR can still invalidate and fetch one plugin.
 - Compression, cache policy, HEAD handling, encoding negotiation, and uncompressed streaming behavior have transport-level coverage.
 - History bounds include the response envelope, preserve pagination continuity, retain incomplete output, and return exact Tool detail on demand.
 - Reconnect leaves the last good conversation visible, and the open-error Retry path succeeds without reloading the page.
@@ -38,7 +38,7 @@ The client keeps an open transcript during connection-generation repair, stitche
 
 ## Testing
 
-The production-sized browser lane reached the usable shell in 5.10 seconds with 831,177 encoded bytes under Fast 3G, reloaded from immutable cache in 338 milliseconds, and recovered the 120-turn history in 1.32 seconds with a 53,957-byte response under 400 kbit/s and 400 ms latency. Brotli quality 9 reduced that run's graph bundle to 500,852 encoded bytes without crossing the encode-time step at quality 10.
+The pre-rebase production-sized browser lane reached the usable shell in 5.10 seconds with 831,177 encoded bytes under Fast 3G, reloaded from immutable cache in 338 milliseconds, and recovered the 120-turn history in 1.32 seconds with a 53,957-byte response under 400 kbit/s and 400 ms latency. Brotli quality 9 reduced that run's graph bundle to 500,852 encoded bytes without crossing the encode-time step at quality 10.
 
 ## Risks
 

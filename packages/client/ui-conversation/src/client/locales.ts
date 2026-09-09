@@ -4,7 +4,6 @@
 export const NS = 'conversation'
 
 // The claimed /plan hint and the plan-mode textarea placeholder describe the same next action.
-const PLAN_NEXT_ACTION_ZH = '描述你的任务以生成计划'
 const PLAN_NEXT_ACTION_EN = 'describe your task to generate plan'
 
 /** Simplified Chinese dictionary (the key-set source of truth). */
@@ -111,6 +110,7 @@ export const zh = {
   'tool.title.edit': 'Edit',
   'tool.title.code': 'Code',
   'tool.title.generic': 'Tool call',
+  'tool.loadResult': 'Load full result',
   'tool.title.inspect': 'Inspect',
   'tool.title.runCordis': 'Run Cordis Plugin',
   'tool.title.stopCordis': 'Stop Cordis Plugin',
@@ -279,6 +279,7 @@ export const en = {
   'tool.title.edit': 'Edit',
   'tool.title.code': 'Code',
   'tool.title.generic': 'Tool call',
+  'tool.loadResult': 'Load full result',
   'tool.title.inspect': 'Inspect',
   'tool.title.runCordis': 'Run Cordis Plugin',
   'tool.title.stopCordis': 'Stop Cordis Plugin',

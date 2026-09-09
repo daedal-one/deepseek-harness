@@ -433,7 +433,7 @@ describe('task admission and package contracts', () => {
     const provider = ctx.subagents.getProvider('codex')!
     expect(provider).toMatchObject({
       name: 'codex',
-      capabilities: {
+      capabilities: { principal: false,
         outputSchema: false,
         depthLimit: false,
         toolFilter: false,

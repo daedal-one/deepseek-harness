@@ -27,12 +27,12 @@ describe('assembled poor-connection recovery', () => {
 
     const retry = await screen.findByRole('button', { name: 'Retry' }, { timeout: 10_000 })
     expect({
-      message: retry.parentElement?.querySelector('span')?.textContent,
+      message: screen.getByText(/Failed to load history: fixture: simulated history transport failure/).textContent,
       action: retry.textContent,
     }).toMatchInlineSnapshot(`
       {
         "action": "Retry",
-        "message": "Failed to load history: fixture: simulated history transport failure (internal)",
+        "message": "Failed to load history: fixture: simulated history transport failure (gateway/internal)Retry",
       }
     `)
 
@@ -41,5 +41,5 @@ describe('assembled poor-connection recovery', () => {
       expect(screen.getAllByText('fixture history message', { exact: false }).length).toBeGreaterThan(0)
       expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
     }, { timeout: 10_000 })
-  })
+  }, 30_000)
 })

@@ -28,10 +28,10 @@
 
 - insert:
     - id: cli-mock-llm
-      name: './snapshot-fixtures/cli-mock-llm.ts'
+      name: '../../../../../../../packages/test-support/loader-smoke/tests/fixtures/cli-mock-llm.ts'
 
     - id: snapshot-approval-allow-once
-      name: './snapshot-fixtures/approval-allow-once.ts'
+      name: './approval-allow-once.ts'
 
     - id: daedal-snapshot-tool-policy
       name: '@deepseek-ai/dsh-tool-policy'

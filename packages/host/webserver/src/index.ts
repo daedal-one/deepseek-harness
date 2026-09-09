@@ -1,6 +1,6 @@
 /**
  * @deepseek-ai/dsh-host-webserver — node:http route registration with optional
- * gzip, index injection, and one fallback seat. It knows no harness concepts
+ * response compression, index injection, and one fallback seat. It knows no harness concepts
  * and serves no files; the composing application owns dist serving. Electron
  * uses file:// plus IPC instead, and this package never prints the URL.
  * Route handlers retain direct response ownership.
@@ -14,6 +14,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import compressionMiddleware from 'compression'
 import Negotiator from 'negotiator'
+import { constants } from 'node:zlib'
 import { renderIndexInjections, type IndexInjection } from './injections.ts'
 
 export { renderIndexInjections } from './injections.ts'
@@ -62,10 +63,12 @@ export interface Config {
   /** Listen port; zero requests an OS-assigned port. */
   port: number
   /** Response compression for socket-backed HTTP requests. @default 'none' */
-  compression?: 'none' | 'gzip'
+  compression?: 'none' | 'gzip' | 'brotli'
   /** Gzip DEFLATE level from 0 through 9. @default 1 */
   compressionLevel?: number
-  /** Minimum known response length eligible for gzip; unknown-length streams are eligible. @default 1024 */
+  /** Brotli quality from 0 through 11; gzip remains the fallback. @default 9 */
+  compressionBrotliQuality?: number
+  /** Minimum known response length eligible for compression; unknown-length streams are eligible. @default 1024 */
   compressionThresholdBytes?: number
 }
 
@@ -74,8 +77,9 @@ const DEFAULT_COMPRESSION_LEVEL = 1
 const DEFAULT_COMPRESSION_THRESHOLD_BYTES = 1024
 
 interface ResolvedConfig extends Config {
-  compression: 'none' | 'gzip'
+  compression: 'none' | 'gzip' | 'brotli'
   compressionLevel: number
+  compressionBrotliQuality: number
   compressionThresholdBytes: number
 }
 
@@ -85,11 +89,12 @@ type NodeMiddleware = (
   next: () => void,
 ) => void
 
-function createGzipMiddleware(config: ResolvedConfig): NodeMiddleware {
+function createCompressionMiddleware(config: ResolvedConfig): NodeMiddleware {
   // `compression` is typed for Express, but its runtime uses only the
   // node:http request and response members supplied here.
   const middleware = compressionMiddleware({
     level: config.compressionLevel,
+    brotli: { params: { [constants.BROTLI_PARAM_QUALITY]: config.compressionBrotliQuality } },
     threshold: config.compressionThresholdBytes,
     filter(request, response) {
       if (response.getHeader('content-range') !== undefined) return false
@@ -105,12 +110,17 @@ function createGzipMiddleware(config: ResolvedConfig): NodeMiddleware {
       next()
       return
     }
-    const encoding = new Negotiator(req).encoding(['gzip', 'identity'])
-    const gzipRequest = Object.create(req) as IncomingMessage
-    Object.defineProperty(gzipRequest, 'headers', {
-      value: { ...req.headers, 'accept-encoding': encoding === 'gzip' ? 'gzip' : 'identity' },
+    const available = config.compression === 'brotli' ? ['br', 'gzip', 'identity'] : ['gzip', 'identity']
+    // Negotiator 1.0 documents server tie-breaking; @types/negotiator omits its second argument.
+    const negotiator = new Negotiator(req) as Negotiator & {
+      encoding(available: readonly string[], options: { preferred: readonly string[] }): string | undefined
+    }
+    const encoding = negotiator.encoding(available, { preferred: available })
+    const encodedRequest = Object.create(req) as IncomingMessage
+    Object.defineProperty(encodedRequest, 'headers', {
+      value: { ...req.headers, 'accept-encoding': encoding ?? 'identity' },
     })
-    middleware(gzipRequest, res, next)
+    middleware(encodedRequest, res, next)
   }
 }
 
@@ -125,8 +135,9 @@ export class WebServer extends Service {
   static Config: z<Config> = z.object({
     host: z.union([z.const('127.0.0.1'), z.const('0.0.0.0')]).required(),
     port: z.natural().max(65535).required(),
-    compression: z.union([z.const('none'), z.const('gzip')]).default(DEFAULT_COMPRESSION),
+    compression: z.union([z.const('none'), z.const('gzip'), z.const('brotli')]).default(DEFAULT_COMPRESSION),
     compressionLevel: z.number().step(1).min(0).max(9).default(DEFAULT_COMPRESSION_LEVEL),
+    compressionBrotliQuality: z.number().step(1).min(0).max(11).default(9),
     compressionThresholdBytes: z.natural().default(DEFAULT_COMPRESSION_THRESHOLD_BYTES),
   })
 
@@ -138,12 +149,12 @@ export class WebServer extends Service {
   private fallback: WebRoute['handler'] | undefined
   private server!: Server
   private listenedPort!: number
-  private readonly gzip: NodeMiddleware | undefined
+  private readonly compression: NodeMiddleware | undefined
 
   constructor(ctx: Context, private config: Config) {
     super(ctx, 'webServer')
     const resolved = config as ResolvedConfig
-    this.gzip = resolved.compression === 'gzip' ? createGzipMiddleware(resolved) : undefined
+    this.compression = resolved.compression === 'none' ? undefined : createCompressionMiddleware(resolved)
   }
 
   /** The listening port (the OS-assigned value when config.port is 0). */
@@ -251,8 +262,8 @@ export class WebServer extends Service {
           res.end()
         })
       }
-      if (this.gzip === undefined) next()
-      else this.gzip(req, res, next)
+      if (this.compression === undefined) next()
+      else this.compression(req, res, next)
     })
     this.server.on('upgrade', (req, socket, head) => {
       const onError = (error: Error): void => {

@@ -1,4 +1,25 @@
+---
+description: "Keep the Harness workspace roster aligned with Forge-owned projects."
+kind: "package-reference"
+---
+
 # `@deepseek-ai/dsh-forge-project-workspaces`
+
+## Summary
+
+Keep the Harness workspace roster aligned with Forge-owned projects. The reconciler uses configured project metadata to add or update the corresponding workspace roots. Forge remains responsible for allocating and authorizing those roots.
+
+## Table of Contents
+
+- [Use this package](#use-this-package)
+- [Runtime contract](#runtime-contract)
+- [Model Experience](#model-experience)
+- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+- [Dev Note](#dev-note)
+
+-----
+
+## Use this package
 
 This Web-host plugin accepts the Forge Hub's authenticated project catalog and reconciles it into the Harness Workspace registry. Forge remains authoritative for project identity and repository ownership; the Harness stores only the derived directory registrations and sessions.
 
@@ -23,3 +44,7 @@ None. The package never changes the model request prefix.
 - **The Web process executes in the mounted workspace world** — this plugin does not provide filesystem, process, network, credential, lifetime, or cleanup isolation. Forge's executor provider owns that later security boundary.
 - **Existing repositories are not refreshed** — reconciliation preserves local edits and branches by leaving an existing `.git` directory untouched.
 - **Removed directories are retained** — replacement removes only the Harness registration so an accidental catalog omission cannot delete source or Session data.
+
+### Dev Note
+
+None.

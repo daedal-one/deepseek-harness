@@ -51,7 +51,7 @@ describe('web e2e: the composer model switch is the default for later sessions',
     if (session === undefined) throw new Error(`session "${sessionId}" is not live`)
     return Promise.resolve(
       scaffold.ctx.sessionProjections.snapshot(session).values.modelSelection?.next
-        ?? scaffold.ctx.agentDefaultModel.currentSelection(),
+        ?? scaffold.ctx.agentModels.mainSelection(),
     )
   }
 

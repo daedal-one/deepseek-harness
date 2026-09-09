@@ -57,8 +57,6 @@ class ManagedStdioTransport implements Transport {
         this.finishClose()
       },
     )
-    // Providers publish `pid = -1` only for an asynchronously reported spawn failure.
-    if (handle.pid === -1) await handle.done
   }
 
   /** Serialize one protocol message to the managed stdin stream. */

@@ -64,6 +64,32 @@ const validPayloads: Readonly<Record<string, SessionFormatJsonValue>> = {
     retry: 1, maxRetries: 2, delayMs: 10, failure: { message: 'retry', code: 'SERVER' },
   },
   'llm/retry-started': { retryId: 'retry-1', turn: 1, step: 0, retry: 1 },
+  'tool-policy/classifier-request': {
+    turn: 1, providerId: 'shell', route: { provider: 'mock', model: 'mock' }, purpose: 'intent-context',
+    input: { kind: 'intent-context', userMessageSeqs: [0], maxUserMessageChars: 2048 },
+    request: { system: 'Classify intent.', temperature: 0, maxTokens: 128, timeoutMs: 1000 },
+  },
+  'tool-policy/intent-context': {
+    turn: 1, requestSeq: 1, userMessageSeq: 0, providerId: 'shell',
+    allowedEffects: ['read'], forbiddenEffects: ['write'], summary: 'Read the project.',
+  },
+  'tool-policy/decision': {
+    turn: 1, callId: 'call-1', toolName: 'bash', stage: 'effective',
+    policyDecision: 'ask', effectiveDecision: 'ask', providerId: 'shell', risk: 75,
+    categories: ['write'], reason: 'Approval required.',
+  },
+  'memory/extraction-request': {
+    turn: 1, sourceEventSeqs: [0], route: { provider: 'mock', model: 'mock' },
+    system: 'Extract facts.', messages: [userMessage], maxTokens: 128,
+  },
+  'memory/extraction-result': { turn: 1, blocks: [], finish: { kind: 'stop' }, proposedIds: [] },
+  'english-output/translation-request': {
+    turn: 1, step: 0, target: { provider: 'mock', model: 'mock' }, translator: { provider: 'mock', model: 'mock' },
+    system: 'Translate prose.', messages: [userMessage], maxTokens: 128,
+    blocks: [{ index: 0, type: 'text', content: 'Original prose.' }],
+  },
+  'english-output/translation-result': { turn: 1, step: 0, status: 'translated', blockIndexes: [0] },
+  'web/openrouter-search-llm-request': { endpoint: 'https://example.test/chat/completions', body: { opaque: true } },
   'model/selection': { provider: 'mock', model: 'mock', reasoningEffort: 'high' },
   'permission/preset': { preset: 'default' },
   'plan/mode': { active: true },
@@ -214,11 +240,12 @@ function replaceAtPath(value: SessionFormatJsonValue, path: string, replacement:
 describe('released event and payload inventory', () => {
   it('has an executable valid fixture for every frozen released-v0 event type', () => {
     expect(Object.keys(validPayloads).sort()).toEqual([...RELEASED_V0_EVENT_TYPES].sort())
-    expect(RELEASED_V0_EVENT_TYPES).toHaveLength(51)
+    expect(RELEASED_V0_EVENT_TYPES).toHaveLength(59)
     expect(RELEASED_V0_EVENT_TYPES.filter(type => !KNOWN_SESSION_EVENT_TYPES.has(type))).toEqual([
       'assistant/chunk',
       'tool/code-dispatch',
       'tool/code-dispatch-start',
+      'web/deepseek-search-llm-request',
     ])
     expect(KNOWN_SESSION_EVENT_TYPES.has('tool/ptc-dispatch')).toBe(true)
     expect(KNOWN_SESSION_EVENT_TYPES.has('tool/ptc-dispatch-start')).toBe(true)

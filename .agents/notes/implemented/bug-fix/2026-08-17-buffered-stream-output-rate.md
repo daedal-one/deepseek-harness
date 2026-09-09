@@ -4,7 +4,7 @@ Status: implemented
 
 ## Problem
 
-The Web `tok/s` figure divided provider-reported output tokens by the local first-token-to-message span. That span measures chunk arrival, not necessarily model generation: a provider or intermediary can buffer an already-generated response and let the Harness append hundreds of chunks within a few milliseconds. One observed session therefore paired 19,523 output tokens with 637 ms of chunk-drain time even though its requests occupied 185,701 ms, producing a physically implausible five-digit rate. The original [latency/throughput decision](../feature/2026-08-04-web-latency-throughput-metrics.md) explicitly preserved this failure mode as replay variance rather than distinguishing transport drain speed from model output rate.
+The Web `tok/s` figure divided provider-reported output tokens by the local first-token-to-message span. That span measures chunk arrival, not necessarily model generation: a provider or intermediary can buffer an already-generated response and let the Harness append hundreds of chunks within a few milliseconds. One observed session therefore paired 19,523 output tokens with 637 ms of chunk-drain time even though its requests occupied 185,701 ms, producing a physically implausible five-digit rate. The original [latency/throughput decision](../../archived/feature/2026-08-04-web-latency-throughput-metrics.md) explicitly preserved this failure mode as replay variance rather than distinguishing transport drain speed from model output rate.
 
 ## Decision
 

@@ -295,6 +295,7 @@ describe('dsh-subagent-spawn-in-process', () => {
     const { ctx } = await setup([])
     const provider = ctx.subagents.getProvider('spawn')!
     expect(provider.capabilities).toEqual({
+      principal: true,
       agentOptions: true,
       outputSchema: true,
       depthLimit: true,

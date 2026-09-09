@@ -45,7 +45,7 @@ describe('product-provider public Loader composition', () => {
       providers: [
         {
           name: 'codex',
-          capabilities: {
+          capabilities: { principal: false,
             agentOptions: false,
             outputSchema: false,
             depthLimit: false,
@@ -56,7 +56,7 @@ describe('product-provider public Loader composition', () => {
         },
         {
           name: 'claude-code',
-          capabilities: {
+          capabilities: { principal: false,
             agentOptions: false,
             outputSchema: false,
             depthLimit: false,
@@ -67,7 +67,7 @@ describe('product-provider public Loader composition', () => {
         },
         {
           name: 'claude-primary',
-          capabilities: {
+          capabilities: { principal: false,
             agentOptions: false,
             outputSchema: false,
             depthLimit: false,
@@ -78,7 +78,7 @@ describe('product-provider public Loader composition', () => {
         },
         {
           name: 'claude-secondary',
-          capabilities: {
+          capabilities: { principal: false,
             agentOptions: false,
             outputSchema: false,
             depthLimit: false,

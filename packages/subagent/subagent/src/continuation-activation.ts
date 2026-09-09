@@ -84,7 +84,7 @@ export interface Activation {
 
 /** Inputs shared by fresh and resumed Activation materialization. */
 export interface MaterializeInputs {
-  principalSetup?: (childCtx: Context) => import('@deepseek-ai/dsh-agent').AgentSetupCommit | undefined
+  principalSetup?: (childCtx: Context, child: Agent) => import('@deepseek-ai/dsh-agent').AgentSetupCommit | undefined
   childId: SessionId
   provider: string
   parent: Agent
@@ -584,7 +584,7 @@ export class ContinuableActivationRegistry {
         child.session.append('subagent/descriptor', create.descriptor)
         appendDelegatedPolicyOverrides(child.session, create.delegatedPolicies)
       }
-      const principalSetup = inputs.principalSetup?.(childCtx)
+      const principalSetup = inputs.principalSetup?.(childCtx, child)
       applyChildComposition(childCtx, parent, inputs.composition)
       return principalSetup
     }

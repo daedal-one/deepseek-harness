@@ -28,7 +28,7 @@ afterEach(async () => {
 })
 
 /** Write a cordis.yml with one webserver row, then boot it through the real Loader. */
-async function loadComposition(port = 0, gzip = false): Promise<Context> {
+async function loadComposition(port = 0, compression?: 'gzip' | 'brotli'): Promise<Context> {
   root = await mkdtemp(join(tmpdir(), 'dsh-webserver-loader-'))
   const configPath = join(root, 'cordis.yml')
   await writeFile(configPath, [
@@ -36,9 +36,9 @@ async function loadComposition(port = 0, gzip = false): Promise<Context> {
     '  config:',
     "    host: '127.0.0.1'",
     `    port: ${String(port)}`,
-    ...(gzip
+    ...(compression
       ? [
-        '    compression: gzip',
+        `    compression: ${compression}`,
         '    compressionLevel: 1',
         '    compressionThresholdBytes: 16',
       ]
@@ -103,13 +103,14 @@ describe('real Loader composition', () => {
       port: 0,
       compression: 'none',
       compressionLevel: 1,
+      compressionBrotliQuality: 9,
       compressionThresholdBytes: 1024,
     })
     expect(() => HttpServer.Config({
       host: '127.0.0.1', port: 0, compressionLevel: 10,
     })).toThrow()
 
-    const loaded = await loadComposition(0, true)
+    const loaded = await loadComposition(0, 'gzip')
     const server = loaded.webServer
     const body = 'compressible response '.repeat(8)
     server.register({
@@ -187,6 +188,26 @@ describe('real Loader composition', () => {
       .headers.get('content-encoding')).toBeNull()
     expect((await request(server.port, '/range', { headers: { 'accept-encoding': 'gzip' } }))
       .headers.get('content-encoding')).toBeNull()
+  })
+
+  it('negotiates Brotli with gzip and identity fallbacks', { timeout: 60_000 }, async () => {
+    const loaded = await loadComposition(0, 'brotli')
+    const body = 'compressible PDF and browser data '.repeat(100)
+    loaded.webServer.register({
+      kind: 'exact', path: '/text', handler: (_req, res) => {
+        res.writeHead(200, { 'content-type': 'text/plain', 'content-length': String(body.length) })
+        res.end(body)
+      },
+    })
+    for (const [accepted, expected] of [
+      ['gzip, deflate, br, zstd', 'br'], ['br;q=0.5, gzip;q=1', 'gzip'],
+      ['br, gzip', 'br'], ['gzip', 'gzip'], ['br;q=0, gzip;q=0, identity', null],
+    ] as const) {
+      const response = await request(loaded.webServer.port, '/text', { headers: { 'accept-encoding': accepted } })
+      expect(response.body).toBe(body.slice(0, 80))
+      expect(response.headers.get('content-encoding')).toBe(expected)
+      expect(response.headers.get('vary')).toBe('Accept-Encoding')
+    }
   })
 
   // Real-Loader composition resolves workspace packages through tsx at test

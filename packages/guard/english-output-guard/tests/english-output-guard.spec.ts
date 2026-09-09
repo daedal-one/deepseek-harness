@@ -1,10 +1,13 @@
+import { randomUUID } from 'node:crypto'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import {
-  CallId,
+  ToolCallId,
+  expandAssistantStream,
+  type ReplayEnvelope,
   createUserMessage,
   LlmAdapter,
   type GenerateOptions,
@@ -31,7 +34,7 @@ const config = (failureMode: 'preserve' | 'block' = 'block'): EnglishOutputGuard
   translationNotice: 'none',
 })
 
-function response(blocks: Array<{ type: 'text' | 'reasoning'; text: string }>, replayState: unknown = { cursor: 'opaque' }): StreamChunk[] {
+function response(blocks: Array<{ type: 'text' | 'reasoning'; text: string }>, replayState: ReplayEnvelope | undefined = { response: { cursor: 'opaque' } }): StreamChunk[] {
   const chunks: StreamChunk[] = []
   blocks.forEach((block, index) => {
     chunks.push({ type: 'block-start', index, blockType: block.type })
@@ -107,7 +110,7 @@ async function run(
   await ctx.plugin(EnglishOutputGuard, guardConfig)
   const adapter = new RoutedAdapter(main, translation)
   ctx.llm.registerAdapter(['main', 'translator'], adapter)
-  const agent = ctx.agentLoop.create(SessionId(crypto.randomUUID()), route)
+  const agent = await ctx.agentLoop.create(SessionId(randomUUID()), route)
   const idle = nextIdle(ctx, agent)
   agent.followup(createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: 'go' }] }))
   await idle
@@ -115,7 +118,13 @@ async function run(
 }
 
 function assistant(agent: Agent) {
-  return agent.session.events.findLast(event => event.type === 'assistant/message')
+  return agent.session.snapshotEvents().findLast(event => event.type === 'assistant/message')
+}
+
+function recordedChunks(agent: Agent): StreamChunk[] {
+  return agent.session.snapshotEvents().flatMap(event =>
+    event.type === 'assistant/message' || event.type === 'assistant/attempt'
+      ? expandAssistantStream(event.data.stream).map(entry => entry.chunk) : [])
 }
 
 describe('targeting and replay', () => {
@@ -136,10 +145,10 @@ describe('targeting and replay', () => {
   it('replays a no-drift stream byte-for-byte, including replay state', async () => {
     const original = response([{ type: 'text', text: 'English only.' }])
     const { agent, adapter } = await run(original, response([{ type: 'text', text: 'unused' }]))
-    const chunks = agent.session.events.filter(event => event.type === 'assistant/chunk').map(event => event.data.chunk)
+    const chunks = recordedChunks(agent)
     expect(chunks).toEqual(original)
     expect(adapter.requests).toHaveLength(1)
-    expect(assistant(agent)?.data.message.source.replayState).toEqual({ cursor: 'opaque' })
+    expect(assistant(agent)?.data.message.source.replayState).toEqual({ response: { cursor: 'opaque' } })
   })
 
   it('passes a non-target loop request through without translator dispatch', async () => {
@@ -156,7 +165,7 @@ describe('targeting and replay', () => {
       { type: 'finish', reason: { kind, failure: { code: kind.toUpperCase(), message: kind } } },
     ]
     const { agent, adapter } = await run(original, 'error')
-    expect(agent.session.events.filter(event => event.type === 'assistant/chunk').map(event => event.data.chunk)).toEqual(original)
+    expect(recordedChunks(agent)).toEqual(original)
     expect(adapter.requests).toHaveLength(1)
     expect(assistant(agent)).toBeUndefined()
   })
@@ -184,9 +193,9 @@ describe('translation', () => {
     expect(adapter.requests[1]?.provider).toBe('translator')
     expect(adapter.requests[1]?.maxTokens).toBe(500)
     expect(adapter.requests[1]?.system).toContain('untrusted DATA')
-    const audit = agent.session.events.filter(event => event.type.startsWith('english-output/'))
+    const audit = agent.session.snapshotEvents().filter(event => event.type.startsWith('english-output/'))
     expect(audit.map(event => event.type)).toEqual(['english-output/translation-request', 'english-output/translation-result'])
-    const requestEvent = agent.session.events.find(event => event.type === 'english-output/translation-request')
+    const requestEvent = agent.session.snapshotEvents().find(event => event.type === 'english-output/translation-request')
     expect(requestEvent?.data.messages).toEqual(adapter.requests[1]?.messages)
     expect(requestEvent?.data.system).toBe(adapter.requests[1]?.system)
     expect(requestEvent?.data.blocks).toEqual([
@@ -201,11 +210,11 @@ describe('translation', () => {
       { type: 'block-start', index: 7, blockType: 'text' },
       { type: 'text-delta', index: 7, text: '中文回答' },
       { type: 'block-end', index: 7, block: { type: 'text', text: '中文回答' } },
-      { type: 'finish', reason: { kind: 'stop' }, replayState: { opaque: true } },
+      { type: 'finish', reason: { kind: 'stop' }, replayState: { response: { opaque: true } } },
     ]
     const translated = JSON.stringify({ translations: [{ index: 7, type: 'text', text: 'English answer' }] })
     const { agent } = await run(main, response([{ type: 'text', text: translated }], undefined))
-    const chunks = agent.session.events.filter(event => event.type === 'assistant/chunk').map(event => event.data.chunk)
+    const chunks = recordedChunks(agent)
     expect(chunks.slice(0, 3).every(chunk => 'index' in chunk && chunk.index === 7)).toBe(true)
   })
 
@@ -231,7 +240,7 @@ describe('translation', () => {
     await ctx.plugin(EnglishOutputGuard, local)
     const adapter = new SameRouteAdapter()
     ctx.llm.registerAdapter(['same'], adapter)
-    const agent = ctx.agentLoop.create(SessionId(crypto.randomUUID()), { provider: 'same', model: 'same' })
+    const agent = await ctx.agentLoop.create(SessionId(randomUUID()), { provider: 'same', model: 'same' })
     const idle = nextIdle(ctx, agent)
     agent.followup(createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: 'go' }] }))
     await idle
@@ -240,7 +249,7 @@ describe('translation', () => {
   })
 
   it('keeps tool calls structured when blocking invalid translator output', async () => {
-    const callId = CallId('call-1')
+    const callId = ToolCallId('call-1')
     const main: StreamChunk[] = [
       { type: 'block-start', index: 0, blockType: 'text' },
       { type: 'text-delta', index: 0, text: '中文回答' },
@@ -248,10 +257,10 @@ describe('translation', () => {
       { type: 'block-start', index: 1, blockType: 'tool-call' },
       { type: 'tool-call-delta', index: 1, id: callId, name: 'missing', argumentsDelta: '{"path":"/tmp/中文"}' },
       { type: 'block-end', index: 1, block: { type: 'tool-call', id: callId, name: 'missing', arguments: '{"path":"/tmp/中文"}' } },
-      { type: 'finish', reason: { kind: 'tool-calls' }, replayState: { secret: true } },
+      { type: 'finish', reason: { kind: 'tool-calls' }, replayState: { response: { secret: true } } },
     ]
     const { agent } = await run(main, response([{ type: 'text', text: '{not json' }], undefined))
-    const chunks = agent.session.events.filter(event => event.type === 'assistant/chunk').map(event => event.data.chunk)
+    const chunks = recordedChunks(agent)
     expect(chunks).toContainEqual({ type: 'tool-call-delta', index: 1, id: callId, name: 'missing', argumentsDelta: '{"path":"/tmp/中文"}' })
     expect(chunks).toContainEqual({ type: 'finish', reason: { kind: 'tool-calls' } })
     expect(chunks.some(chunk => chunk.type === 'text-delta' && chunk.text.includes('withheld'))).toBe(true)
@@ -267,10 +276,10 @@ describe('failure policy', () => {
     const local = config(mode)
     if (translator === 'hang') local.timeoutMs = 5
     const { agent } = await run(original, translator, local)
-    const chunks = agent.session.events.filter(event => event.type === 'assistant/chunk').map(event => event.data.chunk)
+    const chunks = recordedChunks(agent)
     expect(chunks).toEqual(original)
     expect(assistant(agent)?.data.message.content).toEqual([{ type: 'text', text: '中文回答' }])
-    const result = agent.session.events.find(event => event.type === 'english-output/translation-result')
+    const result = agent.session.snapshotEvents().find(event => event.type === 'english-output/translation-result')
     expect(result?.data.status).toBe('preserved')
   })
 
@@ -280,7 +289,7 @@ describe('failure policy', () => {
       type: 'text',
       text: 'English output enforcement failed. The non-English prose was withheld.',
     }])
-    const result = agent.session.events.find(event => event.type === 'english-output/translation-result')
+    const result = agent.session.snapshotEvents().find(event => event.type === 'english-output/translation-result')
     expect(result?.data).toMatchObject({ status: 'blocked', failure: { code: 'provider-error' } })
   })
 
@@ -292,7 +301,7 @@ describe('failure policy', () => {
     ]
     for (const translated of invalid) {
       const { agent } = await run(main, response([{ type: 'text', text: translated }], undefined))
-      const result = agent.session.events.find(event => event.type === 'english-output/translation-result')
+      const result = agent.session.snapshotEvents().find(event => event.type === 'english-output/translation-result')
       expect(result?.data).toMatchObject({ status: 'blocked', failure: { code: 'invalid-output' } })
     }
   })
@@ -303,7 +312,7 @@ describe('failure policy', () => {
     const original = response([{ type: 'text', text: '中文回答' }])
     const { agent, adapter } = await run(original, 'error', local)
     expect(adapter.requests).toHaveLength(1)
-    const result = agent.session.events.find(event => event.type === 'english-output/translation-result')
+    const result = agent.session.snapshotEvents().find(event => event.type === 'english-output/translation-result')
     expect(result?.data).toMatchObject({ status: 'preserved', failure: { code: 'input-too-large' } })
   })
 
@@ -318,13 +327,13 @@ describe('failure policy', () => {
     await fiber
     const adapter = new RoutedAdapter(response([{ type: 'text', text: '中文回答' }]), 'hang')
     ctx.llm.registerAdapter(['main', 'translator'], adapter)
-    const agent = ctx.agentLoop.create(SessionId(crypto.randomUUID()), { provider: 'main', model: 'selected' })
+    const agent = await ctx.agentLoop.create(SessionId(randomUUID()), { provider: 'main', model: 'selected' })
     const idle = nextIdle(ctx, agent)
     agent.followup(createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: 'go' }] }))
     await adapter.translationStarted
     await fiber.dispose()
     await idle
-    const result = agent.session.events.find(event => event.type === 'english-output/translation-result')
+    const result = agent.session.snapshotEvents().find(event => event.type === 'english-output/translation-result')
     expect(result?.data).toMatchObject({ status: 'preserved', failure: { code: 'cancelled' } })
   })
 })

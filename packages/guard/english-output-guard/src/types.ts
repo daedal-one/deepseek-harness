@@ -29,7 +29,7 @@ export type TranslationFailureCode =
 /** Result state recorded for one translation request. */
 export type TranslationStatus = 'translated' | 'blocked' | 'preserved'
 
-declare module '@deepseek-ai/dsh-session' {
+declare module '@deepseek-ai/dsh-session/types' {
   interface SessionEventMap {
     /** Exact auxiliary model input logged before translator dispatch. */
     'english-output/translation-request': {

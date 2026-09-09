@@ -348,6 +348,8 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   SessionSelectModelRequest: 'session.md',
   SessionSelectModelValue: 'session.md',
   SessionSummary: 'session.md',
+  SessionHistoryDetailRequest: 'session.md',
+  SessionEventEntry: 'session.md',
   SessionUpdateQueueRequest: 'session.md',
   SessionUpdateQueueValue: 'session.md',
   EncodedFileUploadRequest: 'attachment.md',

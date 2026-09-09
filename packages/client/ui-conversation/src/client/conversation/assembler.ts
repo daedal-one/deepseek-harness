@@ -133,7 +133,7 @@ function conversationMatch(
     if (input.type !== 'event') {
       throw new Error(`conversation Context ${key} received a transient start Match`)
     }
-    return { event: input.event, role, location, ...input.type === 'event' && input.detail !== undefined ? { detail: input.detail } : {} }
+    return { event: input.event, role, location, ...input.detail !== undefined ? { detail: input.detail } : {} }
   }
   return { event: input.event, role, location, ...input.type === 'event' && input.detail !== undefined ? { detail: input.detail } : {} }
 }

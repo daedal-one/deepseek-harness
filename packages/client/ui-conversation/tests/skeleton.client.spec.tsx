@@ -463,7 +463,7 @@ describe('ConversationRoot resident composer', () => {
   })
 
   it('phone header hides downward, returns upward or on focus, and resets across the breakpoint', () => {
-    const b = mount(conversationSnapshot(), undefined, undefined, { phone: true })
+    const b = mount(sessionSnapshotOf(), undefined, undefined, { phone: true })
     const headerSeat = b.view.container.querySelector<HTMLElement>('[data-conversation-header]')!
     const phone = headerSeat.closest<HTMLElement>('[data-phone="true"]')!
     const documentScroller = (document.scrollingElement ?? document.documentElement) as HTMLElement

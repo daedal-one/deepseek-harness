@@ -72,7 +72,7 @@ function harness() {
       resourceAddress: 'dsh-resource://file/session/s/report.pdf',
       content: kind === 'bytes' ? { kind, data: bytes } : { kind, text: '', pages: [], eof: true }, wrap: false,
       useTabInfo: () => ({ tab: { id: tabId, signal: controller.signal } }),
-      useStore, actions: instance.actions, retainTab: vi.fn(), t: makeTranslate(en),
+      useStore, actions: instance.actions, retainTab: vi.fn(), readAsset: async () => new Uint8Array(), t: makeTranslate(en),
     } as unknown as PdfBodyProps
     return <PdfBody {...props} />
   }

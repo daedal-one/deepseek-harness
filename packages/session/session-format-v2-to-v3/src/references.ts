@@ -28,6 +28,20 @@ export function remapEvent(event: SessionFormatEvent, seq: number, mapping: read
   }
   let data = record(event.data, event.type)
   switch (event.type) {
+    case 'memory/extraction-request':
+      data = { ...data, sourceSessionFormatVersion: data['sourceSessionFormatVersion'] ?? 2 }
+      break
+    case 'tool-policy/intent-context':
+      data = { ...data, requestSeq: one(data['requestSeq']), userMessageSeq: one(data['userMessageSeq']) }
+      break
+    case 'tool-policy/classifier-request': {
+      const input = record(data['input'], 'policy input')
+      data = { ...data, input: input['kind'] === 'intent-context'
+        ? { ...input, userMessageSeqs: list(input['userMessageSeqs']) }
+        : { ...input, intentContextSeq: one(input['intentContextSeq']) },
+      }
+      break
+    }
     case 'command/done':
       if (data['sourceEventSeq'] !== undefined) data = { ...data, sourceEventSeq: one(data['sourceEventSeq']) }
       break

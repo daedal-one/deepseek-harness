@@ -30,6 +30,8 @@ interface SubagentCapabilities {
   readonly depthLimit: boolean
   readonly toolFilter: boolean
   readonly persona: boolean
+  /** Whether an in-process child can receive principal-scoped setup. */
+  readonly principal: boolean
 }
 ```
 
@@ -48,6 +50,11 @@ The tool layer builds this request from the model input and its own config; the 
 interface SubagentStartRequest {
   /** Optional short display label persisted with a session-backed child. */
   readonly label?: string
+  /**
+   * Trusted deployment principal assigned by the delegation Consumer. It is
+   * persisted for local children and is never accepted from model arguments.
+   */
+  readonly principal?: SubagentPrincipal
   /** Content delivered as the child's user message. */
   readonly prompt: ContentBlock[]
   /**
@@ -116,6 +123,11 @@ The caller-facing request does not carry catalog format details or continuation 
 interface ResolvedSubagentStartRequest extends SubagentStartRequest {
   /** Detached descriptor a session-backed provider persists in the child log. */
   readonly descriptor: SubagentDescriptorData
+  /**
+   * Service-owned setup for a trusted principal. Present only after capability
+   * validation and consumed by an in-process provider during unpublished setup.
+   */
+  readonly principalSetup?: (childCtx: Context, child: Agent) => AgentSetupCommit | void
 }
 ```
 
@@ -667,6 +679,30 @@ getProvider(name: string): SubagentProvider | undefined
 list(): string[]
 
 /**
+ * Register one named completed-result validator. A tool opts into it by name;
+ * other delegation tools remain unaffected.
+ * @param validator - deployment policy to register.
+ * @returns disposer for the exact registration.
+ */
+registerResultValidator(validator: SubagentResultValidator): () => void
+
+/**
+ * Resolve one validator selected by a delegation consumer.
+ * @param name - configured validator name.
+ * @returns the current validator, or undefined while no provider owns that name.
+ */
+getResultValidator(name: string): SubagentResultValidator | undefined
+
+/**
+ * Validate one completed result through the selected deployment policy.
+ * @param name - configured validator name.
+ * @param request - completed result and delegation context.
+ * @returns structured warnings in provider order.
+ * @throws when the named validator is unavailable or its provider rejects.
+ */
+validateResult( name: string, request: SubagentResultValidationRequest, ): Promise<readonly SubagentResultWarning[]>
+
+/**
  * Establish a published child on the named provider. Capability and semantic
  * checks run before delegation. Provider ownership lasts until its promise
  * fulfills; a rejection therefore has no run for the caller to dispose and
@@ -679,6 +715,27 @@ list(): string[]
  * @returns the published holder-owned run.
  */
 async start(name: string, request: SubagentStartRequest): Promise<SubagentRun>
+
+/**
+ * Register a child-scoped capability visible only to delegated agents carrying
+ * one config-owned principal. The principal is copied into the durable child
+ * descriptor, so a continuable child receives the same capability after a
+ * cold resume. Removing the registration immediately revokes every live
+ * installation created from it.
+ * @param principal - trusted deployment principal selected by Consumer configuration.
+ * @param contribution - synchronous child-scope installer.
+ * @returns the exact Cordis effect disposer.
+ */
+registerPrincipalSetup( principal: SubagentPrincipal, contribution: SubagentChildSetupContribution, ): () => void
+
+/**
+ * Compose the capability set assigned to a trusted child principal.
+ * @param childCtx - unpublished delegated Agent scope.
+ * @param child - unpublished delegated Agent.
+ * @param principal - config-owned principal copied from the delegation request.
+ * @returns the publication commit, or `undefined` for an ordinary child.
+ */
+applyPrincipalSetup( childCtx: Context, child: Agent, principal: SubagentPrincipal | undefined, ): import('@deepseek-ai/dsh-agent').AgentSetupCommit | undefined
 ```
 
 Types: [Agent](core.md) · [ContentBlock](llm-streaming.md) · [MessageId](llm-streaming.md) · [SessionId](core.md)

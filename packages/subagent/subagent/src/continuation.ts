@@ -68,7 +68,7 @@ type ChildDeliveryOptions =
 
 /** Package-private hooks supplied by the owning service. */
 interface ContinuationHost {
-  applyPrincipalSetup(childCtx: Context, principal: SubagentPrincipal | undefined): AgentSetupCommit | undefined
+  applyPrincipalSetup(childCtx: Context, child: Agent, principal: SubagentPrincipal | undefined): AgentSetupCommit | undefined
   /** Resolve one provider's detached continuable-creation contribution. */
   prepareContinuable(name: string, request: ContinuableCreateRequest): Promise<ContinuableCreateSpec>
   /** Build the lifecycle observer for one Activation residency epoch. */
@@ -172,7 +172,7 @@ export class SubagentContinuationManager {
           },
           agentOptions,
           composition: { persona: request.persona, toolFilter: request.toolFilter },
-          principalSetup: childCtx => this.host.applyPrincipalSetup(childCtx, request.principal),
+          principalSetup: (childCtx, child) => this.host.applyPrincipalSetup(childCtx, child, request.principal),
           signal: spec.signal,
         })
         const childHeader = activation.handle.agent.session.header
@@ -447,7 +447,7 @@ export class SubagentContinuationManager {
             : {},
         },
         composition: { persona: descriptor.persona, toolFilter: descriptor.toolFilter },
-        principalSetup: childCtx => this.host.applyPrincipalSetup(childCtx, descriptor.principal),
+        principalSetup: (childCtx, child) => this.host.applyPrincipalSetup(childCtx, child, descriptor.principal),
         signal: options.signal,
       })
     } catch (error: unknown) {

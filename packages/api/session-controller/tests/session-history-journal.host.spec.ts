@@ -95,6 +95,52 @@ function pageEvents(page: SessionPage): SessionWireEvent[] {
 }
 
 describe('Session history raw journal', () => {
+  it('bounds the complete opening payload and retrieves deferred output without changing the log', async () => {
+    const { ctx } = await harness()
+    const session = ctx.sessions.create(undefined, { meta: { cwd: '/workspace' } })
+    appendUserText(session, 'Read a large file.')
+    const result = session.append('tool/result', {
+      turn: 1, step: 1,
+      message: createToolResultMessage({ callId: ToolCallId('large'), content: [{ type: 'text', text: 'x'.repeat(32_000) }], isError: false }),
+    }, { surfaceOp: 'append' })
+    const before = JSON.stringify(session.snapshotEvents())
+    const history = new SessionHistoryController(ctx, (observation) => { observation[Symbol.dispose]() }, 4096)
+    const abort = new AbortController()
+    const address = { kind: 'session' as const, sessionId: session.id }
+    const iterator = history.follow({ address }, abort.signal)[Symbol.asyncIterator]()
+    try {
+      const opened = await iterator.next()
+      if (opened.done || opened.value.type !== 'snapshot') throw new Error('Missing opening snapshot')
+      expect(Buffer.byteLength(JSON.stringify(opened.value), 'utf8')).toBeLessThanOrEqual(4096)
+      expect(opened.value.oversized).toBeUndefined()
+      const deferred = opened.value.records.find(record => record.event.seq === result.seq)
+      expect(deferred).toMatchObject({ detail: { kind: 'tool-result' }, event: { data: { message: { content: [{ content: [] }] } } } })
+      await expect(history.historyDetail({ address, seq: result.seq }, abort.signal)).resolves.toEqual({ type: 'event', event: result })
+      expect(JSON.stringify(session.snapshotEvents())).toBe(before)
+      await expect(history.historyDetail({ address, seq: 0 }, abort.signal)).rejects.toMatchObject({ code: 'session/history-detail-not-found' })
+    } finally {
+      await disposeFollow(ctx, iterator, abort)
+    }
+  })
+
+  it('reports the exact oversized payload when one complete message cannot fit', async () => {
+    const { ctx } = await harness()
+    const session = ctx.sessions.create(undefined, { meta: { cwd: '/workspace' } })
+    const prompt = appendUserText(session, 'x'.repeat(8192))
+    const history = new SessionHistoryController(ctx, (observation) => { observation[Symbol.dispose]() }, 1024)
+    const abort = new AbortController()
+    const iterator = history.follow({ address: { kind: 'session', sessionId: session.id } }, abort.signal)[Symbol.asyncIterator]()
+    try {
+      const opened = await iterator.next()
+      if (opened.done || opened.value.type !== 'snapshot') throw new Error('Missing opening snapshot')
+      expect(opened.value.records).toContainEqual({ type: 'event', event: prompt })
+      expect(opened.value.oversized?.bytes).toBe(Buffer.byteLength(JSON.stringify(opened.value), 'utf8'))
+      expect(opened.value.oversized!.bytes).toBeGreaterThan(1024)
+    } finally {
+      await disposeFollow(ctx, iterator, abort)
+    }
+  })
+
   it('opens an empty opted-in Assistant baseline before any live attempt exists', async () => {
     const { ctx } = await harness()
     const session = ctx.sessions.create(undefined, { meta: { cwd: '/workspace' } })
@@ -734,11 +780,14 @@ describe('Session history raw journal', () => {
     })
     expect(response.ok).toBe(true)
     if (!response.ok) throw new Error('unreachable')
-    expect(response.value.records).toEqual([
+    expect(response.value.records.slice(0, 2)).toEqual([
       { type: 'event', event: start },
       { type: 'event', event: call },
-      { type: 'event', event: result },
     ])
+    expect(response.value.records[2]).toMatchObject({
+      type: 'event', detail: { kind: 'tool-result' },
+      event: { seq: result.seq, data: { meta: result.data.meta, message: { content: [{ content: [], isError: true }] } } },
+    })
   })
 
   it('counts only append-origin messages toward maxMessages and keeps each compaction summary with its replacement', async () => {

@@ -316,7 +316,7 @@ describe('headless stream-json snapshots', () => {
     })
 
     expect(result.stdout).toBe('Daedal assembled profile completed after a guarded shell call and durable memory proposal.\n')
-    expect(result.stderr).toBe('')
+    expect(result.stderr).toBe('dsh: reasoning:\nInspecting the task before the tool call.\n'.repeat(3))
   }, LOADER_SMOKE_TEST_TIMEOUT_MS)
 
   it('prints a terminal model failure through the product headless profile command', async () => {

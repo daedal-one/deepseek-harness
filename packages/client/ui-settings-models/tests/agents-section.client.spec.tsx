@@ -2,8 +2,8 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentModelsSnapshot } from '@deepseek-ai/dsh-api-remotes/client'
-import { createSnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
-import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-web-react'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import { AgentsSection } from '../src/client/AgentsSection.tsx'
 import { agentEn } from '../src/client/agent-locales.ts'
 
@@ -50,7 +50,10 @@ const snapshot: AgentModelsSnapshot = {
 const t = (key: keyof typeof agentEn): string => agentEn[key]
 const close = (): void => {}
 const unusedHook = (() => { throw new Error('unused global hook') }) as never
-const globalProps = { close, useSessions: unusedHook, useWorkspaces: unusedHook }
+const globalProps = {
+  close, useSessions: unusedHook, useWorkspaces: unusedHook, usePanelInfo: unusedHook,
+  useSessionPendingInteraction: unusedHook, useResource: unusedHook,
+}
 const directory = createSnapshotStore(0)
 const useAgentDirectory = bindSnapshotSelector(directory)
 

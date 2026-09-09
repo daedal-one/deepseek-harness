@@ -78,7 +78,7 @@ describe('list lifecycle', () => {
           hasMore: false,
         })
     }
-    const manager = new SessionManager(api, fakeRemote())
+    const manager = new SessionManager(fakeRemote(api))
     await manager.refreshList()
     expect(api.callsOf('session.list')).toEqual([{}])
     expect(manager.getListSnapshot()).toMatchObject({ hasMore: true, loadingMore: false })
@@ -92,6 +92,22 @@ describe('list lifecycle', () => {
     expect(resident.getSnapshot().running).toBe(true)
     await manager.loadMoreList()
     expect(api.callsOf('session.list')).toHaveLength(2)
+  })
+
+  it('keeps live removals and activity updates when an older continuation page arrives', async () => {
+    const api = new FakeApiClient()
+    api.onList = async () => ok({ items: [summary(S1)] as never[], hasMore: true, nextCursor: 'next' as never })
+    const manager = new SessionManager(fakeRemote(api))
+    await manager.refreshList()
+    const page = deferred<Awaited<ReturnType<FakeApiClient['onList']>>>()
+    api.onList = () => page.promise
+    const continuation = manager.loadMoreList()
+    manager.handleSessionRemoved(S2)
+    manager.handleSessionActivity(S1, 500)
+    page.resolve(ok({ items: [summary(S1), summary(S2)] as never[], hasMore: false }))
+    await continuation
+    expect(manager.getListSnapshot().items.map(item => item.sessionId)).toEqual([S1])
+    expect(manager.getListSnapshot().items[0]?.updatedAt).toBe(500)
   })
 
   it('replays incremental frames over hydration and never batch-reorders established ids', async () => {

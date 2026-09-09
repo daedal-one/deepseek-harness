@@ -248,7 +248,7 @@ describe('syncTools', () => {
     })
     await ctx.tools.execute({
       signal: testToolSignal,
-      callId: CallId('bound'),
+      callId: ToolCallId('bound'),
       name: 'mcp__srv__open',
       arguments: { url: 'https://example.com/path', extraArgs: ['--unsafe'], session: 'attacker' },
       agent: { session: { id: 'agent-session' } },

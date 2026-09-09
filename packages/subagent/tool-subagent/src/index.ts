@@ -567,18 +567,18 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
                   kind: { type: 'string', required: true, const: 'foreground' },
                   runId: { type: 'string', required: true },
                   output: { type: 'array', required: true, items: { type: 'json' } },
-                warnings: {
-                  type: 'array',
-                  items: {
-                    type: 'object',
-                    additionalProperties: false,
-                    properties: {
-                      code: { type: 'string', required: true },
-                      message: { type: 'string', required: true },
-                      details: { type: 'json' },
+                  warnings: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      additionalProperties: false,
+                      properties: {
+                        code: { type: 'string', required: true },
+                        message: { type: 'string', required: true },
+                        details: { type: 'json' },
+                      },
                     },
                   },
-                },
                 },
               },
             ],
@@ -604,24 +604,24 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
             throw new Error('subagent tool requires a calling agent (exec.agent was undefined)')
           }
 
-        const resultValidation = config.resultValidation
-        const validation = resultValidation === undefined
-          ? undefined
-          : runtimeCtx.subagents.getResultValidator(resultValidation.validator)
-        if (resultValidation !== undefined && validation === undefined) {
-          throw new Error(
-            `subagent result validator "${resultValidation.validator}" is unavailable`,
-          )
-        }
-        const validate: ValidateResult | undefined = resultValidation === undefined || validation === undefined
-          ? undefined
-          : (run, result) => validation.validate({
-            role: resultValidation.role,
-            label: args.description,
-            parent,
-            run,
-            result,
-          })
+          const resultValidation = config.resultValidation
+          const validation = resultValidation === undefined
+            ? undefined
+            : runtimeCtx.subagents.getResultValidator(resultValidation.validator)
+          if (resultValidation !== undefined && validation === undefined) {
+            throw new Error(
+              `subagent result validator "${resultValidation.validator}" is unavailable`,
+            )
+          }
+          const validate: ValidateResult | undefined = resultValidation === undefined || validation === undefined
+            ? undefined
+            : (run, result) => validation.validate({
+              role: resultValidation.role,
+              label: args.description,
+              parent,
+              run,
+              result,
+            })
 
           const configuredAgentOptions = configurableTarget === undefined
             ? config.agentOptions

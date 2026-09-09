@@ -6,11 +6,10 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import type {} from 'zod'
 import type { AgentOptions, ModelSelection } from '@deepseek-ai/dsh-agent'
 import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { LlmResolvedModelInfo } from '@deepseek-ai/dsh-llm'
-import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
+import type {} from '@deepseek-ai/dsh-settings'
 import type { SettingsDescriptor } from '@deepseek-ai/dsh-settings'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type {
@@ -63,7 +62,7 @@ export function presetAgentModelTargetId(presetId: string): AgentModelTargetId {
 }
 
 /** Settings namespace carrying per-Agent model selections. */
-export const AGENT_MODELS_SETTINGS_NAMESPACE = settingsNamespace('agent-models')
+export const AGENT_MODELS_SETTINGS_NAMESPACE = 'agent-models'
 
 /** Stored per-Agent model selections keyed by stable target id. */
 export interface AgentModelsSettings {
@@ -250,9 +249,11 @@ export class AgentModelConfig extends TypertRemoteService {
         count: 1,
       })
     }
-    installSettingsSection(ctx, AGENT_MODELS_SETTINGS_NAMESPACE, AGENT_MODELS_SETTINGS_SCHEMA, entry, {
-      setSource: (current) => { this.source = current },
-      onChange: () => {},
+    ctx.inject(['settings'], (settingsCtx) => {
+      settingsCtx.settings.installSection(ctx, AGENT_MODELS_SETTINGS_NAMESPACE, AGENT_MODELS_SETTINGS_SCHEMA, entry, {
+        setSource: (current) => { this.source = current },
+        onChange: () => {},
+      })
     })
   }
 

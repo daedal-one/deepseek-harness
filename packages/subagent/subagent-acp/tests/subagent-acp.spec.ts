@@ -1673,7 +1673,7 @@ describe('dsh-subagent-acp', () => {
   it('advertises no start-time capabilities (out-of-process child)', async () => {
     const ctx = await setup()
     const provider = ctx.subagents.getProvider('acp')!
-    expect(provider.capabilities).toEqual({
+    expect(provider.capabilities).toEqual({ principal: false,
       agentOptions: false,
       outputSchema: false,
       depthLimit: false,

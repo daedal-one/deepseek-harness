@@ -284,12 +284,12 @@ export class ApiSessionAgentController {
       ? undefined
       : agentModelSelection(projectionState.pending)
     const defaultModel = this.ctx.agentModels
-    const preset = this.presetForSession(agent.session)
+    const preset = () => this.presetForSession(agent.session)
     const selection: InstalledSelection = {
       get current(): AgentModelSelection {
         if (picked !== undefined) return picked
         const loggedHeader = agent.session.requestHeader()
-        if (loggedHeader === undefined) return defaultModel.mainSelection(preset)
+        if (loggedHeader === undefined) return defaultModel.mainSelection(preset())
         const logged = loggedHeader.config
         return {
           provider: logged.provider,

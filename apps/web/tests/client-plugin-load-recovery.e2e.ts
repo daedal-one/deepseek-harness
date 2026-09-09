@@ -15,7 +15,13 @@ describe('web e2e: client plugin load recovery', () => {
     scaffold = await launchWebScaffold({})
     browser = await chromium.launch()
     page = await browser.newPage({ viewport: { width: 390, height: 844 }, locale: 'en-US' })
-    await page.route('**/plugins/boot.js?rev=*', async (route) => {
+    let failedUrl: string | undefined
+    await page.route(url => url.pathname === '/plugins/' && url.search.startsWith('??'), async (route) => {
+      failedUrl ??= route.request().url()
+      if (route.request().url() !== failedUrl) {
+        await route.continue()
+        return
+      }
       attempts++
       if (attempts === 1) {
         await route.abort('connectionreset')
@@ -24,7 +30,7 @@ describe('web e2e: client plugin load recovery', () => {
       await route.continue()
     })
     tripwire = watchConsole(page)
-    await page.goto(scaffold.baseUrl, { waitUntil: 'load' })
+    await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
   }, 120_000)
 

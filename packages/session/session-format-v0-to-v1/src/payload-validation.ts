@@ -141,6 +141,97 @@ export function assertReleasedPayloadSemantics(event: SessionFormatEvent, versio
       coordinatePair(data, label)
       positiveIntegerValue(data['retry'], `${label} retry`)
       return
+    case 'tool-policy/classifier-request': {
+      countValue(data['turn'], `${label} turn`)
+      nonEmptyString(data['providerId'], `${label} providerId`)
+      if (data['callId'] !== undefined) nonEmptyString(data['callId'], `${label} callId`)
+      const route = exactRecord(data['route'], `${label} route`, ['provider', 'model'], ['reasoningEffort'])
+      nonEmptyString(route['provider'], `${label} provider`)
+      nonEmptyString(route['model'], `${label} model`)
+      if (route['reasoningEffort'] !== undefined) nonEmptyString(route['reasoningEffort'], `${label} reasoningEffort`)
+      literalValue(data['purpose'], ['intent-context', 'effect-primary', 'effect-secondary'], `${label} purpose`)
+      const input = releasedV0Record(data['input'], `${label} input`)
+      if (input['kind'] === 'intent-context') {
+        assertReleasedV0Keys(input, ['kind', 'userMessageSeqs', 'maxUserMessageChars'], [], `${label} input`)
+        seqArray(input['userMessageSeqs'], event.seq, `${label} userMessageSeqs`, true)
+        positiveIntegerValue(input['maxUserMessageChars'], `${label} maxUserMessageChars`)
+      } else {
+        assertReleasedV0Keys(input, ['kind', 'commandArgument', 'intentContextSeq', 'maxCommandChars', 'maxIntentChars'], ['intentArgument'], `${label} input`)
+        literalValue(input['kind'], ['effect'], `${label} input kind`)
+        stringValue(input['commandArgument'], `${label} commandArgument`)
+        if (input['intentArgument'] !== undefined) stringValue(input['intentArgument'], `${label} intentArgument`)
+        earlierSeq(input['intentContextSeq'], event.seq, `${label} intentContextSeq`)
+        positiveIntegerValue(input['maxCommandChars'], `${label} maxCommandChars`)
+        positiveIntegerValue(input['maxIntentChars'], `${label} maxIntentChars`)
+      }
+      const request = exactRecord(data['request'], `${label} request`, ['system', 'temperature', 'maxTokens', 'timeoutMs'])
+      stringValue(request['system'], `${label} system`)
+      literalValue(request['temperature'], [0], `${label} temperature`)
+      positiveIntegerValue(request['maxTokens'], `${label} maxTokens`)
+      positiveIntegerValue(request['timeoutMs'], `${label} timeoutMs`)
+      return
+    }
+    case 'tool-policy/intent-context':
+      countValue(data['turn'], `${label} turn`)
+      seqArray([
+        earlierSeq(data['requestSeq'], event.seq, `${label} requestSeq`),
+        earlierSeq(data['userMessageSeq'], event.seq, `${label} userMessageSeq`),
+      ], event.seq, `${label} references`, true)
+      nonEmptyString(data['providerId'], `${label} providerId`)
+      arrayValue(data['allowedEffects'], `${label} allowedEffects`, stringValue)
+      arrayValue(data['forbiddenEffects'], `${label} forbiddenEffects`, stringValue)
+      stringValue(data['summary'], `${label} summary`)
+      return
+    case 'tool-policy/decision':
+      countValue(data['turn'], `${label} turn`)
+      for (const key of ['callId', 'toolName', 'providerId']) nonEmptyString(data[key], `${label} ${key}`)
+      literalValue(data['stage'], ['provider', 'effective'], `${label} stage`)
+      for (const key of ['policyDecision', 'effectiveDecision']) literalValue(data[key], ['allow', 'ask', 'deny'], `${label} ${key}`)
+      if (typeof data['risk'] !== 'number' || !Number.isFinite(data['risk']) || data['risk'] < 0 || data['risk'] > 100) throw new SessionFormatError(`${label} risk must be in [0, 100]`)
+      arrayValue(data['categories'], `${label} categories`, stringValue)
+      stringValue(data['reason'], `${label} reason`)
+      return
+    case 'memory/extraction-request':
+      countValue(data['turn'], `${label} turn`)
+      if (data['sourceSessionFormatVersion'] === undefined) seqArray(data['sourceEventSeqs'], event.seq, `${label} sourceEventSeqs`, true)
+      else {
+        countValue(data['sourceSessionFormatVersion'], `${label} sourceSessionFormatVersion`)
+        arrayValue(data['sourceEventSeqs'], `${label} sourceEventSeqs`, countValue)
+      }
+      modelRouteValue(data['route'], `${label} route`)
+      stringValue(data['system'], `${label} system`)
+      arrayValue(data['messages'], `${label} messages`, (value) =>{  messageValue(value, `${label} message`, version) })
+      positiveIntegerValue(data['maxTokens'], `${label} maxTokens`)
+      return
+    case 'memory/extraction-result':
+      countValue(data['turn'], `${label} turn`)
+      contentBlocksValue(data['blocks'], `${label} blocks`, version)
+      finishReasonValue(data['finish'], `${label} finish`)
+      arrayValue(data['proposedIds'], `${label} proposedIds`, nonEmptyString)
+      return
+    case 'english-output/translation-request':
+      coordinatePair(data, label)
+      modelRouteValue(data['target'], `${label} target`)
+      modelRouteValue(data['translator'], `${label} translator`)
+      stringValue(data['system'], `${label} system`)
+      arrayValue(data['messages'], `${label} messages`, (value) =>{  messageValue(value, `${label} message`, version) })
+      positiveIntegerValue(data['maxTokens'], `${label} maxTokens`)
+      arrayValue(data['blocks'], `${label} blocks`, (value, itemLabel) => {
+        const block = exactRecord(value, itemLabel, ['index', 'type', 'content'])
+        countValue(block['index'], `${itemLabel} index`)
+        literalValue(block['type'], ['text', 'reasoning'], `${itemLabel} type`)
+        stringValue(block['content'], `${itemLabel} content`)
+      })
+      return
+    case 'english-output/translation-result':
+      coordinatePair(data, label)
+      literalValue(data['status'], ['translated', 'blocked', 'preserved'], `${label} status`)
+      arrayValue(data['blockIndexes'], `${label} blockIndexes`, countValue)
+      return
+    case 'web/openrouter-search-llm-request':
+      nonEmptyString(data['endpoint'], `${label} endpoint`)
+      releasedV0Record(data['body'], `${label} body`)
+      return
     case 'model/selection':
       nonEmptyString(data['provider'], `${label} provider`)
       nonEmptyString(data['model'], `${label} model`)
@@ -954,9 +1045,10 @@ function modelRouteValue(value: SessionFormatJsonValue | undefined, label: strin
 
 function subagentDescriptorValue(data: JsonRecord, label: string): void {
   literalValue(data['version'], [3], `${label} version`)
+  if (data['principal'] !== undefined) nonEmptyString(data['principal'], `${label} principal`)
   nonEmptyString(data['provider'], `${label} provider`)
   if (data['mode'] === 'one-shot') {
-    assertReleasedV0Keys(data, ['mode', 'version', 'provider'], ['label'], `${label} data`)
+    assertReleasedV0Keys(data, ['mode', 'version', 'provider'], ['label', 'principal'], `${label} data`)
     if (data['label'] !== undefined) stringValue(data['label'], `${label} label`)
     return
   }

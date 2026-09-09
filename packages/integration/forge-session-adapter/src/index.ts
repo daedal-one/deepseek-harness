@@ -12,9 +12,9 @@ import { join } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
-import { grantArgs, launcherPath, probe } from '@deepseek-ai/node-addon-landlock-run'
+import { grantArgs, launcherPath, probe } from '@deepseek-ai/node-addon-system/landlock-run'
 import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
-import { CallId, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
 import * as McpClient from '@deepseek-ai/dsh-mcp-client'
 import { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ToolExecution, ToolExecutionResult } from '@deepseek-ai/dsh-tools'
@@ -772,7 +772,7 @@ export class ForgeSessionAdapter extends Service {
     const agent = await this.ensureHandle(record)
     const result: ToolExecutionResult = await agent.ctx.tools.execute({
       signal: new AbortController().signal,
-      callId: CallId(`forge-${name}-${randomUUID()}`),
+      callId: ToolCallId(`forge-${name}-${randomUUID()}`),
       name: `${PUBLIC_TOOL_PREFIX}${name}`,
       arguments: args,
       agent,

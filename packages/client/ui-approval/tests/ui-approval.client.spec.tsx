@@ -331,6 +331,7 @@ describe('ApprovalPanel', () => {
     expect(screen.getByText('Tool bash asks')).toBeTruthy()
     expect(screen.getByRole('group', { name: 'Approval details' })).toBeTruthy()
     expect(props.renderSlot).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Reject' }))
     fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
 
     await expect(pending.result).resolves.toBe('rejected')

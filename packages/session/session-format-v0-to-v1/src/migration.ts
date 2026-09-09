@@ -85,6 +85,12 @@ function normalizeReleasedV0Event(
   sessionId: string,
   state: LegacyNormalizationState,
 ): SessionFormatEvent {
+  if (event.type === 'memory/extraction-request') {
+    const data = releasedV0Record(event.data, 'memory extraction request')
+    const normalized = { ...event, data: { ...data, sourceSessionFormatVersion: data['sourceSessionFormatVersion'] ?? 0 } }
+    assertReleasedEventPayload(normalized, 0)
+    return normalized
+  }
   const named = normalizeLegacyCompactionType(event)
   assertSupportedLegacyType(named, sessionId)
   const start = normalizeLegacyTurnStart(named, sessionId)

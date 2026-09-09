@@ -64,6 +64,7 @@ async function mockCompletionServer(): Promise<{ url: string; requests: unknown[
 async function makeHarness(storageDir: string) {
   const ctx = new Context()
   await mountAgentLoopTestDependencies(ctx)
+  await ctx.plugin(LlmDeepSeek)
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(SubagentRuntime)
   await ctx.plugin(JsonlSessionPersistence, { root: storageDir })
@@ -81,7 +82,7 @@ async function settleSubagent(
   const result = Promise.withResolvers<SubagentResult>()
   const disposeProvider = ctx.subagents.registerProvider({
     name: info.provider,
-    capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+    capabilities: { principal: false, agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
     inheritsParentContext: false,
     async start() {
       return {
@@ -609,7 +610,7 @@ describe('HarnessSdkJsonRpcServer', () => {
       let currentLocalAgent = oldChild.agent
       const disposeProvider = ctx.subagents.registerProvider({
         name: 'reused',
-        capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+        capabilities: { principal: false, agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
         inheritsParentContext: false,
         start() {
           const result = results[starts]
@@ -706,7 +707,7 @@ describe('HarnessSdkJsonRpcServer', () => {
       const remoteResult = Promise.withResolvers<SubagentResult>()
       const unregisterLocal = ctx.subagents.registerProvider({
         name: 'reused-provider',
-        capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+        capabilities: { principal: false, agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
         inheritsParentContext: false,
         start: () => Promise.resolve({
           id: SessionId('provider-reuse-child'),
@@ -724,7 +725,7 @@ describe('HarnessSdkJsonRpcServer', () => {
 
       const unregisterRemote = ctx.subagents.registerProvider({
         name: 'reused-provider',
-        capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+        capabilities: { principal: false, agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
         inheritsParentContext: false,
         start: () => Promise.resolve({
           id: SessionId('provider-reuse-child'),
@@ -806,7 +807,7 @@ describe('HarnessSdkJsonRpcServer', () => {
       const missedStartResult = Promise.withResolvers<SubagentResult>()
       const disposeMissedStartProvider = ctx.subagents.registerProvider({
         name: 'fork',
-        capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+        capabilities: { principal: false, agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
         inheritsParentContext: true,
         start: () => Promise.resolve({
           id: SessionId('fallback-child-session'),
@@ -895,7 +896,6 @@ describe('HarnessSdkJsonRpcServer', () => {
     const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-existing-llm-'))
     const ctx = await makeHarness(storageDir)
     vi.stubEnv('DEEPSEEK_API_KEY', 'test-key')
-    await ctx.plugin(LlmDeepSeek)
     try {
       const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport())
       const inspect = server as unknown as { hasAdapterFor(provider: string): boolean }
@@ -916,7 +916,6 @@ describe('HarnessSdkJsonRpcServer', () => {
     const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-new-llm-'))
     const ctx = await makeHarness(storageDir)
     vi.stubEnv('DEEPSEEK_API_KEY', 'test-key')
-    await ctx.plugin(LlmDeepSeek)
     try {
       const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport())
 

@@ -84,8 +84,8 @@ async function commandHarness(
   } as unknown as Agent
   ctx.agents.register(agent)
   ctx.provide('workspaceRegistry', { get: () => undefined, list: () => [] } as never)
-  ctx.provide('agentDefaultModel', {
-    currentSelection: () => ({ provider: 'fixture', model: 'fixture-model' }),
+  ctx.provide('agentModels', {
+    mainSelection: () => ({ provider: 'fixture', model: 'fixture-model' }),
     saveSelection: () => Promise.resolve(),
   } as never)
   const selection: ModelSelectionRef = {

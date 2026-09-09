@@ -67,7 +67,10 @@ export interface IConversation {
    * @returns completion of the page pull.
    */
   loadOlder(): Promise<void>
-  /** Load one deferred Tool-result body into the current transcript. */
+  /**
+   * Load a deferred tool result from the authorized session history.
+   * @param seq - sequence of the tool result to load.
+   */
   loadToolResult(seq: number): Promise<void>
 }
 
@@ -517,9 +520,8 @@ export class ConversationController extends Service implements IConversation {
     await this.scopedSession('loadOlder').loadOlder()
   }
 
-  /** Load one deferred Tool-result body into the current transcript. */
   async loadToolResult(seq: number): Promise<void> {
-    await this.scopedSession('loadToolResult').loadHistoryDetail?.(seq)
+    await this.scopedSession('loadToolResult').loadHistoryDetail(seq)
   }
 
   /** Resolve the caller scope's session face or throw on root contexts. */

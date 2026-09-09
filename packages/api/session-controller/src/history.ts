@@ -182,15 +182,15 @@ export class SessionHistoryController {
       const assistantStreamOrdinalCut = assistantStreamOrdinal
       yield boundedPage(events, undefined, request.maxMessages ?? DEFAULT_MAX_MESSAGES,
         cursor, this.historyPageMaxBytes, page => ({
-        type: 'snapshot' as const,
-        header: wireHeader(source.header),
-        cursor,
-        ...page,
-        projections: source.projections === undefined
-          ? { asOfSeq: cursor, values: {} }
-          : projectionBlock(source.projections),
-        ...assistantStream === undefined ? {} : { assistantStream },
-      }))
+          type: 'snapshot' as const,
+          header: wireHeader(source.header),
+          cursor,
+          ...page,
+          projections: source.projections === undefined
+            ? { asOfSeq: cursor, values: {} }
+            : projectionBlock(source.projections),
+          ...assistantStream === undefined ? {} : { assistantStream },
+        }))
       if (address.kind === 'session' && source.source === 'prepared') {
         const promotion = source.retain()
         try {
@@ -445,19 +445,18 @@ function boundedPage<T extends SessionPage>(
     const selected = paginate(events, beforeSeq, messages, throughSeq)
     const records = selected.events.map((event): SessionHistoryRecord => {
       if (event.type !== 'tool/result') return entryFor(event)
-      const entry = entryFor(event)
-      return {
-        ...entry,
-        event: {
-          ...entry.event,
-          data: {
-            ...event.data,
-            message: {
-              ...event.data.message,
-              content: [{ ...event.data.message.content[0], content: [] }],
-            },
-          } as JsonValue,
+      const deferred: Extract<SessionEvent, { type: 'tool/result' }> = {
+        ...event,
+        data: {
+          ...event.data,
+          message: {
+            ...event.data.message,
+            content: [{ ...event.data.message.content[0], content: [] }],
+          },
         },
+      }
+      return {
+        ...entryFor(deferred),
         detail: { kind: 'tool-result', bytes: Buffer.byteLength(JSON.stringify(event), 'utf8') },
       }
     })

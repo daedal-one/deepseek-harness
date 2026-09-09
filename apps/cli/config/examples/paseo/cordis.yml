@@ -5,6 +5,11 @@
   disabled: true
 - id: plugin-package-inventory-deepseek
   disabled: true
+- id: agent-default-model
+  config:
+    provider: deepseek-official
+    model: deepseek-v4-flash
+    reasoningEffort: !!js undefined
 - id: session-persistence-jsonl
   config:
     root: !!js process.env.DSH_SNAPSHOT_SESSIONS_ROOT

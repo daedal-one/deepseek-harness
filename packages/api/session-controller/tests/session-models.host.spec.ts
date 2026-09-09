@@ -10,6 +10,7 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import AttachmentStore from '@deepseek-ai/dsh-attachment'
+import { agentPresetProjectionDefinition } from '@deepseek-ai/dsh-agent-presets'
 import LlmRuntime, { LlmAdapter, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type {
   GenerateOptions, LlmCallConfig, LlmCallConfigAdapterDefaults, LlmModelInfo,
@@ -88,7 +89,7 @@ async function harness(logged?: {
   model: string
   reasoningEffort?: ReasoningEffortId
   adapterDefaults?: LlmCallConfigAdapterDefaults
-}): Promise<{
+}, agentPreset?: string): Promise<{
   ctx: Context
   agent: Agent
   sessionId: SessionId
@@ -154,7 +155,7 @@ function currentSelection(ctx: Context, sessionId: SessionId) {
   const session = ctx.sessions.get(sessionId)
   if (session === undefined) throw new Error('expected a live test Session')
   return ctx.sessionProjections.snapshot(session).values.modelSelection?.next
-    ?? ctx.agentDefaultModel.currentSelection()
+    ?? ctx.agentModels.mainSelection()
 }
 
 describe('Web session model selection', () => {
@@ -526,9 +527,9 @@ describe('Web session model selection', () => {
   })
 
   it('resolves an unlogged default from the session effective preset', async () => {
-    const { ctx, sessionId } = await harness(undefined, 'daedal')
+    const { ctx, agent, sessionId } = await harness(undefined, 'daedal')
     const requested: (string | undefined)[] = []
-    const api = createApiProxy(ctx, {
+    createSessionTestRemote(ctx, {
       defaultModelSelection: (agentPreset) => {
         requested.push(agentPreset)
         return agentPreset === 'daedal-openai'
@@ -537,11 +538,13 @@ describe('Web session model selection', () => {
       },
       cwd: '/tmp',
     })
-
+    ctx.effect(() => ctx.sessionProjections.register(agentPresetProjectionDefinition))
+    const selection = new ApiSessionAgentController(ctx).selectionFor(agent)
+    expect(selection.current.model).toBe('openrouter-route')
     ctx.sessions.get(sessionId)?.append('agent-preset/selected', { agentPreset: 'daedal-openai' })
-    expect(expectValue(await api.sessions.models(request({ sessionId }))).current)
+    expect(selection.current)
       .toEqual({ provider: 'deepseek-official', model: 'openai-route' })
-    expect(requested).toEqual(['daedal-openai'])
+    expect(requested.at(-1)).toBe('daedal-openai')
     await ctx.fiber.dispose()
   })
 

@@ -198,7 +198,7 @@ describe('sessionStats wall-time fold (controlled timestamps)', () => {
     })
   }
 
-  it('accrues model, first-token, and decode time from one fully recorded step', () => {
+  it('accrues model, first-token, and full-request time from one fully recorded step', () => {
     expect(fold([
       at(1_000, 'step/start', { turn: 1, step: 1 }),
       messageAt(4_800, [{
@@ -214,8 +214,8 @@ describe('sessionStats wall-time fold (controlled timestamps)', () => {
   it('measures buffered output over the full request instead of its chunk-arrival burst', () => {
     expect(fold([
       at(1_000, 'step/start', { turn: 1, step: 1 }),
-      at(5_999, 'assistant/chunk', { turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: 'answer' } }),
-      at(6_000, 'assistant/message', { turn: 1, step: 1, message, usage: { inputTokens: 10, outputTokens: 100 } }),
+      messageAt(6_000, [{ time: 5_999, chunk: { type: 'text-delta', index: 0, text: 'answer' } }],
+        { inputTokens: 10, outputTokens: 100 }),
       at(6_100, 'step/end', { turn: 1, step: 1 }),
     ])).toEqual(totals({
       turns: 1, steps: 1, llmMs: 5_000, ttftMs: 4_999, ttftSteps: 1,
@@ -226,7 +226,7 @@ describe('sessionStats wall-time fold (controlled timestamps)', () => {
   it('records output rate without inventing ttft when no token chunk is present', () => {
     expect(fold([
       at(1_000, 'step/start', { turn: 1, step: 1 }),
-      at(6_000, 'assistant/message', { turn: 1, step: 1, message, usage: { inputTokens: 10, outputTokens: 50 } }),
+      messageAt(6_000, [], { inputTokens: 10, outputTokens: 50 }),
       at(6_100, 'step/end', { turn: 1, step: 1 }),
     ])).toEqual(totals({
       turns: 1, steps: 1, llmMs: 5_000, throughputMs: 5_000, throughputTokens: 50,

@@ -1,4 +1,4 @@
-import type { CallId, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import type { ToolCallId, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { ToolPolicyDecision, ToolPolicyProviderId } from './index.ts'
 
 /** Purpose of one auxiliary tool-policy request. */
@@ -24,7 +24,7 @@ export type ToolPolicyClassifierInput =
 export interface ToolPolicyClassifierRequestEventData {
   readonly turn: number
   /** Present for tool-time effect requests; intent context starts before a tool call exists. */
-  readonly callId?: CallId
+  readonly callId?: ToolCallId
   readonly providerId: ToolPolicyProviderId
   readonly route: {
     readonly provider: string
@@ -56,7 +56,7 @@ export interface ToolPolicyIntentContextEventData {
 /** Durable provider or effective decision without duplicated tool arguments. */
 export interface ToolPolicyDecisionEventData {
   readonly turn: number
-  readonly callId: CallId
+  readonly callId: ToolCallId
   readonly toolName: string
   readonly stage: 'provider' | 'effective'
   readonly policyDecision: ToolPolicyDecision

@@ -10,7 +10,7 @@ import * as Reviewer from '../src/index.ts'
 
 function execution(principal?: string): ToolRunContext {
   const descriptor = snapshotSubagentDescriptor({ mode: 'one-shot', provider: 'test', ...principal === undefined ? {} : { principal: SubagentPrincipal(principal) } })
-  return { callId: 'call-1', rootCallId: 'call-1', name: 'memory_review', arguments: {}, signal: new AbortController().signal, token: Symbol('tool'), agent: { session: { events: [{ type: 'subagent/descriptor', seq: 0, time: 1, data: descriptor }] } } } as unknown as ToolRunContext
+  return { callId: 'call-1', rootCallId: 'call-1', name: 'memory_review', arguments: {}, signal: new AbortController().signal, token: Symbol('tool'), agent: { session: { snapshotEvents: () => [{ type: 'subagent/descriptor', seq: 0, time: 1, data: descriptor }] } } } as unknown as ToolRunContext
 }
 
 async function childContext(): Promise<Context> {
@@ -34,8 +34,8 @@ describe('memory reviewer principal setup', () => {
 
     expect(root.tools.schemas().map(tool => tool.name)).not.toContain('memory_review')
     expect(ordinary.tools.schemas().map(tool => tool.name)).not.toContain('memory_review')
-    expect(root.subagents.applyPrincipalSetup(ordinary, undefined)).toBeUndefined()
-    const setup = root.subagents.applyPrincipalSetup(matching, SubagentPrincipal('memory-reviewer'))
+    expect(root.subagents.applyPrincipalSetup(ordinary, execution().agent!, undefined)).toBeUndefined()
+    const setup = root.subagents.applyPrincipalSetup(matching, execution('memory-reviewer').agent!, SubagentPrincipal('memory-reviewer'))
     setup?.commit()
     expect(matching.tools.schemas().map(tool => tool.name)).toEqual(expect.arrayContaining(['memory_list_pending', 'memory_review', 'memory_supersede', 'memory_delete']))
     expect(ordinary.tools.schemas().map(tool => tool.name)).not.toContain('memory_review')

@@ -31,9 +31,21 @@ export type AppFrameProps =
   & PropsStore<ReturnType<typeof createLayoutStore>>
   & PropsLocale<'common'>
 
+/** Keep covered columns out of focus navigation while their overlay is open. */
+function useInertColumn(inert: boolean) {
+  const ref = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const element = ref.current
+    if (element === null) return
+    element.inert = inert
+  }, [inert])
+  return ref
+}
+
 /** Center column grid item (session-body building block). */
 function CenterColumn(props: { children?: ReactNode; inert: boolean }) {
-  return <div className={css.centerCol} inert={props.inert}>{props.children}</div>
+  const ref = useInertColumn(props.inert)
+  return <div ref={ref} className={css.centerCol}>{props.children}</div>
 }
 
 /** Subscribe to the main key without subscribing the column frame to each panel id. */
@@ -48,7 +60,8 @@ function MainPanel({ usePanelInfo, renderSlot }: Pick<PropsRuntime<'root'>, 'use
  * moves, so it can hang over the centre when there is no track.
  */
 function RightbarColumn(props: { children?: ReactNode; inert: boolean }) {
-  return <div className={css.rightbarCol} data-rightbar-col inert={props.inert} aria-hidden={props.inert || undefined}>{props.children}</div>
+  const ref = useInertColumn(props.inert)
+  return <div ref={ref} className={css.rightbarCol} data-rightbar-col aria-hidden={props.inert || undefined}>{props.children}</div>
 }
 
 /**

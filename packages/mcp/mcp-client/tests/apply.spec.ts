@@ -7,7 +7,7 @@ import { Context } from '@deepseek-ai/cordis'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { createScope } from '@deepseek-ai/dsh-scope'
-import { ToolCallId as CallId } from '@deepseek-ai/dsh-llm'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { Scope } from '@deepseek-ai/dsh-scope'
 import type { Config } from '@deepseek-ai/dsh-mcp-client'
 
@@ -489,7 +489,7 @@ describe('apply (plugin lifecycle)', () => {
 
     await ctx.tools.execute({
       signal: new AbortController().signal,
-      callId: CallId('agent-call'),
+      callId: ToolCallId('agent-call'),
       name: 'mcp__srv__remote',
       arguments: {},
       agent,

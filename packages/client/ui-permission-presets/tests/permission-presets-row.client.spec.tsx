@@ -108,11 +108,11 @@ describe('PermissionRow', () => {
 
   it('shows a configured policy mode between Workspace Write and Full access without the Full access risk gate', async () => {
     const mutate = vi.fn(() => Promise.resolve(ok(view('policy-reviewed', 1))))
-    const controller = new PermissionPresetSettingsController({
+    const controller = derivedController({
       settings: {
         describe: () => Promise.resolve(ok({ writable: true, hasDocument: false, namespaces: [view('read-only')] })),
         mutate,
-      } as never,
+      },
     })
     mount(controller)
     fireEvent.click(await screen.findByRole('button', { name: 'Read Only' }))

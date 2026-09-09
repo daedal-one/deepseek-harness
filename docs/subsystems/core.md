@@ -415,30 +415,6 @@ The two core IDs are `ToolCallId` (correlates a tool call with its result; dsh-l
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
-<a id="ctxagentdefaultmodel--agentdefaultmodelconfig"></a>
-
-### `ctx.agentDefaultModel` — `AgentDefaultModelConfig`
-
-Owns the default model selection independently of any Host or transport. The composition entry remains usable without a settings provider; when one is mounted, its user layer is read live.
-
-```ts cordis-catalog
-/**
- * Read the current default model selection.
- * @returns a detached provider, model, and optional reasoning selection.
- */
-currentSelection(): ModelSelection
-
-/**
- * Save the complete default model selection. A deployment without a settings
- * provider keeps its composition entry.
- * @param next - resolved selection accepted by an entry point.
- * @returns fulfillment after the optional settings write settles.
- */
-async saveSelection(next: ModelSelection): Promise<void>
-```
-
-Source: [`packages/core/agent-default-model/src/index.ts`](../../packages/core/agent-default-model/src/index.ts)
-
 <a id="ctxagentloop--agentloop"></a>
 
 ### `ctx.agentLoop` — `AgentLoop`
@@ -478,6 +454,80 @@ async resume(ownerCtx: Context, options: ResumeAgentOptions): Promise<AgentHandl
 Types: [SessionHeader](persistence.md)
 
 Source: [`packages/core/agent-loop/src/index.ts`](../../packages/core/agent-loop/src/index.ts)
+
+<a id="ctxagentmodels--agentmodelconfig"></a>
+
+### `ctx.agentModels` — `AgentModelConfig`
+
+Owns persistent Agent model selections and their lifecycle-safe directory. Each target's provider route is fixed by composition; settings select only a model and optional reasoning effort under that route.
+
+```ts cordis-catalog
+/**
+ * Register one named Agent target. Equivalent registrations from several
+ * Agent scopes coalesce; a conflicting definition fails before either can
+ * silently win.
+ * @param target - stable id, display label, and deployment default.
+ * @returns idempotent disposer for this contribution.
+ */
+registerTarget(target: AgentModelTarget): () => void
+
+/**
+ * Read one registered target's current provider, model, and optional effort.
+ * @param id - target to resolve; defaults to the main Agent.
+ * @returns a detached complete selection.
+ */
+currentSelection(id: AgentModelTargetId = MAIN_AGENT_MODEL_TARGET): ModelSelection
+
+/**
+ * Read the current main-Agent route assigned to a preset.
+ * @param presetId - effective preset id, or undefined without a roster.
+ * @returns assigned selection, falling back to the deployment-wide main route.
+ */
+mainSelection(presetId?: string): ModelSelection
+
+/**
+ * Apply one target's live selection over child options without disturbing
+ * independent limits such as `maxTokens`.
+ * @param id - registered named Agent target.
+ * @param fallback - deployment options carrying non-selection fields.
+ * @returns detached child options with the current selection.
+ */
+optionsFor(id: AgentModelTargetId, fallback: AgentOptions = {}): AgentOptions
+
+/**
+ * Save a preset's main-Agent selection after a session-local model switch.
+ * @param next - resolved selection accepted by the session entry point.
+ * @param presetId - effective preset id, or undefined without a roster.
+ * @returns fulfillment after the optional settings write settles.
+ */
+async saveSelection(next: ModelSelection, presetId?: string): Promise<void>
+
+/**
+ * Read the live target directory and its distinct provider catalogs.
+ * @returns point-in-time graphical settings snapshot.
+ */
+@Remote('list') async list(): Promise<AgentModelsSnapshot>
+
+/**
+ * Persist one graphical Agent selection after exact model validation.
+ * @param id - registered target id.
+ * @param model - exact model id under the fixed provider.
+ * @param reasoningEffort - exact supported effort, or omitted for provider behavior.
+ * @param expectedRevision - settings revision read by the graphical page.
+ * @returns refreshed directory and catalog.
+ */
+@Remote('save') async save( id: AgentModelTargetId, model: string, reasoningEffort: string | undefined, expectedRevision: number, ): Promise<AgentModelsSnapshot>
+
+/**
+ * Remove one graphical override and restore its deployment default.
+ * @param id - registered target id.
+ * @param expectedRevision - settings revision read by the graphical page.
+ * @returns refreshed directory and catalog.
+ */
+@Remote('reset') async reset(id: AgentModelTargetId, expectedRevision: number): Promise<AgentModelsSnapshot>
+```
+
+Source: [`packages/core/agent-default-model/src/index.ts`](../../packages/core/agent-default-model/src/index.ts)
 
 <a id="ctxagentpresets--agentpresets"></a>
 
@@ -909,7 +959,7 @@ Forge protocol bridge and owner of all adapter-created agent handles.
 capability(): Record<string, unknown>
 ```
 
-Source: [`packages/integration/forge-session-adapter/src/index.ts:183`](../../packages/integration/forge-session-adapter/src/index.ts)
+Source: [`packages/integration/forge-session-adapter/src/index.ts`](../../packages/integration/forge-session-adapter/src/index.ts)
 
 <a id="agent-events"></a>
 
@@ -1260,6 +1310,29 @@ A declarative agent entry failed before it could publish a live agent. Consumers
 ```
 
 Source: [`packages/core/agent-loop/src/index.ts`](../../packages/core/agent-loop/src/index.ts)
+
+<a id="agent-models-events"></a>
+
+### `agent-models/*` events
+
+<a id="agent-modelsdirectory-updated--emit"></a>
+
+#### `agent-models/directory-updated` — emit
+
+The live Agent-model role directory gained or lost a visible target. Consumers re-read the directory after this post-commit notification; equivalent reference-count changes do not emit. Observer failures are contained and cannot veto the registry mutation.
+
+```ts cordis-catalog
+/**
+ * The live Agent-model role directory gained or lost a visible target.
+ * Consumers re-read the directory after this post-commit notification;
+ * equivalent reference-count changes do not emit. Observer failures are
+ * contained and cannot veto the registry mutation.
+ * @mode emit
+ */
+'agent-models/directory-updated'(): void
+```
+
+Source: [`packages/core/agent-default-model/src/types.ts`](../../packages/core/agent-default-model/src/types.ts)
 
 <a id="agent-preset-events"></a>
 

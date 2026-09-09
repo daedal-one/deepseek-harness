@@ -1,4 +1,28 @@
+---
+description: "Search the web through a separate OpenRouter request and return cited findings to the Agent."
+kind: "package-reference"
+---
+
 # @deepseek-ai/dsh-web-search-openrouter
+
+## Summary
+
+Search the web through a separate OpenRouter request and return cited findings to the Agent. Deployments configure the search model, engine, and request limits independently of the conversation model. Search requests and responses are logged for reconstruction.
+
+## Table of Contents
+
+- [Use this package](#use-this-package)
+- [Provider behavior](#provider-behavior)
+- [Config](#config)
+- [Result mapping and failures](#result-mapping-and-failures)
+- [Request logging](#request-logging)
+- [Model Experience](#model-experience)
+- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+- [Dev Note](#dev-note)
+
+-----
+
+## Use this package
 
 An [OpenRouter](https://openrouter.ai)-backed `WebSearchProvider` for the harness [web capability](../web/README.md). It sends an auxiliary Chat Completions request with OpenRouter's `openrouter:web_search` server tool and maps the answer plus standardized URL citations into `WebSearchResult`.
 
@@ -43,6 +67,8 @@ Provider HTTP, network, invalid-response, and no-citation failures become `WEB_P
 
 Immediately before dispatch, a search under an initiating Agent appends the log-only `web/openrouter-search-llm-request` event. It records the resolved endpoint and exact JSON body, including model, query instruction, server-tool parameters, token cap, and data-collection denial. Headers and credentials are excluded. Credential failures and cancellations before dispatch create no event; later request failures leave the attempt durable. A direct provider call outside an Agent has no initiating session to record into.
 
+No invariant companion is published because each auxiliary request and response is validated at its wire and durable-log entry points.
+
 ## Model Experience
 
 ### Auxiliary OpenRouter request
@@ -79,3 +105,7 @@ The tool result is append-only and follows the reusable conversation prefix.
 - **The auxiliary model may decline to search** — the prompt requires cited web use, but OpenRouter's server-tool protocol leaves invocation to the model; a no-citation answer fails loud.
 - **`auto` intentionally permits backend variation** — OpenRouter may use native search or a hosted engine, so latency, price, and available filters can change with the selected model and service routing.
 - **Dynamic credential availability resolves inside execution** — synchronous `available()` can establish that a resolver exists but cannot query the asynchronous credential store; a selected keyless provider fails at operation time.
+
+### Dev Note
+
+None.

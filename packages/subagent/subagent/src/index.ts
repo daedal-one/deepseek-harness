@@ -52,6 +52,7 @@ import type {
   SubagentPromptRequest,
   SubagentPromptRequestId,
 } from './control-types.ts'
+import type { SubagentResultValidator, SubagentResultValidationRequest, SubagentResultWarning } from './result-validation.ts'
 import type {
   ContinuableCreateRequest,
   ContinuableCreateSpec,
@@ -134,11 +135,7 @@ export type * from './control-types.ts'
 export type { SubagentDescendantListEntry } from './list-children.ts'
 export type { SubagentRunEndInfo, SubagentRunInfo } from './types.ts'
 export type { SubagentIdentityProjection, SubagentTimingProjection } from './projection-types.ts'
-export type {
-  SubagentResultValidator,
-  SubagentResultValidationRequest,
-  SubagentResultWarning,
-} from './result-validation.ts'
+export type { SubagentResultValidator, SubagentResultValidationRequest, SubagentResultWarning } from './result-validation.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -214,7 +211,7 @@ export class SubagentRuntime extends TypertRemoteService {
       const manager = new SubagentContinuationManager(childCtx, {
         prepareContinuable: (name, request) => this.prepareContinuable(name, request),
         observeActivation: (provider, childId, parent) => this.observeActivation(provider, childId, parent),
-        applyPrincipalSetup: (agentCtx, principal) => this.applyPrincipalSetup(agentCtx, principal),
+        applyPrincipalSetup: (agentCtx, child, principal) => this.applyPrincipalSetup(agentCtx, child, principal),
       })
       this.continuations = manager
       childCtx.effect(() => () => {
@@ -628,7 +625,7 @@ export class SubagentRuntime extends TypertRemoteService {
     const resolved: ResolvedSubagentStartRequest = {
       ...request, descriptor,
       ...request.principal === undefined ? {} : {
-        principalSetup: (childCtx: Context) => this.applyPrincipalSetup(childCtx, request.principal),
+        principalSetup: (childCtx: Context, child: Agent) => this.applyPrincipalSetup(childCtx, child, request.principal),
       },
     }
     const run = await provider.start(resolved)
@@ -681,7 +678,6 @@ export class SubagentRuntime extends TypertRemoteService {
     return provider
   }
 
-  /** Resolve the optional continuable-subagent manager or fail loud. */
   /**
    * Register a child-scoped capability visible only to delegated agents carrying
    * one config-owned principal. The principal is copied into the durable child
@@ -711,15 +707,17 @@ export class SubagentRuntime extends TypertRemoteService {
   /**
    * Compose the capability set assigned to a trusted child principal.
    * @param childCtx - unpublished delegated Agent scope.
+   * @param child - unpublished delegated Agent.
    * @param principal - config-owned principal copied from the delegation request.
    * @returns the publication commit, or `undefined` for an ordinary child.
    */
   applyPrincipalSetup(
     childCtx: Context,
+    child: Agent,
     principal: SubagentPrincipal | undefined,
   ): import('@deepseek-ai/dsh-agent').AgentSetupCommit | undefined {
     if (principal === undefined) return undefined
-    return this.principalSetupRegistries.get(principal)?.apply(childCtx)
+    return this.principalSetupRegistries.get(principal)?.apply(childCtx, child)
   }
 
   private requireContinuations(): SubagentContinuationManager {

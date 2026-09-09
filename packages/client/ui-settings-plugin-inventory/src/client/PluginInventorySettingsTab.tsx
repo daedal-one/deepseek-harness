@@ -88,14 +88,6 @@ function matches(moduleName: string, entryId: string | null, normalizedQuery: st
     .some(value => value.toLocaleLowerCase().includes(normalizedQuery))
 }
 
-/** Whether an inventory row matches the local catalog query. */
-function matches(entry: Pick<AgentPresetRow, 'enabled' | 'fiberPhase'>, normalizedQuery: string): boolean {
-  if (normalizedQuery.length === 0) return true
-  return [entry.moduleName, entry.entryId, entry.author, entry.description, entry.version]
-    .filter((value): value is string => value !== null)
-    .some(value => value.toLocaleLowerCase().includes(normalizedQuery))
-}
-
 /** Whether an inventory row matches the selected visible state. */
 function matchesState(entry: Pick<AgentPresetRow, 'enabled' | 'fiberPhase'>, filter: PluginStateFilter): boolean {
   if (filter === 'all') return true

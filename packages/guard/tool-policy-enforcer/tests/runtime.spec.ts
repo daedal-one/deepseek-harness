@@ -1,6 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { CallId } from '@deepseek-ai/dsh-llm'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolPolicyService, { ToolPolicyProviderId, type ToolPolicyVerdict } from '@deepseek-ai/dsh-tool-policy'
@@ -12,7 +12,9 @@ import { apply, Config, shouldEnforce } from '../src/index.ts'
 function fakeAgent() {
   const events: Array<Record<string, unknown>> = [{ type: 'turn/start', data: { turn: 1 } }]
   const session = {
-    id: 'session', events,
+    id: 'session', snapshotEvents: () => [...events],
+    get seq() { return events.length },
+    eventAt(seq: number) { return events[seq] },
     append(type: string, data: unknown) { const event = { type, data }; events.push(event); return event },
   }
   return { agent: { session } as unknown as Agent, events }
@@ -26,7 +28,7 @@ async function executeLogged(
   argumentsValue: Record<string, unknown>,
   rawArguments = JSON.stringify(argumentsValue),
 ) {
-  const callId = CallId(id)
+  const callId = ToolCallId(id)
   const boundary = events.findLast(event => event.type === 'turn/start' || event.type === 'turn/end')
   const turn = boundary?.type === 'turn/start' ? (boundary.data as { turn: number }).turn : 0
   events.push({ type: 'tool/call', data: { turn, step: 1, callId, name: 'probe', arguments: rawArguments } })
@@ -113,7 +115,7 @@ describe('tool-policy enforcement through ToolRuntime', () => {
       { options: { alpha: 1, beta: 2 }, command: 'curl example' },
       '{"options":{"beta":2,"alpha":1},"command":"curl example"}',
     )
-    expect(second).toMatchObject({ isError: true, content: [{ text: expect.stringContaining('(attempt 2/3)') }] })
+    expect(second).toMatchObject({ isError: true, content: [{ text: expect.stringContaining('(attempt 2/3)') as unknown }] })
     expect(prompted).not.toHaveBeenCalled()
     await expect(executeLogged(ctx, agent, events, 'ask-3', {
       command: 'curl example', options: { alpha: 1, beta: 2 },
@@ -122,7 +124,7 @@ describe('tool-policy enforcement through ToolRuntime', () => {
     const afterSuccess = await executeLogged(ctx, agent, events, 'ask-4', {
       command: 'curl example', options: { alpha: 1, beta: 2 },
     })
-    expect(afterSuccess).toMatchObject({ isError: true, content: [{ text: expect.stringContaining('(attempt 1/3)') }] })
+    expect(afterSuccess).toMatchObject({ isError: true, content: [{ text: expect.stringContaining('(attempt 1/3)') as unknown }] })
     expect(prompted).toHaveBeenCalledOnce()
     expect(executions).toBe(1)
     expect(events.filter(event => event.type === 'approval/asked')).toHaveLength(1)
@@ -157,14 +159,14 @@ describe('tool-policy enforcement through ToolRuntime', () => {
     const { agent, events } = fakeAgent()
 
     await expect(executeLogged(ctx, agent, events, 'a-1', { command: 'a' }))
-      .resolves.toMatchObject({ content: [{ text: expect.stringContaining('(attempt 1/3)') }] })
+      .resolves.toMatchObject({ content: [{ text: expect.stringContaining('(attempt 1/3)') as unknown }] })
     await expect(executeLogged(ctx, agent, events, 'b-1', { command: 'b' }))
-      .resolves.toMatchObject({ content: [{ text: expect.stringContaining('(attempt 1/3)') }] })
+      .resolves.toMatchObject({ content: [{ text: expect.stringContaining('(attempt 1/3)') as unknown }] })
     await expect(executeLogged(ctx, agent, events, 'a-2', { command: 'a' }))
-      .resolves.toMatchObject({ content: [{ text: expect.stringContaining('(attempt 1/3)') }] })
+      .resolves.toMatchObject({ content: [{ text: expect.stringContaining('(attempt 1/3)') as unknown }] })
     events.push({ type: 'turn/end', data: { turn: 1 } }, { type: 'turn/start', data: { turn: 2 } })
     await expect(executeLogged(ctx, agent, events, 'a-next-turn', { command: 'a' }))
-      .resolves.toMatchObject({ content: [{ text: expect.stringContaining('(attempt 1/3)') }] })
+      .resolves.toMatchObject({ content: [{ text: expect.stringContaining('(attempt 1/3)') as unknown }] })
     current = {
       providerId: ToolPolicyProviderId('fake'), decision: 'deny', risk: 90,
       categories: [], reason: 'forbidden', opinions: [],
@@ -224,7 +226,7 @@ describe('tool-policy enforcement through ToolRuntime', () => {
     const { agent, events } = fakeAgent()
 
     await expect(executeLogged(ctx, agent, events, 'configured-1', { command: 'same' }))
-      .resolves.toMatchObject({ isError: true, content: [{ text: expect.stringContaining('(attempt 1/2)') }] })
+      .resolves.toMatchObject({ isError: true, content: [{ text: expect.stringContaining('(attempt 1/2)') as unknown }] })
     await expect(executeLogged(ctx, agent, events, 'configured-2', { command: 'same' }))
       .resolves.toMatchObject({ isError: false })
     expect(prompted).toHaveBeenCalledOnce()
@@ -252,7 +254,7 @@ describe('tool-policy enforcement through ToolRuntime', () => {
     events.push({ type: 'sandbox/mode', data: { mode: 'workspace-write' } })
     events.push({ type: 'approval/policy', data: { policy: 'ask' } })
     const execute = (id: string) => ctx.tools.execute({
-      callId: CallId(id), name: 'probe', arguments: {}, agent,
+      callId: ToolCallId(id), name: 'probe', arguments: {}, agent,
       signal: new AbortController().signal,
     })
 

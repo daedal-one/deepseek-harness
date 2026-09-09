@@ -52,19 +52,16 @@ describe('collectPackageGraph', () => {
 })
 
 describe('renderModuleGraph', () => {
-  it('renders the same peer edge in both generated languages', () => {
+  it('renders the shared-instance peer edge', () => {
     const packages = [
       { short: 'provider', name: '@deepseek-ai/dsh-provider', group: 'core', rel: 'packages/core/provider', deps: [] },
       { short: 'consumer', name: '@deepseek-ai/dsh-consumer', group: 'core', rel: 'packages/core/consumer', deps: ['provider'] },
     ]
 
-    const english = renderModuleGraph(packages, 'en')
-    const chinese = renderModuleGraph(packages, 'zh')
+    const english = renderModuleGraph(packages)
 
     expect(english).toContain('# Shared-instance dependency graph')
-    expect(chinese).toContain('# 共享实例依赖关系图')
-    expect(chinese).toContain('[English](module-graph.md) | 中文')
-    for (const output of [english, chinese]) {
+    for (const output of [english]) {
       expect(output).toContain('pkg_consumer --> pkg_provider')
       expect(output).toContain('| [`consumer`](../packages/core/consumer) | `core` | [`provider`](../packages/core/provider) |')
     }

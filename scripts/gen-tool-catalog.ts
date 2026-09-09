@@ -139,12 +139,12 @@ const catalogChildScopes = new WeakMap<Context, Agent>()
  */
 async function mountCatalogChildScope(
   ctx: Context,
-  mountScoped: (childCtx: Context) => void,
+  mountScoped: (childCtx: Context, child: Agent) => void,
   key: Agent = { id: SessionId('tool-catalog-child') } as Agent,
   inject: string[] = ['tools', 'systemPrompt', 'subagents'],
 ): Promise<void> {
   await ctx.plugin(Object.assign((inner: Context) => {
-    mountScoped(createScope(inner, key).ctx)
+    mountScoped(createScope(inner, key).ctx, key)
   }, { inject }))
   catalogChildScopes.set(ctx, key)
 }
@@ -455,8 +455,8 @@ const TOOL_PACKAGES: ToolPackage[] = [
       await ctx.plugin(MemoryRuntime)
       await ctx.plugin(SubagentRuntime)
       await ctx.plugin(ToolMemoryReviewer, { reviewerPrincipal: 'memory-reviewer' })
-      await mountCatalogChildScope(ctx, (childCtx) => {
-        const setup = ctx.subagents.applyPrincipalSetup(childCtx, SubagentPrincipal('memory-reviewer'))
+      await mountCatalogChildScope(ctx, (childCtx, child) => {
+        const setup = ctx.subagents.applyPrincipalSetup(childCtx, child, SubagentPrincipal('memory-reviewer'))
         if (setup === undefined) throw new Error('gen-tool-catalog: memory reviewer principal setup is missing')
         setup.commit()
       })

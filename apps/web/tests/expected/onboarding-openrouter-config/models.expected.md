@@ -1,0 +1,64 @@
+- dialog "Settings":
+  - navigation:
+    - text: Settings
+    - button "General":
+      - img
+      - text: General
+    - button "Models":
+      - img
+      - text: Models
+    - button "Plugins":
+      - img
+      - text: Plugins
+    - button "Agent presets":
+      - img
+      - text: Agent presets
+    - button "Agents":
+      - img
+      - text: Agents
+  - button "Open configuration file"
+  - button "Close":
+    - img
+    - text: Close
+  - heading "Models" [level=2]
+  - paragraph: Enter your API keys to use models from the following providers.
+  - list:
+    - listitem:
+      - text: OpenRouter API key configured
+      - button "Edit OpenRouter (openrouter)": Edit
+      - text: OpenRouter openrouter API key
+      - textbox "API key":
+        - /placeholder: Configured — enter a new value to replace
+      - group:
+        - text: Customized settings Base URL
+        - textbox "Base URL":
+          - /placeholder: Provider default
+        - region "Models":
+          - text: Models Customized model catalog
+          - button "Restore defaults"
+          - button "Fetch available models"
+          - textbox "Model ID 1":
+            - /placeholder: Model ID
+            - text: private-preview
+          - textbox "Display name 1":
+            - /placeholder: Display name
+            - text: Private Preview
+          - button "Capacities 1" [expanded]
+          - button "Delete model 1"
+          - text: Context window
+          - textbox "Context window 1":
+            - /placeholder: 256K
+            - text: "131072"
+          - text: Max output tokens
+          - textbox "Max output tokens 1":
+            - /placeholder: 32K
+            - text: 64K
+          - button "Add model"
+      - button "Cancel"
+      - button "Apply"
+  - button "Add provider":
+    - img
+    - text: Add provider
+  - button "Add a custom provider":
+    - img
+    - text: Add a custom provider

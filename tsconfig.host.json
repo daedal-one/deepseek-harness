@@ -8,9 +8,12 @@
     "rewriteRelativeImportExtensions": false
   },
   "include": [
+    "apps/web/tests/poor-connection.e2e.ts",
+    "apps/web/tests/client-plugin-load-recovery.e2e.ts",
     "apps/web/tests/scaffold.ts",
     "apps/web/tests/scaffold-generation.spec.ts",
     "apps/web/tests/default-model.e2e.ts",
+    "apps/web/tests/agent-model-settings.e2e.ts",
     "apps/web/tests/github-ready-review.e2e.ts",
     "apps/web/tests/streaming-fence-highlight.e2e.ts",
     "apps/web/tests/declared-reasoning.e2e.ts",
@@ -36,7 +39,7 @@
     "apps/web/tests/settings-chrome.e2e.ts",
     "apps/web/tests/models-settings.e2e.ts",
     "apps/web/tests/models-settings-recovery.e2e.ts",
-    "apps/web/tests/onboarding-deepseek-config.e2e.ts",
+    "apps/web/tests/onboarding-openrouter-config.e2e.ts",
     "apps/web/tests/onboarding-usable-provider.e2e.ts",
     "apps/web/tests/remote-welcome.e2e.ts",
     "apps/web/tests/workspace-new-session-folding.e2e.ts",
@@ -133,6 +136,7 @@
     "scripts/client-bundle-purity.spec.ts"
   ],
   "references": [
+    { "path": "./packages/client/ui-sidebar-documentpreview/tsconfig.host.json" },
     { "path": "./packages/client/ui-deliverables/tsconfig.host.json" },
     { "path": "./vendor/cosmokit" },
     { "path": "./vendor/schemastery" },

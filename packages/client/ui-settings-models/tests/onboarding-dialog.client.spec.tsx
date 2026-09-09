@@ -7,8 +7,8 @@ import Schema from '@deepseek-ai/schemastery'
 import type { SettingsNamespaceView } from '@deepseek-ai/dsh-api-remotes/client'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { bindSnapshotSelector, RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
-import { DeepSeekOnboardingDialog } from '../src/client/DeepSeekOnboardingDialog.tsx'
-import type { DeepSeekOnboardingDialogProps } from '../src/client/DeepSeekOnboardingDialog.tsx'
+import { OpenRouterOnboardingDialog } from '../src/client/OpenRouterOnboardingDialog.tsx'
+import type { OpenRouterOnboardingDialogProps } from '../src/client/OpenRouterOnboardingDialog.tsx'
 import { SettingsDescribeMirror } from '@deepseek-ai/dsh-client-ui-settings/src/client/settings-mirror.ts'
 import { ModelsSettingsStore } from '../src/client/store.ts'
 import { createModelsOperations } from '../src/client/operations.ts'
@@ -32,7 +32,7 @@ function remoteFail(message: string) {
   return { ok: false as const, error: new RemoteError('gateway/internal', message, {}) }
 }
 
-const DeepSeekConfig = Schema.object({
+const OpenRouterProfileConfig = Schema.object({
   apiKeyEnv: Schema.string().role('credential-ref'),
   baseURL: Schema.string().pattern(/^https:\/\//),
   reasoningEffort: Schema.union(['off', 'low', 'high', 'max']),
@@ -45,17 +45,17 @@ const DeepSeekConfig = Schema.object({
   })),
 })
 
-type AttentionSnapshot = Parameters<Parameters<DeepSeekOnboardingDialogProps['useSessionPendingInteraction']>[0]>[0]
+type AttentionSnapshot = Parameters<Parameters<OpenRouterOnboardingDialogProps['useSessionPendingInteraction']>[0]>[0]
 const noAttention: AttentionSnapshot = new Map()
-const useSessionPendingInteraction: DeepSeekOnboardingDialogProps['useSessionPendingInteraction'] = selector => selector(noAttention)
+const useSessionPendingInteraction: OpenRouterOnboardingDialogProps['useSessionPendingInteraction'] = selector => selector(noAttention)
 
-function deepSeekNamespace(apiKeyEnv: string | null): SettingsNamespaceView {
+function openRouterNamespace(apiKeyEnv: string | null): SettingsNamespaceView {
   const value = apiKeyEnv === null ? {} : { apiKeyEnv }
   return {
-    ns: 'llm-deepseek',
-    schema: JSON.parse(JSON.stringify(DeepSeekConfig.toJSON())) as JsonValue,
-    value,
-    base: value,
+    ns: 'llm-pi-ai',
+    schema: JSON.parse(JSON.stringify(Schema.object({ providers: Schema.dict(OpenRouterProfileConfig) }).toJSON())) as JsonValue,
+    value: { providers: { openrouter: value } },
+    base: { providers: { openrouter: value } },
     user: {},
     applies: 'live',
     secrets: [],
@@ -83,8 +83,8 @@ function harness(options: {
   }
   let fileConfigured = false
   const configured = options.configured ?? (() => fileConfigured)
-  const apiKeyEnv = options.apiKeyEnv === undefined ? 'DEEPSEEK_API_KEY' : options.apiKeyEnv
-  const mutate = vi.fn(() => Promise.resolve(remoteOk(deepSeekNamespace(apiKeyEnv))))
+  const apiKeyEnv = options.apiKeyEnv === undefined ? 'OPENROUTER_API_KEY' : options.apiKeyEnv
+  const mutate = vi.fn(() => Promise.resolve(remoteOk(openRouterNamespace(apiKeyEnv))))
   const set = vi.fn((_ref: string, _value: string) => {
     if (options.setFailure !== undefined) return Promise.resolve(remoteFail(options.setFailure))
     fileConfigured = true
@@ -97,17 +97,17 @@ function harness(options: {
         return Promise.resolve(remoteOk(
           options.provider === false || options.providerActive === false
             ? []
-            : [{ id: 'deepseek-official', name: 'DeepSeek' }],
+            : [{ id: 'openrouter', name: 'OpenRouter' }],
         ))
       },
       listConfigurableProviders: () => Promise.resolve(remoteOk(
         options.provider === false
           ? []
           : [{
-            provider: 'deepseek-official',
-            displayName: 'DeepSeek',
-            settingsNs: options.providerSettingsNs ?? 'llm-deepseek',
-            settingsPath: [],
+            provider: 'openrouter',
+            displayName: 'OpenRouter',
+            settingsNs: options.providerSettingsNs ?? 'llm-pi-ai',
+            settingsPath: ['providers', 'openrouter'],
           }],
       )),
       discoverModels: () => Promise.resolve(remoteOk([])),
@@ -116,14 +116,14 @@ function harness(options: {
       describe: () => Promise.resolve(remoteOk({
         writable: options.settingsWritable ?? true,
         hasDocument: false,
-        namespaces: options.settingsNamespace === false ? [] : [deepSeekNamespace(apiKeyEnv)],
+        namespaces: options.settingsNamespace === false ? [] : [openRouterNamespace(apiKeyEnv)],
       })),
       mutate,
     },
     credentials: {
       describe: () => options.describeFailure === undefined
         ? Promise.resolve(remoteOk({
-          DEEPSEEK_API_KEY: {
+          OPENROUTER_API_KEY: {
             configured: configured(),
             ...configured() && options.credential?.source !== undefined
               ? { source: options.credential.source }
@@ -142,8 +142,8 @@ function harness(options: {
   const openSection = vi.fn()
   const complete = vi.fn()
   const unusedHook = (() => { throw new Error('unused standard hook') }) as never
-  const props: DeepSeekOnboardingDialogProps = {
-    stepId: 'deepseek-official',
+  const props: OpenRouterOnboardingDialogProps = {
+    stepId: 'openrouter',
     complete,
     openSection,
     useSessions: unusedHook,
@@ -162,17 +162,17 @@ function harness(options: {
   }
 }
 
-describe('DeepSeekOnboardingDialog', () => {
+describe('OpenRouterOnboardingDialog', () => {
   it('renders when the shell root is absent', async () => {
     const h = harness()
     document.getElementById('root')!.remove()
-    render(<DeepSeekOnboardingDialog {...h.props} />)
+    render(<OpenRouterOnboardingDialog {...h.props} />)
     expect(await screen.findByRole('dialog', { name: en.onboardingTitle })).toBeTruthy()
   })
 
   it('loads a credential-only modal, inerts the product, and focuses the key', async () => {
     const h = harness()
-    render(<DeepSeekOnboardingDialog {...h.props} />)
+    render(<OpenRouterOnboardingDialog {...h.props} />)
     expect(await screen.findByRole('dialog', { name: en.onboardingTitle })).toBeTruthy()
     expect(document.getElementById('root')?.inert).toBe(true)
     expect(screen.getByText(en.onboardingDescription)).toBeTruthy()
@@ -185,7 +185,7 @@ describe('DeepSeekOnboardingDialog', () => {
     const h = harness()
     const appRoot = document.getElementById('root')!
     appRoot.inert = true
-    const view = render(<DeepSeekOnboardingDialog {...h.props} />)
+    const view = render(<OpenRouterOnboardingDialog {...h.props} />)
     await screen.findByRole('dialog')
 
     fireEvent.keyDown(document, { key: 'Escape' })
@@ -199,7 +199,7 @@ describe('DeepSeekOnboardingDialog', () => {
 
   it('requires a non-blank key before Save and continue is available', async () => {
     const h = harness()
-    render(<DeepSeekOnboardingDialog {...h.props} />)
+    render(<OpenRouterOnboardingDialog {...h.props} />)
     await screen.findByRole('dialog')
     const save = screen.getByRole<HTMLButtonElement>('button', { name: en.onboardingSave })
     expect(save.disabled).toBe(true)
@@ -214,7 +214,7 @@ describe('DeepSeekOnboardingDialog', () => {
       [{ setFailure: 'credential was rejected' }, 'credential was rejected'],
     ] as const) {
       const h = harness(options)
-      const view = render(<DeepSeekOnboardingDialog {...h.props} />)
+      const view = render(<OpenRouterOnboardingDialog {...h.props} />)
       await screen.findByRole('dialog')
       fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: 'sk-live' } })
       fireEvent.click(screen.getByRole('button', { name: en.onboardingSave }))
@@ -229,7 +229,7 @@ describe('DeepSeekOnboardingDialog', () => {
 
   it('allows configure-later dismissal without opening settings', async () => {
     const h = harness()
-    render(<DeepSeekOnboardingDialog {...h.props} />)
+    render(<OpenRouterOnboardingDialog {...h.props} />)
     await screen.findByRole('dialog')
     fireEvent.click(screen.getByRole('button', { name: en.onboardingLater }))
     expect(h.complete).toHaveBeenCalledOnce()
@@ -248,7 +248,7 @@ describe('DeepSeekOnboardingDialog', () => {
       harness({ settingsNamespace: false }),
       harness({ apiKeyEnv: null }),
     ]) {
-      const view = render(<DeepSeekOnboardingDialog {...h.props} />)
+      const view = render(<OpenRouterOnboardingDialog {...h.props} />)
       await act(async () => { await h.controller.load() })
       expect(screen.queryByRole('dialog')).toBeNull()
       await waitFor(() => { expect(h.complete).toHaveBeenCalledOnce() })
@@ -263,7 +263,7 @@ describe('DeepSeekOnboardingDialog', () => {
       harness({ providerSettingsNs: '' }),
       harness({ configured: () => true, credential: { source: 'env', writable: false } }),
     ]) {
-      const view = render(<DeepSeekOnboardingDialog {...h.props} />)
+      const view = render(<OpenRouterOnboardingDialog {...h.props} />)
       await act(async () => { await h.controller.load() })
       expect(screen.queryByRole('dialog')).toBeNull()
       await waitFor(() => { expect(h.complete).toHaveBeenCalledOnce() })
@@ -273,7 +273,7 @@ describe('DeepSeekOnboardingDialog', () => {
 
   it('closes when an external credential invalidation refreshes the shared join', async () => {
     const h = harness()
-    render(<DeepSeekOnboardingDialog {...h.props} />)
+    render(<OpenRouterOnboardingDialog {...h.props} />)
     await screen.findByRole('dialog')
     h.configure()
     await act(async () => { await h.controller.load() })

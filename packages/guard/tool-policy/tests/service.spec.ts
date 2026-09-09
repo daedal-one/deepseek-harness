@@ -1,5 +1,5 @@
 import { Context } from '@deepseek-ai/cordis'
-import { CallId, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
 import InvariantRegistry from '@deepseek-ai/dsh-invariants'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import { describe, expect, it } from 'vitest'
@@ -74,7 +74,7 @@ describe('tool-policy durable invariants', () => {
       providerId: ToolPolicyProviderId('intent-context:mock/reviewer'),
       allowedEffects: ['workspace-read'], forbiddenEffects: [], summary: 'inspect',
     })
-    const callId = CallId('call')
+    const callId = ToolCallId('call')
     session.append('tool/call', { turn: 1, step: 1, callId, name: 'bash', arguments: '{}' })
     expect(() => {
       session.append('tool-policy/classifier-request', {

@@ -1,6 +1,7 @@
 # Agent Note: Bilingual documentation via paired sibling files and a pairing gate
 
 Status: implemented
+Archived: 2026-09-09
 
 ## Problem
 

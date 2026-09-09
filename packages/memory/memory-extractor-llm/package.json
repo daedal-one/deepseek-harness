@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-memory-extractor-llm",
   "description": "Bounded post-turn LLM extraction of evidence-backed project memory proposals",
-  "version": "0.1.0-rc.5",
+  "version": "0.1.5-alpha.2",
   "publishConfig": {
     "access": "public"
   },

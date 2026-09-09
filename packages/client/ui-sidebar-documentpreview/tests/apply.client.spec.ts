@@ -12,7 +12,6 @@ import { Context } from '@deepseek-ai/cordis'
 import { SidebarRightTabRegistry } from '@deepseek-ai/dsh-client-ui-sidebar-right/src/client/tab-registry.ts'
 import { TEXTPREVIEW_ID, TEXTPREVIEW_KIND } from '../src/client/definition.ts'
 import { apply, inject } from '../src/client/index.ts'
-import { apply as hostApply } from '../src/index.ts'
 import { TextPreview } from '../src/client/TextPreview.tsx'
 import { TextTitle } from '../src/client/TextTitle.tsx'
 import { TextBody } from '../src/client/text/TextBody.tsx'
@@ -42,6 +41,7 @@ interface Recorded {
 
 async function boot() {
   const ctx = new Context()
+  ctx.provide('connection', { rpc: { call: vi.fn() } } as never)
   const tabs = new SidebarRightTabRegistry(ctx)
   const registered: Recorded[] = []
   const slots = {
@@ -78,10 +78,6 @@ async function boot() {
 }
 
 describe('ui-sidebar-documentpreview apply', () => {
-  it('keeps the host Loader entry inert', () => {
-    expect(hostApply).not.toThrow()
-  })
-
   it('registers the type, its dictionaries, and the body and title seats under the type\'s id, the body with a store and a face', async () => {
     const { tabs, registered, dictionaries } = await boot()
     expect(tabs.get(TEXTPREVIEW_KIND)?.priority).toBe('fallback')

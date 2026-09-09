@@ -4,7 +4,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { Branded } from '@deepseek-ai/dsh-brand'
-import type { CallId } from '@deepseek-ai/dsh-llm'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type {} from './types.ts'
 export type * from './types.ts'
@@ -40,7 +40,7 @@ export interface ToolPolicyVerdict extends ToolPolicyOpinion {
 
 /** Immutable execution facts supplied to a policy provider. */
 export interface ToolPolicyRequest {
-  readonly callId: CallId
+  readonly callId: ToolCallId
   readonly toolName: string
   readonly arguments: unknown
   readonly agent: Agent

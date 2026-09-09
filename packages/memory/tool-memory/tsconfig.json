@@ -1,1 +1,36 @@
-{"extends":"../../../tsconfig.base.json","compilerOptions":{"rootDir":"src","outDir":"lib/types"},"include":["src"],"references":[{"path":"../../../vendor/cordis"},{"path":"../memory"},{"path":"../../core/session"},{"path":"../../core/tools"},{"path":"../../core/system-prompt"},{"path":"../../core/agent"},{"path":"../../interaction/user-approval"},{"path":"../../runtime-diagnostics/invariants"}]}
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../memory"
+    },
+    {
+      "path": "../../core/session"
+    },
+    {
+      "path": "../../core/tools"
+    },
+    {
+      "path": "../../core/system-prompt"
+    },
+    {
+      "path": "../../core/agent"
+    },
+    {
+      "path": "../../interaction/user-approval"
+    },
+    {
+      "path": "../../util/values"
+    }
+  ]
+}

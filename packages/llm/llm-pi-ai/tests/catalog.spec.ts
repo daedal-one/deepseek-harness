@@ -468,7 +468,7 @@ describe('catalog routes with per-model configuration', () => {
           maxTokens: 65_536,
         }],
       },
-    }).get('deepseek')?.piProvider.getModels() ?? []
+    }).get('deepseek')?.piProvider?.getModels() ?? []
 
     expect(model).toMatchObject({
       id: `${catalogModel.id}-dated:nitro`,
@@ -788,21 +788,23 @@ describe('modelOverrides', () => {
     expect(() => resolveProfiles({
       deepseek: { modelOverrides: { 'no-such-model': { name: 'ghost' } } },
     })).toThrow(/which the installed catalog does not describe/)
-    expect(() => resolveProfiles({
+    const explicit = resolveProfiles({
       'acme-gateway': {
         api: 'openai-completions',
         baseURL: 'https://acme.test',
-        models: [{ id: 'm' }],
+        models: [{ id: 'm', name: 'Explicit' }],
         modelOverrides: { m: { name: 'renamed' } },
       },
-    })).toThrow(/a declared route spells every model out/)
+    })
+    expect(explicit.get('acme-gateway')?.piProvider?.getModels()[0]?.name).toBe('Explicit')
     const declaredOnly = deepseekModel()
-    expect(() => resolveProfiles({
+    const replaced = resolveProfiles({
       deepseek: {
-        models: [{ id: declaredOnly.id }],
+        models: [{ id: declaredOnly.id, name: 'Explicit' }],
         modelOverrides: { [declaredOnly.id]: { name: 'renamed' } },
       },
-    })).toThrow(/models already replaces the served catalog/)
+    })
+    expect(replaced.get('deepseek')?.piProvider?.getModels()[0]?.name).toBe('Explicit')
     expect(() => resolveProfiles({
       deepseek: { modelOverrides: { '': { name: 'nameless' } } },
     })).toThrow(/empty model id/)
@@ -1129,7 +1131,7 @@ describe('compat switches', () => {
   })
 
   it('refuses compat keys pi-ai’s catalog owns, pointing at the catalog route', () => {
-    for (const compat of [{ openRouterRouting: {} }, { supportsAdditionalTools: true }]) {
+    for (const compat of [{ vercelGatewayRouting: {} }, { supportsAdditionalTools: true }]) {
       expect(() => resolveProfiles({
         'acme-gateway': {
           api: 'openai-completions',

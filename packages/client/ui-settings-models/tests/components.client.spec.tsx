@@ -31,6 +31,7 @@ const t: ModelsSectionInjected['t'] = key => en[key]
 const OPENAI_TARGET = { provider: 'openai', displayName: 'openai' }
 const openaiCopy = (template: string): string => providerCopy(template, OPENAI_TARGET)
 const DEEPSEEK_TARGET = { provider: 'deepseek-official', displayName: 'DeepSeek' }
+const openRouterCopy = (template: string): string => providerCopy(template, { provider: 'openrouter', displayName: 'OpenRouter' })
 const deepSeekCopy = (template: string): string => providerCopy(template, DEEPSEEK_TARGET)
 
 /** Open one row's capacity disclosure (1-based, as the labels read). */
@@ -289,12 +290,36 @@ async function mountSection(overrides: Parameters<typeof scriptedFace>[0] = {}) 
   return mountFace(scriptedFace(overrides))
 }
 
+/** Shipped OpenRouter setup fixture alongside the independently editable adapters. */
+function firstRunFace(overrides: Parameters<typeof scriptedFace>[0] = {}) {
+  const scripted = scriptedFace(overrides)
+  const listProviders = scripted.face.llm.listProviders.getMockImplementation()!
+  const listConfigurable = scripted.face.llm.listConfigurableProviders.getMockImplementation()!
+  scripted.face.llm.listProviders.mockImplementation(async () => {
+    const result = await listProviders()
+    return remoteOk(result.value.map(entry => entry.id === 'deepseek-official'
+      ? { id: 'openrouter', name: 'OpenRouter' } : entry))
+  })
+  scripted.face.llm.listConfigurableProviders.mockImplementation(async () => {
+    const result = await listConfigurable()
+    return remoteOk(result.value.map(entry => entry.provider === 'deepseek-official'
+      ? { provider: 'openrouter', displayName: 'OpenRouter', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'openrouter'] } : entry))
+  })
+  const namespaces = wireNamespaces().map(view => view.ns === 'llm-pi-ai' ? {
+    ...view,
+    value: { providers: { ...(view.value as { providers: Record<string, JsonValue> }).providers, openrouter: { apiKeyEnv: 'OPENROUTER_API_KEY' } } },
+    base: { providers: { openrouter: { apiKeyEnv: 'OPENROUTER_API_KEY' } } },
+  } : view)
+  scripted.face.settings.describe.mockResolvedValue(remoteOk({ writable: true, hasDocument: false, namespaces }))
+  return scripted
+}
+
 /**
  * Mount for a user who cannot reach any provider yet: no credential is stored
- * anywhere, so the whole-section DeepSeek route owns the first-run setup card.
+ * anywhere, so the configured OpenRouter route owns the first-run setup card.
  */
 async function mountFirstRun(overrides: Parameters<typeof scriptedFace>[0] = {}) {
-  const scripted = scriptedFace(overrides)
+  const scripted = firstRunFace(overrides)
   scripted.face.credentials.describe.mockImplementation((refs: string[]) =>
     Promise.resolve(remoteOk(
       Object.fromEntries(refs.map(ref => [ref, { configured: false, writable: true }])),
@@ -356,23 +381,23 @@ describe('ModelsSection', () => {
   })
 
   it('shows a configuration diagnostic inside the first-run setup card', async () => {
-    const scripted = scriptedFace()
+    const scripted = firstRunFace()
     const failure = 'The provider configuration needs repair'
     scripted.face.llm.listProviders.mockResolvedValue(remoteOk([
-      { id: 'deepseek-official', name: 'DeepSeek' },
+      { id: 'openrouter', name: 'OpenRouter' },
     ]))
     scripted.face.llm.listConfigurableProviders.mockResolvedValue(remoteOk([
-      { provider: 'deepseek-official', displayName: 'DeepSeek', settingsNs: 'llm-deepseek', settingsPath: [], error: failure },
+      { provider: 'openrouter', displayName: 'OpenRouter', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'openrouter'], error: failure },
     ]))
     scripted.face.credentials.describe.mockResolvedValue(remoteOk({
-      DEEPSEEK_API_KEY: { configured: false, writable: true },
+      OPENROUTER_API_KEY: { configured: false, writable: true },
     }))
     await mountFace(scripted)
 
     const card = screen.getByRole('listitem')
     expect(within(card).getByRole('alert').textContent).toBe(failure)
     expect(within(card).getByLabelText(en.keyInput)).toBeTruthy()
-    expect(within(card).queryByRole('button', { name: deepSeekCopy(en.editProvider) })).toBeNull()
+    expect(within(card).queryByRole('button', { name: openRouterCopy(en.editProvider) })).toBeNull()
   })
 
   it('dispatches the provider-card seat per rendered row, keyed by the owning namespace', async () => {
@@ -388,7 +413,7 @@ describe('ModelsSection', () => {
 
   it('dispatches the provider-card seat inside the first-run setup card', async () => {
     const { renderSlot } = await mountFirstRun()
-    expect(cardSeatCalls(renderSlot)).toContainEqual(['deepseek-official', true, false, 'llm-deepseek'])
+    expect(cardSeatCalls(renderSlot)).toContainEqual(['openrouter', true, false, 'llm-pi-ai'])
   })
 
   it('dispatches the provider-card seat on the add-provider draft with its dormant row', async () => {
@@ -432,7 +457,7 @@ describe('ModelsSection', () => {
     await mountFirstRun()
     // Nothing is reachable yet, and DeepSeek has no configured credential and
     // no stored apiKey → setup card.
-    expect(screen.getByText('DeepSeek')).toBeTruthy()
+    expect(screen.getByText('OpenRouter')).toBeTruthy()
     expect(screen.getByLabelText(en.keyInput)).toBeTruthy()
     expect(screen.getByText('openai')).toBeTruthy()
     expect(screen.queryByText('Active')).toBeNull()
@@ -445,11 +470,10 @@ describe('ModelsSection', () => {
     // openai's key is stored, so the user is not blocked and nothing on the
     // page opens itself over them.
     expect(screen.queryByLabelText(en.keyInput)).toBeNull()
-    const configured = screen.getByRole('img', { name: en.credentialConfigured })
-    expect(configured.getAttribute('title')).toBe(en.credentialConfigured)
-    expect(configured.className).toContain('credentialDotConfigured')
+    const configured = screen.getByText(en.credentialConfigured)
+    expect(configured.className).toContain('credentialConfigured')
     expect(configured.closest('li')?.textContent).toContain('openai')
-    const missing = screen.getByRole('img', { name: en.credentialMissing })
+    const missing = within(screen.getByText('DeepSeek').closest('li')!).getByText(en.credentialMissing)
     expect(missing.closest('li')?.textContent).toContain('DeepSeek')
     // The card is still one click away.
     fireEvent.click(screen.getByRole('button', { name: deepSeekCopy(en.editProvider) }))
@@ -472,9 +496,8 @@ describe('ModelsSection', () => {
       renderSlot={() => null}
     />)
 
-    const missing = screen.getByRole('img', { name: en.credentialMissing })
-    expect(missing.getAttribute('title')).toBe(en.credentialMissing)
-    expect(missing.className).toContain('credentialDotMissing')
+    const missing = within(screen.getByText('openai').closest('li')!).getByText(en.credentialMissing)
+    expect(missing.className).toContain('credentialMissing')
     expect(missing.closest('li')?.textContent).toContain('openai')
     expect(screen.queryByRole('img', { name: en.credentialConfigured })).toBeNull()
     expect(screen.getByText('zombie').closest('li')?.querySelector('[role="img"]')).toBeNull()
@@ -502,7 +525,7 @@ describe('ModelsSection', () => {
   })
 
   it('decides setup need from the joined credential state and the first-run posture', () => {
-    const entry = { provider: 'p', displayName: 'p', settingsNs: 'llm-deepseek', settingsPath: [], active: true }
+    const entry = { provider: 'openrouter', displayName: 'OpenRouter', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'openrouter'], active: true }
     const row = (credential: ProviderRow['credential']): ProviderRow => ({
       entry,
       configured: true,
@@ -545,13 +568,13 @@ describe('ModelsSection', () => {
     const key = screen.getByLabelText<HTMLInputElement>(en.keyInput)
     fireEvent.change(key, { target: { value: '  sk-live  ' } })
     fireEvent.click(screen.getByText(en.apply))
-    await waitFor(() => { expect(set).toHaveBeenCalledWith('DEEPSEEK_API_KEY', 'sk-live') })
+    await waitFor(() => { expect(set).toHaveBeenCalledWith('OPENROUTER_API_KEY', 'sk-live') })
     expect(mutate).not.toHaveBeenCalled()
     // The saved key re-loads the join; the settings answer rides the shared
     // mirror, so the reload shows as a directory read rather than a describe.
     await waitFor(() => { expect(face.llm.listProviders.mock.calls.length).toBeGreaterThan(1) })
     expect((await screen.findByRole('status')).textContent).toBe(
-      providerCopy(en.savedProvider, { provider: 'deepseek-official', displayName: 'DeepSeek' }),
+      providerCopy(en.savedProvider, { provider: 'openrouter', displayName: 'OpenRouter' }),
     )
     fireEvent.click(screen.getByText(en.add))
     expect(screen.queryByRole('status')).toBeNull()
@@ -1120,7 +1143,8 @@ describe('ModelsSection', () => {
       displayName="OpenRouter"
       namespace={namespace}
       settingsPath={['providers', 'openrouter']}
-      api={face as never}
+      operations={createModelsOperations(ctxWith(face))}
+      schema={settingsSchema}
       t={t}
       readOnly={false}
       onClose={() => {}}
@@ -1131,15 +1155,11 @@ describe('ModelsSection', () => {
     fireEvent.click(screen.getByText(en.apply))
 
     await waitFor(() => { expect(mutate).toHaveBeenCalledOnce() })
-    expect(mutate.mock.calls[0]?.[0]).toEqual({
-      ns: 'llm-pi-ai',
-      ops: [{
-        op: 'set',
-        path: ['providers', 'openrouter', 'models'],
-        value: [{ ...sourceModel, name: 'V4 Nitro' }],
-      }],
-      expectedRevision: 0,
-    })
+    expect(mutate.mock.calls[0]).toEqual([
+      'llm-pi-ai',
+      [{ op: 'set', path: ['providers', 'openrouter', 'models'], value: [{ ...sourceModel, name: 'V4 Nitro' }] }],
+      0,
+    ])
   })
 
   it('adds a dormant provider with a derived reference and stores its key', async () => {
@@ -1250,7 +1270,7 @@ describe('ModelsSection', () => {
   })
 
   it('renders the card without the stored-key hint when the credential probe is refused', async () => {
-    const { face } = scriptedFace()
+    const { face } = firstRunFace()
     face.credentials.describe = vi.fn(() => Promise.resolve(remoteFail('no credential provider')))
     const controller = new ModelsSettingsStore(ctxWith(face), settingsSchema, new SettingsDescribeMirror(ctxWith(face)))
     await controller.load()
@@ -1263,7 +1283,7 @@ describe('ModelsSection', () => {
       renderSlot={() => null}
     />)
     const key = await screen.findByLabelText<HTMLInputElement>(en.keyInput)
-    expect(key.placeholder).toBe(en.keyPlaceholder)
+    expect(key.placeholder).toBe(en.keyPlaceholderNative)
   })
 
   it('tells the user to reopen when another writer moved the namespace first', async () => {
@@ -1293,7 +1313,7 @@ describe('ModelsSection', () => {
 
   it('surfaces a shadowed credential write on the card', async () => {
     await mountFirstRun({
-      set: vi.fn(() => Promise.resolve(remoteFail('credentials: DEEPSEEK_API_KEY is shadowed by the read-only environment'))),
+      set: vi.fn(() => Promise.resolve(remoteFail('credentials: OPENROUTER_API_KEY is shadowed by the read-only environment'))),
     })
     const key = screen.getByLabelText<HTMLInputElement>(en.keyInput)
     fireEvent.change(key, { target: { value: 'sk-live' } })
@@ -1462,10 +1482,10 @@ describe('ModelsSection', () => {
     expect(screen.getByLabelText(en.provider)).toBeTruthy()
     // …and DeepSeek collapsed to an ordinary row carrying the missing-key dot.
     expect(screen.getAllByLabelText(en.keyInput)).toHaveLength(1)
-    expect(screen.getAllByRole('img', { name: en.credentialMissing })
-      .some(dot => dot.closest('li')?.textContent?.includes('DeepSeek') === true)).toBe(true)
+    expect(screen.getAllByText(en.credentialMissing)
+      .some(dot => dot.closest('li')?.textContent?.includes('OpenRouter') === true)).toBe(true)
     // Its card reopens through Edit, which closes the add card as any row does.
-    fireEvent.click(screen.getByRole('button', { name: deepSeekCopy(en.editProvider) }))
+    fireEvent.click(screen.getByRole('button', { name: openRouterCopy(en.editProvider) }))
     expect(screen.getAllByLabelText(en.keyInput)).toHaveLength(1)
     expect(screen.queryByLabelText(en.provider)).toBeNull()
   })

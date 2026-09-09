@@ -30,7 +30,7 @@ function request(toolName: string, args: unknown, principal = 'browser-reader') 
     arguments: args,
     agent: {
       session: {
-        events: principal === '' ? [] : [{
+        snapshotEvents: () => principal === '' ? [] : [{
           type: 'subagent/descriptor',
           data: { version: 3, mode: 'one-shot', provider: 'spawn', principal },
         }],

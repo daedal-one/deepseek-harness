@@ -276,7 +276,7 @@ describe('AppFrame normal width concessions', () => {
     expect(instance.getSnapshot().layoutInfo).toMatchObject({ rightbarShown: true, rightbar: 864 })
     act(() => { instance.actions.closeRightbar() })
     resize(455)
-    expect(tracks(frame)).toEqual([56, 0])
+    expect(frame.style.gridTemplateColumns).toBe('minmax(0, 1fr)')
     resize(1920)
     expect(tracks(frame)).toEqual([420, 0])
   })
@@ -293,7 +293,7 @@ describe('AppFrame normal width concessions', () => {
     expect(rightOwner().canShow).toBe(true)
   })
 
-  it.each([[756, 300, true], [755, 0, false]] as const)('reports eligibility at %ipx', (width, rightbar, canShow) => {
+  it.each([[756, 756, true], [755, 755, true]] as const)('reports eligibility at %ipx', (width, rightbar, canShow) => {
     frameWidth = width
     const { instance, rightOwner } = mountFrame()
     act(() => { instance.actions.toggleSidebar() })
@@ -416,12 +416,12 @@ describe('AppFrame right panel presentation', () => {
     expect(frame.dataset.rightbarFullscreen).toBeUndefined()
   })
 
-  it('retains fullscreen without a track when normal columns cannot fit', () => {
+  it('opens phone details at viewport width without a grid track', () => {
     frameWidth = 700
     const { frame, instance, rightOwner } = mountFrame()
     act(() => { instance.actions.openRightbar(false, true) })
-    expect(tracks(frame)).toEqual([56, 0])
-    expect(rightOwner()).toEqual({ width: 0, viewportWidth: 700, canShow: false })
+    expect(frame.style.gridTemplateColumns).toBe('minmax(0, 1fr)')
+    expect(rightOwner()).toEqual({ width: 700, viewportWidth: 700, canShow: true })
     expect(instance.getSnapshot().layoutInfo.rightbarShown).toBe(true)
     expect(frame.querySelector('[data-side="rightbar"]')).toBeNull()
   })

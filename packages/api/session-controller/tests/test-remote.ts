@@ -86,10 +86,10 @@ export interface TestSessionRemote {
 
 /** Dependencies and policy supplied by a Session Controller unit harness. */
 export interface TestSessionRemoteDefaults {
-  readonly defaultModelSelection: () => AgentModelSelection
+  readonly defaultModelSelection: (agentPreset?: string) => AgentModelSelection
   readonly cwd: string
   readonly nativeOpen?: boolean
-  readonly saveDefaultModelSelection?: (selection: AgentModelSelection) => void | Promise<void>
+  readonly saveDefaultModelSelection?: (selection: AgentModelSelection, agentPreset?: string) => void | Promise<void>
   readonly openPath?: (path: string, signal: AbortSignal) => Promise<void>
   readonly revealPath?: (path: string, signal: AbortSignal) => Promise<void>
   readonly canOpenPath?: () => boolean
@@ -235,11 +235,11 @@ function installControllers(
       contexts: { configureHost: () => dispose },
     } as never)
   }
-  if (ctx.get('agentDefaultModel') === undefined) {
-    ctx.provide('agentDefaultModel', {
-      currentSelection: defaults.defaultModelSelection,
-      saveSelection: async (selection: AgentModelSelection) => {
-        await defaults.saveDefaultModelSelection?.(selection)
+  if (ctx.get('agentModels') === undefined) {
+    ctx.provide('agentModels', {
+      mainSelection: defaults.defaultModelSelection,
+      saveSelection: async (selection: AgentModelSelection, agentPreset?: string) => {
+        await defaults.saveDefaultModelSelection?.(selection, agentPreset)
       },
     } as never)
   }

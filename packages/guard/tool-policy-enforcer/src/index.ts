@@ -3,12 +3,12 @@
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
-import { SANDBOX_MODES, effectiveSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
+import { SANDBOX_MODES } from '@deepseek-ai/dsh-sandbox-policy'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { ToolPolicyProviderId, type ToolPolicyOpinion, type ToolPolicyVerdict } from '@deepseek-ai/dsh-tool-policy'
 import type { PreToolDecision, ToolExecution } from '@deepseek-ai/dsh-tools'
 import type { ApprovalPolicy } from '@deepseek-ai/dsh-user-approval'
-import { APPROVAL_POLICIES, effectiveApprovalPolicy } from '@deepseek-ai/dsh-user-approval'
+import { APPROVAL_POLICIES } from '@deepseek-ai/dsh-user-approval'
 
 export const name = 'tool-policy-enforcer'
 export const inject = ['tools', 'toolPolicy']
@@ -55,8 +55,8 @@ export function shouldEnforce(
   condition: EnforcementCondition | undefined,
 ): boolean {
   if (condition === undefined) return true
-  const sandbox = effectiveSandboxMode(events)
-  const approval = effectiveApprovalPolicy(events)
+  const sandbox = events.findLast(event => event.type === 'sandbox/mode')?.data.mode
+  const approval = events.findLast(event => event.type === 'approval/policy')?.data.policy
   if (condition.sandboxModes !== undefined) {
     if (sandbox === undefined) return true
     if (!condition.sandboxModes.includes(sandbox)) return false
@@ -69,7 +69,7 @@ export function shouldEnforce(
 }
 
 function currentTurn(exec: ToolExecution): number {
-  const boundary = exec.agent?.session.events.findLast(event => event.type === 'turn/start' || event.type === 'turn/end')
+  const boundary = exec.agent?.session.snapshotEvents().findLast(event => event.type === 'turn/start' || event.type === 'turn/end')
   return boundary?.type === 'turn/start' ? boundary.data.turn : 0
 }
 
@@ -98,7 +98,7 @@ function canonicalJson(value: unknown): string {
     const record = value as Record<string, unknown>
     return `{${Object.keys(record).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(record[key])}`).join(',')}}`
   }
-  return JSON.stringify(value) as string
+  return JSON.stringify(value)
 }
 
 /** Match the agent loop's raw-argument parsing for durable prior calls. */
@@ -116,7 +116,7 @@ function callKey(toolName: string, argumentsValue: unknown): string {
 
 /** Count the uninterrupted prior ask denials for this exact call in the open turn. */
 function consecutiveAskDenials(exec: ToolExecution): number {
-  const events = exec.agent?.session.events ?? []
+  const events = exec.agent?.session.snapshotEvents() ?? []
   const turn = currentTurn(exec)
   const key = callKey(exec.name, exec.arguments)
   const currentCallIndex = events.findLastIndex(event => event.type === 'tool/call' && event.data.callId === exec.callId)
@@ -133,7 +133,7 @@ function consecutiveAskDenials(exec: ToolExecution): number {
     }
     if (event?.type === 'tool/result') {
       const result = event.data.message.content[0]
-      if (result?.type === 'tool-result' && !failedResults.has(result.toolCallId)) {
+      if (!failedResults.has(result.toolCallId)) {
         failedResults.set(result.toolCallId, result.isError === true)
       }
       continue
@@ -170,7 +170,7 @@ export function apply(ctx: Context, config: Config = {}): void {
       || event.type === 'approval/policy'
     if (!directUser && !permissionChanged) return
     queueMicrotask(() => {
-      if (lifetime.signal.aborted || !shouldEnforce(session.events, config.enforceWhen)) return
+      if (lifetime.signal.aborted || !shouldEnforce(session.snapshotEvents(), config.enforceWhen)) return
       void ctx.toolPolicy.prewarm({ session, signal: lifetime.signal }).catch((_prewarmFailure: unknown) => {
         // Evaluation reports missing preparation through its ordinary fail-closed verdict.
       })
@@ -178,7 +178,7 @@ export function apply(ctx: Context, config: Config = {}): void {
   })
   const dispose = ctx.on('tools/pre-execute', async (exec, next): Promise<PreToolDecision> => {
     if (exec.agent === undefined) return next()
-    if (!shouldEnforce(exec.agent.session.events, config.enforceWhen)) return next()
+    if (!shouldEnforce(exec.agent.session.snapshotEvents(), config.enforceWhen)) return next()
     let verdict: ToolPolicyVerdict | undefined
     try {
       verdict = await ctx.toolPolicy.evaluate({

@@ -1,16 +1,22 @@
 /** Deterministic two-page PDF with red and blue vector rectangles and an explicit xref table. */
 
-/** @returns complete PDF bytes; no clocks, external fonts, images, or network references. */
-export function pdfFixture(): Uint8Array {
+/**
+ * @param withStandardFont - include a glyph to exercise the bundled font resource.
+ * @returns complete deterministic PDF bytes.
+ */
+export function pdfFixture(withStandardFont = false): Uint8Array {
   const streams = ['0.9 0.1 0.1 rg 10 10 100 80 re f', '0.1 0.1 0.9 rg 10 10 100 80 re f']
+  if (withStandardFont) streams[0] = streams[0]! + ' BT /F1 8 Tf 20 20 Td (A) Tj ET'
+  const resources = withStandardFont ? '/Font << /F1 7 0 R >>' : ''
   const objects = [
     '<< /Type /Catalog /Pages 2 0 R >>',
     '<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >>',
-    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 120 100] /Resources << >> /Contents 4 0 R >>',
+    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 120 100] /Resources << ${resources} >> /Contents 4 0 R >>`,
     `<< /Length ${streams[0]!.length} >>\nstream\n${streams[0]}\nendstream`,
     '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 120 100] /Resources << >> /Contents 6 0 R >>',
     `<< /Length ${streams[1]!.length} >>\nstream\n${streams[1]}\nendstream`,
   ]
+  if (withStandardFont) objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /ZapfDingbats >>')
   let text = '%PDF-1.4\n'
   const offsets = [0]
   objects.forEach((object, index) => {

@@ -31,10 +31,10 @@ async function observe(run: () => Promise<unknown>): Promise<string[]> {
   try { await run().catch(() => undefined) } finally { await dispose() }
   return seen
 }
-import { DeepSeekSearchProvider } from '../src/provider.ts'
-describe('deepseek search egress', () => {
+import { OpenRouterSearchProvider } from '../src/provider.ts'
+describe('openrouter search egress', () => {
   it('goes through the proxy', async () => {
-    const p = new DeepSeekSearchProvider(() => ({ apiKey: 'probe', baseURL: 'http://dsk-probe.invalid', model: 'm', apiVersion: '2023-06-01', maxTokens: 16, maxUses: 1 }))
-    expect(await observe(() => p.search({ query: 'probe' }))).toEqual(['REQ http://dsk-probe.invalid/messages'])
+    const p = new OpenRouterSearchProvider(() => ({ apiKey: 'probe', baseURL: 'http://dsk-probe.invalid', model: 'm', engine: 'auto', maxTokens: 16, maxUses: 1 }))
+    expect(await observe(() => p.search({ query: 'probe' }))).toEqual(['REQ http://dsk-probe.invalid/chat/completions'])
   })
 })

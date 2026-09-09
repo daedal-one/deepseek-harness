@@ -610,6 +610,20 @@ function remapPayloadReferences(
 ): SessionFormatJsonValue {
   const data = record(event.data)
   switch (event.type) {
+    case 'memory/extraction-request':
+      return { ...data, sourceSessionFormatVersion: data['sourceSessionFormatVersion'] ?? 1 }
+    case 'tool-policy/intent-context':
+      return { ...data,
+        requestSeq: mapOne(coordinate(data['requestSeq']), mapping, 'policy requestSeq'),
+        userMessageSeq: mapOne(coordinate(data['userMessageSeq']), mapping, 'policy userMessageSeq'),
+      }
+    case 'tool-policy/classifier-request': {
+      const input = record(data['input'])
+      return { ...data, input: input['kind'] === 'intent-context'
+        ? { ...input, userMessageSeqs: mapList(numberArray(input['userMessageSeqs']), mapping, 'policy userMessageSeqs') }
+        : { ...input, intentContextSeq: mapOne(coordinate(input['intentContextSeq']), mapping, 'policy intentContextSeq') },
+      }
+    }
     case 'command/done':
       return data['sourceEventSeq'] === undefined
         ? data
@@ -639,7 +653,7 @@ function remapPayloadReferences(
           ),
         },
         shadowedSeqs: mapList(
-          numberArray(data['shadowedSeqs'] as SessionFormatJsonValue),
+          numberArray(data['shadowedSeqs']),
           mapping,
           `${event.type} ${event.seq} shadowedSeqs`,
         ),
@@ -650,7 +664,7 @@ function remapPayloadReferences(
       return {
         ...data,
         messageSeqs: mapList(
-          numberArray(data['messageSeqs'] as SessionFormatJsonValue),
+          numberArray(data['messageSeqs']),
           mapping,
           `${event.type} ${event.seq} messageSeqs`,
         ),
@@ -682,7 +696,7 @@ function record(value: SessionFormatJsonValue | undefined): SessionFormatJsonObj
   return value as SessionFormatJsonObject
 }
 
-function numberArray(value: SessionFormatJsonValue): number[] {
+function numberArray(value: SessionFormatJsonValue | undefined): number[] {
   return value as number[]
 }
 

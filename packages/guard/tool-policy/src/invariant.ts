@@ -74,7 +74,8 @@ function validate(history: readonly SessionEvent[], event: SessionEvent, fail: I
 }
 
 function validateSession(session: Session, fail: InvariantFailure): void {
-  for (const [index, event] of session.events.entries()) validate(session.events.slice(0, index), event, fail)
+  const events = session.snapshotEvents()
+  for (const [index, event] of events.entries()) validate(events.slice(0, index), event, fail)
 }
 
 const install: InvariantInstaller = Object.assign((ctx: Context, fail: InvariantFailure) => {
@@ -83,7 +84,7 @@ const install: InvariantInstaller = Object.assign((ctx: Context, fail: Invariant
   ctx.on('internal/dispatch', (_mode, eventName, args) => {
     if (eventName !== 'session/event') return
     const [session, event] = args as [Session, SessionEvent]
-    validate(session.events, event, fail)
+    validate(session.snapshotEvents(), event, fail)
   }, { global: true })
 }, { inject: ['sessions'] })
 

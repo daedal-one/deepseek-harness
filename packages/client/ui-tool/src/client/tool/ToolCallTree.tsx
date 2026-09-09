@@ -1,5 +1,6 @@
 /** Root/subcall Tool composition with one keyed atomic dispatch path. */
 import { memo, useMemo, useState, type ReactNode } from 'react'
+import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ToolCallBlock } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { ToolCallOwnerProps, ToolTreeProps } from '../contract/slots.ts'
 import { GenericToolCard } from './toolviews/GenericToolCard.tsx'
@@ -40,13 +41,13 @@ const ToolCall = memo(function ToolCall({
     >
       {'kind' in block && block.deferred === true && (
         <div>
-          <button type="button" disabled={loading} onClick={() => {
+          <Button size="sm" variant="outline" disabled={loading} onClick={() => {
             setLoading(true)
             setLoadError(null)
             loadToolResult(block.seq).catch((error: unknown) => {
               setLoadError(error instanceof Error ? error.message : String(error))
             }).finally(() => { setLoading(false) })
-          }}>{loading ? t('loading') : t('tool.loadResult')}</button>
+          }}>{loading ? t('loading') : t('tool.loadResult')}</Button>
           {loadError !== null && <span role="alert">{loadError}</span>}
         </div>
       )}
@@ -91,7 +92,7 @@ const ToolCallBranch = memo(function ToolCallBranch({
               openFile={openFile}
               inspectCall={inspectCall}
               loadToolResult={loadToolResult}
-      loadImage={loadImage}
+              loadImage={loadImage}
               t={t}
             />
           ))}

@@ -15,6 +15,9 @@ import type {
   SessionFollowFrame,
   SessionFollowRequest,
   SessionPage,
+  SessionEventEntry,
+  SessionHistoryDetailRequest,
+  SessionListCursor,
   SessionPageRequest,
   SessionProjectionBaseline,
   SessionSelectModelRequest,
@@ -122,7 +125,8 @@ export class FakeApiClient {
   readonly followStarts: SessionId[] = []
 
   // Programmable slots (defaults answer OK-empty); reassign per case.
-  onList: (payload: unknown) => Promise<RemoteResult<{ items: never[] }>> = () => Promise.resolve(ok({ items: [] }))
+  onList: (payload: unknown) => Promise<RemoteResult<{ items: never[]; hasMore?: boolean; nextCursor?: SessionListCursor }>> =
+    () => Promise.resolve(ok({ items: [] }))
   onSearch: (payload: unknown) => Promise<RemoteResult<{ items: SessionSearchItem[]; hasMore: boolean }>> =
     () => Promise.resolve(ok({ items: [], hasMore: false }))
   onCreate: (payload: unknown) => Promise<RemoteResult<{ sessionId: SessionId }>> = () => Promise.resolve(ok({ sessionId: 'fk-new' as SessionId }))
@@ -141,6 +145,9 @@ export class FakeApiClient {
   onHistory: (payload: { sessionId: SessionId; throughSeq?: number; beforeSeq?: number; maxMessages?: number })
   => Promise<RemoteResult<SessionPage & { readonly projections?: SessionProjectionBaseline }>> =
     () => Promise.resolve(ok({ records: [], hasMore: false }))
+
+  onHistoryDetail: (payload: SessionHistoryDetailRequest) => Promise<RemoteResult<SessionEventEntry>> =
+    async () => { throw new Error('History detail response is not programmed') }
 
   onPrompt: (payload: unknown) => Promise<RemoteResult<{ accepted: true }>> = () => Promise.resolve(ok({ accepted: true as const }))
   onAttachment: (payload: unknown) => Promise<RemoteResult<{ attachment: { attachmentId: never; mediaType: 'image/png'; bytes: number; width: number; height: number }; data: string }>> =
@@ -206,7 +213,10 @@ export class FakeApiClient {
       },
       session: {
         canOpenWorkspacePath: () => Promise.resolve(ok(true)),
-        list: payload => this.record('session.list', payload, this.onList(payload)),
+        list: async (payload) => {
+          const result = await this.record('session.list', payload, this.onList(payload))
+          return result.ok ? ok({ ...result.value, hasMore: result.value.hasMore ?? false }) : result
+        },
         modelCatalog: () => Promise.resolve({
           ok: true,
           value: {
@@ -238,6 +248,7 @@ export class FakeApiClient {
           this.onOpenWorkspacePath(payload),
         ),
         page: request => this.page(request),
+        historyDetail: request => this.record('session.historyDetail', request, this.onHistoryDetail(request)),
         follow: (request, signal) => this.openFollow(request, signal),
         control: signal => this.openControl(signal),
       },

@@ -100,7 +100,7 @@ function observedMutations(request: SubagentResultValidationRequest): string[] {
   if (child === undefined) return []
   const cwd = child.session.header.cwd
   const names = new Set(['write', 'edit', 'str_replace_editor'])
-  return [...new Set(successfulCalls(child.session.events).flatMap((event) => {
+  return [...new Set(successfulCalls(child.session.snapshotEvents()).flatMap((event) => {
     if (!names.has(event.data.name)) return []
     const path = argumentPath(event)
     return path === undefined ? [] : [workspacePath(path, cwd)]
@@ -113,7 +113,7 @@ function observedReads(request: SubagentResultValidationRequest): string[] {
   if (child === undefined) return []
   const cwd = child.session.header.cwd
   const names = new Set(['read', 'read_image'])
-  return [...new Set(successfulCalls(child.session.events).flatMap((event) => {
+  return [...new Set(successfulCalls(child.session.snapshotEvents()).flatMap((event) => {
     if (!names.has(event.data.name)) return []
     const path = argumentPath(event)
     return path === undefined ? [] : [workspacePath(path, cwd)]

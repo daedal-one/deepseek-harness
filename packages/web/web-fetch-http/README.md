@@ -61,6 +61,10 @@ const page = await ctx.web.fetch({ url: 'https://example.com' })
 
 The provider keeps requests anonymous and bounded: it accepts only `http:` and `https:` URLs without embedded credentials and rejects URLs over 2,048 characters. It resolves each hostname once, rejects the complete result if any IPv4 or IPv6 address is not public unicast, and pins the connection to that validated set. IPv6 checks discover the active DNS64 prefix and reject translations to non-public IPv4. Each same-origin redirect repeats resolution and pinning; cross-origin redirects fail and require a fresh call. The provider also enforces byte, character, hop, and time caps, rejects unsupported content types, and sends an explicit product `User-Agent`.
 
+### Destination policy
+
+Web fetch refuses proxy routes because the proxy resolves destination hostnames independently of the validated public address set. Direct requests pin public addresses and validate every redirect.
+
 ### Failures and recovery
 
 Failures throw `WebError` with a machine-routable code: `WEB_INVALID_URL`, `WEB_BLOCKED_URL`, `WEB_FETCH_TOO_LARGE`, `WEB_FETCH_TIMEOUT`, `WEB_REDIRECT_BLOCKED`, `WEB_UNSUPPORTED_CONTENT_TYPE`, `WEB_ABORTED`, or `WEB_PROVIDER_ERROR`. Direct callers can route on the code; the model-facing `web_fetch` tool surfaces the failure text to the model under its own error wrapper.
@@ -142,7 +146,3 @@ These limits define when the provider is unsafe or a poor fit. They are current 
 None.
 
 </details>
-
-## Fork destination policy
-
-Web fetch refuses proxy routes because the proxy resolves destination hostnames independently of the validated public address set. Direct requests pin public addresses and validate every redirect.

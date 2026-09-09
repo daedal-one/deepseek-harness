@@ -211,7 +211,7 @@ function bounded(value: string, limit: number): string {
 }
 
 function currentTurn(session: Session): number {
-  const boundary = session.events.findLast(event => event.type === 'turn/start' || event.type === 'turn/end')
+  const boundary = session.snapshotEvents().findLast(event => event.type === 'turn/start' || event.type === 'turn/end')
   return boundary?.type === 'turn/start' ? boundary.data.turn : 0
 }
 
@@ -225,8 +225,9 @@ function directText(event: SessionEvent<'user/message'>): string {
 function directUsers(session: Session, limit: number): DirectUserText[] {
   const selected: DirectUserText[] = []
   let remaining = limit
-  for (let index = session.events.length - 1; index >= 0 && remaining > 0; index -= 1) {
-    const event = session.events[index]
+  const events = session.snapshotEvents()
+  for (let index = events.length - 1; index >= 0 && remaining > 0; index -= 1) {
+    const event = events[index]
     if (event?.type !== 'user/message' || event.data.source.kind !== 'user') continue
     const text = directText(event)
     selected.push({ seq: event.seq, text: bounded(text, remaining) })
@@ -236,7 +237,7 @@ function directUsers(session: Session, limit: number): DirectUserText[] {
 }
 
 function latestDirectUser(session: Session): DirectUserText | undefined {
-  const event = session.events.findLast((item): item is SessionEvent<'user/message'> =>
+  const event = session.snapshotEvents().findLast((item): item is SessionEvent<'user/message'> =>
     item.type === 'user/message' && item.data.source.kind === 'user')
   if (event === undefined) return undefined
   const text = event.data.content

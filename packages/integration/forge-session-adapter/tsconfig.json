@@ -1,20 +1,48 @@
 {
   "extends": "../../../tsconfig.base.json",
-  "compilerOptions": { "rootDir": "src", "outDir": "lib/types" },
-  "include": ["src"],
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": [
+    "src"
+  ],
   "references": [
-    { "path": "../../../vendor/cordis" },
-    { "path": "../../../vendor/schemastery" },
-    { "path": "../../../native/landlock-run/packages/entry" },
-    { "path": "../../util/atomic-write" },
-    { "path": "../../core/agent" },
-    { "path": "../../core/session" },
-    { "path": "../../core/tools" },
-    { "path": "../../llm/llm" },
-    { "path": "../../mcp/mcp-client" },
-    { "path": "../../host/webserver" },
-    { "path": "../../interaction/user-approval" },
-    { "path": "../../session/session-persistence" },
-    { "path": "../../runtime-diagnostics/invariants" }
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../../vendor/schemastery"
+    },
+    {
+      "path": "../../../native/system/packages/entry"
+    },
+    {
+      "path": "../../util/atomic-write"
+    },
+    {
+      "path": "../../core/agent"
+    },
+    {
+      "path": "../../core/session"
+    },
+    {
+      "path": "../../core/tools"
+    },
+    {
+      "path": "../../llm/llm"
+    },
+    {
+      "path": "../../mcp/mcp-client"
+    },
+    {
+      "path": "../../host/webserver"
+    },
+    {
+      "path": "../../interaction/user-approval"
+    },
+    {
+      "path": "../../session/session-persistence"
+    }
   ]
 }

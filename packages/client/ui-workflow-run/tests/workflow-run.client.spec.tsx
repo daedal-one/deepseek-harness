@@ -312,6 +312,7 @@ const listState = (overrides: Partial<SessionListState> = {}): SessionListState 
 
 function panelProps(data: WorkflowRunChatData, sessions = listState(), openSession = vi.fn()): WorkflowRunPanelProps {
   return {
+    loadToolResult: () => Promise.reject(new Error('unused detail load')),
     node: node(data),
     sessionId: PARENT_ID,
     useSessions: selector => selector(sessions),

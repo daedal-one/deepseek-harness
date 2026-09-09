@@ -9,7 +9,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import {
   BlockAssembler,
-  CallId,
+  ToolCallId,
   createUserMessage,
   isAgentLoopRequest,
   type ContentBlock,
@@ -120,7 +120,7 @@ function routeMatches(options: GenerateOptions, targets: readonly ModelRoute[]):
 
 function openStep(session: Session): { turn: number; step: number } | undefined {
   let active: { turn: number; step: number } | undefined
-  for (const event of session.events) {
+  for (const event of session.snapshotEvents()) {
     if (event.type === 'step/start') active = event.data
     if (event.type === 'step/end' && active?.turn === event.data.turn && active.step === event.data.step) active = undefined
   }
@@ -226,7 +226,7 @@ function canonicalChunks(
     chunks.push({ type: 'block-start', index, blockType: block.type })
     if (block.type === 'text') chunks.push({ type: 'text-delta', index, text: block.text })
     else if (block.type === 'reasoning') chunks.push({ type: 'reasoning-delta', index, text: block.text })
-    else if (block.type === 'tool-call') chunks.push({ type: 'tool-call-delta', index, id: CallId(block.id), name: block.name, argumentsDelta: block.arguments })
+    else if (block.type === 'tool-call') chunks.push({ type: 'tool-call-delta', index, id: ToolCallId(block.id), name: block.name, argumentsDelta: block.arguments })
     chunks.push({ type: 'block-end', index, block })
   })
   if (usage !== undefined) chunks.push({ type: 'usage', usage })

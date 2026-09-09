@@ -7,7 +7,7 @@ kind: "package-library"
 
 ## Summary
 
-This package restores released v0 Session JSONL by decoding each physical row and producing the shared-layout v1 format. It preserves validated headers and events apart from changing version 0 to version 1, while applying only the finite legacy normalizations accepted by v0 persistence. Malformed or unsupported historical records fail migration before the current restorer runs, with the source retained for recovery. The migration accepts only the frozen first-party event inventory and does not publish or select later format migrations.
+This package restores released v0 Session JSONL by decoding each physical row and producing the shared-layout v1 format. It preserves validated headers and events apart from changing version 0 to version 1, while applying only the finite legacy normalizations accepted by v0 persistence. Malformed or unsupported historical records fail migration before the current restorer runs, with the source retained for recovery. The migration accepts the frozen first-party inventory and explicitly validated fork policy, memory, English-output, and OpenRouter-search records and does not publish or select later format migrations.
 
 ## Table of Contents
 

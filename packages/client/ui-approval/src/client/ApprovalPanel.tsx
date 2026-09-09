@@ -42,7 +42,7 @@ function ApprovalFlow({ pending, detail, t }: {
           {detail !== null && <div className={css.command}>{detail}</div>}
         </div>
         <div className={css.actionRow}>
-          <Button variant="outline" className={css.reject} disabled={answered} onClick={() => { answer('rejected') }}>
+          <Button autoFocus variant="outline" className={css.reject} disabled={answered} onClick={() => { answer('rejected') }}>
             {t('reject')}
           </Button>
           <Button variant="primary" disabled={answered} onClick={() => { answer('allowed-once') }}>

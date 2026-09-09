@@ -144,7 +144,9 @@ export class SessionController extends TypertRemoteService {
     ctx.effect(() => async () => {
       await Promise.allSettled([...this.promotions])
     }, 'session-controller.promotions')
-    this.history = new SessionHistoryController(ctx, (observation) => { this.promote(observation) }, config.historyPageMaxBytes ?? 512 * 1024)
+    this.history = new SessionHistoryController(
+      ctx, (observation) => { this.promote(observation) }, config.historyPageMaxBytes ?? 512 * 1024,
+    )
     this.listState = new ApiSessionList(ctx)
     this.openPath = internals.openPath ?? openNativePath
     this.revealPath = internals.revealPath ?? revealNativePath
@@ -226,7 +228,7 @@ export class SessionController extends TypertRemoteService {
 
   /**
    * Read all visible Session rows without resuming an Agent.
-   * @param _request - reserved empty list request.
+   * @param request - optional page size and cursor for persisted session metadata.
    * @param signal - cancellation for persistence reads.
    * @returns visible Session summaries ordered by activity.
    */

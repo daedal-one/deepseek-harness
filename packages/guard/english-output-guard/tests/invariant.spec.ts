@@ -38,8 +38,9 @@ describe('English output durable invariant', () => {
     session.append('assistant/message', {
       turn: 1,
       step: 1,
+      stream: [],
       message: createAssistantMessage({ source: { provider: 'main', model: 'selected' }, content: [{ type: 'text', text: 'English' }] }),
-    }, { surfaceOp: 'append', sourceEventSeqs: [] })
+    }, { surfaceOp: 'append' })
     expect(() => { session.append('step/end', { turn: 1, step: 1 }) }).not.toThrow()
   })
 

@@ -1,6 +1,28 @@
+---
+description: "Let an Agent query, read, propose, and challenge scoped memory."
+kind: "package-reference"
+---
+
 # `@deepseek-ai/dsh-tool-memory`
 
+## Summary
+
+Let an Agent query, read, propose, and challenge scoped memory. Global writes require approval, and proposed facts remain pending until an authorized reviewer accepts them. The tools use the memory service rather than accessing its database directly.
+
+## Table of Contents
+
+- [Use this package](#use-this-package)
+- [Model Experience](#model-experience)
+- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+- [Dev Note](#dev-note)
+
+-----
+
+## Use this package
+
 Ordinary memory Consumer exposing query, get, propose, challenge, and checkpoint tools. Project scope is derived from the session workspace; models cannot choose another project path. Every global mutation requests approval at execution time and proceeds only after `allowed-once`.
+
+No invariant companion is published because the tool registry owns execution enclosure.
 
 ## Model Experience
 
@@ -41,3 +63,7 @@ Schemas are prefix-stable while visibility is unchanged. Calls and results are a
 ## Known Limitations and Deferred Work
 
 - Evidence entered through ordinary tools is a reference string. Automated extraction can persist richer session evidence directly through the Service Definition.
+
+### Dev Note
+
+None.

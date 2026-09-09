@@ -252,10 +252,15 @@ async function nextPaint(page: Page): Promise<void> {
 }
 
 function scrollGeometry(page: Page): Promise<ScrollGeometry> {
-  return page.locator('[data-conversation-scroll]').evaluate(host => ({
-    distanceFromBottom: host.scrollHeight - host.clientHeight - host.scrollTop,
-    scrollTop: host.scrollTop,
-  }))
+  return page.locator('[data-conversation-scroll]').evaluate((host) => {
+    const scroller = host.closest('[data-phone="true"]') === null
+      ? host
+      : document.scrollingElement!
+    return {
+      distanceFromBottom: scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop,
+      scrollTop: scroller.scrollTop,
+    }
+  })
 }
 
 /**
@@ -271,6 +276,9 @@ async function loadedFlowRows(page: Page): Promise<number> {
 }
 
 async function openSeed(page: Page, fixture: ChatScrollFixture, tailMarker?: string): Promise<void> {
+  const narrow = (page.viewportSize()?.width ?? 1680) < 768
+  const openSidebar = page.getByRole('button', { name: 'Open sidebar', exact: true })
+  if (narrow && await openSidebar.isVisible()) await openSidebar.click()
   // Search collapsed into a header action; expand it before filling.
   const searchButton = page.getByRole('button', { name: 'Search sessions' })
   if (await searchButton.getAttribute('aria-expanded') !== 'true') await searchButton.click()
@@ -283,6 +291,8 @@ async function openSeed(page: Page, fixture: ChatScrollFixture, tailMarker?: str
   const results = page.getByRole('tree', { name: 'Search results' }).getByRole('treeitem')
   await expect.poll(() => results.count(), { timeout: 60_000 }).toBe(1)
   await results.click()
+  const collapseSidebar = page.getByRole('button', { name: 'Collapse sidebar', exact: true })
+  if (narrow && await collapseSidebar.isVisible()) await collapseSidebar.click()
   await page.getByRole('tab', { name: 'Chat', exact: true }).waitFor({ timeout: 30_000 })
   if (tailMarker !== undefined) {
     await page.getByText(tailMarker, { exact: false }).last().waitFor({ timeout: 30_000 })
@@ -293,7 +303,9 @@ async function openSeed(page: Page, fixture: ChatScrollFixture, tailMarker?: str
 async function wheelTranscript(page: Page, deltaY: number): Promise<void> {
   const box = await page.locator('[data-conversation-scroll]').boundingBox()
   if (box === null) throw new Error('conversation scrollport has no layout box')
-  await page.mouse.move(box.x + box.width / 2, box.y + Math.min(140, box.height / 3))
+  const visibleTop = Math.max(0, box.y)
+  const visibleBottom = Math.min(page.viewportSize()!.height, box.y + box.height)
+  await page.mouse.move(box.x + box.width / 2, visibleTop + Math.min(140, (visibleBottom - visibleTop) / 3))
   await page.mouse.wheel(0, deltaY)
   await nextPaint(page)
 }
@@ -363,7 +375,9 @@ async function wheelUntilVisible(page: Page, selector: string, deltaY: number): 
 function visibleFlowAnchor(page: Page): Promise<FlowAnchor> {
   return page.locator('[data-conversation-scroll]').evaluate((host) => {
     const rows = [...host.querySelectorAll<HTMLElement>('[data-chat-anchor-key]:not([hidden])')]
-    const viewport = host.getBoundingClientRect()
+    const viewport = host.closest('[data-phone="true"]') === null
+      ? host.getBoundingClientRect()
+      : { top: 0, bottom: window.innerHeight }
     const composer = host.querySelector<HTMLElement>('[data-composer-seat]')
     const visibleBottom = composer?.getBoundingClientRect().top ?? viewport.bottom
     const visible = rows.filter((candidate) => {
@@ -399,7 +413,8 @@ function flowTop(page: Page, key: string): Promise<number> {
     if (!(row instanceof HTMLElement)) throw new Error(`stable Chat anchor ${anchorKey} is not mounted`)
     const host = row.closest('[data-conversation-scroll]')
     if (!(host instanceof HTMLElement)) throw new Error('flow row has no conversation scrollport')
-    return row.getBoundingClientRect().top - host.getBoundingClientRect().top
+    const viewportTop = host.closest('[data-phone="true"]') === null ? host.getBoundingClientRect().top : 0
+    return row.getBoundingClientRect().top - viewportTop
   }, key)
 }
 
@@ -774,9 +789,6 @@ describe('web e2e: long Chat scroll contract', () => {
       await world.page.getByRole('tab', { name: 'Trajectory', exact: true }).click()
       await world.page.getByLabel('Trajectory timeline').waitFor({ timeout: 30_000 })
       await world.page.setViewportSize({ width: 700, height: 900 })
-      // The narrow breakpoint auto-collapses the sidebar. Re-open it because
-      // this scenario switches sessions while pinning the narrow Chat scroll owner.
-      await world.page.getByRole('button', { name: 'Open sidebar', exact: true }).click()
       await world.page.getByRole('tab', { name: 'Chat', exact: true }).click()
       await nextPaint(world.page)
       await expectSameFlowTop(world.page, sessionAnchor, RESPONSIVE_REFLOW_TOLERANCE)

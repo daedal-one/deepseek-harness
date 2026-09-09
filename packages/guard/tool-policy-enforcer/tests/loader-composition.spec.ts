@@ -7,7 +7,7 @@ import Include from '@deepseek-ai/cordis-plugin-include'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import LlmRuntime, {
-  CallId,
+  ToolCallId,
   LlmAdapter,
   ReasoningEffortId,
   type GenerateOptions,
@@ -130,19 +130,19 @@ describe('real Loader policy composition', () => {
     const events: Array<Record<string, unknown>> = [
       { seq: 1, type: 'turn/start', data: { turn: 1 } },
       { seq: 2, type: 'user/message', data: { source: { kind: 'user' }, content: [{ type: 'text', text: 'print a local value' }] } },
-      { seq: 3, type: 'tool/call', data: { callId: CallId('c'), name: 'bash', arguments: '{}' } },
+      { seq: 3, type: 'tool/call', data: { callId: ToolCallId('c'), name: 'bash', arguments: '{}' } },
       { seq: 4, type: 'sandbox/mode', data: { mode: 'danger-full-access' } },
       { seq: 5, type: 'approval/policy', data: { policy: 'ask' } },
     ]
     const agent = {
       options: { provider: 'acting', model: 'acting-model' },
       session: {
-        id: 'loader', header: { id: 'loader', cwd: '/work' }, events,
+        id: 'loader', header: { id: 'loader', cwd: '/work' }, snapshotEvents: () => [...events],
         append(type: string, data: unknown) { const event = { seq: events.length + 1, type, data }; events.push(event); return event },
       },
     } as unknown as Agent
     await expect(loaded.tools.execute({
-      callId: CallId('c'), name: 'bash', arguments: { command: 'printf loader', description: 'print a local value' }, agent,
+      callId: ToolCallId('c'), name: 'bash', arguments: { command: 'printf loader', description: 'print a local value' }, agent,
       signal: new AbortController().signal,
     })).resolves.toMatchObject({ isError: false })
     expect(ran).toBe(true)

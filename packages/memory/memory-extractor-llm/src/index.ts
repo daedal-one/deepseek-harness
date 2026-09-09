@@ -3,7 +3,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { BlockAssembler, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, GenerateOptions, Message } from '@deepseek-ai/dsh-llm'
-import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, type Session, type SessionEvent } from '@deepseek-ai/dsh-session'
 import { MemoryId } from '@deepseek-ai/dsh-memory'
 import './types.ts'
 
@@ -57,8 +57,8 @@ export function apply(ctx: Context, config: Config): void {
   }
   const listener = ctx.on('session/event', (session, event) => {
     if (event.type !== 'turn/end' || event.data.reason.kind !== 'completed' || session.header.cwd === undefined || disposed) return
-    const start = findTurnStart(session.events, event.data.turn)
-    const events = session.events.slice(start, event.seq + 1)
+    const start = findTurnStart(session.snapshotEvents(), event.data.turn)
+    const events = session.snapshotEvents().slice(start, event.seq + 1)
     if (pending.length + active.size >= config.maxQueue) {
       session.append('memory/extraction-result', { turn: event.data.turn, blocks: [], finish: { kind: 'stop' }, proposedIds: [], failure: { code: 'queue-full' } })
       return
@@ -122,6 +122,7 @@ async function extract(ctx: Context, config: Config, job: Job, controllers: Set<
   session.append('memory/extraction-request', {
     turn,
     sourceEventSeqs: events.map(event => event.seq),
+    sourceSessionFormatVersion: SESSION_FORMAT_VERSION,
     route: { provider: config.provider, model: config.model },
     system: SYSTEM,
     messages,

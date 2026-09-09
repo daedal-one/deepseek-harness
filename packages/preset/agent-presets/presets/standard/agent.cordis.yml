@@ -183,6 +183,7 @@
       config:
         provider: spawn
         toolName: subagent
+        agentLabel: Subagent
         modelSelectionSettings: true
         backgroundMode: continuable
 
@@ -195,6 +196,7 @@
       config:
         provider: fork
         toolName: subagent_fork
+        agentLabel: Forked agent
         backgroundMode: continuable
 
     # Production dsh does not install these optional providers. Install the

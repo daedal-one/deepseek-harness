@@ -1,39 +1,39 @@
-/** Build-owned, same-version PDF.js resources; all binary assets are decoded locally. */
-import workerSource from 'pdfjs-dist/build/pdf.worker.min.mjs?raw'
+/** PDF worker code and document-scoped binary resource access. */
+import type { ClientConnectionRpc } from '@deepseek-ai/dsh-client-connection/client'
+import { PDF_ASSET_ENDPOINT, type PdfAssetKind, type ReadPdfAsset } from '../../pdf-assets.ts'
 
-export { workerSource }
+export type { PdfAssetKind, PdfAssetMap, ReadPdfAsset } from '../../pdf-assets.ts'
 
-/** Resource kinds used by PDF.js 6's BinaryDataFactory requests. */
-export type PdfAssetKind = 'cMapUrl' | 'standardFontDataUrl' | 'wasmUrl'
-
-/** Original filenames mapped to base64, in the same PDF.js version as the worker. */
-export type PdfAssetMap = Readonly<Record<PdfAssetKind, Readonly<Record<string, string>>>>
-
-declare global {
-  /** Inline artifact data supplied by the package-local build configuration. */
-  const __DSH_PDFJS_ASSETS__: PdfAssetMap
-}
-
-/** Public methods required by PDF.js's BinaryDataFactory option. */
+/** Public methods required by PDF.js BinaryDataFactory. */
 export interface PdfBinaryDataFactory {
-  /** @param request - PDF.js resource kind and exact filename. @returns independent transferable resource bytes. */
+  /** @param request - PDF.js resource kind and exact filename. @returns independently transferable bytes. */
   fetch(request: { readonly kind: PdfAssetKind; readonly filename: string }): Promise<Uint8Array>
 }
 
 /**
- * Capture this build's binary assets without network fallbacks.
- * @param assets - build-inlined base64 resources, read only when a PDF is opened.
+ * Bind resource reads to the shell's authenticated carrier, including local Worker and desktop transports.
+ * @param rpc - active Connection's generic unary carrier.
+ * @returns exact-name resource reader with caller-owned cancellation.
+ */
+export function createReadPdfAsset(rpc: ClientConnectionRpc): ReadPdfAsset {
+  return async (kind, filename, signal) => {
+    const result = await rpc.call('/api', PDF_ASSET_ENDPOINT, { kind, filename }, signal)
+    if (!result.ok) throw new Error(result.error.message)
+    if (typeof result.value !== 'string') throw new TypeError('PDF resource response must contain base64 text')
+    return Uint8Array.from(atob(result.value), character => character.charCodeAt(0))
+  }
+}
+
+/**
+ * Give each PDF document an abortable resource reader; no resource is fetched during shell boot.
+ * @param read - exact-name resource provider.
+ * @param signal - document lifetime.
  * @returns the constructor passed to PDF.js getDocument.
  */
-export function createPdfBinaryDataFactory(assets: PdfAssetMap = __DSH_PDFJS_ASSETS__): new () => PdfBinaryDataFactory {
+export function createPdfBinaryDataFactory(read: ReadPdfAsset, signal: AbortSignal): new () => PdfBinaryDataFactory {
   return class implements PdfBinaryDataFactory {
     fetch({ kind, filename }: { readonly kind: PdfAssetKind; readonly filename: string }): Promise<Uint8Array> {
-      return Promise.resolve().then(() => {
-        const files = assets[kind]
-        const data = Object.hasOwn(files, filename) ? files[filename] : undefined
-        if (data === undefined) throw new Error(`PDF.js asset is not bundled: ${kind}/${filename}`)
-        return Uint8Array.from(atob(data), character => character.charCodeAt(0))
-      })
+      return read(kind, filename, signal)
     }
   }
 }

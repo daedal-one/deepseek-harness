@@ -199,6 +199,7 @@ describe('dsh-subagent-fork-in-process', () => {
   it('advertises every start-time capability', async () => {
     const { ctx } = await setup([])
     expect(ctx.subagents.getProvider('fork')!.capabilities).toEqual({
+      principal: true,
       agentOptions: true,
       outputSchema: true,
       depthLimit: true,

@@ -1,6 +1,28 @@
+---
+description: "Review pending memory in a deployment-authorized child Agent."
+kind: "package-reference"
+---
+
 # `@deepseek-ai/dsh-tool-memory-reviewer`
 
+## Summary
+
+Review pending memory in a deployment-authorized child Agent. Its tools accept, supersede, and delete records only for the configured principal. Ordinary Agents do not receive these privileged tools.
+
+## Table of Contents
+
+- [Use this package](#use-this-package)
+- [Model Experience](#model-experience)
+- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+- [Dev Note](#dev-note)
+
+-----
+
+## Use this package
+
 Privileged memory Consumer exposing pending-item discovery, review, supersession, and deletion only inside subagent children carrying its config-selected principal. Root and ordinary children receive no reviewer prompt or tool schemas. Every execution also folds the durable subagent descriptor and requires the same principal; no model argument, persona, or role string can claim reviewer authority. Global mutations additionally require an `allowed-once` approval.
+
+No invariant companion is published because reviewer principal authorization is checked at every execution.
 
 ## Model Experience
 
@@ -21,3 +43,7 @@ Prefix-stable while the principal capability remains installed. Adding or revoki
 ## Known Limitations and Deferred Work
 
 - Only session-backed subagents with a matching durable principal can use the tools. Other provider families need an equally durable process-owned principal before they can act as reviewers.
+
+### Dev Note
+
+None.

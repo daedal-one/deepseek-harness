@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import LlmRuntime, { CallId, createUserMessage } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
 import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import ToolPolicyService from '@deepseek-ai/dsh-tool-policy'
@@ -82,7 +82,7 @@ describe.skipIf(!hasKey)('tool-policy-shell real OpenRouter evidence', () => {
           content: [{ type: 'text', text: item.user }], source: { kind: 'user' },
         }), { surfaceOp: 'append' })
         await ctx.toolPolicy.prewarm({ session: agent.session, signal: new AbortController().signal })
-        const callId = CallId(`real-${index}`)
+        const callId = ToolCallId(`real-${index}`)
         agent.session.append('tool/call', {
           turn: 1, step: index + 1, callId, name: 'bash',
           arguments: JSON.stringify({ command: item.command, description: item.description }),
@@ -119,7 +119,7 @@ describe.skipIf(!hasKey)('tool-policy-shell real OpenRouter evidence', () => {
           source: { kind: 'user' },
         }), { surfaceOp: 'append' })
         await ctx.toolPolicy.prewarm({ session: agent.session, signal: new AbortController().signal })
-        const callId = CallId(`outside-${index}`)
+        const callId = ToolCallId(`outside-${index}`)
         agent.session.append('tool/call', {
           turn: 1, step: index + 1, callId, name: 'bash',
           arguments: JSON.stringify({ command: 'ls -lat /opt/dsh-policy-e2e 2>&1 | head', description: 'List the named /opt/dsh-policy-e2e directory.' }),
@@ -160,7 +160,7 @@ describe.skipIf(!hasKey)('tool-policy-shell real OpenRouter evidence', () => {
         }), { surfaceOp: 'append' })
       }
       await ctx.toolPolicy.prewarm({ session: agent.session, signal: new AbortController().signal })
-      expect(agent.session.events.findLast(event => event.type === 'tool-policy/intent-context')).toBeDefined()
+      expect(agent.session.snapshotEvents().findLast(event => event.type === 'tool-policy/intent-context')).toBeDefined()
     } finally {
       await ctx.fiber.dispose()
       await rm(directory, { recursive: true, force: true })
@@ -188,7 +188,7 @@ describe.skipIf(!hasKey)('tool-policy-shell real OpenRouter evidence', () => {
       await ctx.toolPolicy.prewarm({ session: agent.session, signal: new AbortController().signal })
       const durations: number[] = []
       for (let index = 0; index < 5; index += 1) {
-        const callId = CallId(`workspace-git-${index}`)
+        const callId = ToolCallId(`workspace-git-${index}`)
         agent.session.append('tool/call', {
           turn: 1, step: index + 1, callId, name: 'bash',
           arguments: JSON.stringify({ command, description: 'Inspect Git state for generated and guide files in the workspace.' }),

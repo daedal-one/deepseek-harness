@@ -75,8 +75,9 @@
     - id: agent-default-model
       name: '@deepseek-ai/dsh-agent-default-model'
       config:
-        provider: deepseek-official
-        model: deepseek-v4-flash
+        provider: openrouter
+        model: deepseek/deepseek-v4-flash-0731:nitro
+        reasoningEffort: xhigh
 
     - id: jobs
       name: '@deepseek-ai/dsh-jobs-local'
@@ -97,15 +98,19 @@
     - id: credentials
       name: '@deepseek-ai/dsh-credentials-local'
 
-    # The pi-ai multi-provider twin, mounted dormant: zero routes (and no extra
-    # models in the picker) until a `llm-pi-ai:` settings section supplies provider
-    # profiles — then those routes register live, keys resolving per request
-    # through their apiKeyEnv references, and drop again when the section empties.
-    # Supplying those profiles is exactly what the web Models page does. Which
-    # adapters exist is composition; which providers run is the user's settings
-    # document.
+    # The shipped OpenRouter route preserves its catalog metadata for dated requests.
     - id: llm-pi-ai
       name: '@deepseek-ai/dsh-llm-pi-ai'
+      config:
+        providers:
+          openrouter:
+            displayName: OpenRouter
+            api: openai-completions
+            apiKeyEnv: OPENROUTER_API_KEY
+            modelAliases:
+              deepseek/deepseek-v4-flash-0731:nitro:
+                catalogModel: deepseek/deepseek-v4-flash
+                name: DeepSeek V4 Flash 0731 (Nitro)
 
     - id: session-persistence-jsonl
       name: '@deepseek-ai/dsh-session-persistence-jsonl'
@@ -351,6 +356,7 @@
       config:
         provider: spawn
         toolName: subagent
+        agentLabel: Subagent
         backgroundMode: continuable
 
     # Fork omits model selection so provider/model stay equal to the parent and
@@ -364,6 +370,7 @@
       config:
         provider: fork
         toolName: subagent_fork
+        agentLabel: Forked agent
         backgroundMode: one-shot
 
     - id: workflow-worker-thread

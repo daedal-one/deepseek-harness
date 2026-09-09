@@ -2,7 +2,7 @@
 
 ## Summary
 
-Review documentation by whether a reader completes an outcome, not by whether every template heading exists. Verify prose against code and tests, preserve exact contracts, and keep package READMEs useful to consumers while exposing enough implementation detail for maintainers. Run current repository gates; the `session-persistence-jsonl` README pair is the reference example of the format.
+Review documentation by whether a reader completes an outcome, not by whether every template heading exists. Verify prose against code and tests, preserve exact contracts, and keep package READMEs useful to consumers while exposing enough implementation detail for maintainers. Run current repository gates; the `session-persistence-jsonl` README is the reference example of the format.
 
 ## Table of Contents
 
@@ -46,7 +46,7 @@ Do not restate JSDoc or generated catalogs. Link the owner and explain only the 
 
 ## Reference example
 
-The `session-persistence-jsonl` README pair ([English](../../../../packages/session/session-persistence-jsonl/README.md), [Chinese](../../../../packages/session/session-persistence-jsonl/README.zh.md)) demonstrates the format in production: searchable YAML whose `kind` selects this package-reference standard, a four-sentence Summary, a linked Table of Contents, a user-facing use section covering selection, configuration, layout, durability, and reading, a GitHub-native `<details>` fold for developer-facing design and storage details, Further Exploration, canonical Model Experience and Known Limitations sections, and a final Dev Note. Use its structure, evidence standards, and bilingual alignment as the model for package READMEs and cross-package pages; ground every claim in its owning source and evidence.
+The `session-persistence-jsonl` README ([README](../../../../packages/session/session-persistence-jsonl/README.md)) demonstrates the format in production: searchable YAML whose `kind` selects this package-reference standard, a four-sentence Summary, a linked Table of Contents, a user-facing use section covering selection, configuration, layout, durability, and reading, a GitHub-native `<details>` fold for developer-facing design and storage details, Further Exploration, canonical Model Experience and Known Limitations sections, and a final Dev Note. Use its structure, evidence standards as the model for package READMEs and cross-package pages; ground every claim in its owning source and evidence.
 
 ## Verification
 
@@ -54,13 +54,12 @@ Run the smallest focused checks while iterating, then the standing documentation
 
 ```sh
 pnpm run test:docs
-pnpm run verify-translation-pairing --write <pair>
 pnpm run doc-sync
 pnpm run lint
 git diff --check
 ```
 
-Also run the repository's skill-invocation metadata check for skill changes and compare English/Chinese physical line counts for a line-aligned pair. Re-read the final diff once for factual completeness and once for brevity, navigation, and ownership.
+Also run the repository's skill-invocation metadata check for skill changes. Re-read the final diff once for factual completeness and once for brevity, navigation, and ownership.
 
 ## Dev Note
 

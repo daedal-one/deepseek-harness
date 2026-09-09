@@ -1,4 +1,25 @@
+---
+description: "Return delegated results with an explicit completion status."
+kind: "package-reference"
+---
+
 # @deepseek-ai/dsh-subagent-result-status-block
+
+## Summary
+
+Return delegated results with an explicit completion status. The formatter preserves child output and adds the status information the parent needs to distinguish completion from interruption or failure. The subagent service owns execution and lifecycle.
+
+## Table of Contents
+
+- [Use this package](#use-this-package)
+- [Config](#config)
+- [Model Experience](#model-experience)
+- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+- [Dev Note](#dev-note)
+
+-----
+
+## Use this package
 
 Role-aware completed-result validation for one-shot subagents. Each plugin instance registers a named validator on `ctx.subagents`; a [`dsh-tool-subagent`](../tool-subagent/README.md) instance selects it through `resultValidation`. Unconfigured delegation tools are unchanged.
 
@@ -14,6 +35,8 @@ Warnings are structured values on foreground delegation results and stable text 
 |---|---|
 | `validator` | Unique registry name selected by a delegation tool. |
 | `kind` | `implementer-status` or `review-verdict`. |
+
+No invariant companion is published because the subagent registry owns result and lifecycle relationships.
 
 ## Model Experience
 
@@ -35,3 +58,7 @@ Append-only. Validation changes only the new delegation result and does not alte
 
 - Structured filesystem events cannot prove shell, remote-provider, or external-editor reads and writes. The validator reports only contradictions supported by durable facts and does not claim complete activity reconstruction.
 - The status-block parser exists for imported role prompts. New role designs should use the existing subagent `outputSchema` capability and keep textual parsing as compatibility only.
+
+### Dev Note
+
+None.

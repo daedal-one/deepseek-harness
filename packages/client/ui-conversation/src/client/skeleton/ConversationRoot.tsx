@@ -8,7 +8,7 @@ import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import type { ConversationSlotProps, InputZone } from '../contract/slots.ts'
 import { conversationPhase } from '../contract/snapshot.ts'
 import { HeroShell, WorkspaceChip, workspaceLabel } from './EmptyHero.tsx'
-import { conversationScroller, conversationScrollEventTargets, isDocumentScroller } from '../scroll-owner.ts'
+import { conversationScroller, conversationScrollEventTargets, isDocumentScroller } from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './ConversationRoot.module.css'
 
 /** Full props composed from the slot contract. */

@@ -411,6 +411,45 @@ Types: [ToolCallId](subsystems/core.md)
 
 Source: [`packages/fs/tool-present/src/types.ts:15`](../packages/fs/tool-present/src/types.ts)
 
+### `english-output/*`
+
+<a id="english-outputtranslation-request--log-only"></a>
+
+#### `english-output/translation-request` — log-only
+
+```ts persistence-catalog
+/** Exact auxiliary model input logged before translator dispatch. */
+'english-output/translation-request': {
+  turn: number
+  step: number
+  target: ModelRoute
+  translator: ModelRoute
+  system: string
+  messages: Message[]
+  maxTokens: number
+  blocks: TranslationBlock[]
+}
+```
+
+Source: [`packages/guard/english-output-guard/src/types.ts:35`](../packages/guard/english-output-guard/src/types.ts)
+
+<a id="english-outputtranslation-result--log-only"></a>
+
+#### `english-output/translation-result` — log-only
+
+```ts persistence-catalog
+/** Bounded settlement facts for one preceding translation request. */
+'english-output/translation-result': {
+  turn: number
+  step: number
+  status: TranslationStatus
+  blockIndexes: number[]
+  failure?: { code: TranslationFailureCode }
+}
+```
+
+Source: [`packages/guard/english-output-guard/src/types.ts:46`](../packages/guard/english-output-guard/src/types.ts)
+
 ### `feedback/*`
 
 <a id="feedbackmessage-delete--log-only"></a>
@@ -537,6 +576,48 @@ Source: [`packages/llm/llm-retry/src/types.ts:9`](../packages/llm/llm-retry/src/
 ```
 
 Source: [`packages/llm/llm-retry/src/types.ts:11`](../packages/llm/llm-retry/src/types.ts)
+
+### `memory/*`
+
+<a id="memoryextraction-request--log-only"></a>
+
+#### `memory/extraction-request` — log-only
+
+```ts persistence-catalog
+/** Exact durable pre-dispatch record for one post-turn memory extraction. */
+'memory/extraction-request': {
+  turn: number
+  sourceEventSeqs: number[]
+  /** Generation containing the captured input events; retained across migrations. */
+  sourceSessionFormatVersion?: number
+  route: { provider: string; model: string }
+  system: string
+  messages: Message[]
+  maxTokens: number
+}
+```
+
+Source: [`packages/memory/memory-extractor-llm/src/types.ts:6`](../packages/memory/memory-extractor-llm/src/types.ts)
+
+<a id="memoryextraction-result--log-only"></a>
+
+#### `memory/extraction-result` — log-only
+
+```ts persistence-catalog
+/** Exact assembled auxiliary response and bounded extraction settlement. */
+'memory/extraction-result': {
+  turn: number
+  blocks: ContentBlock[]
+  finish: FinishReason
+  usage?: TokenUsage
+  proposedIds: string[]
+  failure?: { code: 'aborted' | 'invalid-output' | 'provider-error' | 'queue-full' | 'timeout' }
+}
+```
+
+Types: [ContentBlock](subsystems/core.md) · [TokenUsage](subsystems/llm-streaming.md)
+
+Source: [`packages/memory/memory-extractor-llm/src/types.ts:17`](../packages/memory/memory-extractor-llm/src/types.ts)
 
 ### `model/*`
 
@@ -805,7 +886,7 @@ Source: [`packages/subagent/subagent/src/catalog.ts:40`](../packages/subagent/su
 'subagent/descriptor': SubagentDescriptorData
 ```
 
-Source: [`packages/subagent/subagent/src/descriptor.ts:38`](../packages/subagent/subagent/src/descriptor.ts)
+Source: [`packages/subagent/subagent/src/descriptor.ts:52`](../packages/subagent/subagent/src/descriptor.ts)
 
 <a id="subagentmodel-selection-policy--log-only"></a>
 
@@ -1018,6 +1099,41 @@ Source: [`packages/core/tools/src/types.ts:40`](../packages/core/tools/src/types
 ```
 
 Source: [`packages/core/session/src/types.ts:353`](../packages/core/session/src/types.ts)
+
+### `tool-policy/*`
+
+<a id="tool-policyclassifier-request--log-only"></a>
+
+#### `tool-policy/classifier-request` — log-only
+
+```ts persistence-catalog
+/** Reconstructible bounded auxiliary request recorded before LLM dispatch. */
+'tool-policy/classifier-request': ToolPolicyClassifierRequestEventData
+```
+
+Source: [`packages/guard/tool-policy/src/types.ts:73`](../packages/guard/tool-policy/src/types.ts)
+
+<a id="tool-policydecision--log-only"></a>
+
+#### `tool-policy/decision` — log-only
+
+```ts persistence-catalog
+/** Provider or effective authorization decision; raw arguments remain in `tool/call`. */
+'tool-policy/decision': ToolPolicyDecisionEventData
+```
+
+Source: [`packages/guard/tool-policy/src/types.ts:77`](../packages/guard/tool-policy/src/types.ts)
+
+<a id="tool-policyintent-context--log-only"></a>
+
+#### `tool-policy/intent-context` — log-only
+
+```ts persistence-catalog
+/** Validated user-intent context passed to later effect classifiers. */
+'tool-policy/intent-context': ToolPolicyIntentContextEventData
+```
+
+Source: [`packages/guard/tool-policy/src/types.ts:75`](../packages/guard/tool-policy/src/types.ts)
 
 ### `tool-workflow/*`
 

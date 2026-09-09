@@ -78,8 +78,8 @@ describe('startInProcessRun', () => {
     const reviewer = SubagentPrincipal('memory-reviewer')
     const installed: SessionId[] = []
     const released: SessionId[] = []
-    ctx.subagents.registerPrincipalSetup(reviewer, (childCtx) => {
-      const childId = childCtx.agent!.id
+    ctx.subagents.registerPrincipalSetup(reviewer, (_childCtx, child) => {
+      const childId = child.id
       installed.push(childId)
       return () => released.push(childId)
     })
@@ -87,7 +87,7 @@ describe('startInProcessRun', () => {
     const run = await startInProcessRun({
       ...request(parent),
       principal: reviewer,
-      principalSetup: childCtx => ctx.subagents.applyPrincipalSetup(childCtx, reviewer),
+      principalSetup: (childCtx, child) => ctx.subagents.applyPrincipalSetup(childCtx, child, reviewer),
       descriptor: snapshotSubagentDescriptor({
         mode: 'one-shot',
         provider: 'test',

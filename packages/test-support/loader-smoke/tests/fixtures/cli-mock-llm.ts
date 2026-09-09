@@ -94,8 +94,8 @@ class CliMockAdapter extends LlmAdapter {
         trust: 0.9,
       })
       yield { type: 'block-start', index: 0, blockType: 'tool-call' }
-      yield { type: 'tool-call-delta', index: 0, id: CallId('cli-memory-call'), name: 'memory_propose', argumentsDelta: args }
-      yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: CallId('cli-memory-call'), name: 'memory_propose', arguments: args } }
+      yield { type: 'tool-call-delta', index: 0, id: ToolCallId('cli-memory-call'), name: 'memory_propose', argumentsDelta: args }
+      yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: ToolCallId('cli-memory-call'), name: 'memory_propose', arguments: args } }
       yield { type: 'usage', usage: { inputTokens: 13, outputTokens: 4 } }
       yield { type: 'finish', reason: { kind: 'tool-calls' } }
       return

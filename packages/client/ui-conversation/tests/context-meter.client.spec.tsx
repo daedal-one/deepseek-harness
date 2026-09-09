@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it } from 'vitest'
-import { cleanup, fireEvent, render } from '@testing-library/react'
+import { within, cleanup, fireEvent, render } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { en as commonEn, zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/index.ts'
 import { ContextMeter, type ContextMeterProps } from '../src/client/skeleton/ContextMeter.tsx'
@@ -58,7 +58,7 @@ describe('ContextMeter', () => {
     expect(panel.textContent).toContain('25%')
     expect(panel.textContent).toContain('of context used')
     expect(panel.textContent).toContain('System prompt~120')
-    expect(panel.textContent).toContain('工具定义~21.5K')
+    expect(panel.textContent).toContain('Tool definitions~21.5K')
     expect(panel.textContent).toContain('Messages~477K')
     // The occupancy bar splits into one colored segment per composition row.
     expect(panel.getElementsByClassName(segmentClass)).toHaveLength(3)
@@ -67,19 +67,17 @@ describe('ContextMeter', () => {
     expect(view.container.querySelector('[role="dialog"]')).toBeNull()
   })
 
-  it('lets each locale own the headline word order around the reading', () => {
+  it('keeps the English headline for every accepted locale', () => {
     const values = {
       contextPressure: { pressureTokens: 32_000, contextWindow: 128_000 },
       contextBreakdown: BREAKDOWN,
     }
     const zhView = meter(values)
     fireEvent.click(within(zhView.container).getByRole('button', { name: '25% of context used' }))
-    // The reading follows the label in Chinese and leads it in English; both
-    // headers read as one sentence rather than a concatenated fragment.
     expect(zhView.container.querySelector('[role="dialog"]')!.textContent)
       .toMatch(/^25%of context used/)
     const enView = meter(values, tEn)
-    fireEvent.click(enView.getByRole('button', { name: '25% of context used' }))
+    fireEvent.click(within(enView.container).getByRole('button', { name: '25% of context used' }))
     expect(enView.container.querySelector('[role="dialog"]')!.textContent)
       .toMatch(/^25%of context used/)
   })

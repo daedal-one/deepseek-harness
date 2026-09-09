@@ -45,7 +45,7 @@ describe('Codex provider public Loader composition', () => {
       providerDetails: [
         {
           name: 'codex',
-          capabilities: {
+          capabilities: { principal: false,
             agentOptions: false,
             outputSchema: false,
             depthLimit: false,
@@ -56,7 +56,7 @@ describe('Codex provider public Loader composition', () => {
         },
         {
           name: 'codex-primary',
-          capabilities: {
+          capabilities: { principal: false,
             agentOptions: false,
             outputSchema: false,
             depthLimit: false,
@@ -67,7 +67,7 @@ describe('Codex provider public Loader composition', () => {
         },
         {
           name: 'codex-secondary',
-          capabilities: {
+          capabilities: { principal: false,
             agentOptions: false,
             outputSchema: false,
             depthLimit: false,

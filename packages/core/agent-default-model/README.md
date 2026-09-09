@@ -1,4 +1,24 @@
+---
+description: "Choose and retain a model for the main Agent and each deployment-defined Agent role."
+kind: "package-reference"
+---
+
 # @deepseek-ai/dsh-agent-default-model
+
+## Summary
+
+Choose and retain a model for the main Agent and each deployment-defined Agent role. Settings writes validate the selected model and reasoning effort, while deployments retain control of provider routes. Later starts use the saved selection; established sessions keep their logged model.
+
+## Table of Contents
+
+- [Use this package](#use-this-package)
+- [Model Experience](#model-experience)
+- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+- [Dev Note](#dev-note)
+
+-----
+
+## Use this package
 
 Persistent model selection for the main Agent and deployment-defined named Agent roles. `AgentModelConfig` provides `ctx.agentModels`; direct entry points, Host-backed entry points, and named child tools read one owner instead of carrying unrelated model defaults.
 
@@ -13,6 +33,8 @@ The plugin config requires a fallback `{ provider, model }`, accepts `reasoningE
 
 Every graphical save validates the exact model and reasoning effort through `ctx.llm` before writing. A stale settings revision is rejected instead of overwriting a concurrent edit. Removing an override restores that role's composition default.
 
+No invariant companion is published because settings validation and the synchronous target registry own selection consistency.
+
 ## Model Experience
 
 Indirectly, through the selection passed to a subsequently created Agent; the service adds no prompt content.
@@ -26,3 +48,7 @@ Existing sessions keep their logged selection. A saved change applies to later s
 - Each target's provider route is deployment-owned and cannot be changed from the graphical page.
 - Named roles appear only while their contributing plugins are mounted; open clients re-read the directory when that live set changes.
 - Without a writable settings provider, the directory remains readable but changes cannot be retained.
+
+### Dev Note
+
+None.

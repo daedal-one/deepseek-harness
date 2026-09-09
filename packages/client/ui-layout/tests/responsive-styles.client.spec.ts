@@ -10,7 +10,7 @@ describe('AppFrame responsive styles', () => {
     expect(css).toMatch(/\.frame\[data-phone\]\s*\{[\s\S]*?grid-template-columns: minmax\(0, 1fr\);/)
     expect(css).toMatch(/\.frame\[data-phone\]\s*\{[\s\S]*?min-height: 100dvh;[\s\S]*?height: auto;[\s\S]*?overflow: visible;/)
     expect(css).toMatch(/\.frame\[data-phone\] \.sidebarCol\s*\{[\s\S]*?position: fixed;[\s\S]*?width: min\(86vw, 320px\);/)
-    expect(css).toMatch(/\.frame\[data-phone\] \.detailsCol\s*\{[\s\S]*?position: fixed;[\s\S]*?width: 100%;/)
+    expect(css).toMatch(/\.frame\[data-phone\] \.rightbarCol\s*\{[\s\S]*?position: fixed;[\s\S]*?width: 100%;/)
     expect(css).toMatch(/\.frame\[data-phone\] \.drawerScrim\s*\{[\s\S]*?position: fixed;[\s\S]*?display: block;/)
   })
 })

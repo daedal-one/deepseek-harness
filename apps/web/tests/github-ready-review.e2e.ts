@@ -96,7 +96,7 @@ describe.skipIf(MODE === 'record')('web e2e: GitHub ready-for-review', () => {
       () => scaffold.ctx.llm.registerAdapter([PROVIDER], adapter),
       'GitHub webhook review adapter',
     )
-    await scaffold.ctx.agentDefaultModel.saveSelection({ provider: PROVIDER, model: MODEL })
+    await scaffold.ctx.agentModels.saveSelection({ provider: PROVIDER, model: MODEL })
 
     browser = await chromium.launch()
     page = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: 'en-US' })

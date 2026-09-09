@@ -58,7 +58,7 @@ function snapshotDelivery(delivery: VerifiedWebhookDelivery): VerifiedWebhookDel
 export class WebhookRuntime extends Service {
   static inject = [
     'agents',
-    'agentDefaultModel',
+    'agentModels',
     'agentPresets',
     'permissionPresets',
     'sessionTitle',

@@ -1,7 +1,7 @@
 - id: persona
   name: '@deepseek-ai/dsh-persona'
   config:
-    text: You are Daedal in an assembled keyless acceptance fixture.
+    prefix: You are Daedal in an assembled keyless acceptance fixture.
 
 - id: english-output-guard
   name: '@deepseek-ai/dsh-english-output-guard'

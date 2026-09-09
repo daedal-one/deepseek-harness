@@ -1,6 +1,5 @@
 /** Deterministic policy for exact MCP tools and public URL arguments. @module */
 
-import { lookup } from 'node:dns/promises'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import {
@@ -10,11 +9,7 @@ import {
   type ToolPolicyRequest,
   type ToolPolicyVerdict,
 } from '@deepseek-ai/dsh-tool-policy'
-import {
-  assertPublicAddress,
-  assertPublicLiteral,
-  ipLiteral,
-} from '@deepseek-ai/dsh-web-fetch-http'
+import { resolvePublicAddresses } from '@deepseek-ai/dsh-web-fetch-http'
 import { foldSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
 
 export const name = 'tool-policy-mcp'
@@ -99,13 +94,7 @@ async function assertPublicUrl(value: string, signal: AbortSignal): Promise<void
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     throw new Error('URL argument must use HTTP or HTTPS')
   }
-  assertPublicLiteral(url.hostname)
-  if (ipLiteral(url.hostname) !== undefined) return
-  signal.throwIfAborted()
-  const addresses = await lookup(url.hostname, { all: true, order: 'verbatim' })
-  signal.throwIfAborted()
-  if (addresses.length === 0) throw new Error('URL host resolved to no addresses')
-  for (const record of addresses) assertPublicAddress(record.address)
+  await resolvePublicAddresses(url.hostname, signal)
 }
 
 /** Provider with disposal-aware in-flight DNS validation. */
@@ -135,7 +124,7 @@ class McpPolicyProvider implements ToolPolicyProvider {
     const rule = this.config.rules.find(candidate => candidate.tool === request.toolName)
     if (rule === undefined) return undefined
     if (rule.principals !== undefined) {
-      const principal = foldSubagentDescriptor(request.agent.session.events)?.principal
+      const principal = foldSubagentDescriptor(request.agent.session.snapshotEvents())?.principal
       if (principal === undefined || !rule.principals.includes(principal)) {
         return verdict(this.config.id, 'deny', 100, ['principal'], 'tool call is outside its configured agent role')
       }

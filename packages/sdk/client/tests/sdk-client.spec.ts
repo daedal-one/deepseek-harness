@@ -66,10 +66,7 @@ describe('DeepSeekHarness', () => {
   it('defaults SDK-created agents to the OpenRouter Nitro route', async () => {
     const dir = await tempDir('sdk-client-default-route-')
     const recordFile = join(dir, 'init.jsonl')
-    const harness = new DeepSeekHarness({
-      launch: fakeLaunch({ FAKE_RECORD_INIT: recordFile }),
-      cwd: dir,
-    })
+    const harness = createProcessDeepSeekHarness(fakeLaunch({ FAKE_RECORD_INIT: recordFile }), { cwd: dir })
     cleanups.push(() => harness.close())
     await harness.start()
     await harness.close()

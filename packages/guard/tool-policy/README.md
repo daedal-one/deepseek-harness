@@ -1,4 +1,26 @@
+---
+description: "Combine tool-policy providers through one decision service."
+kind: "package-reference"
+---
+
 # dsh-tool-policy
+
+## Summary
+
+Combine tool-policy providers through one decision service. Consumers submit a tool call and its Agent context, and providers return an allow, ask, or deny decision with attributable evidence. This package defines the vocabulary and registry; an enforcer must apply the result.
+
+## Table of Contents
+
+- [Use this package](#use-this-package)
+- [Service](#service)
+- [Durable events](#durable-events)
+- [Model Experience](#model-experience)
+- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+- [Dev Note](#dev-note)
+
+-----
+
+## Use this package
 
 `ctx.toolPolicy` is the provider-neutral authorization service. Providers register under stable ids; deployments configure an ordered set or omit it to evaluate every registered provider. Duplicate ids and missing configured providers fail loud.
 
@@ -31,3 +53,7 @@ The service does not alter the main request, so it does not invalidate its KV-ca
 ## Known Limitations and Deferred Work
 
 - Provider availability is checked at evaluation time because plugins may reload.
+
+### Dev Note
+
+None.

@@ -86,8 +86,8 @@ function harness(options: HarnessOptions = {}): SessionHarness {
         if (options.failAt === 'permission-set') throw new Error('permission set failed')
       },
     },
-    agentDefaultModel: {
-      currentSelection() {
+    agentModels: {
+      mainSelection() {
         calls.push('default-model')
         return { provider: 'default-provider', model: 'default-model', reasoningEffort: 'high' }
       },

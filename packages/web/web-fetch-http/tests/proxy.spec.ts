@@ -72,16 +72,13 @@ async function installProxy(): Promise<() => Promise<void>> {
 }
 
 describe('fetching through a proxy', () => {
-  it('tunnels the request and never resolves a public address for it', async () => {
+  it('refuses a proxy hop whose destination cannot be pinned', { timeout: 30_000 }, async () => {
     const resolve = vi.spyOn(publicHttpNetwork, 'resolve')
     disposeProxy = await installProxy()
 
-    const result = await new HttpFetchProvider(limits).fetch({ url: proxyTarget })
-
-    expect(result.body.content).toBe('via-proxy')
-    expect(proxied).toEqual([proxyTarget])
-    // Through a proxy the origin's DNS happens proxy-side, so the resolver that rejects non-public
-    // destinations is not consulted at all.
+    await expect(new HttpFetchProvider(limits).fetch({ url: proxyTarget }))
+      .rejects.toThrow(expect.objectContaining({ code: 'WEB_BLOCKED_URL' }))
+    expect(proxied).toEqual([])
     expect(resolve).not.toHaveBeenCalled()
   })
 
@@ -122,7 +119,8 @@ describe('fetching through a proxy', () => {
       await expect(new HttpFetchProvider(limits).fetch({ url: `http://${host}:8080/` }))
         .rejects.toThrow(expect.objectContaining({ code: 'WEB_BLOCKED_URL' }))
       expect(proxied).toEqual([])
-      expect(resolve).toHaveBeenCalledOnce()
+      if (host === '127.0.0.2') expect(resolve).toHaveBeenCalledOnce()
+      else expect(resolve).not.toHaveBeenCalled()
     },
   )
 
@@ -136,7 +134,7 @@ describe('fetching through a proxy', () => {
     expect(isNonPublicIpLiteral('example.com')).toBe(false)
   })
 
-  it('still refuses a cross-origin redirect on the proxied path', async () => {
+  it('refuses the proxy before it can send a redirect', async () => {
     proxy.removeAllListeners('request')
     proxy.on('request', (request, response) => {
       proxied.push(request.url ?? '')
@@ -146,7 +144,7 @@ describe('fetching through a proxy', () => {
     disposeProxy = await installProxy()
 
     await expect(new HttpFetchProvider(limits).fetch({ url: proxyTarget }))
-      .rejects.toThrow(expect.objectContaining({ code: 'WEB_REDIRECT_BLOCKED' }))
+      .rejects.toThrow(expect.objectContaining({ code: 'WEB_BLOCKED_URL' }))
   })
 
   it('still refuses a URL the transport policy rejects before any hop', async () => {

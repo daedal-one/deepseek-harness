@@ -113,6 +113,7 @@ async function flush(): Promise<void> {
 describe('Session Controller Client apply', () => {
   it('routes Session Remote Events and connection generations into the object layer', async () => {
     const connected = vi.spyOn(ClientSessions.prototype, 'handleConnected')
+    const disconnected = vi.spyOn(ClientSessions.prototype, 'handleDisconnected')
     const error = vi.spyOn(ClientSessions.prototype, 'handleSessionError')
     const bench = await mount()
     expect(connected).not.toHaveBeenCalled()
@@ -143,6 +144,9 @@ describe('Session Controller Client apply', () => {
     await flush()
     expect(bench.sessions.list.getSnapshot().byId[sid('session-1')]).toBeUndefined()
 
+    bench.publishGeneration(GENERATION)
+    bench.publishGeneration(undefined)
+    expect(disconnected).toHaveBeenCalledOnce()
     bench.ctx.emit('connection/reset')
     expect(connected).toHaveBeenCalledOnce()
   })

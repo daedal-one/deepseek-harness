@@ -77,5 +77,3 @@ declare module '@deepseek-ai/cordis' {
     uiConversation: import('./conversation/assembly.ts').UiConversation
   }
 }
-
-export { conversationFlowTop, conversationScroller, conversationScrollEventTargets, conversationViewport } from './scroll-owner.ts'

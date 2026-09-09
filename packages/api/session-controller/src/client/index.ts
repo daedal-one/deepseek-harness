@@ -2,7 +2,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent/types'
-import type {} from '@deepseek-ai/dsh-client-connection/client'
+import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 import type {} from '@deepseek-ai/dsh-client-file-upload/client'
 import { createSessionControlStream } from './transport.ts'
 import { ClientSessions } from './sessions/service.ts'
@@ -116,6 +116,10 @@ export function apply(ctx: Context): void {
     failed: (error) => { console.error('[session-controller] control stream failed:', error) },
   })
   control.start()
+  const connection = ctx.get('connection') as ConnectionHandle
+  ctx.effect(() => connection.generation.subscribe(() => {
+    if (connection.generation.getSnapshot() === undefined) sessions.handleDisconnected()
+  }), 'session-controller.client.connection-loss')
   ctx.on('connection/reset', () => { sessions.handleConnected() })
   if (ctx.remote.$host.home !== undefined) sessions.handleConnected()
   ctx.typert.contexts.registerClient('agent', {

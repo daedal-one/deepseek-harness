@@ -18,4 +18,4 @@ cd "$REPOSITORY_ROOT"
 exec node \
   apps/cli/lib/bin.js \
   --profile acp \
-  --config apps/cli/config/examples/paseo/cordis.yml
+  --patch apps/cli/config/examples/paseo/cordis.yml

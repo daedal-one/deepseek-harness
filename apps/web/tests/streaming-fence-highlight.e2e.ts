@@ -114,7 +114,7 @@ describe.skipIf(MODE === 'record')('web e2e: streaming code-fence highlighting',
       () => scaffold.ctx.llm.registerAdapter([PROVIDER], adapter),
       'streaming fence highlight adapter',
     )
-    await scaffold.ctx.agentDefaultModel.saveSelection({ provider: PROVIDER, model: MODEL })
+    await scaffold.ctx.agentModels.saveSelection({ provider: PROVIDER, model: MODEL })
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
     tripwire = watchConsole(page)

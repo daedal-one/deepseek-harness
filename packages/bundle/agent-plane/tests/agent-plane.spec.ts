@@ -9,7 +9,7 @@ import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
 
 const MODEL_FACING_ROWS = [
   'tool-bash', 'tool-pwsh', 'tool-jobs', 'tool-fs', 'tool-fs-search',
-  'tool-str-replace-editor', 'skill-filesystem', 'tool-skill', 'tool-goal',
+  'skill-filesystem', 'tool-skill', 'command-goal', 'tool-goal',
   'plan-mode', 'compaction-basic', 'command-compact', 'tool-result-pruner',
   'tool-subagent-control', 'tool-subagent-list-agents', 'tool-subagent',
   'tool-subagent-fork', 'workflow-worker-thread', 'tool-workflow', 'tool-ralph',
@@ -32,6 +32,8 @@ describe('agent-plane bundle', () => {
       expect(parsed.filter(row => row.id === id && row.disabled === true), id).toHaveLength(1)
     }
     expect(parsed.flatMap(row => row.insert ?? [])).toEqual([{
+      id: 'subagent-model-selection-settings', name: '@deepseek-ai/dsh-tool-subagent/model-selection-settings',
+    }, {
       id: 'agent-presets', name: '@deepseek-ai/dsh-agent-presets', config: { default: 'standard' },
     }])
     expect(manifest.dependencies).toHaveProperty('@deepseek-ai/dsh-agent-presets')

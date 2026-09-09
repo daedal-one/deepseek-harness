@@ -37,17 +37,35 @@ Source: [`packages/acp/acp/src/index.ts:75`](../packages/acp/acp/src/index.ts)
 
 ## `@deepseek-ai/dsh-agent-default-model`
 
+Requires: `llm`
+
 ```ts config-catalog
-/** Composition entry for the default model selection. */
+/** Composition entry for fallback and preset-specific main-Agent routes. */
 export interface Config {
-  /** Registered provider route. */
+  /** Fallback provider route for presets without an explicit assignment. */
   provider: string
-  /** Provider-owned model id. */
+  /** Fallback main-Agent model id. */
   model: string
+  /** Fallback main-Agent reasoning effort, or provider/default behavior when absent. */
+  reasoningEffort?: string
+  /** Preset ids mapped to deployment-owned main-Agent routes. */
+  presets?: Record<string, AgentModelPresetRoute>
+}
+
+/** One deployment-owned main-Agent route assigned to a preset. */
+export interface AgentModelPresetRoute {
+  /** Provider route fixed for this preset's main Agent. */
+  provider: string
+  /** Main-Agent model id. */
+  model: string
+  /** Main-Agent reasoning effort, or provider/default behavior when absent. */
+  reasoningEffort?: string
+  /** Graphical label; defaults to the preset id followed by `main agent`. */
+  label?: string
 }
 ```
 
-Source: [`packages/core/agent-default-model/src/index.ts:41`](../packages/core/agent-default-model/src/index.ts)
+Source: [`packages/core/agent-default-model/src/index.ts:96`](../packages/core/agent-default-model/src/index.ts)
 
 <a id="deepseek-aidsh-agent-instructions"></a>
 
@@ -203,17 +221,21 @@ Source: [`packages/api/gateway/src/index.ts:119`](../packages/api/gateway/src/in
 
 ## `@deepseek-ai/dsh-api-session-controller`
 
-Requires: `agentDefaultModel` · `agents` · `attachments` · `fileUploads` · `llm` · `sessions` · `sessionProjections` · `sessionQuery` · `typert` · `workspaceRegistry`
+Requires: `agentModels` · `agents` · `attachments` · `fileUploads` · `llm` · `sessions` · `sessionProjections` · `sessionQuery` · `typert` · `workspaceRegistry`
 
 ```ts config-catalog
 /** Session Controller deployment policy. */
 export interface Config {
   /** Override platform desktop-opener detection. */
   readonly nativeOpen?: boolean
+  /** Maximum serialized history page or opening snapshot, except one indivisible message group. */
+  readonly historyPageMaxBytes?: number
+  /** Maximum ordinary Session rows per list page. */
+  readonly sessionListPageSize?: number
 }
 ```
 
-Source: [`packages/api/session-controller/src/index.ts:71`](../packages/api/session-controller/src/index.ts)
+Source: [`packages/api/session-controller/src/index.ts:74`](../packages/api/session-controller/src/index.ts)
 
 <a id="deepseek-aidsh-api-settings-controller"></a>
 
@@ -558,6 +580,46 @@ export interface Config {
 
 Source: [`packages/e2b/e2b/src/index.ts:45`](../packages/e2b/e2b/src/index.ts)
 
+<a id="deepseek-aidsh-english-output-guard"></a>
+
+## `@deepseek-ai/dsh-english-output-guard`
+
+Requires: `llm` · `agents` · `systemPrompt`
+
+```ts config-catalog
+/** Load-time configuration; every deployment-sensitive choice is explicit. */
+export interface Config {
+  /** Exact agent-loop routes whose successful streams are inspected. */
+  targets: ModelRoute[]
+  /** Auxiliary model route used for translation. */
+  translator: ModelRoute
+  /** Minimum unprotected Han code points required to trigger translation. */
+  hanMinChars: number
+  /** Minimum Han share among unprotected letters and digits. */
+  hanRatio: number
+  /** Maximum serialized translation data characters accepted for dispatch. */
+  maxTranslationInputChars: number
+  /** Output-token cap sent to the translator. */
+  maxOutputTokens: number
+  /** Complete auxiliary translation deadline in milliseconds. */
+  timeoutMs: number
+  /** Whether translation failure replays prose or replaces affected prose. */
+  failureMode: 'preserve' | 'block'
+  /** Whether the first changed prose block receives a visible translation notice. */
+  translationNotice: 'none' | 'append'
+}
+
+/** Exact provider/model identity. */
+export interface ModelRoute {
+  /** Registered LLM provider name. */
+  readonly provider: string
+  /** Exact model identifier exposed by the provider. */
+  readonly model: string
+}
+```
+
+Source: [`packages/guard/english-output-guard/src/index.ts:37`](../packages/guard/english-output-guard/src/index.ts)
+
 <a id="deepseek-aidsh-experimental-agent-team"></a>
 
 ## `@deepseek-ai/dsh-experimental-agent-team`
@@ -880,7 +942,7 @@ Source: [`packages/goal/goal/src/index.ts:172`](../packages/goal/goal/src/index.
 
 ## `@deepseek-ai/dsh-headless`
 
-Requires: `agentDefaultModel` · `agents` · `sessions`
+Requires: `agentModels` · `agents` · `sessions`
 
 ```ts config-catalog
 /** Plugin config: the task resolved from this app's injected provider service. */
@@ -890,7 +952,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/bundle/headless/src/index.ts:34`](../packages/bundle/headless/src/index.ts)
+Source: [`packages/bundle/headless/src/index.ts:35`](../packages/bundle/headless/src/index.ts)
 
 <a id="deepseek-aidsh-hooks-claude-code"></a>
 
@@ -1030,15 +1092,17 @@ export interface Config {
   /** Listen port; zero requests an OS-assigned port. */
   port: number
   /** Response compression for socket-backed HTTP requests. @default 'none' */
-  compression?: 'none' | 'gzip'
+  compression?: 'none' | 'gzip' | 'brotli'
   /** Gzip DEFLATE level from 0 through 9. @default 1 */
   compressionLevel?: number
-  /** Minimum known response length eligible for gzip; unknown-length streams are eligible. @default 1024 */
+  /** Brotli quality from 0 through 11; gzip remains the fallback. @default 9 */
+  compressionBrotliQuality?: number
+  /** Minimum known response length eligible for compression; unknown-length streams are eligible. @default 1024 */
   compressionThresholdBytes?: number
 }
 ```
 
-Source: [`packages/host/webserver/src/index.ts:59`](../packages/host/webserver/src/index.ts)
+Source: [`packages/host/webserver/src/index.ts:60`](../packages/host/webserver/src/index.ts)
 
 <a id="deepseek-aidsh-invariants"></a>
 
@@ -1208,6 +1272,8 @@ export interface PiAiProviderProfile {
    * model the catalog does not describe is refused rather than skipped.
    */
   modelOverrides?: Record<string, PiAiModelOverride>
+  /** Additive request-wire aliases inheriting complete installed model metadata. */
+  modelAliases?: Record<string, PiAiModelAlias>
   /**
    * pi-ai wire-compatibility switches defaulting every model on this route
    * whose protocol declares them; each model's own `compat` overrides per
@@ -1277,6 +1343,11 @@ export interface PiAiProviderProfile {
 export interface PiAiModelProfile {
   /** Model id sent to the provider and accepted by {@link GenerateOptions.model}. */
   id: string
+  /**
+   * Installed model on this provider route whose metadata this entry inherits.
+   * The configured {@link id} remains the request-wire model identifier.
+   */
+  catalogModel?: string
   /** Display name for selectors; defaults to the catalog name, then the id. */
   name?: string
   /** Maximum combined request and response context in tokens. */
@@ -1319,7 +1390,13 @@ export interface PiAiModelProfile {
  * rest of the catalog serving untouched, which is what makes "correct one
  * model, keep the other thirty-seven" a three-line edit.
  */
-export type PiAiModelOverride = Omit<PiAiModelProfile, 'id'>
+export type PiAiModelOverride = Omit<PiAiModelProfile, 'id' | 'catalogModel'>
+
+/** Additive request-wire alias inheriting one installed catalog model. */
+export type PiAiModelAlias = Omit<PiAiModelProfile, 'id' | 'catalogModel'> & {
+  /** Installed model whose complete metadata the alias inherits. */
+  catalogModel: string
+}
 
 /**
  * pi-ai wire-compatibility switches, set on the route (its models' default) or
@@ -1340,6 +1417,8 @@ export type PiAiModelOverride = Omit<PiAiModelProfile, 'id'>
  * switch settable on one is settable on all three.
  */
 export interface PiAiCompatProfile {
+  /** Provider routing sent as the OpenRouter request provider field; openai-completions. */
+  openRouterRouting?: OpenRouterRouting
   /** Whether the endpoint accepts `store`; `openai-completions`. */
   supportsStore?: boolean
   /**
@@ -1433,9 +1512,9 @@ export type PiAiThinkingFormat = NonNullable<OpenAICompletionsCompat['thinkingFo
 export type PiAiThinkingTokenBudgetField = NonNullable<OpenAICompletionsCompat['thinkingTokenBudgetField']>
 ```
 
-Depends on: `Api` (`@earendil-works/pi-ai`) · `CacheRetention` (`@earendil-works/pi-ai`) · `Model` (`@earendil-works/pi-ai`) · `ModelThinkingLevel` (`@earendil-works/pi-ai`) · `OpenAICompletionsCompat` (`@earendil-works/pi-ai`) · [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts) · `ThinkingBudgets` (`@earendil-works/pi-ai`) · `Transport` (`@earendil-works/pi-ai`)
+Depends on: `Api` (`@earendil-works/pi-ai`) · `CacheRetention` (`@earendil-works/pi-ai`) · `Model` (`@earendil-works/pi-ai`) · `ModelThinkingLevel` (`@earendil-works/pi-ai`) · `OpenAICompletionsCompat` (`@earendil-works/pi-ai`) · `OpenRouterRouting` (`@earendil-works/pi-ai`) · [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts) · `ThinkingBudgets` (`@earendil-works/pi-ai`) · `Transport` (`@earendil-works/pi-ai`)
 
-Source: [`packages/llm/llm-pi-ai/src/config.ts:221`](../packages/llm/llm-pi-ai/src/config.ts)
+Source: [`packages/llm/llm-pi-ai/src/config.ts:225`](../packages/llm/llm-pi-ai/src/config.ts)
 
 <a id="deepseek-aidsh-llm-replay"></a>
 
@@ -1582,7 +1661,7 @@ Requires: `tools`
 export type Config = StdioConfig | StreamableHttpConfig
 
 /** Config for connecting to an MCP server via a spawned child process over stdio. */
-export interface StdioConfig {
+export interface StdioConfig extends ToolProjectionConfig {
   /** Selects child-process stdio transport. */
   transport: 'stdio'
   /**
@@ -1601,6 +1680,8 @@ export interface StdioConfig {
   cwd: string
   /** Per-tool-call timeout in milliseconds. */
   toolCallTimeoutMs: number
+  /** Managed process-tree TERM-to-KILL grace in milliseconds. */
+  processGraceMs: number
   /** Fail plugin activation when the initial connection or tool synchronization fails. */
   failOnStartupError: boolean
   /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
@@ -1608,7 +1689,7 @@ export interface StdioConfig {
 }
 
 /** Config for connecting to an MCP server over Streamable HTTP (SSE). */
-export interface StreamableHttpConfig {
+export interface StreamableHttpConfig extends ToolProjectionConfig {
   /** Selects Streamable HTTP transport. */
   transport: 'streamable-http'
   /**
@@ -1629,6 +1710,20 @@ export interface StreamableHttpConfig {
   reconnect?: ReconnectConfig
 }
 
+/** MCP discovery and argument projection shared by both transports. */
+export interface ToolProjectionConfig {
+  /** Exact raw MCP tool names to publish; omission publishes the complete server list. */
+  includeTools?: string[]
+  /** Raw argument names removed from every published input schema. */
+  removeArguments?: string[]
+  /** Raw string arguments removed from schemas and bound to the executing Agent session id. */
+  bindSessionArguments?: string[]
+  /** Exact tools whose hidden provider domain argument is derived from a model URL argument. */
+  urlHostBindings?: UrlHostBinding[]
+  /** Reuse one MCP client or create one isolated client per executing Agent. */
+  clientLifetime: ClientLifetime
+}
+
 /** Automatic reconnect policy for one MCP server connection. */
 export interface ReconnectConfig {
   /** Reconnect automatically after a lost connection (default true). */
@@ -1640,9 +1735,72 @@ export interface ReconnectConfig {
   /** Consecutive failed attempts per outage before giving up for good (default 10). */
   maxAttempts?: number
 }
+
+/** Derive one hidden provider hostname argument from a model-visible URL argument. */
+export interface UrlHostBinding {
+  /** Raw MCP tool whose arguments participate in this binding. */
+  readonly tool: string
+  /** Model-visible string or string-array URL argument used as the hostname source. */
+  readonly sourceArgument: string
+  /** Hidden provider argument populated with the unique validated hostnames. */
+  readonly targetArgument: string
+}
+
+/** Connection ownership for model tool calls. */
+export type ClientLifetime = 'plugin' | 'agent'
 ```
 
-Source: [`packages/mcp/mcp-client/src/index.ts:98`](../packages/mcp/mcp-client/src/index.ts)
+Source: [`packages/mcp/mcp-client/src/index.ts:119`](../packages/mcp/mcp-client/src/index.ts)
+
+<a id="deepseek-aidsh-memory-extractor-llm"></a>
+
+## `@deepseek-ai/dsh-memory-extractor-llm`
+
+Requires: `llm` · `memory` · `sessions`
+
+```ts config-catalog
+/** Required extraction bounds and route. */
+export interface Config {
+  /** Registered auxiliary LLM provider id. */
+  provider: string
+  /** Provider-owned auxiliary model id. */
+  model: string
+  /** Maximum UTF-8 bytes in the completed-turn event JSON. */
+  maxInputBytes: number
+  /** Auxiliary generation output-token cap. */
+  maxOutputTokens: number
+  /** End-to-end auxiliary request deadline in milliseconds. */
+  timeoutMs: number
+  /** Maximum active plus queued extraction jobs. */
+  maxQueue: number
+  /** Maximum simultaneously active auxiliary requests. */
+  concurrency: number
+  /** Maximum proposals accepted from one auxiliary result. */
+  maxProposals: number
+}
+```
+
+Source: [`packages/memory/memory-extractor-llm/src/index.ts:14`](../packages/memory/memory-extractor-llm/src/index.ts)
+
+<a id="deepseek-aidsh-memory-sqlite"></a>
+
+## `@deepseek-ai/dsh-memory-sqlite`
+
+Requires: `memory`
+
+```ts config-catalog
+/** SQLite path, retention, and bounded-search deployment policy. */
+export interface Config {
+  /** Absolute path of the application-owned SQLite database. */
+  path: string
+  /** Age in days after which rejected or superseded project records are removed. */
+  retentionDays?: number
+  /** Maximum records returned by one provider query. */
+  maxSearchResults?: number
+}
+```
+
+Source: [`packages/memory/memory-sqlite/src/index.ts:13`](../packages/memory/memory-sqlite/src/index.ts)
 
 <a id="deepseek-aidsh-message-feedback"></a>
 
@@ -2611,6 +2769,24 @@ export interface Config {
 
 Source: [`packages/subagent/subagent-fork-in-process/src/index.ts:31`](../packages/subagent/subagent-fork-in-process/src/index.ts)
 
+<a id="deepseek-aidsh-subagent-result-status-block"></a>
+
+## `@deepseek-ai/dsh-subagent-result-status-block`
+
+Requires: `subagents`
+
+```ts config-catalog
+/** Text protocol enforced by one validator instance. */
+export interface Config {
+  /** Unique name selected by `dsh-tool-subagent`. */
+  validator: string
+  /** Role protocol to validate. */
+  kind: 'implementer-status' | 'review-verdict'
+}
+```
+
+Source: [`packages/subagent/subagent-result-status-block/src/index.ts:22`](../packages/subagent/subagent-result-status-block/src/index.ts)
+
 <a id="deepseek-aidsh-subagent-spawn-in-process"></a>
 
 ## `@deepseek-ai/dsh-subagent-spawn-in-process`
@@ -2937,6 +3113,180 @@ export interface Config {
 
 Source: [`packages/lsp/tool-lsp/src/index.ts:57`](../packages/lsp/tool-lsp/src/index.ts)
 
+<a id="deepseek-aidsh-tool-memory-reviewer"></a>
+
+## `@deepseek-ai/dsh-tool-memory-reviewer`
+
+Requires: `subagents`
+
+```ts config-catalog
+/** Trusted child principal allowed to receive reviewer prompt and tools. */
+export interface Config {
+  /** Config-owned durable child principal authorized to review memory. */
+  reviewerPrincipal?: string
+}
+```
+
+Source: [`packages/memory/tool-memory-reviewer/src/index.ts:18`](../packages/memory/tool-memory-reviewer/src/index.ts)
+
+<a id="deepseek-aidsh-tool-policy"></a>
+
+## `@deepseek-ai/dsh-tool-policy`
+
+```ts config-catalog
+/** Registry routing configuration. */
+export interface Config {
+  /** Ordered provider ids; omission evaluates every registered provider. */
+  readonly providers?: string[]
+}
+```
+
+Source: [`packages/guard/tool-policy/src/index.ts:65`](../packages/guard/tool-policy/src/index.ts)
+
+<a id="deepseek-aidsh-tool-policy-enforcer"></a>
+
+## `@deepseek-ai/dsh-tool-policy-enforcer`
+
+Requires: `tools` · `toolPolicy`
+
+```ts config-catalog
+/** Tool-policy enforcer configuration. */
+export interface Config {
+  /** Optional conjunction over the session's durable permission values. */
+  readonly enforceWhen?: EnforcementCondition
+  /** Consecutive identical ask verdicts required before human approval. */
+  readonly approvalThreshold?: number
+}
+
+/** Effective permission values for which the enforcer evaluates policy. */
+export interface EnforcementCondition {
+  /** Sandbox modes that activate policy evaluation when configured. */
+  readonly sandboxModes?: readonly SandboxMode[]
+  /** Approval policies that activate policy evaluation when configured. */
+  readonly approvalPolicies?: readonly ApprovalPolicy[]
+}
+```
+
+Depends on: [`ApprovalPolicy`](subsystems/approval.md) · [`SandboxMode`](subsystems/sandbox.md)
+
+Source: [`packages/guard/tool-policy-enforcer/src/index.ts:25`](../packages/guard/tool-policy-enforcer/src/index.ts)
+
+<a id="deepseek-aidsh-tool-policy-mcp"></a>
+
+## `@deepseek-ai/dsh-tool-policy-mcp`
+
+Requires: `toolPolicy`
+
+```ts config-catalog
+/** MCP policy provider configuration. */
+export interface Config {
+  /** Stable provider id registered with `ctx.toolPolicy`. */
+  readonly id: string
+  /** Exact public MCP tool rules; tool names must be unique. */
+  readonly rules: readonly McpToolRule[]
+}
+
+/** One exact public MCP tool's deterministic authorization rule. */
+export interface McpToolRule {
+  /** Exact public `mcp__...` tool name observed at execution time. */
+  readonly tool: string
+  /** Deterministic authorization verdict for a valid matching call. */
+  readonly decision: ToolPolicyDecision
+  /** Audit risk score from zero through one hundred. */
+  readonly risk: number
+  /** Non-empty secret-free audit categories. */
+  readonly categories: readonly string[]
+  /** Secret-free audit explanation for the configured verdict. */
+  readonly reason: string
+  /** Trusted child principals allowed to execute this tool; omission permits every Agent. */
+  readonly principals?: readonly string[]
+  /** Root string or string-array arguments that must contain public HTTP(S) URLs when present. */
+  readonly urlArguments: readonly string[]
+  /** Root arguments whose presence is an unconditional policy denial. */
+  readonly forbiddenArguments: readonly string[]
+}
+```
+
+Depends on: [`ToolPolicyDecision`](../packages/guard/tool-policy/src/index.ts)
+
+Source: [`packages/guard/tool-policy-mcp/src/index.ts:39`](../packages/guard/tool-policy-mcp/src/index.ts)
+
+<a id="deepseek-aidsh-tool-policy-shell"></a>
+
+## `@deepseek-ai/dsh-tool-policy-shell`
+
+Requires: `toolPolicy` · `llm`
+
+```ts config-catalog
+/** Shell provider configuration. */
+export interface Config {
+  /** Stable provider id registered with `ctx.toolPolicy`. */
+  readonly id: string
+  /** Explicit shell-tool and argument mappings handled by this provider. */
+  readonly mappings: readonly ShellToolMapping[]
+  /** Independent route that reviews bounded user and acting-model intent. */
+  readonly intent: ClassifierRoute
+  /** Preferred route that classifies direct command effects without raw intent. */
+  readonly primary: ClassifierRoute
+  /** Independent effect route used when preferred evidence is unavailable or invalid. */
+  readonly secondary: ClassifierRoute
+  /** Maximum wall time for the complete model-reviewed decision in milliseconds. */
+  readonly decisionTimeoutMs: number
+  /** Maximum wall time for user-intent preparation outside tool execution. */
+  readonly intentContextTimeoutMs: number
+  /** Maximum completion tokens requested from each auxiliary route. */
+  readonly maxTokens: number
+  /** Maximum command and working-directory length accepted for effect review. */
+  readonly maxCommandChars: number
+  /** Maximum latest direct-user-message length included in intent review. */
+  readonly maxUserMessageChars: number
+  /** Maximum acting-model intent length included in intent review. */
+  readonly maxIntentChars: number
+  /** Maximum raw auxiliary-output length accepted for evidence parsing. */
+  readonly maxOutputChars: number
+  /** Maximum sanitized intent-summary length retained in memory. */
+  readonly maxSummaryChars: number
+  /** Maximum number of closed effects accepted in one auxiliary result. */
+  readonly maxEffects: number
+  /** Ordered deterministic rules whose last matching entry wins. */
+  readonly rules: readonly CommandRule[]
+}
+
+/** Explicit tool argument mapping; no shell name or argument is implicit. */
+export interface ShellToolMapping {
+  /** Exact registered tool name handled as a shell execution. */
+  readonly tool: string
+  /** Root argument containing the complete command string. */
+  readonly commandArgument: string
+  /** Optional root argument containing the acting model's stated intent. */
+  readonly intentArgument?: string
+}
+
+/** One auxiliary review route. */
+export interface ClassifierRoute {
+  /** Exact `ctx.llm` provider id. */
+  readonly provider: string
+  /** Provider-owned model id used for the auxiliary request. */
+  readonly model: string
+  /** Optional provider-neutral reasoning effort for this auxiliary request. */
+  readonly reasoningEffort?: string
+}
+
+/** Ordered glob-like deployment rule. Last matching rule wins. */
+export interface CommandRule {
+  /** Glob-like pattern matched against the complete command. */
+  readonly pattern: string
+  /** Deterministic verdict returned when this rule is the last match. */
+  readonly decision: ToolPolicyDecision
+  /** Secret-free audit explanation for the deterministic verdict. */
+  readonly reason: string
+}
+```
+
+Depends on: [`ToolPolicyDecision`](../packages/guard/tool-policy/src/index.ts)
+
+Source: [`packages/guard/tool-policy-shell/src/index.ts:67`](../packages/guard/tool-policy-shell/src/index.ts)
+
 <a id="deepseek-aidsh-tool-present"></a>
 
 ## `@deepseek-ai/dsh-tool-present`
@@ -3102,6 +3452,10 @@ export interface Config {
    * Agent options applied to every child; omitted fields use child-loop defaults.
    */
   agentOptions?: AgentOptions
+  /** Human-facing role name used by graphical Agent model settings. */
+  agentLabel?: string
+  /** Stable graphical model-settings id; defaults to the tool name in kebab-case. */
+  agentModelId?: string
   /**
    * Per-child persona that shadows `deployment:persona-prefix`. Requires the
    * provider's `persona` capability; omission preserves the deployment persona.
@@ -3128,12 +3482,25 @@ export interface Config {
    * budget belongs to the child runtime or its own deployment.
    */
   maxDepth?: number | 'provider-managed'
+  /**
+   * Optional role-specific result policy. The named validator must be
+   * registered on `ctx.subagents` before a call starts; warnings are attached
+   * to the returned result without replacing the child's output.
+   */
+  resultValidation?: {
+    /** Registered validator name. */
+    validator: string
+    /** Validator-owned role contract for this tool instance. */
+    role: string
+  }
+  /** Config-owned durable authorization principal assigned to this child. */
+  principal?: string
 }
 ```
 
 Depends on: [`AgentOptions`](subsystems/core.md)
 
-Source: [`packages/subagent/tool-subagent/src/index.ts:48`](../packages/subagent/tool-subagent/src/index.ts)
+Source: [`packages/subagent/tool-subagent/src/index.ts:50`](../packages/subagent/tool-subagent/src/index.ts)
 
 <a id="deepseek-aidsh-tool-terminal"></a>
 
@@ -3374,7 +3741,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/web/web-fetch-http/src/index.ts:32`](../packages/web/web-fetch-http/src/index.ts)
+Source: [`packages/web/web-fetch-http/src/index.ts:33`](../packages/web/web-fetch-http/src/index.ts)
 
 <a id="deepseek-aidsh-web-search-exa"></a>
 
@@ -3550,7 +3917,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-client-ui-settings-plugin-inventory` ([`packages/client/ui-settings-plugin-inventory/src/index.ts`](../packages/client/ui-settings-plugin-inventory/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-settings-plugins` ([`packages/client/ui-settings-plugins/src/index.ts`](../packages/client/ui-settings-plugins/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-sidebar` ([`packages/client/ui-sidebar/src/index.ts`](../packages/client/ui-sidebar/src/index.ts))
-- `@deepseek-ai/dsh-client-ui-sidebar-documentpreview` ([`packages/client/ui-sidebar-documentpreview/src/index.ts`](../packages/client/ui-sidebar-documentpreview/src/index.ts))
+- `@deepseek-ai/dsh-client-ui-sidebar-documentpreview` — requires `connection` ([`packages/client/ui-sidebar-documentpreview/src/index.ts`](../packages/client/ui-sidebar-documentpreview/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-sidebar-files` ([`packages/client/ui-sidebar-files/src/index.ts`](../packages/client/ui-sidebar-files/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-sidebar-right` ([`packages/client/ui-sidebar-right/src/index.ts`](../packages/client/ui-sidebar-right/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-skill` ([`packages/client/ui-skill/src/index.ts`](../packages/client/ui-skill/src/index.ts))
@@ -3576,6 +3943,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-host-plugin-inventory` — requires `loader` ([`packages/host/plugin-inventory/src/index.ts`](../packages/host/plugin-inventory/src/index.ts))
 - `@deepseek-ai/dsh-llm` ([`packages/llm/llm/src/index.ts`](../packages/llm/llm/src/index.ts))
 - `@deepseek-ai/dsh-lsp` ([`packages/lsp/lsp/src/index.ts`](../packages/lsp/lsp/src/index.ts))
+- `@deepseek-ai/dsh-memory` ([`packages/memory/memory/src/index.ts`](../packages/memory/memory/src/index.ts))
 - `@deepseek-ai/dsh-schedule` — requires `agents` · `sessions` · `tools` · `sessionPersistence` ([`packages/schedule/schedule/src/index.ts`](../packages/schedule/schedule/src/index.ts))
 - `@deepseek-ai/dsh-session` ([`packages/core/session/src/index.ts`](../packages/core/session/src/index.ts))
 - `@deepseek-ai/dsh-session-checkpoint-policy` — requires `llm` · `sessionPersistence` · `sessions` · `tools` ([`packages/session/session-checkpoint-policy/src/index.ts`](../packages/session/session-checkpoint-policy/src/index.ts))
@@ -3590,9 +3958,10 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-tool-ask-user` — requires `tools` · `userQuestions` ([`packages/interaction/tool-ask-user/src/index.ts`](../packages/interaction/tool-ask-user/src/index.ts))
 - `@deepseek-ai/dsh-tool-call-timeout-policy` — requires `tools` ([`packages/guard/timeout-policy/src/index.ts`](../packages/guard/timeout-policy/src/index.ts))
 - `@deepseek-ai/dsh-tool-cordis` — requires `tools` · `systemPrompt` · `dynamicCordisRunner` · `cordisInspect` ([`packages/extensions/tool-cordis/src/index.ts`](../packages/extensions/tool-cordis/src/index.ts))
+- `@deepseek-ai/dsh-tool-memory` — requires `memory` · `tools` · `systemPrompt` ([`packages/memory/tool-memory/src/index.ts`](../packages/memory/tool-memory/src/index.ts))
 - `@deepseek-ai/dsh-tool-subagent-control` — requires `tools` · `subagents` ([`packages/subagent/tool-subagent-control/src/index.ts`](../packages/subagent/tool-subagent-control/src/index.ts))
 - `@deepseek-ai/dsh-user-questions` ([`packages/interaction/user-questions/src/index.ts`](../packages/interaction/user-questions/src/index.ts))
-- `@deepseek-ai/dsh-webhook` — requires `agents` · `agentDefaultModel` · `agentPresets` · `permissionPresets` · `sessionTitle` · `workspaceRegistry` ([`packages/webhook/webhook/src/index.ts`](../packages/webhook/webhook/src/index.ts))
+- `@deepseek-ai/dsh-webhook` — requires `agents` · `agentModels` · `agentPresets` · `permissionPresets` · `sessionTitle` · `workspaceRegistry` ([`packages/webhook/webhook/src/index.ts`](../packages/webhook/webhook/src/index.ts))
 - `@deepseek-ai/dsh-workspace` — requires `storageDomain` · `sessionPersistence` ([`packages/workspace/workspace/src/index.ts`](../packages/workspace/workspace/src/index.ts))
 
 ## Seam packages (not directly loadable)
@@ -3621,6 +3990,7 @@ Abstract service classes — a deployment loads a concrete implementation packag
 Imported as libraries by other packages; a `cordis.yml` cannot load them.
 
 - `@deepseek-ai/dsh-agent-loop-testkit` ([`packages/test-support/agent-loop-testkit/src/index.ts`](../packages/test-support/agent-loop-testkit/src/index.ts))
+- `@deepseek-ai/dsh-agent-plane` ([`packages/bundle/agent-plane/src/index.ts`](../packages/bundle/agent-plane/src/index.ts))
 - `@deepseek-ai/dsh-anonymous-user-id` ([`packages/identity/anonymous-user-id/src/index.ts`](../packages/identity/anonymous-user-id/src/index.ts))
 - `@deepseek-ai/dsh-app-boot` ([`packages/boot/app-boot/src/index.ts`](../packages/boot/app-boot/src/index.ts))
 - `@deepseek-ai/dsh-atomic-write` ([`packages/util/atomic-write/src/index.ts`](../packages/util/atomic-write/src/index.ts))

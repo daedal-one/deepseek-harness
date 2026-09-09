@@ -33,9 +33,9 @@ interface WindowStats {
   ttftMs: number
   /** Steps carrying a recorded TTFT. */
   ttftSteps: number
-  /** Summed decode wall time over steps that also report output tokens. */
+  /** Summed request wall time over steps that also report output tokens. */
   throughputMs: number
-  /** Summed output tokens over the same decode-timed steps. */
+  /** Summed output tokens over the same request-timed steps. */
   throughputTokens: number
 }
 

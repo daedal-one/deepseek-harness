@@ -102,10 +102,10 @@ export const WELCOME_NOTICE_SETTINGS_NAMESPACE = 'ui-onboarding'
 export const WELCOME_NOTICE_ACK_FIELD = 'welcomeNoticeVersion'
 export const WELCOME_NOTICE_VERSION = '2026-08-13.1'
 export const WELCOME_NOTICE_COPY = {
-  zh: {
-    title: '内测声明',
-    body: 'DeepSeek Harness 目前的 0.1 版本仍处在面向 Harness 开发者进行测试的阶段，还有许多地方需要持续改进和打磨，希望听取广大开发者的反馈建议。预计 DeepSeek Harness 的核心插件以及基础 API 都会在接下来的一段时间内快速迭代、持续演化。\n\n我们期待与全球开发者一起，在开源、开放、可复用、可组合的基础设施之上，共同探索智能上限。欢迎全球 Harness 开发者加入 DSH 插件生态。',
-    continueLabel: '继续',
+  en: {
+    title: 'Internal Testing Notice',
+    body: "DeepSeek Harness 0.1 remains in testing for Harness developers. Many areas need further improvement, and we welcome feedback from the developer community. DeepSeek Harness's core plugins and foundational APIs will continue to evolve rapidly over the coming months.\n\nWe look forward to exploring the limits of intelligence with developers around the world, building on open-source, open, reusable, and composable infrastructure. We welcome Harness developers everywhere to join the DSH plugin ecosystem.",
+    continueLabel: 'Continue',
   },
 } as const
 
@@ -181,6 +181,7 @@ export function recordedSessionFixturePath(path: string, version: number): strin
 
 /** The shipped composition under test: the dsh-base and dsh-web-app bundle patches over the empty profile root. */
 const BASE_PATCH_PATH = join(REPO_ROOT, 'packages/bundle/base/cordis.patch.yml')
+const AGENT_PLANE_PATCH_PATH = join(REPO_ROOT, 'packages/bundle/agent-plane/cordis.patch.yml')
 const WEB_PATCH_PATH = join(REPO_ROOT, 'packages/bundle/web-app/cordis.patch.yml')
 /** The installation anchor whose dependency surface the profile module fallback mirrors. */
 const INSTALL_ANCHOR = join(REPO_ROOT, 'apps/cli/package.json')
@@ -190,7 +191,17 @@ const INSTALL_ANCHOR = join(REPO_ROOT, 'apps/cli/package.json')
 // catch-all would leave resolveModelInfo unroutable and compaction-basic's
 // post-step pressure check would warn every step). The published
 // contextWindow keeps that pressure path provably inert for small fixtures.
-const REPLAY_PROVIDERS = [{
+const REPLAY_PROVIDERS: (ReplayProviderConfig & { models: NonNullable<ReplayProviderConfig['models']> })[] = [{
+  id: 'openrouter',
+  name: 'OpenRouter',
+  models: [{
+    id: 'deepseek/deepseek-v4-flash-0731:nitro',
+    name: 'DeepSeek V4 Flash 0731 (Nitro)',
+    contextWindow: 1_000_000,
+    reasoningEfforts: ['off', 'low', 'medium', 'high', 'xhigh', 'max'],
+    defaultReasoningEffort: 'xhigh',
+  }],
+}, {
   id: 'deepseek-official',
   name: 'DeepSeek',
   models: [
@@ -225,7 +236,7 @@ class RouteOnlyAdapter extends LlmAdapter {
 
   override listModels(provider: string): Promise<readonly LlmModelInfo[]> {
     return Promise.resolve((this.providers.find(entry => entry.id === provider)?.models ?? [])
-      .map(model => ({ provider, id: model.id, name: model.name })))
+      .map(model => ({ provider, id: model.id, name: model.name ?? model.id })))
   }
 
   override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
@@ -356,20 +367,20 @@ export interface LaunchOptions {
    */
   cordisTools?: boolean
   /**
-   * Keep the shipped DeepSeek adapter mounted while masking the process
-   * environment's DEEPSEEK_API_KEY for this scaffold lifetime. This is the
+   * Keep the shipped OpenRouter adapter mounted while masking the process
+   * environment's OPENROUTER_API_KEY for this scaffold lifetime. This is the
    * keyless first-run configuration lane; the default disables the adapter.
    */
-  deepSeekMissingCredential?: boolean
+  openRouterMissingCredential?: boolean
   /** Leave the current welcome notice pending; ordinary scenarios pre-acknowledge it before browser boot. */
   welcomeNoticePending?: boolean
   /**
-   * Patch the shipped DeepSeek search row to a deterministic endpoint and
+   * Patch the shipped OpenRouter search row to a deterministic endpoint and
    * credential reference. Browser search scenarios keep the real provider and
    * credentials seam while avoiding external search traffic and ambient keys.
    */
-  deepSeekSearch?: {
-    /** Anthropic-compatible base URL; the provider appends `/messages`. */
+  openRouterSearch?: {
+    /** Chat Completions base URL; the provider appends `/chat/completions`. */
     baseURL: string
     /** Credential reference resolved by the shipped search provider. */
     apiKeyEnv: string
@@ -434,23 +445,23 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
   if (mode === 'record') {
     // Both owning vitest configs (web unconditionally, snapshot in record
     // mode) load the repo-root .env before this file runs.
-    if (process.env.DEEPSEEK_API_KEY === undefined || process.env.DEEPSEEK_API_KEY.length === 0) {
-      throw new Error('web e2e record mode needs DEEPSEEK_API_KEY (env or repo-root .env)')
+    if (process.env.OPENROUTER_API_KEY === undefined || process.env.OPENROUTER_API_KEY.length === 0) {
+      throw new Error('web e2e record mode needs OPENROUTER_API_KEY (env or repo-root .env)')
     }
   }
-  if (mode === 'record' && options.deepSeekMissingCredential === true) {
-    throw new Error('deepSeekMissingCredential is a keyless replay/refresh option')
+  if (mode === 'record' && options.openRouterMissingCredential === true) {
+    throw new Error('openRouterMissingCredential is a keyless replay/refresh option')
   }
-  const maskDeepSeekCredential = mode !== 'record' && options.deepSeekMissingCredential === true
-  const originalDeepSeekCredential = process.env.DEEPSEEK_API_KEY
+  const maskOpenRouterCredential = mode !== 'record' && options.openRouterMissingCredential === true
+  const originalOpenRouterCredential = process.env.OPENROUTER_API_KEY
   let credentialEnvironmentRestored = false
   const restoreCredentialEnvironment = (): void => {
-    if (credentialEnvironmentRestored || !maskDeepSeekCredential) return
+    if (credentialEnvironmentRestored || !maskOpenRouterCredential) return
     credentialEnvironmentRestored = true
-    if (originalDeepSeekCredential === undefined) {
-      Reflect.deleteProperty(process.env, 'DEEPSEEK_API_KEY')
+    if (originalOpenRouterCredential === undefined) {
+      Reflect.deleteProperty(process.env, 'OPENROUTER_API_KEY')
     } else {
-      process.env.DEEPSEEK_API_KEY = originalDeepSeekCredential
+      process.env.OPENROUTER_API_KEY = originalOpenRouterCredential
     }
   }
   const workspaceCwd = await realpath(await mkdtemp(join(tmpdir(), 'dsh-web-e2e-ws-')))
@@ -496,24 +507,26 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
     if (failures.length > 1) throw new AggregateError(failures, 'web scaffold temp-root setup failed')
     throw error
   }
-  if (maskDeepSeekCredential) Reflect.deleteProperty(process.env, 'DEEPSEEK_API_KEY')
+  if (maskOpenRouterCredential) Reflect.deleteProperty(process.env, 'OPENROUTER_API_KEY')
 
   // The include patch set — the same layer stack the profile boot composes
   // (bundle patches in dsh.profile.bundles order), applied over the SAME empty root (a
   // patch id that stops matching a row fails the boot sweep loudly instead of
   // drifting).
   const basePatches = loadOverlayPatches('web e2e scaffold', BASE_PATCH_PATH)
+  const agentPlanePatches = loadOverlayPatches('web e2e scaffold', AGENT_PLANE_PATCH_PATH)
   const surfacePatches = loadOverlayPatches('web e2e scaffold', WEB_PATCH_PATH)
   const extraOverlayPatches = options.extraOverlayPath === undefined
     ? []
     : loadOverlayPatches('web e2e scaffold', options.extraOverlayPath)
-  const composedRows = composeEntries([basePatches, surfacePatches, extraOverlayPatches])
+  const composedRows = composeEntries([basePatches, agentPlanePatches, surfacePatches, extraOverlayPatches])
   const webRuntimeConfig = composedRows.find(row => row.id === 'web-runtime')?.config as {
     surfaceContext?: boolean
   } | undefined
   const surfaceContext = webRuntimeConfig?.surfaceContext !== false
   const patches: PatchOptions[] = [
     ...basePatches,
+    ...agentPlanePatches,
     ...surfacePatches,
     ...extraOverlayPatches,
     // The roster's shipped presets are the plugin's own, bundled inside
@@ -577,8 +590,8 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
     {
       id: 'webserver',
       config: {
-        host: '127.0.0.1', port: 0, compression: 'gzip',
-        compressionLevel: 1, compressionThresholdBytes: 1024,
+        host: '127.0.0.1', port: 0, compression: 'brotli',
+        compressionLevel: 6, compressionBrotliQuality: 9, compressionThresholdBytes: 1024,
       },
     },
     // The bundle's web-runtime row resolves the same built dist under test
@@ -620,18 +633,19 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
         { id: 'tool-cordis', name: '@deepseek-ai/dsh-tool-cordis' },
       ] }]
       : [],
-    ...options.deepSeekSearch === undefined
+    ...options.openRouterSearch === undefined
       ? []
       : [{
-        id: 'web-search-deepseek',
+        id: 'web-search-openrouter',
         config: {
-          apiKeyEnv: options.deepSeekSearch.apiKeyEnv,
-          baseURL: options.deepSeekSearch.baseURL,
+          apiKeyEnv: options.openRouterSearch.apiKeyEnv,
+          baseURL: options.openRouterSearch.baseURL,
         },
       }],
-    ...mode === 'record' || options.deepSeekMissingCredential === true
+    { id: 'llm-deepseek', disabled: mode !== 'record' },
+    ...mode === 'record' || options.openRouterMissingCredential === true
       ? []
-      : [{ id: 'llm-deepseek', disabled: true }],
+      : [{ id: 'llm-pi-ai', disabled: true }],
   ]
 
   // Sessions inherit the gateway's process.cwd() default; run the boot from
@@ -765,7 +779,7 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
         ...(replayChildFixtures === undefined ? {} : { childFiles: replayChildFixtures }),
         ...(options.paceMs === undefined ? {} : { paceMs: options.paceMs }),
       })
-    } else if (mode !== 'record' && options.deepSeekMissingCredential !== true) {
+    } else if (mode !== 'record' && options.openRouterMissingCredential !== true) {
       // No fixture and no shipped adapter would leave the tree with ZERO
       // provider routes — a state no product composition has, and one the
       // composer refuses to type into. Register the same routes
@@ -985,7 +999,7 @@ export function normalizeWebSessionVolatiles(log: string, workspaceCwd?: string)
       for (const cwd of cwdSpellings) normalized = replaceWebCwd(normalized, cwd)
       return normalized
     })) as { type?: unknown; data?: { endpoint?: unknown } }
-    if (record.type === 'web/deepseek-search-llm-request' && typeof record.data?.endpoint === 'string') {
+    if (record.type === 'web/openrouter-search-llm-request' && typeof record.data?.endpoint === 'string') {
       record.data.endpoint = '{{webSearchEndpoint}}'
     }
     return JSON.stringify(record)

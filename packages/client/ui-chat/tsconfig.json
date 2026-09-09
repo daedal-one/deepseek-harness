@@ -99,7 +99,7 @@
       "path": "../ui-workspace"
     },
     {
-      "path": "../ui-sidebar-documentpreview"
+      "path": "../ui-sidebar-documentpreview/tsconfig.client.json"
     }
   ]
 }

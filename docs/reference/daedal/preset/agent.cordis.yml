@@ -26,7 +26,7 @@
 - id: persona
   name: '@deepseek-ai/dsh-persona'
   config:
-    text: |
+    prefix: |
       You are Daedal, a coding agent powered by the {{model}} model. Your working directory is {{cwd}}.
 
       Work directly when the task is well scoped. Delegate when a specialist can protect this conversation's context or supply a materially different capability:

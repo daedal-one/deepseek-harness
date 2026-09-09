@@ -22,6 +22,12 @@
     },
     {
       "path": "../../settings/settings"
+    },
+    {
+      "path": "../../typert/protocol"
+    },
+    {
+      "path": "../../util/brand"
     }
   ]
 }

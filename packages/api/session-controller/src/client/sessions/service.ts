@@ -394,7 +394,12 @@ export class ClientSessions implements ISessions {
     this.manager.handleSessionError(...args)
   }
 
-  /** Rebuild the Session baseline and every opened window after connection. */
+  /** Retain loaded transcripts while the Host generation is unavailable. */
+  handleDisconnected(): void {
+    this.manager.handleDisconnected()
+  }
+
+  /** Repair queryable baselines after the Host connection returns. */
   handleConnected(): void {
     this.manager.handleConnected()
   }

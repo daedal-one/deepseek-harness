@@ -5,7 +5,7 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent, AgentHandle, AssistantStreamFrame, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
 import AgentDefaultModelConfig from '@deepseek-ai/dsh-agent-default-model'
-import { LlmAttemptId, createAssistantMessage, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { LlmAttemptId, createAssistantMessage, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import SessionStore from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Session, UserMessage } from '@deepseek-ai/dsh-session'
@@ -85,6 +85,7 @@ async function bench(script: Script): Promise<{
   let out = ''
   let err = ''
   const order: string[] = []
+  await ctx.plugin(LlmRuntime)
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
@@ -152,7 +153,7 @@ describe('headless runner', () => {
       preset: {
         id: 'daedal',
         mount(agentCtx) {
-          mounted = agentCtx.agent !== undefined
+          mounted = agentCtx instanceof Context
         },
       },
       created(options) {
@@ -414,7 +415,7 @@ describe('headless runner', () => {
     const exited = new Promise<number>((resolve) => {
       ctx.provide('appExit', resolve)
     })
-    ctx.provide('agentDefaultModel', { currentSelection: () => ({ provider: 'p', model: 'm' }) } as never)
+    ctx.provide('agentModels', { mainSelection: () => ({ provider: 'p', model: 'm' }) } as never)
     ctx.provide('sessions', { flush: () => Promise.resolve(true) } as never)
     ctx.provide('agents', { create: () => Promise.reject(new Error('factory exploded')) } as never)
     apply(ctx, { task: 't' })
@@ -431,7 +432,7 @@ describe('headless runner', () => {
     const exited = new Promise<number>((resolve) => {
       ctx.provide('appExit', resolve)
     })
-    ctx.provide('agentDefaultModel', { currentSelection: () => ({ provider: 'p', model: 'm' }) } as never)
+    ctx.provide('agentModels', { mainSelection: () => ({ provider: 'p', model: 'm' }) } as never)
     ctx.provide('sessions', { flush: () => Promise.resolve(true) } as never)
     const rejected = {
       then(_resolve: (value: never) => void, reject: (reason: unknown) => void): void {
@@ -452,7 +453,7 @@ describe('headless runner', () => {
     internals.stderr = { write: () => true }
     ctx.provide('appExit', () => { exited = true })
     const services = ctx.plugin((child: Context) => {
-      child.provide('agentDefaultModel', { currentSelection: () => ({ provider: 'p', model: 'm' }) } as never)
+      child.provide('agentModels', { mainSelection: () => ({ provider: 'p', model: 'm' }) } as never)
       child.provide('sessions', {} as never)
       child.provide('agents', {} as never)
     })

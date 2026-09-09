@@ -6,7 +6,7 @@ import {
   conversationScrollEventTargets,
   conversationViewport,
   isDocumentScroller,
-} from '../src/client/scroll-owner.ts'
+} from '../src/scroll-owner.ts'
 
 afterEach(() => {
   document.body.replaceChildren()

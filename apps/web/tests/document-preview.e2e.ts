@@ -129,7 +129,7 @@ describe.skipIf(MODE === 'record')('web e2e: document preview through Files', ()
         '<rect width="1200" height="1600" fill="#2463eb"/>',
         '</svg>',
       ].join('')),
-      writeFile(join(cwd, 'smoke.pdf'), pdfFixture()),
+      writeFile(join(cwd, 'smoke.pdf'), pdfFixture(true)),
     ])
 
     const column = page.locator('[data-rightbar-col]')
@@ -262,6 +262,11 @@ describe.skipIf(MODE === 'record')('web e2e: document preview through Files', ()
       `- Parent unchanged: ${String(await page.locator('html').getAttribute('data-document-preview-escape') === null)}`,
     ].join('\n'))
 
+    const fontResponse = page.waitForResponse((response) => {
+      if (!response.url().endsWith('/api/pdf-assets')) return false
+      const request = response.request().postDataJSON() as { payload?: { kind?: string } }
+      return request.payload?.kind === 'standardFontDataUrl'
+    })
     await openFile('smoke.pdf')
     await expect.poll(() => viewer.innerText()).toBe('PDF')
     const canvas = preview.getByRole('img', { name: 'PDF page 1', exact: true })
@@ -273,6 +278,11 @@ describe.skipIf(MODE === 'record')('web e2e: document preview through Files', ()
     expect(firstColor).toBe('red')
     const workerNames = await Promise.all(page.workers().map(worker => worker.evaluate(() => self.name)))
     expect(workerNames).toContain('dsh-pdf')
+    const font = await fontResponse
+    expect(font.status()).toBe(200)
+    const fontEnvelope = await font.json() as { result: { ok: boolean; value: unknown } }
+    expect(fontEnvelope.result.ok).toBe(true)
+    expect(typeof fontEnvelope.result.value).toBe('string')
     await preview.locator('[data-pdf-page="2"]').scrollIntoViewIfNeeded()
     const secondPage = preview.getByRole('img', { name: 'PDF page 2', exact: true })
     await secondPage.waitFor({ state: 'visible', timeout: 30_000 })

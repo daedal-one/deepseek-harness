@@ -458,7 +458,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Owns live Agent handles, the create/resume factory seam, and process-local initiator propagation.',
   },
   {
-    key: 'agentDefaultModel',
+    key: 'agentModels',
     pkg: 'agent-default-model',
     title: 'Default Agent model selection',
     mode: 'core',

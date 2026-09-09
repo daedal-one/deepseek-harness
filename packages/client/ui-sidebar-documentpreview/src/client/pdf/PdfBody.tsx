@@ -7,6 +7,7 @@ import type { DocumentPreviewProps } from '../document/contract.ts'
 import { LoadingIndicator } from '../LoadingIndicator.tsx'
 import { DEFAULT_PDF_VIEW, type PdfStore } from './store.ts'
 import { renderPdfPage, type PdfDocument } from './document.ts'
+import type { ReadPdfAsset } from './assets.ts'
 import { openPdf } from './runtime.ts'
 import { PdfWorkerFailure } from './errors.ts'
 import type {} from './locales.ts'
@@ -14,6 +15,8 @@ import css from './PdfBody.module.css'
 
 /** A record's viewing preferences survive body unmounts and leave with the tab. */
 export interface PdfBodyInjected {
+  /** Exact-name resource reader using the active Connection. */
+  readonly readAsset: ReadPdfAsset
   /**
    * Retain viewing preferences until the tab record ends.
    * @param tabId - owning tab.
@@ -40,7 +43,7 @@ export function PdfBody(props: PdfBodyProps): ReactNode {
   const data = props.content.kind === 'bytes' ? props.content.data : undefined
   const [load, setLoad] = useState<LoadState>()
   const [attempt, setAttempt] = useState(0)
-  const { retainTab, actions, t } = props
+  const { retainTab, readAsset, actions, t } = props
   const pageVisible = useCallback((page: number): void => {
     actions.page(tab.id, page)
   }, [actions, tab.id])
@@ -53,7 +56,7 @@ export function PdfBody(props: PdfBodyProps): ReactNode {
     setLoad(undefined)
     const session = openPdf(data, signal, (error) => {
       if (!signal.aborted) setLoad({ kind: 'failed', data, error })
-    })
+    }, readAsset)
     void session.document.then(
       (document) => { if (!signal.aborted) setLoad({ kind: 'loaded', data, document }) },
       (error: unknown) => { if (!signal.aborted) setLoad({ kind: 'failed', data, error }) },
@@ -62,7 +65,7 @@ export function PdfBody(props: PdfBodyProps): ReactNode {
       lifetime.abort()
       void session.dispose()
     }
-  }, [data, tab.signal, attempt])
+  }, [data, tab.signal, attempt, readAsset])
   if (data === undefined) return <p className={css.status} role="alert">{t('unsupported')}</p>
   if (load?.data !== data) return <LoadingIndicator className={css.status} label={t('loading')} />
   if (load.kind === 'failed') {

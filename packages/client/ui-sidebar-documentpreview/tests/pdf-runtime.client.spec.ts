@@ -6,7 +6,6 @@ import type { PdfDocument, PdfSession } from '../src/client/pdf/document.ts'
 const api = vi.hoisted(() => ({ getDocument: vi.fn(), createWorker: vi.fn(), destroyBridge: vi.fn() }))
 vi.mock('pdfjs-dist', () => ({ getDocument: api.getDocument, PDFWorker: { create: api.createWorker } }))
 vi.mock('../src/client/pdf/assets.ts', () => ({
-  workerSource: 'export const WorkerMessageHandler = {}',
   createPdfBinaryDataFactory: () => class { fetch() { return Promise.resolve(new Uint8Array()) } },
 }))
 import { openPdf } from '../src/client/pdf/runtime.ts'
@@ -51,7 +50,7 @@ afterEach(async () => {
   }
 })
 
-function setup(controller = new AbortController(), failed = vi.fn()) {
+async function setup(controller = new AbortController(), failed = vi.fn()) {
   const loading = Promise.withResolvers<PdfDocument>()
   const entered = Promise.withResolvers<unknown>()
   const destroy = vi.fn(async () => {})
@@ -60,15 +59,16 @@ function setup(controller = new AbortController(), failed = vi.fn()) {
     return { promise: loading.promise, destroy }
   })
   const data = new TextEncoder().encode('%PDF-test')
-  const session = openPdf(data, controller.signal, failed)
+  const session = openPdf(data, controller.signal, failed, async () => new Uint8Array())
   sessions.push(session)
   void session.document.catch(() => {})
+  await Promise.resolve()
   return { loading, entered, destroy, controller, failed, session, data }
 }
 
 describe('PDF Worker lifecycle', () => {
   it('starts a real module-worker port before calling getDocument with complete bytes and local assets', async () => {
-    const h = setup()
+    const h = await setup()
     expect(workers[0]!.options).toEqual({ type: 'module', name: 'dsh-pdf' })
     expect(api.getDocument).not.toHaveBeenCalled()
     workers[0]!.ready()
@@ -96,8 +96,25 @@ describe('PDF Worker lifecycle', () => {
     expect(revokeURL).toHaveBeenCalledExactlyOnceWith('blob:pdf-worker')
   })
 
+  it('cancels a pending worker download without constructing a late worker', async () => {
+    const resource = Promise.withResolvers<Uint8Array>()
+    const controller = new AbortController()
+    const read = vi.fn<(kind: string, filename: string, signal: AbortSignal) => Promise<Uint8Array>>(() => resource.promise)
+    const session = openPdf(new Uint8Array(), controller.signal, vi.fn(), read)
+    sessions.push(session)
+    const rejected = expect(session.document).rejects.toMatchObject({ name: 'AbortError' })
+    controller.abort()
+    await rejected
+    resource.resolve(new Uint8Array())
+    await session.dispose()
+    expect(read).toHaveBeenCalledWith('workerSource', 'pdf.worker.min.mjs', expect.any(AbortSignal))
+    expect(read.mock.calls[0]?.[2].aborted).toBe(true)
+    expect(workers).toEqual([])
+    expect(createURL).not.toHaveBeenCalled()
+  })
+
   it('cancels startup before the worker handshake without invoking PDF.js', async () => {
-    const h = setup()
+    const h = await setup()
     h.controller.abort()
     await expect(h.session.document).rejects.toMatchObject({ name: 'AbortError' })
     await h.session.dispose()
@@ -108,7 +125,7 @@ describe('PDF Worker lifecycle', () => {
   })
 
   it('awaits document destruction before terminating a healthy worker and rejects a late load', async () => {
-    const h = setup()
+    const h = await setup()
     workers[0]!.ready()
     await h.entered.promise
     const destruction = Promise.withResolvers<undefined>()
@@ -126,7 +143,7 @@ describe('PDF Worker lifecycle', () => {
   })
 
   it('reports worker startup failure and releases its Blob without a fake-worker fallback', async () => {
-    const h = setup()
+    const h = await setup()
     const error = new ErrorEvent('error', { message: 'worker blocked' })
     workers[0]!.dispatchEvent(error)
     await expect(h.session.document).rejects.toMatchObject({ kind: 'worker', cause: error })
@@ -137,7 +154,7 @@ describe('PDF Worker lifecycle', () => {
   })
 
   it('reports a worker crash after loading and releases the document and worker', async () => {
-    const h = setup()
+    const h = await setup()
     workers[0]!.ready()
     await h.entered.promise
     h.loading.resolve({ numPages: 1, getPage: vi.fn() })
@@ -154,7 +171,7 @@ describe('PDF Worker lifecycle', () => {
   it('allocates nothing for an already-ended document lifetime', async () => {
     const controller = new AbortController()
     controller.abort()
-    const h = setup(controller)
+    const h = await setup(controller)
     await expect(h.session.document).rejects.toMatchObject({ name: 'AbortError' })
     await h.session.dispose()
     expect(workers).toEqual([])
@@ -163,7 +180,7 @@ describe('PDF Worker lifecycle', () => {
   })
 
   it('ignores unrelated Worker wire messages until its own startup acknowledgement', async () => {
-    const h = setup()
+    const h = await setup()
     for (const data of [null, 'noise', { action: 'ready', sourceName: 'worker' }, { type: 'other-worker' }]) {
       workers[0]!.dispatchEvent(new MessageEvent('message', { data }))
     }
@@ -178,7 +195,7 @@ describe('PDF Worker lifecycle', () => {
     const callbackError = new Error('listener failed')
     const failed = vi.fn(() => { throw callbackError })
     const log = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const h = setup(new AbortController(), failed)
+    const h = await setup(new AbortController(), failed)
     workers[0]!.dispatchEvent(new MessageEvent('messageerror'))
     await expect(h.session.document).rejects.toBeInstanceOf(PdfWorkerFailure)
     await h.session.dispose()
@@ -188,7 +205,7 @@ describe('PDF Worker lifecycle', () => {
   })
 
   it('suppresses late failure reports and finishes abort cleanup when the worker crashes', async () => {
-    const h = setup()
+    const h = await setup()
     workers[0]!.ready()
     await h.entered.promise
     h.loading.resolve({ numPages: 1, getPage: vi.fn() })
@@ -208,7 +225,7 @@ describe('PDF Worker lifecycle', () => {
 
   it('logs a library teardown rejection after releasing the bridge, Worker, and Blob', async () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const h = setup()
+    const h = await setup()
     workers[0]!.ready()
     await h.entered.promise
     h.loading.resolve({ numPages: 1, getPage: vi.fn() })
@@ -226,7 +243,7 @@ describe('PDF Worker lifecycle', () => {
     vi.stubGlobal('Worker', vi.fn(function blockedWorker() {
       throw new DOMException('Worker blocked by policy', 'SecurityError')
     }))
-    const h = setup()
+    const h = await setup()
     await expect(h.session.document).rejects.toMatchObject({ name: 'SecurityError' })
     expect(revokeURL).toHaveBeenCalledOnce()
     expect(api.getDocument).not.toHaveBeenCalled()

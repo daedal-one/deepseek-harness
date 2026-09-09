@@ -3,6 +3,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '../index.ts'
 import type { DocumentPreviewDefinition } from '../document/registry.ts'
 import { PdfBody, type PdfBodyInjected } from './PdfBody.tsx'
+import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
+import { createReadPdfAsset } from './assets.ts'
 import { createPdfStore } from './store.ts'
 import { en, zh } from './locales.ts'
 
@@ -24,6 +26,7 @@ export function apply(ctx: Context): void {
   const t = ctx.locale.bind('sidebarPdf')
   ctx.effect(() => ctx.documentPreviews.register(pdfBodyDefinition(() => t('title'))))
   const store = createPdfStore()
+  const readAsset = createReadPdfAsset((ctx.get('connection') as ConnectionHandle).rpc)
   const retained = new Map<AbortSignal, () => void>()
   ctx.effect(() => () => {
     for (const forget of retained.values()) forget()
@@ -31,6 +34,7 @@ export function apply(ctx: Context): void {
   ctx.effect(() => ctx.slots.inject('sidebar.right.tab.document', () => ctx.slots.register({
     name: 'sidebar.right.tab.document', key: PDF_BODY_ID, locale: 'sidebarPdf', store,
     inject: (_sessionId, actions): PdfBodyInjected => ({
+      readAsset,
       retainTab: (tabId, signal) => {
         if (signal.aborted) { actions.forget(tabId); return }
         if (retained.has(signal)) return

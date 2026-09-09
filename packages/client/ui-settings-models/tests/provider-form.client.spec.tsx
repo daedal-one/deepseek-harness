@@ -861,12 +861,12 @@ describe('hand-declared providers', () => {
     // The route id, not the stored name: it is what the route will be called
     // the moment the field is cleared.
     expect(name.placeholder).toBe('acme-gateway')
-    fireEvent.change(name, { target: { value: 'Acme Gateway' } })
+    fireEvent.change(name, { target: { value: 'Renamed Gateway' } })
     fireEvent.click(screen.getByText(en.apply))
 
     await waitFor(() => { expect(mutate).toHaveBeenCalledTimes(1) })
     expect(firstMutate(mutate).ops)
-      .toEqual([{ op: 'set', path: ['providers', 'acme-gateway', 'displayName'], value: 'Acme Gateway' }])
+      .toEqual([{ op: 'set', path: ['providers', 'acme-gateway', 'displayName'], value: 'Renamed Gateway' }])
   })
 
   it('offers the composition name as what a cleared field falls back to', async () => {

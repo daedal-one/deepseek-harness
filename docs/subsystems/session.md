@@ -712,11 +712,11 @@ inspect( sessionId: SessionId, signal?: AbortSignal, ): Promise<SessionInspectio
 
 /**
  * Read all visible Session rows without resuming an Agent.
- * @param _request - reserved empty list request.
+ * @param request - optional page size and cursor for persisted session metadata.
  * @param signal - cancellation for persistence reads.
  * @returns visible Session summaries ordered by activity.
  */
-@Remote('list') async list(_request: SessionListRequest, signal: AbortSignal): Promise<SessionListValue>
+@Remote('list') async list(request: SessionListRequest, signal: AbortSignal): Promise<SessionListValue>
 
 /**
  * Search visible Session content without resuming an Agent.
@@ -809,6 +809,14 @@ workspaceDesktop(): { name: string; available: boolean; fileManager: 'finder' | 
  * @returns acknowledgement that cancellation was requested.
  */
 @Remote('cancel') cancel(request: SessionCancelRequest): SessionCancelValue
+
+/**
+ * Read one original Tool result omitted from a history page.
+ * @param request - authorized address and result sequence.
+ * @param signal - cancellation for the read.
+ * @returns the exact original result event.
+ */
+@Remote('historyDetail') historyDetail(request: SessionHistoryDetailRequest, signal: AbortSignal): Promise<SessionEventEntry>
 
 /**
  * Read one cold-safe, message-aligned Session history page.

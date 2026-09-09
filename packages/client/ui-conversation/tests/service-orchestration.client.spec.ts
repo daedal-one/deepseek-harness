@@ -129,7 +129,7 @@ describe('ConversationController', () => {
         new File([Uint8Array.of(1)], 'pasted.png', { type: 'image/png' }),
       ])
       expect(attachment?.id).toBe('abababab-abab-4bab-abab-abababababab')
-       if (attachment?.kind !== 'image') throw new Error('expected an image draft')
+      if (attachment?.kind !== 'image') throw new Error('expected an image draft')
       expect(attachment?.previewUrl).toBe('blob:draft-insecure-origin')
     } finally {
       created.mockRestore()

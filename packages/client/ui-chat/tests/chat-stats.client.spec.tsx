@@ -58,10 +58,10 @@ describe('deriveStats', () => {
     // The window fold's counts are only the fallback for assemblies without
     // the sessionStats projection; the paged window is not an accounting
     // source either, so the fold exposes no billing fields (billing rides the
-    // tokenUsage projection); decodeTokens is a throughput input, not a
+    // tokenUsage projection); throughputTokens is a throughput input, not a
     // billed total.
     expect(Object.keys(stats).sort()).toEqual(
-      ['decodeMs', 'decodeTokens', 'llmMs', 'steps', 'toolMs', 'ttftMs', 'ttftSteps', 'turns'],
+      ['llmMs', 'steps', 'throughputMs', 'throughputTokens', 'toolMs', 'ttftMs', 'ttftSteps', 'turns'],
     )
   })
 
@@ -93,7 +93,7 @@ describe('deriveStats', () => {
     expect(stats.toolMs).toBe(3_000)
   })
 
-  it('sums ttft per recorded step and decode throughput inputs per usage-carrying step', () => {
+  it('sums first-token latency separately from full-request output throughput', () => {
     const sampled: AssistantMessageNode = {
       ...assistant(1, 1, { outputTokens: 40 }),
       timing: { stepStartTime: 1_000, firstTokenTime: 1_800, completedTime: 4_800 },
@@ -105,9 +105,9 @@ describe('deriveStats', () => {
     const stats = deriveStats([sampled, ttftOnly, assistant(3, 2)])
     expect(stats.ttftMs).toBe(1_200)
     expect(stats.ttftSteps).toBe(2)
-    // The usage-less step contributes no decode share, keeping the ratio honest.
-    expect(stats.decodeMs).toBe(3_000)
-    expect(stats.decodeTokens).toBe(40)
+    // Only requests with both output usage and complete request timing contribute.
+    expect(stats.throughputMs).toBe(3_800)
+    expect(stats.throughputTokens).toBe(40)
   })
 })
 
@@ -131,7 +131,7 @@ describe('StatsPills', () => {
   /** A whole-log sessionStats value: zeros plus overrides. */
   function sessionStats(overrides: Record<string, number>): Record<string, number> {
     return {
-      turns: 0, steps: 0, llmMs: 0, toolMs: 0, ttftMs: 0, ttftSteps: 0, decodeMs: 0, decodeTokens: 0,
+      turns: 0, steps: 0, llmMs: 0, toolMs: 0, ttftMs: 0, ttftSteps: 0, throughputMs: 0, throughputTokens: 0,
       ...overrides,
     }
   }
@@ -152,7 +152,7 @@ describe('StatsPills', () => {
     return { uncachedInputTokens, outputTokens: 1, cacheReadTokens, cacheWriteTokens: 0 }
   }
 
-  /** A step whose timing yields 3.8s LLM, 0.8s TTFT, and 20 tok/s over 60 tokens. */
+  /** A step whose timing yields 3.8s LLM, 0.8s TTFT, and 16 tok/s over 60 tokens. */
   const timedStep = (): AssistantMessageNode => ({
     ...assistant(1, 1, { outputTokens: 60 }),
     timing: { stepStartTime: 1_000, firstTokenTime: 1_800, completedTime: 4_800 },
@@ -205,12 +205,12 @@ describe('StatsPills', () => {
     expect(view.getAllByRole('button')[0]!.textContent).toContain(expected)
   })
 
-  it('exposes output speed on the counts pill when decode timing exists', () => {
+  it('exposes output speed on the counts pill when full request timing exists', () => {
     const { source } = makeSource({ nodes: [timedStep()] })
     const view = render(<StatsPills {...props(source)} />)
     const timePill = view.getAllByRole('button')[0]!
-    expect(timePill.textContent).toBe('1 turns 1 steps·20 tok/s')
-    expect(timePill.getAttribute('aria-label')).toBe('1 turns 1 steps · 20 tok/s')
+    expect(timePill.textContent).toBe('1 turns 1 steps·16 tok/s')
+    expect(timePill.getAttribute('aria-label')).toBe('1 turns 1 steps · 16 tok/s')
   })
 
   it('click-opens the time-and-speed dialog carrying the time split and speeds', () => {
@@ -235,7 +235,7 @@ describe('StatsPills', () => {
     // No tool call in this session: the row is absent, not zeroed.
     expect(details.textContent).not.toContain('Tool time')
     expect(details.textContent).toContain('Avg time to first token (TTFT)0.8s')
-    expect(details.textContent).toContain('Tokens per second (TPS)20 tok/s')
+    expect(details.textContent).toContain('Tokens per second (TPS)16 tok/s')
     // Token accounting lives on the usage pill's own dialog, not here.
     expect(dialog.textContent).not.toContain('Token usage')
   })
@@ -301,20 +301,20 @@ describe('StatsPills', () => {
     const { source } = makeSource({ nodes: [timedStep()] })
     const view = render(<StatsPills {...props(source, { tokenUsage: tokenUsage(9_995, 5) })} t={t} />)
     const [timePill, usagePill] = [...view.getAllByRole('button')] as [HTMLElement, HTMLElement]
-    expect(timePill.textContent).toBe('1 轮 1 步·20 tok/s')
+    expect(timePill.textContent).toBe('1 turns 1 steps·16 tok/s')
     // Whole-log total 9995 + 5 + 1 compacts to 10K.
-    expect(usagePill.textContent).toBe('10K tok·缓存命中 99.95%')
+    expect(usagePill.textContent).toBe('10K tok·Cache hit 99.95%')
     fireEvent.click(timePill)
     const timeDialog = view.getByRole('dialog')
-    expect(timeDialog.getAttribute('aria-label')).toBe('会话统计')
-    expect(timeDialog.textContent).toContain('模型用时3.8秒')
-    expect(timeDialog.textContent).toContain('首 token 平均（TTFT）0.8秒')
-    expect(timeDialog.textContent).toContain('输出速度（TPS）20 tok/s')
+    expect(timeDialog.getAttribute('aria-label')).toBe('Session statistics')
+    expect(timeDialog.textContent).toContain('LLM time3.8s')
+    expect(timeDialog.textContent).toContain('Avg time to first token (TTFT)0.8s')
+    expect(timeDialog.textContent).toContain('Tokens per second (TPS)16 tok/s')
     fireEvent.keyDown(document, { key: 'Escape' })
     fireEvent.click(usagePill)
     const usageDialog = view.getByRole('dialog')
-    expect(usageDialog.getAttribute('aria-label')).toBe('Token 用量')
-    expect(usageDialog.textContent).toContain('未缓存输入5 tok')
+    expect(usageDialog.getAttribute('aria-label')).toBe('Token usage')
+    expect(usageDialog.textContent).toContain('Uncached input5 tok')
   })
 
   it('keeps the durable usage pill after the visible step window is empty', () => {
@@ -391,17 +391,17 @@ describe('StatsPills', () => {
       tokenUsage: USAGE,
       sessionStats: sessionStats({
         turns: 200, steps: 200, llmMs: 100_000, toolMs: 62_000,
-        ttftMs: 1_600, ttftSteps: 2, decodeMs: 3_000, decodeTokens: 60,
+        ttftMs: 1_600, ttftSteps: 2, throughputMs: 3_800, throughputTokens: 60,
       }),
     })} />)
     const timePill = view.getAllByRole('button')[0]!
-    expect(timePill.textContent).toBe('200 turns 200 steps·20 tok/s')
+    expect(timePill.textContent).toBe('200 turns 200 steps·16 tok/s')
     fireEvent.click(timePill)
     const dialog = view.getByRole('dialog')
     expect(dialog.textContent).toContain('LLM time1m40s')
     expect(dialog.textContent).toContain('Tool time1m2s')
     expect(dialog.textContent).toContain('Avg time to first token (TTFT)0.8s')
-    expect(dialog.textContent).toContain('Tokens per second (TPS)20 tok/s')
+    expect(dialog.textContent).toContain('Tokens per second (TPS)16 tok/s')
   })
 
   it('omits the cache-hit segment when nothing was billed on the input side', () => {

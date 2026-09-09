@@ -1,16 +1,17 @@
 import { createHash } from 'node:crypto'
 import { performance } from 'node:perf_hooks'
-import type { Browser, CDPSession, Page, Route } from 'playwright'
+import type { Browser, CDPSession, Page } from 'playwright'
 import { chromium } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, onTestFailed, vi } from 'vitest'
 import {
-  CallId,
+  ToolCallId,
   createAssistantMessage,
   createToolResultMessage,
   createUserMessage,
 } from '@deepseek-ai/dsh-llm'
 import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-title'
+import type {} from '@deepseek-ai/dsh-api-session-controller'
 import { launchWebScaffold, seedSession, type WebScaffold } from './scaffold.ts'
 import { newEnglishPage, saveFailureShot } from './support.ts'
 
@@ -49,23 +50,13 @@ function detailPayload(turn: number): string {
 function appendFinalAssistant(session: Session, turn: number): void {
   const step = 2
   const final = `POOR_NETWORK_ASSISTANT_${String(turn)} ${'settled response '.repeat(24)}`
-  const chunks = [
-    session.append('assistant/chunk', {
-      turn, step, chunk: { type: 'block-start', index: 0, blockType: 'text' },
-    }).seq,
-    session.append('assistant/chunk', {
-      turn, step, chunk: { type: 'text-delta', index: 0, text: `POOR_NETWORK_ASSISTANT_${String(turn)} ` },
-    }).seq,
-    session.append('assistant/chunk', {
-      turn, step, chunk: { type: 'text-delta', index: 0, text: 'settled response '.repeat(24) },
-    }).seq,
-    session.append('assistant/chunk', {
-      turn, step, chunk: { type: 'block-end', index: 0, block: { type: 'text', text: final } },
-    }).seq,
-    session.append('assistant/chunk', {
-      turn, step, chunk: { type: 'finish', reason: { kind: 'stop' } },
-    }).seq,
-  ]
+  const stream = [
+    { type: 'block-start', index: 0, blockType: 'text' },
+    { type: 'text-delta', index: 0, text: `POOR_NETWORK_ASSISTANT_${String(turn)} ` },
+    { type: 'text-delta', index: 0, text: 'settled response '.repeat(24) },
+    { type: 'block-end', index: 0, block: { type: 'text', text: final } },
+    { type: 'finish', reason: { kind: 'stop' } },
+  ] satisfies import('@deepseek-ai/dsh-llm').StreamChunk[]
   session.append('assistant/message', {
     turn,
     step,
@@ -74,7 +65,8 @@ function appendFinalAssistant(session: Session, turn: number): void {
       source: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
     }),
     usage: { inputTokens: 1_024, outputTokens: 128 },
-  }, { surfaceOp: 'append', sourceEventSeqs: chunks })
+    stream: stream.map(chunk => ({ type: 'chunk', time: Date.now(), chunk })),
+  }, { surfaceOp: 'append' })
 }
 
 function productionHistoryFixture(): string {
@@ -93,17 +85,18 @@ function productionHistoryFixture(): string {
       })
     }
 
-    const callId = CallId(`poor-network-call-${String(turn)}`)
+    const callId = ToolCallId(`poor-network-call-${String(turn)}`)
     const args = JSON.stringify({ turn, probe: 'poor-connection' })
     session.append('step/start', { turn, step: 1 })
     session.append('assistant/message', {
       turn,
       step: 1,
+      stream: [],
       message: createAssistantMessage({
         content: [{ type: 'tool-call', id: callId, name: 'poor_connection_probe', arguments: args }],
         source: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
       }),
-    }, { surfaceOp: 'append', sourceEventSeqs: [] })
+    }, { surfaceOp: 'append' })
     const call = session.append('tool/call', {
       turn, step: 1, callId, name: 'poor_connection_probe', arguments: args,
     })
@@ -126,11 +119,13 @@ function productionHistoryFixture(): string {
     JSON.stringify({
       type: 'session',
       version: SESSION_FORMAT_VERSION,
+      isSeeded: false,
+      delegationDepth: 0,
       id: '{{sessionId}}',
       createdAt: Date.now() - 60_000,
       cwd: '{{cwd}}',
     }),
-    ...session.events.map(event => JSON.stringify(event)),
+    ...session.snapshotEvents().map(event => JSON.stringify(event)),
     '',
   ].join('\n')
 }
@@ -202,37 +197,14 @@ function appTransfers(transfers: Map<string, Transfer>, baseUrl: string): Transf
     transfer.url.startsWith(baseUrl) && transfer.encodedBytes !== undefined)
 }
 
-async function bodyBytes(cdp: CDPSession, transfer: Transfer): Promise<number> {
-  const response = await cdp.send('Network.getResponseBody', { requestId: transfer.requestId })
-  return response.base64Encoded
-    ? Buffer.from(response.body, 'base64').byteLength
-    : Buffer.byteLength(response.body, 'utf8')
-}
-
-async function fulfillTimeout(route: Route): Promise<void> {
-  const request = route.request().postDataJSON() as { rpcId: string }
-  await route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify({
-      type: 'server-response',
-      rpcId: request.rpcId,
-      result: {
-        ok: false,
-        error: { code: 'transport-timeout', message: 'simulated constrained-link timeout', details: {} },
-      },
-    }),
-  })
-}
-
 describe('web e2e: poor-connection budgets and recovery', () => {
   let scaffold: WebScaffold
   let browser: Browser
   let page: Page
   let cdp: CDPSession
   let transfers: Map<string, Transfer>
+  const historyFrames: string[] = []
   const pageErrors: string[] = []
-  const connectionWarnings: string[] = []
 
   beforeAll(async () => {
     scaffold = await launchWebScaffold({})
@@ -240,14 +212,20 @@ describe('web e2e: poor-connection budgets and recovery', () => {
     browser = await chromium.launch()
     page = await newEnglishPage(browser, 844)
     page.on('pageerror', (error) => { pageErrors.push(String(error)) })
-    page.on('console', (message) => {
-      if (/connection lost/i.test(message.text())) connectionWarnings.push(message.text())
-    })
     cdp = await page.context().newCDPSession(page)
     transfers = await installTransferProbe(cdp)
+    cdp.on('Network.webSocketFrameReceived', (event) => {
+      const body = event.response.payloadData
+      if (event.response.opcode !== 1) return
+      const frame = JSON.parse(body) as { type?: string; value?: { type?: string; header?: { id?: string } } }
+      if (frame.type === 'item' && frame.value?.type === 'snapshot' && frame.value.header?.id === SESSION_ID) {
+        historyFrames.push(body)
+      }
+    })
   }, 120_000)
 
   afterAll(async () => {
+    vi.restoreAllMocks()
     const failures: unknown[] = []
     await browser?.close().catch((error: unknown) => failures.push(error))
     await scaffold?.close().catch((error: unknown) => failures.push(error))
@@ -255,19 +233,22 @@ describe('web e2e: poor-connection budgets and recovery', () => {
     if (failures.length > 1) throw new AggregateError(failures, 'poor-connection browser teardown failed')
   })
 
-  it('meets cold and warm Fast 3G boot budgets with one cached registration bundle', async () => {
+  it('meets cold and warm Fast 3G boot budgets with cached registration combos', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-poor-connection-boot'))
     await throttle(cdp, 'fast-3g')
     const coldStarted = performance.now()
-    await page.goto(scaffold.baseUrl, { waitUntil: 'load', timeout: 30_000 })
+    await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load', timeout: 30_000 })
     await waitForShell(page)
     const coldMs = performance.now() - coldStarted
     const cold = appTransfers(transfers, scaffold.baseUrl)
     const coldBytes = cold.reduce((sum, transfer) => sum + (transfer.encodedBytes ?? 0), 0)
-    const boot = cold.filter(transfer => new URL(transfer.url).pathname === '/plugins/boot.js')
+    const boot = cold.filter((transfer) => {
+      const url = new URL(transfer.url)
+      return url.pathname === '/plugins/' && url.search.startsWith('??')
+    })
     const individualPlugins = cold.filter((transfer) => {
       const path = new URL(transfer.url).pathname
-      return path.startsWith('/plugins/') && path !== '/plugins/boot.js'
+      return path.startsWith('/plugins/') && path !== '/plugins/'
     })
     const index = cold.find(transfer => new URL(transfer.url).pathname === '/')
 
@@ -283,9 +264,9 @@ describe('web e2e: poor-connection budgets and recovery', () => {
     })}`)
     expect(coldMs).toBeLessThanOrEqual(COLD_BOOT_MAX_MS)
     expect(coldBytes).toBeLessThanOrEqual(COLD_BOOT_MAX_BYTES)
-    expect(boot).toHaveLength(1)
-    expect(boot[0]?.headers?.['content-encoding']).toBe('br')
-    expect(boot[0]?.headers?.['cache-control']).toContain('immutable')
+    expect(boot.length).toBeGreaterThanOrEqual(2)
+    expect(boot.every(transfer => transfer.headers?.['content-encoding'] === 'br')).toBe(true)
+    expect(boot.every(transfer => transfer.headers?.['cache-control']?.includes('immutable'))).toBe(true)
     expect(individualPlugins).toEqual([])
     expect(index?.headers?.['cache-control']).toBe('no-store')
 
@@ -296,7 +277,7 @@ describe('web e2e: poor-connection budgets and recovery', () => {
     const warmMs = performance.now() - warmStarted
     const warmImmutable = appTransfers(transfers, scaffold.baseUrl).filter((transfer) => {
       const path = new URL(transfer.url).pathname
-      return path.startsWith('/assets/') || path === '/plugins/boot.js'
+      return path.startsWith('/assets/') || path === '/plugins/'
     })
     console.info(`POOR_CONNECTION_RESULT ${JSON.stringify({
       scenario: 'fast-3g-warm',
@@ -320,17 +301,17 @@ describe('web e2e: poor-connection budgets and recovery', () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-poor-connection-history'))
     if (page.url() === 'about:blank') {
       await throttle(cdp, 'fast-3g')
-      await page.goto(scaffold.baseUrl, { waitUntil: 'load', timeout: 30_000 })
+      await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load', timeout: 30_000 })
       await waitForShell(page)
     }
     let failFirstHistory = true
-    await page.route('**/api/session.history', async (route) => {
+    const follow = scaffold.ctx.sessionController.follow.bind(scaffold.ctx.sessionController)
+    vi.spyOn(scaffold.ctx.sessionController, 'follow').mockImplementation(async function* (request, signal) {
       if (failFirstHistory) {
         failFirstHistory = false
-        await fulfillTimeout(route)
-        return
+        throw new Error('simulated constrained-link timeout')
       }
-      await route.continue()
+      yield* follow(request, signal)
     })
     await throttle(cdp, 'slow-400')
     const searchButton = page.getByRole('button', { name: 'Search sessions', exact: true })
@@ -339,25 +320,22 @@ describe('web e2e: poor-connection budgets and recovery', () => {
     const result = page.getByRole('tree', { name: 'Search results' }).getByRole('treeitem')
     await expect.poll(() => result.count(), { timeout: 30_000 }).toBe(1)
     await result.click()
-    await page.getByText(/Failed to load history: simulated constrained-link timeout \(transport-timeout\)/)
+    await page.getByText(/Failed to load history: simulated constrained-link timeout/)
       .waitFor({ timeout: 10_000 })
 
-    transfers.clear()
+    historyFrames.length = 0
     const historyStarted = performance.now()
     await page.getByRole('button', { name: 'Retry', exact: true }).click()
     await page.getByText(`POOR_NETWORK_ASSISTANT_${String(HISTORY_TURNS)}`, { exact: false })
       .waitFor({ timeout: 30_000 })
     const historyMs = performance.now() - historyStarted
-    const historyTransfer = [...transfers.values()].find(transfer =>
-      transfer.method === 'session.history' && transfer.status === 200 && transfer.encodedBytes !== undefined)
-    expect(historyTransfer).toBeDefined()
-    const historyBytes = await bodyBytes(cdp, historyTransfer!)
+    expect(historyFrames.length).toBeGreaterThan(0)
+    const historyBytes = Buffer.byteLength(historyFrames[0]!, 'utf8')
     console.info(`POOR_CONNECTION_RESULT ${JSON.stringify({
       scenario: 'slow-400-history',
       readyMs: Math.round(historyMs),
       responseBytes: historyBytes,
-      encodedBytes: Math.round(historyTransfer!.encodedBytes ?? 0),
-      encoding: historyTransfer!.headers?.['content-encoding'],
+      carrier: 'WebSocket snapshot including its envelope',
     })}`)
     expect(historyBytes).toBeLessThanOrEqual(HISTORY_MAX_BYTES)
     expect(historyMs).toBeLessThanOrEqual(HISTORY_MAX_MS)
@@ -367,16 +345,18 @@ describe('web e2e: poor-connection budgets and recovery', () => {
       await page.getByText(`POOR_NETWORK_ASSISTANT_${String(turn)}`, { exact: false }).waitFor()
     }
     const latestCall = page.locator(`[data-chat-call-id="poor-network-call-${String(HISTORY_TURNS)}"]`)
-    await latestCall.getByRole('button').first().click()
+    await latestCall.getByRole('button', { name: 'Load full result', exact: true }).click()
+    await latestCall.getByRole('button', { name: 'Load full result', exact: true }).waitFor({ state: 'hidden' })
+    await latestCall.getByText('Tool call', { exact: true }).click()
     await page.getByText(`POOR_NETWORK_DETAIL_${String(HISTORY_TURNS)}`, { exact: false })
       .waitFor({ timeout: 10_000 })
 
-    scaffold.breakEventStreams()
+    await page.context().setOffline(true)
     await throttle(cdp, 'offline')
-    await expect.poll(() => connectionWarnings.length, { timeout: 15_000 }).toBeGreaterThan(0)
     await page.getByText('Reconnecting… showing the last loaded messages', { exact: true })
       .waitFor({ timeout: 15_000 })
     await page.getByText(`POOR_NETWORK_ASSISTANT_${String(HISTORY_TURNS)}`, { exact: false }).waitFor()
+    await page.context().setOffline(false)
     await throttle(cdp, 'slow-400')
     await page.getByText('Reconnecting… showing the last loaded messages', { exact: true })
       .waitFor({ state: 'hidden', timeout: 30_000 })

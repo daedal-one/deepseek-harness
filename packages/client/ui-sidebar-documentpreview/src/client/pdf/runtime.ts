@@ -1,6 +1,6 @@
 /** One real module Worker and PDF.js loading task per mounted binary document. */
 import { getDocument, PDFWorker } from 'pdfjs-dist'
-import { createPdfBinaryDataFactory, workerSource } from './assets.ts'
+import { createPdfBinaryDataFactory, type ReadPdfAsset } from './assets.ts'
 import type { PdfSession } from './document.ts'
 import { PdfWorkerFailure } from './errors.ts'
 
@@ -14,9 +14,15 @@ const WORKER_READY = 'dsh-pdf-worker-ready'
  * @param data - complete PDF bytes retained by the preview; the worker receives a copy.
  * @param signal - document/body lifetime.
  * @param reportFailure - reports a fatal Worker failure, including failures after document loading.
+ * @param readAsset - exact-name resources from the authenticated Host.
  * @returns the pending document and idempotent asynchronous cleanup.
  */
-export function openPdf(data: Uint8Array<ArrayBuffer>, signal: AbortSignal, reportFailure: (error: PdfWorkerFailure) => void): PdfSession {
+export function openPdf(
+  data: Uint8Array<ArrayBuffer>,
+  signal: AbortSignal,
+  reportFailure: (error: PdfWorkerFailure) => void,
+  readAsset: ReadPdfAsset,
+): PdfSession {
   const lifetime = new AbortController()
   const stopped = AbortSignal.any([signal, lifetime.signal])
   const failed = Promise.withResolvers<never>()
@@ -67,10 +73,12 @@ export function openPdf(data: Uint8Array<ArrayBuffer>, signal: AbortSignal, repo
 
   const initialize = async () => {
     stopped.throwIfAborted()
-    const BinaryDataFactory = createPdfBinaryDataFactory()
+    const BinaryDataFactory = createPdfBinaryDataFactory(readAsset, stopped)
     const bytes = data.slice()
+    const workerSource = await readAsset('workerSource', 'pdf.worker.min.mjs', stopped)
+    stopped.throwIfAborted()
     url = URL.createObjectURL(new Blob([
-      workerSource,
+      workerSource as Uint8Array<ArrayBuffer>,
       `\nself.postMessage({type:${JSON.stringify(WORKER_READY)}});\n`,
     ], { type: 'text/javascript' }))
     worker = new Worker(url, { type: 'module', name: 'dsh-pdf' })

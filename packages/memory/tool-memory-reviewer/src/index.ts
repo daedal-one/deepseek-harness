@@ -4,8 +4,8 @@ import z from '@deepseek-ai/schemastery'
 import { MemoryId } from '@deepseek-ai/dsh-memory'
 import type { MemoryScope } from '@deepseek-ai/dsh-memory'
 import { foldSubagentDescriptor, SubagentPrincipal } from '@deepseek-ai/dsh-subagent'
-import { snapshotJsonValue } from '@deepseek-ai/dsh-session'
-import type { JsonValue } from '@deepseek-ai/dsh-session'
+import { snapshotJsonValue } from '@deepseek-ai/dsh-util-values'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-agent'
@@ -37,7 +37,7 @@ function scopeOf(value: 'project' | 'global', exec: ToolRunContext): MemoryScope
 export function assertMemoryReviewerPrincipal(config: Config, exec: ToolRunContext): void {
   const session = exec.agent?.session
   if (session === undefined) throw new Error('memory reviewer tools require an agent-owned execution')
-  const descriptor = foldSubagentDescriptor(session.events)
+  const descriptor = foldSubagentDescriptor(session.snapshotEvents())
   if (descriptor?.principal !== (config.reviewerPrincipal ?? 'memory-reviewer')) {
     throw new Error('memory reviewer authorization denied this execution')
   }

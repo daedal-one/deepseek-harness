@@ -58,11 +58,11 @@ function validateSettled(events: readonly SessionEvent[], fail: InvariantFailure
 }
 
 const install: InvariantInstaller = Object.assign((ctx: Context, fail: InvariantFailure) => {
-  for (const session of ctx.sessions.list()) validateSettled(session.events, fail)
+  for (const session of ctx.sessions.list()) validateSettled(session.snapshotEvents(), fail)
   ctx.on('internal/dispatch', (_mode, eventName, args) => {
     if (eventName !== 'session/event') return
     const [session, event] = args as [Session, SessionEvent]
-    if (event.type === 'step/end' || event.type === 'turn/end') validateSettled([...session.events, event], fail)
+    if (event.type === 'step/end' || event.type === 'turn/end') validateSettled([...session.snapshotEvents(), event], fail)
   }, { global: true })
 }, { inject: ['sessions'] })
 

@@ -1,4 +1,27 @@
+---
+description: "Keep assistant output in English across configured Agent surfaces."
+kind: "package-reference"
+---
+
 # @deepseek-ai/dsh-english-output-guard
+
+## Summary
+
+Deliver assistant prose in English while preserving code and other protected content. The guard buffers target streams and translates unprotected prose through a configured auxiliary model. It logs the original response and translation evidence so the delivered output remains reconstructable.
+
+## Table of Contents
+
+- [Use this package](#use-this-package)
+- [Config](#config)
+- [Buffering and translation](#buffering-and-translation)
+- [Durable audit](#durable-audit)
+- [Model Experience](#model-experience)
+- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+- [Dev Note](#dev-note)
+
+-----
+
+## Use this package
 
 A scoped output policy for deployments whose selected model routes may drift into Han-script prose. It adds an English instruction to the scoped system prompt and wraps `llm/stream`; auxiliary calls and routes not listed in `targets` delegate immediately, while a targeted successful agent-loop response is buffered until its finish is known. Error and aborted responses replay byte-for-byte. A successful response without substantial unprotected Han also replays byte-for-byte, including provider `replayState`.
 
@@ -81,3 +104,7 @@ The auxiliary request is independent of the conversation cache. A changed assist
 - **Han-triggered only** — other non-English scripts do not activate translation.
 - **Text heuristics** — unmarked quoted prose is translatable; only clearly structured spans are protected.
 - **No translation replay cache** — resumed sessions use the already accepted assistant message, but an interrupted request cannot reuse a completed auxiliary translation that never reached the canonical stream.
+
+### Dev Note
+
+None.

@@ -1,4 +1,22 @@
+---
+description: "Store project or global knowledge with evidence and an explicit review lifecycle."
+kind: "package-group"
+---
+
 # memory/ — durable reviewed-memory capability family
+
+## Summary
+
+Store project or global knowledge with evidence and an explicit review lifecycle. Ordinary Agent tools can propose and retrieve records; a principal-authorized reviewer accepts, supersedes, or deletes them. The SQLite provider retains records and revisions across sessions.
+
+## Table of Contents
+
+- [Use this group](#use-this-group)
+- [Dev Note](#dev-note)
+
+-----
+
+## Use this group
 
 This family stores evidence-backed project or global knowledge, keeps extracted statements pending until review, and exposes ordinary and principal-authorized model tools.
 
@@ -11,3 +29,7 @@ This family stores evidence-backed project or global knowledge, keeps extracted 
 | [`memory-extractor-llm/`](memory-extractor-llm/README.md) | Creates bounded project proposals after committed completed turns | appends extraction events and calls `ctx.memory` |
 
 The [memory subsystem reference](../../docs/subsystems/memory.md) defines the provider-neutral data and service API. The [durable reviewed-memory Agent Note](../../.agents/notes/implemented/feature/2026-08-16-durable-reviewed-memory.md) owns the review, authorization, approval, extraction, and persistence decisions.
+
+### Dev Note
+
+None.

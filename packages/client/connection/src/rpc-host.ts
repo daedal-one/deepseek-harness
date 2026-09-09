@@ -80,6 +80,13 @@ export class HostConnectionService extends Service implements HostConnectionHand
     const owner = this.ctx
     return {
       handle: (channel, handler) => this.register(owner, channel, handler),
+      handleRoute: (endpoint, handler) => {
+        const fetchHandler = rpcFetchHandler(API_PATH, handler)
+        return this.registerFetchRoute(owner, {
+          path: `${API_PATH}/${endpoint}`, methods: ['POST'], requestBody: 'buffered',
+          fetch: request => fetchHandler.fetch(request),
+        })
+      },
       intercept: (channel, matches, handler) =>
         this.registerInterceptor(owner, channel, matches, handler),
     }
@@ -206,6 +213,12 @@ export class HostConnectionService extends Service implements HostConnectionHand
   }
 }
 
+/**
+ * Adapt a generic RPC handler for an exact Fetch route or a dedicated channel.
+ * @param channel - URL prefix preceding the endpoint name.
+ * @param handler - endpoint owner receiving validated RPC envelopes.
+ * @returns buffered Fetch handler with method and envelope validation.
+ */
 function rpcFetchHandler(
   channel: string,
   handler: ConnectionRpcHandler,

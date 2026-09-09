@@ -57,6 +57,8 @@ with DeepSeekHarness(
 
 `provider` selects a provider route registered by the chosen Cordis composition; `model` is the model id resolved by that adapter. `reasoning_effort` is an optional non-empty adapter-owned identifier for that exact route; omission preserves the model's own default. `max_tokens` is an optional positive per-request output-token cap for the root agent and its in-process descendants; omission leaves the provider default in control. Initialization rejects a missing adapter, unavailable model, or unsupported effort before a prompt runs. Compaction summaries keep the separate limit configured by their compaction plugin. The bundled default composition registers `deepseek-official`. A custom composition can mount `llm-pi-ai`, configure provider-specific credentials/endpoints there, and select any provider/model present in pi-ai's installed catalog.
 
+The default route is `openrouter` with `deepseek/deepseek-v4-flash-0731:nitro`. The `api_key` and `base_url` options configure OpenRouter; other routes use their profile configuration and explicit environment overrides.
+
 The shipped `sdk-minimal` profile is a standalone explicit tree rather than an overlay on `dsh-base`. Select it with `profile="sdk-minimal"`; the ordinary `model` argument is the sole runtime model selection, including for model ids outside the adapter's advisory catalog. It provides only a platform-selected persistent shell, local execution, and JSONL sessions; filesystem tools, settings, managed credentials, telemetry, Web tools, and the full default tool roster remain available through the separate full `sdk` and `web` profiles.
 
 ## Results and notifications

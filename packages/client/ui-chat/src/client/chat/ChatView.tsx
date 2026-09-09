@@ -1,4 +1,4 @@
-import { conversationFlowTop as flowTop, conversationScroller as scrollerOf, conversationScrollEventTargets, conversationViewport } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import { conversationFlowTop as flowTop, conversationScroller as scrollerOf, conversationScrollEventTargets, conversationViewport } from '@deepseek-ai/dsh-client-ui-primitives'
 // An enclosing `[data-conversation-scroll]` owns scrolling when present;
 // otherwise this view owns it. Each row subscribes to one stable node key.
 
@@ -580,7 +580,6 @@ export function ChatView({
     const local = listRef.current
     /* v8 ignore next -- ref-null guard: effect runs after the list node commits. */
     if (local === null) return
-    const el = scrollerOf(local)
     let sampleTimer: number | undefined
     const sample = (): void => {
       if (!scrollSamplePendingRef.current) return

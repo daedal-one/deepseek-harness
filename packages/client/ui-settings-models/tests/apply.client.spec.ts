@@ -11,7 +11,7 @@ import {
   WELCOME_NOTICE_ACK_FIELD, WELCOME_NOTICE_SETTINGS_NAMESPACE, WELCOME_NOTICE_VERSION,
 } from '../src/onboarding-copy.ts'
 import { ModelsSection } from '../src/client/ModelsSection.tsx'
-import { DeepSeekOnboardingDialog } from '../src/client/DeepSeekOnboardingDialog.tsx'
+import { OpenRouterOnboardingDialog } from '../src/client/OpenRouterOnboardingDialog.tsx'
 import { WelcomeNotice } from '../src/client/WelcomeNotice.tsx'
 import { apply as hostApply } from '../src/index.ts'
 
@@ -30,6 +30,11 @@ async function bench(isLoopback = true, settings?: object, services: object = {}
       describe: vi.fn(() => Promise.resolve({ ok: true, value: {} })),
       set: vi.fn(),
       unset: vi.fn(),
+    },
+    agentModels: {
+      list: vi.fn(() => Promise.resolve({ ok: true, value: { writable: false, revision: 0, targets: [], catalogs: [] } })),
+      save: vi.fn(),
+      reset: vi.fn(),
     },
     llm: {
       listProviders: vi.fn(() => Promise.resolve({ ok: true, value: [] })),
@@ -69,7 +74,7 @@ describe('ui-settings-models apply', () => {
   it('declares the services it uses', () => {
     expect(inject).toEqual([
       'slots', 'locale', 'remote', 'remote.credentials', 'remote.llm', 'remote.settings',
-      'settingsScope', 'settingsSchema',
+      'settingsScope', 'settingsSchema', 'remote.agentModels',
     ])
   })
 
@@ -97,11 +102,11 @@ describe('ui-settings-models apply', () => {
       component: WelcomeNotice,
       options: { id: 'welcome-notice', order: -100 },
     })
-    const deepSeek = onboarding.find(entry => entry.options.id === 'deepseek-official')!
-    expect(deepSeek.component).toBe(DeepSeekOnboardingDialog)
-    expect(deepSeek.options).toMatchObject({ id: 'deepseek-official', order: 0 })
+    const deepSeek = onboarding.find(entry => entry.options.id === 'openrouter')!
+    expect(deepSeek.component).toBe(OpenRouterOnboardingDialog)
+    expect(deepSeek.options).toMatchObject({ id: 'openrouter', order: 0 })
     const deepSeekInjected = (
-      deepSeek.inject as unknown as () => import('../src/client/DeepSeekOnboardingDialog.tsx').DeepSeekOnboardingInjected
+      deepSeek.inject as unknown as () => import('../src/client/OpenRouterOnboardingDialog.tsx').OpenRouterOnboardingInjected
     )()
     expect(deepSeekInjected.hooks.models).toBe(injected.controller.store)
     expect(typeof deepSeekInjected.operations.storeCredential).toBe('function')
@@ -115,7 +120,7 @@ describe('ui-settings-models apply', () => {
     expect(after.slots.entries('settings.section')[0]!.component).toBe(ModelsSection)
     expect(after.slots.entries('settings.onboarding')).toHaveLength(2)
     // The self-inflicted ledger notifications hit the duplicate guard.
-    expect(after.slots.entries('settings.section')).toHaveLength(1)
+    expect(after.slots.entries('settings.section')).toHaveLength(2)
   })
 
   it('the label thunk follows the active locale without re-registration', async () => {
@@ -143,7 +148,7 @@ describe('ui-settings-models apply', () => {
     const b = await bench()
     const redeclare = declare(b.slots)
     await b.ctx.plugin({ inject: [...inject], apply }).await()
-    expect(b.slots.entries('settings.section')).toHaveLength(1)
+    expect(b.slots.entries('settings.section')).toHaveLength(2)
     // Declarer unload: the cascade removes our entry while our local
     // disposer variable goes stale.
     redeclare()
@@ -245,10 +250,10 @@ describe('pushed invalidations', () => {
     declare(b.slots)
     await b.ctx.plugin({ inject: [...inject], apply }).await()
     const entry = b.slots.entries('settings.onboarding')
-      .find(candidate => candidate.options.id === 'deepseek-official')!
+      .find(candidate => candidate.options.id === 'openrouter')!
     const injected = (
       entry.inject as unknown as
-      () => import('../src/client/DeepSeekOnboardingDialog.tsx').DeepSeekOnboardingInjected
+      () => import('../src/client/OpenRouterOnboardingDialog.tsx').OpenRouterOnboardingInjected
     )()
     injected.controller.store.update((state) => { state.status = 'ready' })
     const load = vi.spyOn(injected.controller, 'load').mockResolvedValue()

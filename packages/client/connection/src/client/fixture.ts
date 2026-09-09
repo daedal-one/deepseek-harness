@@ -3588,6 +3588,11 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
     const initial = pageOf(snapshot, undefined, request.maxMessages ?? 50)
     let nextSeq = cursor + 1
     try {
+      const doomed = failNextHistory
+      failNextHistory = false
+      if (historyDelayMs > 0) await new Promise(resolve => setTimeout(resolve, historyDelayMs))
+      signal.throwIfAborted()
+      if (doomed) throw new Error('fixture: simulated history transport failure')
       yield {
         type: 'snapshot',
         header: {

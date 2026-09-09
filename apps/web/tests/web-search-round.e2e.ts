@@ -1,6 +1,6 @@
 // Web e2e scenario for the shipped default search composition. A real browser
-// drives `web_search`; the model stream is replayed while the real DeepSeek
-// provider calls a deterministic local Anthropic-compatible endpoint through
+// drives `web_search`; the model stream is replayed while the real OpenRouter
+// provider calls a deterministic local Chat Completions endpoint through
 // the real credentials service.
 import { readFile } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
@@ -31,7 +31,7 @@ const SEARCH_CREDENTIAL = 'snapshot-search-key'
  * Provider results the double returns per query. The combined result exceeds
  * the shipped `searchMaxResults`, so the tool's round-robin cap and the card's
  * scroll container are both exercised. Each row carries a title, a snippet,
- * and a date, so 8 kept rows exceed the `.sources` 320px max-height.
+ * so 8 kept rows exceed the `.sources` 320px max-height.
  */
 const PROVIDER_RESULT_COUNT = 6
 
@@ -50,11 +50,6 @@ function resultSnippet(queryIndex: number, ordinal: number): string {
   return `Snapshot search ${queryIndex + 1} excerpt ${ordinal}: the harness replays this source list from a local endpoint.`
 }
 
-/** One provider result's `page_age`, by 1-based provider order (July 2026 days 01..12). */
-function resultPageAge(ordinal: number): string {
-  return `2026-07-${String(ordinal).padStart(2, '0')}`
-}
-
 /** The 1-based provider ordinals, in provider order. */
 const RESULT_ORDINALS = Array.from({ length: PROVIDER_RESULT_COUNT }, (_value, index) => index + 1)
 
@@ -63,7 +58,6 @@ const KEPT_SOURCES = RESULT_ORDINALS.flatMap(ordinal => QUERIES.map((_query, que
   url: resultUrl(queryIndex, ordinal),
   title: resultTitle(queryIndex, ordinal),
   snippet: resultSnippet(queryIndex, ordinal),
-  publishedAt: resultPageAge(ordinal),
 }))).slice(0, WEB_SEARCH_MAX_RESULTS)
 
 /** URLs omitted after the combined source cap is reached. */
@@ -77,7 +71,7 @@ interface CapturedSearchRequest {
   body: unknown
 }
 
-/** Start the deterministic DeepSeek Messages double used by the real provider. */
+/** Start the deterministic OpenRouter Chat Completions double used by the real provider. */
 async function startSearchServer(captured: CapturedSearchRequest[]): Promise<{ server: Server; baseURL: string }> {
   const server = createServer((request, response) => {
     let body = ''
@@ -87,11 +81,11 @@ async function startSearchServer(captured: CapturedSearchRequest[]): Promise<{ s
       const parsedBody = JSON.parse(body) as unknown
       captured.push({
         path: request.url ?? '',
-        apiKey: typeof request.headers['x-api-key'] === 'string' ? request.headers['x-api-key'] : undefined,
+        apiKey: typeof request.headers.authorization === 'string' ? request.headers.authorization : undefined,
         body: parsedBody,
       })
       const serializedBody = JSON.stringify(parsedBody)
-      const queryIndex = QUERIES.findIndex(query => serializedBody.includes(`Perform a web search for the query: ${query}`))
+      const queryIndex = QUERIES.findIndex(query => serializedBody.includes(`Use web search to answer this query with cited sources: ${query}`))
       if (queryIndex < 0) {
         response.writeHead(400, { 'content-type': 'application/json' })
         response.end(JSON.stringify({ error: 'unknown fixture query' }))
@@ -99,26 +93,17 @@ async function startSearchServer(captured: CapturedSearchRequest[]): Promise<{ s
       }
       response.writeHead(200, { 'content-type': 'application/json' })
       response.end(JSON.stringify({
-        content: [
-          {
-            type: 'text',
-            text: `Found ${PROVIDER_RESULT_COUNT} sources.`,
-            citations: RESULT_ORDINALS.map(ordinal => ({
-              type: 'web_search_result_location',
-              url: resultUrl(queryIndex, ordinal),
-              cited_text: resultSnippet(queryIndex, ordinal),
-            })),
-          },
-          {
-            type: 'web_search_tool_result',
-            content: RESULT_ORDINALS.map(ordinal => ({
-              type: 'web_search_result',
+        choices: [{ message: {
+          content: `Found ${PROVIDER_RESULT_COUNT} sources.`,
+          annotations: RESULT_ORDINALS.map(ordinal => ({
+            type: 'url_citation',
+            url_citation: {
               url: resultUrl(queryIndex, ordinal),
               title: resultTitle(queryIndex, ordinal),
-              page_age: resultPageAge(ordinal),
-            })),
-          },
-        ],
+              content: resultSnippet(queryIndex, ordinal),
+            },
+          })),
+        } }],
       }))
     })
   })
@@ -149,7 +134,7 @@ describe('web e2e: shipped default web search', () => {
     searchBaseURL = search.baseURL
     scaffold = await launchWebScaffold({
       compareReplaySession: true,
-      deepSeekSearch: {
+      openRouterSearch: {
         baseURL: search.baseURL,
         apiKeyEnv: SEARCH_CREDENTIAL_REF,
       },
@@ -199,21 +184,21 @@ describe('web e2e: shipped default web search', () => {
     for (const query of QUERIES) {
       const request = searchRequests.find(candidate => JSON.stringify(candidate.body).includes(query))
       if (request === undefined) throw new Error(`missing provider request for query: ${query}`)
-      expect(request).toMatchObject({ path: '/messages', apiKey: SEARCH_CREDENTIAL })
+      expect(request).toMatchObject({ path: '/chat/completions', apiKey: `Bearer ${SEARCH_CREDENTIAL}` })
       expect(request.body).toMatchObject({
         messages: [{
           role: 'user',
-          content: [{ type: 'text', text: `Perform a web search for the query: ${query}` }],
+          content: `Use web search to answer this query with cited sources: ${query}`,
         }],
       })
       const tools = (request.body as { tools?: unknown }).tools
       expect(tools).toHaveLength(1)
-      expect((tools as unknown[])[0]).toMatchObject({ type: 'web_search_20250305', name: 'web_search' })
+      expect((tools as unknown[])[0]).toMatchObject({ type: 'openrouter:web_search', parameters: { engine: 'auto' } })
     }
 
     const auxiliaryRequests = sessionEvents.filter(
-      (event): event is Extract<SessionEvent, { type: 'web/deepseek-search-llm-request' }> =>
-        event.type === 'web/deepseek-search-llm-request',
+      (event): event is Extract<SessionEvent, { type: 'web/openrouter-search-llm-request' }> =>
+        event.type === 'web/openrouter-search-llm-request',
     )
     expect(auxiliaryRequests).toHaveLength(QUERIES.length)
     for (const query of QUERIES) {
@@ -223,8 +208,7 @@ describe('web e2e: shipped default web search', () => {
         throw new Error(`missing paired provider request for query: ${query}`)
       }
       expect(auxiliaryRequest.data).toEqual({
-        endpoint: `${searchBaseURL}/messages`,
-        apiVersion: '2023-06-01',
+        endpoint: `${searchBaseURL}/chat/completions`,
         body: request.body,
       })
     }

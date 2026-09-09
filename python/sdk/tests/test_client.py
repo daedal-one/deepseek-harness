@@ -25,8 +25,8 @@ import sys
 
 env_dump = os.environ["ENV_DUMP"]
 json.dump({
-    "DEEPSEEK_API_KEY": os.environ.get("DEEPSEEK_API_KEY"),
-    "DEEPSEEK_BASE_URL": os.environ.get("DEEPSEEK_BASE_URL"),
+    "OPENROUTER_API_KEY": os.environ.get("OPENROUTER_API_KEY"),
+    "OPENROUTER_BASE_URL": os.environ.get("OPENROUTER_BASE_URL"),
     "DSH_CWD": os.environ.get("DSH_CWD"),
     "DSH_SESSION_ROOT": os.environ.get("DSH_SESSION_ROOT"),
     "DSH_CORDIS_CONFIG": os.environ.get("DSH_CORDIS_CONFIG"),
@@ -101,8 +101,8 @@ for line in sys.stdin:
         env={
             "ENV_DUMP": str(env_dump),
             "INIT_DUMP": str(init_dump),
-            "DEEPSEEK_API_KEY": "env-key",
-            "DEEPSEEK_BASE_URL": "http://127.0.0.1:4321",
+            "OPENROUTER_API_KEY": "env-key",
+            "OPENROUTER_BASE_URL": "http://127.0.0.1:4321",
         },
     ) as harness:
         result = harness.run("say hello", session_id="main")
@@ -111,14 +111,14 @@ for line in sys.stdin:
     assert result.finish_reason == "max-tokens"
     assert result.events[-1]["type"] == "turn/end"
     dumped_env = json.loads(env_dump.read_text())
-    assert dumped_env["DEEPSEEK_API_KEY"] == "env-key"
-    assert dumped_env["DEEPSEEK_BASE_URL"] == "http://127.0.0.1:4321"
+    assert dumped_env["OPENROUTER_API_KEY"] == "env-key"
+    assert dumped_env["OPENROUTER_BASE_URL"] == "http://127.0.0.1:4321"
     assert dumped_env["DSH_CWD"] is None
     assert dumped_env["DSH_SESSION_ROOT"] is None
     assert dumped_env["DSH_CORDIS_CONFIG"] is None
     assert json.loads(init_dump.read_text()) == {
         "cwd": str(tmp_path),
-        "provider": "deepseek-official",
+        "provider": "openrouter",
         "model": "deepseek-v4-flash",
         "reasoningEffort": "max",
         "maxTokens": 4096,

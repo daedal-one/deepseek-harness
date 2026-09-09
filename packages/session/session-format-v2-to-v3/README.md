@@ -79,9 +79,13 @@ Source events must be dense from zero. Each original event receives its target p
 | Owner | Fields remapped |
 |---|---|
 | Surface envelope | `sourceEventSeqs[]`; `surfaceOp.start/end` before their canonical rename |
+| `tool-policy/intent-context.data` | `requestSeq` and `userMessageSeq` |
+| `tool-policy/classifier-request.data.input` | `userMessageSeqs[]` for intent input; `intentContextSeq` for effect input |
 | `command/done.data` | `sourceEventSeq` when present |
 | `compaction/summary.data` and `compaction/prune.data` | `shadowedRange.start/end` and `shadowedSeqs[]` |
 | `session/title.data` and `session/title-llm-request.data` | `messageSeqs[]` |
+
+Memory extraction captures retain their original `sourceEventSeqs` and carry `sourceSessionFormatVersion`; the original generation is required because embedded-stream migration can remove cited chunk events. The [fork evidence decision](../../../.agents/notes/implemented/architecture/2026-09-09-fork-session-evidence-migration.md) owns the distinction between captured input and live references.
 
 There is no recursive numeric-field rewrite. Delivery `throughSeq` and `sessionFormatVersion`, session-reference `capturedThroughSeq` and `capturedFormatVersion`, workflow-local `seq`, stream block indices, turn/step numbers, inbox indices, token/byte counts, and all ids keep their source values. Embedded assistant streams, model replay state, tool arguments/results, title-request input text and `data.system` retain their recorded meaning. Compaction payload endpoints keep the names `start/end`; only envelope replacement endpoints are renamed.
 

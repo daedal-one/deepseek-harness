@@ -212,8 +212,6 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
   const patch = (index: number, next: Record<string, string | number | undefined>): void => {
     onChange(models.map((model, at) => {
       if (at !== index) return model
-      // Rebuilt rather than spread over: an emptied optional field has to leave
-      // the profile, not be stored as a value its schema would reject.
       // Spread first so a field this card does not edit survives; an emptied
       // optional field is then dropped rather than stored as a value its
       // schema would reject.

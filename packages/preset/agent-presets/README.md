@@ -25,7 +25,7 @@ Use `dsh-agent-presets` to give each session the tools, prompt sections, and ski
 
 Mount this package in a composition that should give each agent session its own tools, prompt sections, and skills from a preset file. Every session names a preset — explicitly or through the configured default — and is composed from it; without the package, sessions fall back to whatever the host composition mounts.
 
-The shipped Web `standard`, `ptc`, and `cordis` presets include [explicit file delivery](../../client/ui-deliverables/README.md#explicit-deliveries). The `minimal` preset keeps its fixed two-tool training configuration.
+The shipped Web `standard`, `ptc`, and `cordis` presets include [explicit file delivery](../../client/ui-deliverables/README.md#explicit-deliveries). The `minimal` preset keeps its fixed two-tool training configuration. The standard preset exposes Subagent and Forked agent model preferences through the shared Agent settings registry.
 
 ### What a preset gives a session
 

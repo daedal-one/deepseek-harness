@@ -219,7 +219,7 @@ export interface ResolvedSubagentStartRequest extends SubagentStartRequest {
    * Service-owned setup for a trusted principal. Present only after capability
    * validation and consumed by an in-process provider during unpublished setup.
    */
-  readonly principalSetup?: (childCtx: Context) => AgentSetupCommit | void
+  readonly principalSetup?: (childCtx: Context, child: Agent) => AgentSetupCommit | void
 }
 
 /**

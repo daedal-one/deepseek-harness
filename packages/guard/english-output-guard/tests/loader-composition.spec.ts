@@ -10,6 +10,7 @@ import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import LlmRuntime, { createUserMessage, LlmAdapter, type GenerateOptions, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { afterEach, describe, expect, it } from 'vitest'
 import * as guard from '../src/index.ts'
@@ -50,6 +51,7 @@ async function load(): Promise<Context> {
   await writeFile(configPath, [
     "- name: '@deepseek-ai/dsh-llm'",
     "- name: '@deepseek-ai/dsh-session'",
+    "- name: '@deepseek-ai/dsh-session-projection'",
     "- name: '@deepseek-ai/dsh-system-prompt'",
     "- name: '@deepseek-ai/dsh-tools'",
     "- name: '@deepseek-ai/dsh-agent'",
@@ -76,6 +78,7 @@ async function load(): Promise<Context> {
   const modules = new Map<string, unknown>([
     ['@deepseek-ai/dsh-llm', LlmRuntime],
     ['@deepseek-ai/dsh-session', SessionStore],
+    ['@deepseek-ai/dsh-session-projection', SessionProjectionRegistry],
     ['@deepseek-ai/dsh-system-prompt', SystemPrompt],
     ['@deepseek-ai/dsh-tools', ToolRuntime],
     ['@deepseek-ai/dsh-agent', AgentRegistry],
@@ -99,12 +102,12 @@ describe('real Loader English-output composition', () => {
     const loaded = await load()
     expect([...loaded.loader.entries()].filter(entry => entry.fiber === undefined && !entry.disabled)).toEqual([])
     loaded.llm.registerAdapter(['main', 'translator'], new CompositionAdapter())
-    const agent = loaded.agentLoop.create(SessionId('loader-composition'), { provider: 'main', model: 'selected' })
+    const agent = await loaded.agentLoop.create(SessionId('loader-composition'), { provider: 'main', model: 'selected' })
     const idle = nextIdle(loaded, agent)
     agent.followup(createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: 'go' }] }))
     await idle
-    const message = agent.session.events.findLast(event => event.type === 'assistant/message')
+    const message = agent.session.snapshotEvents().findLast(event => event.type === 'assistant/message')
     expect(message?.data.message.content).toEqual([{ type: 'text', text: 'English answer' }])
-    expect(agent.session.events.map(event => event.type)).toContain('english-output/translation-request')
+    expect(agent.session.snapshotEvents().map(event => event.type)).toContain('english-output/translation-request')
   })
 })

@@ -27,6 +27,8 @@ This package is a Web-shell build input. Its static ESM retains third-party impo
 
 Compose feature UI from these atoms whenever the web client needs a standard control or an agent-output renderer. They render through React only and take `--dsw-*` design tokens from the theme, so they fit any plugin without importing the theme or the slot system.
 
+The scroll-owner helpers resolve `[data-conversation-scroll]` against its enclosing phone frame, use document scrolling on phones, and provide viewport-relative positions and event targets that survive a responsive layout change.
+
 <a id="component-catalog"></a>
 ### Component catalog
 

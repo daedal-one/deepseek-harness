@@ -1,7 +1,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import LlmRuntime, {
-  CallId,
+  ToolCallId,
   LlmAdapter,
   ReasoningEffortId,
   type GenerateOptions,
@@ -73,12 +73,12 @@ function fakeAgent(options: { provider: string; model: string } = { provider: 'a
   const events: Array<Record<string, unknown>> = [
     { seq: 1, type: 'turn/start', data: { turn: 1 } },
     { seq: 2, type: 'user/message', data: { source: { kind: 'user' }, content: [{ type: 'text', text: 'inspect it' }] } },
-    { seq: 3, type: 'tool/call', data: { callId: CallId('c'), name: 'bash', arguments: '{}' } },
+    { seq: 3, type: 'tool/call', data: { callId: ToolCallId('c'), name: 'bash', arguments: '{}' } },
   ]
   const session = {
     id: 'session',
     header: { id: 'session', cwd: process.cwd() },
-    events,
+    snapshotEvents: () => [...events],
     append(type: string, data: unknown) {
       const event = { seq: events.length + 1, type, data }
       events.push(event)
@@ -99,7 +99,7 @@ async function setup(adapter?: LlmAdapter, decisionTimeoutMs = 50) {
 
 function evaluate(ctx: Context, agent: Agent, signal = new AbortController().signal) {
   return ctx.toolPolicy.evaluate({
-    callId: CallId('c'), toolName: 'bash', arguments: { command: 'system_profiler SPSoftwareDataType', description: 'inspect' }, agent, signal,
+    callId: ToolCallId('c'), toolName: 'bash', arguments: { command: 'system_profiler SPSoftwareDataType', description: 'inspect' }, agent, signal,
   })
 }
 
@@ -347,11 +347,11 @@ describe('shell classifier dispatch', () => {
     await fiber
     const { agent } = fakeAgent()
     await expect(ctx.toolPolicy.evaluate({
-      callId: CallId('c'), toolName: 'bash', arguments: { command: 'pwd' }, agent, signal: new AbortController().signal,
+      callId: ToolCallId('c'), toolName: 'bash', arguments: { command: 'pwd' }, agent, signal: new AbortController().signal,
     })).resolves.toMatchObject({ decision: 'allow' })
     await fiber.dispose()
     await expect(ctx.toolPolicy.evaluate({
-      callId: CallId('c'), toolName: 'bash', arguments: { command: 'pwd' }, agent, signal: new AbortController().signal,
+      callId: ToolCallId('c'), toolName: 'bash', arguments: { command: 'pwd' }, agent, signal: new AbortController().signal,
     })).rejects.toThrow(/no providers are registered/)
   })
 })

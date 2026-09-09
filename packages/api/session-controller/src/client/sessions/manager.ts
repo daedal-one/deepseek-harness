@@ -539,6 +539,9 @@ export class SessionManager {
     this.listError = null
     this.notifier.markDirty()
     const cursor = this.listCursor
+    const established = this.summaries
+    const mutations: SessionListMutation[] = []
+    this.listMutations = mutations
     this.listInflight = (async () => {
       try {
         const result = await this.remote.session.list({ cursor })
@@ -547,16 +550,24 @@ export class SessionManager {
           return
         }
         const pageById = new Map(result.value.items.map(summary => [summary.sessionId, summary]))
-        this.summaries = this.summaries.map(summary => pageById.get(summary.sessionId) ?? summary)
+        this.summaries = established.map(summary => pageById.get(summary.sessionId) ?? summary)
         const known = new Set(this.summaries.map(summary => summary.sessionId))
         for (const summary of result.value.items) {
           if (known.has(summary.sessionId)) continue
           this.summaries.push(summary)
           known.add(summary.sessionId)
         }
+        for (const summary of this.summaries) {
+          if (!this.prevRunning.has(summary.sessionId)) this.prevRunning.set(summary.sessionId, summary.running)
+        }
+        for (const mutation of mutations) {
+          this.summaries = applyMutation(this.summaries, mutation)
+          this.syncCompletedNotifications()
+        }
+        this.syncCompletedNotifications()
         this.listCursor = result.value.nextCursor
         this.listHasMore = result.value.hasMore
-        for (const summary of result.value.items) {
+        for (const summary of this.summaries) {
           const session = this.sessions.get(summary.sessionId)
           if (session !== undefined) {
             session.handleBlank(summary.blank)
@@ -573,6 +584,7 @@ export class SessionManager {
         this.listError = error
       } finally {
         this.listLoadingMore = false
+        this.listMutations = null
         this.listInflight = null
         this.notifier.markDirty()
       }
@@ -844,6 +856,11 @@ export class SessionManager {
    */
   handleSessionError(sessionId: SessionId, message: string): void {
     this.sessions.get(sessionId)?.handleAgentError(message)
+  }
+
+  /** Mark resident open transcripts as waiting for the next Host baseline. */
+  handleDisconnected(): void {
+    for (const session of this.sessions.values()) session.handleDisconnected()
   }
 
   /**

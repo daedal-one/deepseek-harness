@@ -8,6 +8,8 @@ import { join } from 'node:path'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
+import { SessionId } from '@deepseek-ai/dsh-session'
+import type { AgentHandle } from '@deepseek-ai/dsh-agent'
 import { agentModelTargetId } from '@deepseek-ai/dsh-agent-default-model'
 import { LlmAdapter, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmModelInfo, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
@@ -23,7 +25,7 @@ import {
 } from './scaffold.ts'
 import { newEnglishPage, saveFailureShot } from './support.ts'
 
-const SNAPSHOT_DIR = fileURLToPath(new URL('./snapshots/agent-model-settings', import.meta.url))
+const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/agent-model-settings', import.meta.url))
 const PAGE_EXPECTED = join(SNAPSHOT_DIR, 'agents.expected.md')
 const MODE = webSnapshotMode()
 const NITRO_MODEL = 'deepseek/deepseek-v4-flash-0731:nitro'
@@ -68,6 +70,7 @@ describe.skipIf(MODE === 'record')('web e2e: graphical per-Agent model settings'
   let browser: Browser
   let page: Page
   let tripwire: ReturnType<typeof watchConsole>
+  let presetAgent: AgentHandle | undefined
   let disposeGuru: (() => void) | undefined
   let disposeCodexTarget: (() => void) | undefined
   let disposeCodexAdapter: (() => void) | undefined
@@ -84,14 +87,19 @@ describe.skipIf(MODE === 'record')('web e2e: graphical per-Agent model settings'
         reasoningEffort: ReasoningEffortId('xhigh'),
       },
     })
+    presetAgent = await scaffold.ctx.agents.create({
+      sessionId: SessionId('model-settings-preset'),
+      setup: agentCtx => scaffold.ctx.agentPresets.mount(agentCtx).then(() => undefined),
+    })
     browser = await chromium.launch()
     page = await newEnglishPage(browser, 960)
     tripwire = watchConsole(page)
-    await page.goto(scaffold.baseUrl, { waitUntil: 'load' })
+    await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
   }, 120_000)
 
   afterAll(async () => {
+    await presetAgent?.dispose()
     disposeGuru?.()
     disposeCodexTarget?.()
     disposeCodexAdapter?.()
@@ -101,11 +109,6 @@ describe.skipIf(MODE === 'record')('web e2e: graphical per-Agent model settings'
 
   it('persists and restores the main role while exposing named roles', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-agent-model-settings'))
-    const onboarding = page.getByRole('dialog', { name: 'Add an API key to get started' })
-    await onboarding.waitFor({ timeout: 15_000 })
-    await onboarding.getByRole('button', { name: 'Configure later' }).click()
-    await onboarding.waitFor({ state: 'detached', timeout: 15_000 })
-
     await page.getByRole('button', { name: 'Settings', exact: true }).click()
     const settings = page.getByRole('dialog', { name: 'Settings' })
     await settings.waitFor({ timeout: 10_000 })
@@ -148,8 +151,6 @@ describe.skipIf(MODE === 'record')('web e2e: graphical per-Agent model settings'
     const warningsBefore = tripwire.warnings.length
     await page.reload({ waitUntil: 'load' })
     acknowledgeReloadConnectionLoss(tripwire, warningsBefore)
-    await onboarding.waitFor({ timeout: 15_000 })
-    await onboarding.getByRole('button', { name: 'Configure later' }).click()
     await page.getByRole('button', { name: 'Settings', exact: true }).click()
     await settings.waitFor({ timeout: 10_000 })
     await settings.getByRole('button', { name: 'Agents', exact: true }).click()

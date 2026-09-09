@@ -114,7 +114,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'agentModels',
     summary: 'Owns persistent Agent model selections and their lifecycle-safe directory.',
-    description: 'Owns persistent Agent model selections and their lifecycle-safe directory. The provider route is fixed by composition; settings select only a model and optional reasoning effort for each registered Agent target.',
+    description: 'Owns persistent Agent model selections and their lifecycle-safe directory. Each target\'s provider route is fixed by composition; settings select only a model and optional reasoning effort under that route.',
     methods: [
       {
         signature: 'registerTarget(target: AgentModelTarget): () => void',
@@ -129,20 +129,26 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'a detached complete selection.',
       },
       {
+        signature: 'mainSelection(presetId?: string): ModelSelection',
+        description: 'Read the current main-Agent route assigned to a preset.',
+        parameters: [{ name: 'presetId', description: 'effective preset id, or undefined without a roster.' }],
+        returns: 'assigned selection, falling back to the deployment-wide main route.',
+      },
+      {
         signature: 'optionsFor(id: AgentModelTargetId, fallback: AgentOptions = {}): AgentOptions',
         description: 'Apply one target\'s live selection over child options without disturbing independent limits such as `maxTokens`.',
         parameters: [{ name: 'id', description: 'registered named Agent target.' }, { name: 'fallback', description: 'deployment options carrying non-selection fields.' }],
         returns: 'detached child options with the current selection.',
       },
       {
-        signature: 'async saveSelection(next: ModelSelection): Promise<void>',
-        description: 'Save the main Agent selection after a session-local model switch.',
-        parameters: [{ name: 'next', description: 'resolved selection accepted by the session entry point.' }],
+        signature: 'async saveSelection(next: ModelSelection, presetId?: string): Promise<void>',
+        description: 'Save a preset\'s main-Agent selection after a session-local model switch.',
+        parameters: [{ name: 'next', description: 'resolved selection accepted by the session entry point.' }, { name: 'presetId', description: 'effective preset id, or undefined without a roster.' }],
         returns: 'fulfillment after the optional settings write settles.',
       },
       {
         signature: '@Remote(\'list\') async list(): Promise<AgentModelsSnapshot>',
-        description: 'Read the live target directory and fixed-provider model catalog.',
+        description: 'Read the live target directory and its distinct provider catalogs.',
         parameters: [],
         returns: 'point-in-time graphical settings snapshot.',
       },
@@ -980,6 +986,32 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'forgeProjectWorkspaces',
+    summary: 'Forge-owned catalog reconciler and authenticated HTTP route owner.',
+    description: 'Forge-owned catalog reconciler and authenticated HTTP route owner.',
+    methods: [
+      {
+        signature: 'managed(): readonly string[]',
+        description: 'Current managed directory paths for invariant inspection.',
+        parameters: [],
+        returns: 'a stable snapshot of the reconciler-owned paths.',
+      },
+    ],
+  },
+  {
+    key: 'forgeSessionAdapter',
+    summary: 'Forge protocol bridge and owner of all adapter-created agent handles.',
+    description: 'Forge protocol bridge and owner of all adapter-created agent handles.',
+    methods: [
+      {
+        signature: 'capability(): Record<string, unknown>',
+        description: 'Current protocol capability document, also served over HTTP.',
+        parameters: [],
+        returns: 'The immutable Forge adapter capability declaration.',
+      },
+    ],
+  },
+  {
     key: 'fs',
     summary: 'Abstract filesystem provider.',
     description: 'Abstract filesystem provider. Targets must preserve identity across aliases; reads expose regular UTF-8 text or typed errors, listings are stable and content-free, and mutations are atomic. Optional guards add stale protection without changing the unguarded provider contract.',
@@ -1347,6 +1379,67 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'memory',
+    summary: 'Provider-selecting durable-memory runtime.',
+    description: 'Provider-selecting durable-memory runtime.',
+    methods: [
+      {
+        signature: 'registerProvider(provider: MemoryProvider): () => void',
+        description: 'Register one storage provider for the calling fiber.',
+        parameters: [{ name: 'provider', description: 'storage implementation and stable provider id.' }],
+        returns: 'the effect-owned registration disposer.',
+      },
+      {
+        signature: 'query(request: MemoryQuery): Promise<MemoryQueryResult>',
+        description: 'Query one explicit memory scope.',
+        parameters: [{ name: 'request', description: 'scoped text, statuses, temporal point, and limit.' }],
+        returns: 'bounded matching records.',
+      },
+      {
+        signature: 'get(scope: MemoryScope, id: MemoryId): Promise<MemoryRecord | undefined>',
+        description: 'Read one id only inside its explicit scope.',
+        parameters: [{ name: 'scope', description: 'exact project or global scope.' }, { name: 'id', description: 'branded memory identifier.' }],
+        returns: 'the record, or undefined when absent from that scope.',
+      },
+      {
+        signature: 'propose(request: MemoryProposal): Promise<MemoryRecord>',
+        description: 'Persist an unreviewed proposal.',
+        parameters: [{ name: 'request', description: 'scoped statement, evidence, trust, validity, and contradictions.' }],
+        returns: 'the created proposal record.',
+      },
+      {
+        signature: 'challenge(request: MemoryChallenge): Promise<MemoryRecord>',
+        description: 'Challenge one exact scope-bound revision.',
+        parameters: [{ name: 'request', description: 'compare-and-set ref, reason, and contrary evidence.' }],
+        returns: 'the challenged record revision.',
+      },
+      {
+        signature: 'review(request: MemoryReview): Promise<MemoryRecord>',
+        description: 'Accept or reject one exact scope-bound revision.',
+        parameters: [{ name: 'request', description: 'compare-and-set ref and reviewer decision.' }],
+        returns: 'the reviewed record revision.',
+      },
+      {
+        signature: 'supersede( request: MemorySupersession, ): Promise<{ readonly previous: MemoryRecord; readonly replacement: MemoryRecord }>',
+        description: 'Atomically supersede one exact scope-bound revision.',
+        parameters: [{ name: 'request', description: 'prior ref and same-scope replacement.' }],
+        returns: 'the previous and replacement records after commit.',
+      },
+      {
+        signature: 'checkpoint(request: MemoryCheckpoint): Promise<readonly MemoryRecord[]>',
+        description: 'Checkpoint use of exact scope-bound memory revisions.',
+        parameters: [{ name: 'request', description: 'unique compare-and-set refs.' }],
+        returns: 'the revisioned records with updated access facts.',
+      },
+      {
+        signature: 'delete(ref: MemoryRef): Promise<boolean>',
+        description: 'Delete one exact scope-bound revision.',
+        parameters: [{ name: 'ref', description: 'exact scope, id, and revision.' }],
+        returns: 'whether the record was deleted.',
+      },
+    ],
+  },
+  {
     key: 'messageFeedback',
     summary: 'Session-log service; cold operations never construct a Session or Agent.',
     description: 'Session-log service; cold operations never construct a Session or Agent.',
@@ -1488,9 +1581,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the current attached state or persisted header and event prefix.',
       },
       {
-        signature: '@Remote(\'list\') async list(_request: SessionListRequest, signal: AbortSignal): Promise<SessionListValue>',
+        signature: '@Remote(\'list\') async list(request: SessionListRequest, signal: AbortSignal): Promise<SessionListValue>',
         description: 'Read all visible Session rows without resuming an Agent.',
-        parameters: [{ name: '_request', description: 'reserved empty list request.' }, { name: 'signal', description: 'cancellation for persistence reads.' }],
+        parameters: [{ name: 'request', description: 'optional page size and cursor for persisted session metadata.' }, { name: 'signal', description: 'cancellation for persistence reads.' }],
         returns: 'visible Session summaries ordered by activity.',
       },
       {
@@ -1571,6 +1664,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Cancel one active Agent turn without dropping its pending inbox.',
         parameters: [{ name: 'request', description: 'Session whose active Agent turn is cancelled.' }],
         returns: 'acknowledgement that cancellation was requested.',
+      },
+      {
+        signature: '@Remote(\'historyDetail\') historyDetail(request: SessionHistoryDetailRequest, signal: AbortSignal): Promise<SessionEventEntry>',
+        description: 'Read one original Tool result omitted from a history page.',
+        parameters: [{ name: 'request', description: 'authorized address and result sequence.' }, { name: 'signal', description: 'cancellation for the read.' }],
+        returns: 'the exact original result event.',
       },
       {
         signature: '@Remote(\'page\') page(request: SessionPageRequest, signal: AbortSignal): Promise<SessionPage>',
@@ -2399,10 +2498,41 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the registered names.',
       },
       {
+        signature: 'registerResultValidator(validator: SubagentResultValidator): () => void',
+        description: 'Register one named completed-result validator. A tool opts into it by name; other delegation tools remain unaffected.',
+        parameters: [{ name: 'validator', description: 'deployment policy to register.' }],
+        returns: 'disposer for the exact registration.',
+      },
+      {
+        signature: 'getResultValidator(name: string): SubagentResultValidator | undefined',
+        description: 'Resolve one validator selected by a delegation consumer.',
+        parameters: [{ name: 'name', description: 'configured validator name.' }],
+        returns: 'the current validator, or undefined while no provider owns that name.',
+      },
+      {
+        signature: 'validateResult( name: string, request: SubagentResultValidationRequest, ): Promise<readonly SubagentResultWarning[]>',
+        description: 'Validate one completed result through the selected deployment policy.',
+        parameters: [{ name: 'name', description: 'configured validator name.' }, { name: 'request', description: 'completed result and delegation context.' }],
+        returns: 'structured warnings in provider order.',
+        throws: ['when the named validator is unavailable or its provider rejects.'],
+      },
+      {
         signature: 'async start(name: string, request: SubagentStartRequest): Promise<SubagentRun>',
         description: 'Establish a published child on the named provider. Capability and semantic checks run before delegation. Provider ownership lasts until its promise fulfills; a rejection therefore has no run for the caller to dispose and emits no run lifecycle events. Post-publication turn and infrastructure failures settle through the returned run. A catalog append failure disposes the run and handles its result rejection; the caller receives the catalog error even if disposal also fails.',
         parameters: [{ name: 'name', description: 'the provider to use.' }, { name: 'request', description: 'child label, prompt, parent, signal, and optional capabilities.' }],
         returns: 'the published holder-owned run.',
+      },
+      {
+        signature: 'registerPrincipalSetup( principal: SubagentPrincipal, contribution: SubagentChildSetupContribution, ): () => void',
+        description: 'Register a child-scoped capability visible only to delegated agents carrying one config-owned principal. The principal is copied into the durable child descriptor, so a continuable child receives the same capability after a cold resume. Removing the registration immediately revokes every live installation created from it.',
+        parameters: [{ name: 'principal', description: 'trusted deployment principal selected by Consumer configuration.' }, { name: 'contribution', description: 'synchronous child-scope installer.' }],
+        returns: 'the exact Cordis effect disposer.',
+      },
+      {
+        signature: 'applyPrincipalSetup( childCtx: Context, child: Agent, principal: SubagentPrincipal | undefined, ): import(\'@deepseek-ai/dsh-agent\').AgentSetupCommit | undefined',
+        description: 'Compose the capability set assigned to a trusted child principal.',
+        parameters: [{ name: 'childCtx', description: 'unpublished delegated Agent scope.' }, { name: 'child', description: 'unpublished delegated Agent.' }, { name: 'principal', description: 'config-owned principal copied from the delegation request.' }],
+        returns: 'the publication commit, or `undefined` for an ordinary child.',
       },
     ],
   },
@@ -2601,6 +2731,32 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Heuristically price one model-visible message (instance face of the pure `estimateMessage` export from `estimate.ts`).',
         parameters: [{ name: 'message', description: 'message to price without mutation.' }],
         returns: 'content and role-framing tokens under the fixed service heuristic.',
+      },
+    ],
+  },
+  {
+    key: 'toolPolicy',
+    summary: 'Effect-scoped named policy-provider registry.',
+    description: 'Effect-scoped named policy-provider registry.',
+    methods: [
+      {
+        signature: 'register(id: ToolPolicyProviderId, provider: ToolPolicyProvider): () => void',
+        description: 'Register one stable provider id.',
+        parameters: [{ name: 'id', description: 'non-empty deployment-local provider id.' }, { name: 'provider', description: 'implementation owned by the registering plugin.' }],
+        returns: 'idempotent disposer for this exact registration.',
+      },
+      {
+        signature: 'async prewarm(request: ToolPolicyPrewarmRequest): Promise<void>',
+        description: 'Start reusable preparation in every selected provider that supports it.',
+        parameters: [{ name: 'request', description: 'session and cancellation for this prewarm opportunity.' }],
+        returns: 'when every selected provider\'s preparation has settled.',
+      },
+      {
+        signature: 'async evaluate(request: ToolPolicyRequest): Promise<ToolPolicyVerdict | undefined>',
+        description: 'Evaluate one execution through the selected provider.',
+        parameters: [{ name: 'request', description: 'immutable call identity, arguments, agent, and cancellation.' }],
+        returns: 'a canonical verdict, or `undefined` when the selected provider does not support the tool.',
+        throws: ['when a configured provider is absent or a selected provider rejects.'],
       },
     ],
   },
@@ -3055,6 +3211,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'A declarative agent entry failed before it could publish a live agent.',
     description: 'A declarative agent entry failed before it could publish a live agent. Consumers that buffer work for the configured identity use this transient signal to reject that work instead of waiting forever. Normal factory teardown suppresses failures from the cancelled startup attempt.',
     parameters: [{ name: 'payload', description: '.error - persistence, setup, or publication failure.' }],
+  },
+  {
+    name: 'agent-models/directory-updated',
+    mode: 'emit',
+    signature: '\'agent-models/directory-updated\'(): void',
+    summary: 'The live Agent-model role directory gained or lost a visible target.',
+    description: 'The live Agent-model role directory gained or lost a visible target. Consumers re-read the directory after this post-commit notification; equivalent reference-count changes do not emit. Observer failures are contained and cannot veto the registry mutation.',
+    parameters: [],
   },
   {
     name: 'agent-preset/selected',
@@ -3621,12 +3785,16 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface AgentHandle {\n    agent: Agent;\n    dispose(): Promise<void>;\n}',
   },
   {
+    name: 'AgentModelCatalogView',
+    declaration: 'export interface AgentModelCatalogView {\n    readonly provider: string;\n    readonly models: readonly AgentModelOption[];\n}',
+  },
+  {
     name: 'AgentModelOption',
     declaration: 'export interface AgentModelOption {\n    readonly id: string;\n    readonly name: string;\n    readonly description?: string;\n    readonly reasoningEfforts: readonly {\n        readonly id: string;\n        readonly name: string;\n        readonly description?: string;\n    }[];\n    readonly defaultReasoningEffort?: string;\n}',
   },
   {
     name: 'AgentModelsSnapshot',
-    declaration: 'export interface AgentModelsSnapshot {\n    readonly provider: string;\n    readonly writable: boolean;\n    readonly revision: number;\n    readonly targets: readonly AgentModelTargetView[];\n    readonly models: readonly AgentModelOption[];\n}',
+    declaration: 'export interface AgentModelsSnapshot {\n    readonly writable: boolean;\n    readonly revision: number;\n    readonly targets: readonly AgentModelTargetView[];\n    readonly catalogs: readonly AgentModelCatalogView[];\n}',
   },
   {
     name: 'AgentModelTarget',
@@ -3638,7 +3806,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'AgentModelTargetView',
-    declaration: 'export interface AgentModelTargetView {\n    readonly id: AgentModelTargetId;\n    readonly label: string;\n    readonly selection: StoredAgentModelSelection;\n    readonly defaultSelection: StoredAgentModelSelection;\n    readonly overridden: boolean;\n}',
+    declaration: 'export interface AgentModelTargetView {\n    readonly id: AgentModelTargetId;\n    readonly label: string;\n    readonly provider: string;\n    readonly selection: StoredAgentModelSelection;\n    readonly defaultSelection: StoredAgentModelSelection;\n    readonly overridden: boolean;\n}',
   },
   {
     name: 'AgentOptions',
@@ -3959,6 +4127,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ConfinedSandboxMode',
     declaration: 'export type ConfinedSandboxMode = Exclude<SandboxMode, \'danger-full-access\'>;',
+  },
+  {
+    name: 'ContentBlock',
+    declaration: 'export type ContentBlock = ContentBlockMap[ContentBlockType];',
   },
   {
     name: 'ContentBlockMap',
@@ -4657,6 +4829,70 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ManualCompactAgentContext extends CompactionAgentContext {\n    runMaintenance<T>(task: (signal: AbortSignal) => Promise<T>): Promise<T>;\n}',
   },
   {
+    name: 'MemoryChallenge',
+    declaration: 'export interface MemoryChallenge {\n    readonly ref: MemoryRef;\n    readonly reason: string;\n    readonly evidence?: readonly MemoryEvidence[];\n}',
+  },
+  {
+    name: 'MemoryCheckpoint',
+    declaration: 'export interface MemoryCheckpoint {\n    readonly refs: readonly MemoryRef[];\n}',
+  },
+  {
+    name: 'MemoryEvidence',
+    declaration: 'export interface MemoryEvidence {\n    readonly kind: \'session\' | \'file\' | \'url\' | \'user\' | \'agent\' | \'tool\';\n    readonly ref: string;\n    readonly excerpt?: string;\n}',
+  },
+  {
+    name: 'MemoryId',
+    declaration: 'export type MemoryId = Branded<\'MemoryId\'>;',
+  },
+  {
+    name: 'MemoryProposal',
+    declaration: 'export interface MemoryProposal {\n    readonly scope: MemoryScope;\n    readonly statement: string;\n    readonly evidence: readonly MemoryEvidence[];\n    readonly trust: MemoryTrust;\n    readonly validity?: MemoryValidity;\n    readonly contradicts?: readonly MemoryId[];\n}',
+  },
+  {
+    name: 'MemoryProvider',
+    declaration: 'export interface MemoryProvider {\n    readonly id: string;\n    query(request: MemoryQuery): Promise<MemoryQueryResult>;\n    get(scope: MemoryScope, id: MemoryId): Promise<MemoryRecord | undefined>;\n    propose(request: MemoryProposal): Promise<MemoryRecord>;\n    challenge(request: MemoryChallenge): Promise<MemoryRecord>;\n    review(request: MemoryReview): Promise<MemoryRecord>;\n    supersede(request: MemorySupersession): Promise<{\n        readonly previous: MemoryRecord;\n        readonly replacement: MemoryRecord;\n    }>;\n    checkpoint(request: MemoryCheckpoint): Promise<readonly MemoryRecord[]>;\n    delete(ref: MemoryRef): Promise<boolean>;\n}',
+  },
+  {
+    name: 'MemoryQuery',
+    declaration: 'export interface MemoryQuery {\n    readonly scope: MemoryScope;\n    readonly text: string;\n    readonly statuses?: readonly MemoryStatus[];\n    readonly limit?: number;\n    readonly at?: number;\n}',
+  },
+  {
+    name: 'MemoryQueryResult',
+    declaration: 'export interface MemoryQueryResult {\n    readonly memories: readonly MemoryRecord[];\n    readonly truncated: boolean;\n}',
+  },
+  {
+    name: 'MemoryRecord',
+    declaration: 'export interface MemoryRecord {\n    readonly id: MemoryId;\n    readonly revision: number;\n    readonly scope: MemoryScope;\n    readonly statement: string;\n    readonly status: MemoryStatus;\n    readonly evidence: readonly MemoryEvidence[];\n    readonly trust: MemoryTrust;\n    readonly validity: MemoryValidity;\n    readonly contradicts: readonly MemoryId[];\n    readonly challenge?: {\n        readonly reason: string;\n        readonly evidence: readonly MemoryEvidence[];\n    };\n    readonly supersededBy?: MemoryId;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n    readonly lastAccessedAt: number;\n    readonly accessCount: number;\n}',
+  },
+  {
+    name: 'MemoryRef',
+    declaration: 'export interface MemoryRef {\n    readonly scope: MemoryScope;\n    readonly id: MemoryId;\n    readonly revision: number;\n}',
+  },
+  {
+    name: 'MemoryReview',
+    declaration: 'export interface MemoryReview {\n    readonly ref: MemoryRef;\n    readonly decision: \'accept\' | \'reject\';\n    readonly trust?: MemoryTrust;\n}',
+  },
+  {
+    name: 'MemoryScope',
+    declaration: 'export type MemoryScope = {\n    readonly kind: \'project\';\n    readonly project: string;\n} | {\n    readonly kind: \'global\';\n};',
+  },
+  {
+    name: 'MemoryStatus',
+    declaration: 'export type MemoryStatus = \'proposed\' | \'active\' | \'challenged\' | \'rejected\' | \'superseded\';',
+  },
+  {
+    name: 'MemorySupersession',
+    declaration: 'export interface MemorySupersession {\n    readonly ref: MemoryRef;\n    readonly replacement: MemoryProposal;\n}',
+  },
+  {
+    name: 'MemoryTrust',
+    declaration: 'export interface MemoryTrust {\n    readonly score: number;\n    readonly source: \'extracted\' | \'agent\' | \'user\' | \'reviewer\';\n}',
+  },
+  {
+    name: 'MemoryValidity',
+    declaration: 'export interface MemoryValidity {\n    readonly validFrom?: number;\n    readonly validUntil?: number;\n}',
+  },
+  {
     name: 'Message',
     declaration: 'export interface Message {\n    readonly id: MessageId;\n    readonly role: \'system\' | \'user\' | \'assistant\';\n    readonly content: ContentBlock[];\n    readonly source: MessageSource;\n}',
   },
@@ -4990,7 +5226,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ResolvedSubagentStartRequest',
-    declaration: 'export interface ResolvedSubagentStartRequest extends SubagentStartRequest {\n    readonly descriptor: SubagentDescriptorData;\n}',
+    declaration: 'export interface ResolvedSubagentStartRequest extends SubagentStartRequest {\n    readonly descriptor: SubagentDescriptorData;\n    readonly principalSetup?: (childCtx: Context, child: Agent) => AgentSetupCommit | void;\n}',
   },
   {
     name: 'RestoredSessionOptions',
@@ -5150,7 +5386,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionEventEntry',
-    declaration: 'export interface SessionEventEntry {\n    readonly type: \'event\';\n    readonly event: SessionWireEvent;\n}',
+    declaration: 'export interface SessionEventEntry {\n    readonly type: \'event\';\n    readonly event: SessionWireEvent;\n    readonly detail?: {\n        readonly kind: \'tool-result\';\n        readonly bytes: number;\n    };\n}',
   },
   {
     name: 'SessionEventMap',
@@ -5230,7 +5466,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionFollowFrame',
-    declaration: 'export type SessionFollowFrame = {\n    readonly type: \'snapshot\';\n    readonly header: SessionWireHeader;\n    readonly cursor: number;\n    readonly records: readonly SessionHistoryRecord[];\n    readonly hasMore: boolean;\n    readonly projections: SessionProjectionBaseline;\n    readonly assistantStream?: SessionAssistantStreamBaseline;\n} | SessionEventEntry | {\n    readonly type: \'assistant-stream\';\n    readonly frame: SessionAssistantStreamFrame;\n};',
+    declaration: 'export type SessionFollowFrame = {\n    readonly type: \'snapshot\';\n    readonly header: SessionWireHeader;\n    readonly cursor: number;\n    readonly records: readonly SessionHistoryRecord[];\n    readonly hasMore: boolean;\n    readonly oversized?: {\n        readonly bytes: number;\n    };\n    readonly projections: SessionProjectionBaseline;\n    readonly assistantStream?: SessionAssistantStreamBaseline;\n} | SessionEventEntry | {\n    readonly type: \'assistant-stream\';\n    readonly frame: SessionAssistantStreamFrame;\n};',
   },
   {
     name: 'SessionFollowRequest',
@@ -5273,6 +5509,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface SessionHeader {\n    readonly version: typeof SESSION_FORMAT_VERSION;\n    readonly id: SessionId;\n    readonly createdAt: number;\n    readonly cwd?: string;\n    readonly parentSession?: SessionId;\n    readonly isSeeded: boolean;\n    readonly origin?: \'subagent\';\n    readonly delegationDepth?: number;\n    readonly agentPreset?: string;\n}',
   },
   {
+    name: 'SessionHistoryDetailRequest',
+    declaration: 'export interface SessionHistoryDetailRequest {\n    readonly address: SessionAddress;\n    readonly seq: number;\n}',
+  },
+  {
     name: 'SessionHistoryRecord',
     declaration: 'export type SessionHistoryRecord = SessionEventEntry;',
   },
@@ -5297,12 +5537,16 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type SessionLineageTrace = {\n    target: SessionRecord;\n    ancestors: SessionRecord[];\n    descendants: SessionLineageNode[];\n} & ({\n    complete: true;\n    root: SessionRecord;\n} | {\n    complete: false;\n    unresolvedParentId: SessionId;\n});',
   },
   {
+    name: 'SessionListCursor',
+    declaration: 'export type SessionListCursor = import(\'@deepseek-ai/dsh-brand\').Branded<\'session-list-cursor\'>;',
+  },
+  {
     name: 'SessionListRequest',
-    declaration: 'export interface SessionListRequest {\n    readonly cursor?: string;\n}',
+    declaration: 'export interface SessionListRequest {\n    readonly cursor?: SessionListCursor;\n    readonly includeSessionId?: SessionId;\n}',
   },
   {
     name: 'SessionListValue',
-    declaration: 'export interface SessionListValue {\n    readonly items: readonly SessionSummary[];\n}',
+    declaration: 'export interface SessionListValue {\n    readonly items: readonly SessionSummary[];\n    readonly hasMore: boolean;\n    readonly nextCursor?: SessionListCursor;\n}',
   },
   {
     name: 'SessionLogOffset',
@@ -5330,7 +5574,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionPage',
-    declaration: 'export interface SessionPage {\n    readonly records: readonly SessionHistoryRecord[];\n    readonly hasMore: boolean;\n}',
+    declaration: 'export interface SessionPage {\n    readonly records: readonly SessionHistoryRecord[];\n    readonly hasMore: boolean;\n    readonly oversized?: {\n        readonly bytes: number;\n    };\n}',
   },
   {
     name: 'SessionPageRequest',
@@ -5762,11 +6006,15 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SubagentCapabilities',
-    declaration: 'export interface SubagentCapabilities {\n    readonly agentOptions: boolean;\n    readonly outputSchema: boolean;\n    readonly depthLimit: boolean;\n    readonly toolFilter: boolean;\n    readonly persona: boolean;\n}',
+    declaration: 'export interface SubagentCapabilities {\n    readonly agentOptions: boolean;\n    readonly outputSchema: boolean;\n    readonly depthLimit: boolean;\n    readonly toolFilter: boolean;\n    readonly persona: boolean;\n    readonly principal: boolean;\n}',
   },
   {
     name: 'SubagentCatalog',
     declaration: 'export interface SubagentCatalog {\n    readonly entries: readonly SubagentListEntry[];\n    readonly parentAvailable: boolean;\n}',
+  },
+  {
+    name: 'SubagentChildSetupContribution',
+    declaration: 'export type SubagentChildSetupContribution = (childCtx: Context, child: Agent) => () => void;',
   },
   {
     name: 'SubagentDescendantListEntry',
@@ -5789,6 +6037,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type SubagentListEntry = {\n    readonly kind: \'child\';\n    readonly id: SessionId;\n    readonly activity: \'running\' | \'inactive\';\n    readonly hasChildren: boolean;\n} & ({\n    readonly mode: \'one-shot\';\n    readonly label?: string;\n} | {\n    readonly mode: \'continuable\';\n    readonly label: string;\n}) | {\n    readonly kind: \'diagnostic\';\n    readonly id: SessionId;\n    readonly reason: \'corrupt\' | \'unsupported\' | \'unavailable\';\n};',
   },
   {
+    name: 'SubagentPrincipal',
+    declaration: 'export type SubagentPrincipal = Branded<\'SubagentPrincipal\'>;',
+  },
+  {
     name: 'SubagentPromptReceipt',
     declaration: 'export interface SubagentPromptReceipt {\n    readonly messageId: MessageId;\n}',
   },
@@ -5809,6 +6061,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface SubagentResult {\n    readonly output: ContentBlock[];\n    readonly structured?: unknown;\n    readonly diagnostic?: string;\n    readonly stopReason: SubagentStopReason;\n}',
   },
   {
+    name: 'SubagentResultValidationRequest',
+    declaration: 'export interface SubagentResultValidationRequest {\n    readonly role: string;\n    readonly label: string;\n    readonly parent: Agent;\n    readonly run: SubagentRun;\n    readonly result: SubagentResult;\n}',
+  },
+  {
+    name: 'SubagentResultValidator',
+    declaration: 'export interface SubagentResultValidator {\n    readonly name: string;\n    validate(request: SubagentResultValidationRequest): Promise<readonly SubagentResultWarning[]>;\n}',
+  },
+  {
+    name: 'SubagentResultWarning',
+    declaration: 'export interface SubagentResultWarning {\n    readonly code: string;\n    readonly message: string;\n    readonly details?: JsonValue;\n}',
+  },
+  {
     name: 'SubagentRun',
     declaration: 'export interface SubagentRun {\n    readonly id: SessionId;\n    readonly localAgent: Agent | undefined;\n    readonly result: Promise<SubagentResult>;\n    dispose(): Promise<void>;\n}',
   },
@@ -5826,7 +6090,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SubagentRuntime',
-    declaration: 'export class SubagentRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    async startContinuable(spec: ContinuableStartSpec): Promise<ContinuableStart>;\n    async sendMessage(sender: Agent, targetId: SessionId, content: ContentBlock[], options: SubagentSendMessageOptions): Promise<MessageId>;\n    interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): void;\n    async drainContinuableDescendants(parents: readonly Agent[]): Promise<void>;\n    async drainContinuableChildren(parent: Agent, childIds: readonly SessionId[]): Promise<void>;\n    listChildren(parentSessionId: SessionId, signal?: AbortSignal): Promise<SubagentListEntry[]>;\n    listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<SubagentDescendantListEntry[]>;\n    @Remote(\'list\')\n    async remoteExportList(parentSessionId: SessionId, signal: AbortSignal): Promise<SubagentCatalog>;\n    @Remote(\'prompt\')\n    async prompt(request: SubagentPromptRequest, signal: AbortSignal): Promise<SubagentPromptReceipt>;\n    @Remote(\'interruptByParent\')\n    interruptByParent(childSessionId: SessionId, parentSessionId: SessionId, mode: \'continuable\'): SubagentInterruptReceipt;\n    registerProvider(provider: SubagentProvider): () => void;\n    getProvider(name: string): SubagentProvider | undefined;\n    list(): string[];\n    async start(name: string, request: SubagentStartRequest): Promise<SubagentRun>;\n}',
+    declaration: 'export class SubagentRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    async startContinuable(spec: ContinuableStartSpec): Promise<ContinuableStart>;\n    async sendMessage(sender: Agent, targetId: SessionId, content: ContentBlock[], options: SubagentSendMessageOptions): Promise<MessageId>;\n    interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): void;\n    async drainContinuableDescendants(parents: readonly Agent[]): Promise<void>;\n    async drainContinuableChildren(parent: Agent, childIds: readonly SessionId[]): Promise<void>;\n    listChildren(parentSessionId: SessionId, signal?: AbortSignal): Promise<SubagentListEntry[]>;\n    listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<SubagentDescendantListEntry[]>;\n    @Remote(\'list\')\n    async remoteExportList(parentSessionId: SessionId, signal: AbortSignal): Promise<SubagentCatalog>;\n    @Remote(\'prompt\')\n    async prompt(request: SubagentPromptRequest, signal: AbortSignal): Promise<SubagentPromptReceipt>;\n    @Remote(\'interruptByParent\')\n    interruptByParent(childSessionId: SessionId, parentSessionId: SessionId, mode: \'continuable\'): SubagentInterruptReceipt;\n    registerProvider(provider: SubagentProvider): () => void;\n    getProvider(name: string): SubagentProvider | undefined;\n    list(): string[];\n    registerResultValidator(validator: SubagentResultValidator): () => void;\n    getResultValidator(name: string): SubagentResultValidator | undefined;\n    valid /* …truncated — full shape in source */',
   },
   {
     name: 'SubagentSendMessageOptions',
@@ -5834,7 +6098,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SubagentStartRequest',
-    declaration: 'export interface SubagentStartRequest {\n    readonly label?: string;\n    readonly prompt: ContentBlock[];\n    readonly parent: Agent;\n    readonly signal: AbortSignal;\n    readonly agentOptions?: AgentOptions;\n    readonly outputSchema?: ObjectJsonSchema;\n    readonly maxDepth?: number;\n    readonly toolFilter?: ToolRestriction;\n    readonly persona?: string;\n}',
+    declaration: 'export interface SubagentStartRequest {\n    readonly label?: string;\n    readonly principal?: SubagentPrincipal;\n    readonly prompt: ContentBlock[];\n    readonly parent: Agent;\n    readonly signal: AbortSignal;\n    readonly agentOptions?: AgentOptions;\n    readonly outputSchema?: ObjectJsonSchema;\n    readonly maxDepth?: number;\n    readonly toolFilter?: ToolRestriction;\n    readonly persona?: string;\n}',
   },
   {
     name: 'SubagentStopReason',
@@ -6061,6 +6325,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type TerminalWaitReason = \'stdin_read\' | \'inferred_idle\' | \'timeout\' | \'session_exit\';',
   },
   {
+    name: 'TextBlock',
+    declaration: 'export interface TextBlock {\n    type: \'text\';\n    text: string;\n}',
+  },
+  {
     name: 'TokenMeasurement',
     declaration: 'export interface TokenMeasurement {\n    readonly logRevision: SessionLogOffset;\n    readonly baseline: TokenMeasurementBaseline;\n    readonly surfaceDeltaTokens: number;\n    readonly totalTokens: number;\n    readonly surfaceTokens: number;\n    readonly nodes: readonly TokenSurfaceNode[];\n}',
   },
@@ -6139,6 +6407,34 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ToolOutputDefinition',
     declaration: 'export interface ToolOutputDefinition {\n    readonly schema: JsonSchemaNode;\n    render(args: unknown, value: JsonValue): ContentBlock[];\n    presentationMeta?(args: unknown, value: JsonValue): JsonValue;\n}',
+  },
+  {
+    name: 'ToolPolicyDecision',
+    declaration: 'export type ToolPolicyDecision = \'allow\' | \'ask\' | \'deny\';',
+  },
+  {
+    name: 'ToolPolicyOpinion',
+    declaration: 'export interface ToolPolicyOpinion {\n    readonly providerId: ToolPolicyProviderId;\n    readonly decision: ToolPolicyDecision;\n    readonly risk: number;\n    readonly categories: readonly string[];\n    readonly reason: string;\n}',
+  },
+  {
+    name: 'ToolPolicyPrewarmRequest',
+    declaration: 'export interface ToolPolicyPrewarmRequest {\n    readonly session: Session;\n    readonly signal: AbortSignal;\n}',
+  },
+  {
+    name: 'ToolPolicyProvider',
+    declaration: 'export interface ToolPolicyProvider {\n    prewarm?(request: ToolPolicyPrewarmRequest): Promise<void>;\n    evaluate(request: ToolPolicyRequest): Promise<ToolPolicyVerdict | undefined>;\n}',
+  },
+  {
+    name: 'ToolPolicyProviderId',
+    declaration: 'export type ToolPolicyProviderId = Branded<\'ToolPolicyProviderId\'>;',
+  },
+  {
+    name: 'ToolPolicyRequest',
+    declaration: 'export interface ToolPolicyRequest {\n    readonly callId: ToolCallId;\n    readonly toolName: string;\n    readonly arguments: unknown;\n    readonly agent: Agent;\n    readonly signal: AbortSignal;\n}',
+  },
+  {
+    name: 'ToolPolicyVerdict',
+    declaration: 'export interface ToolPolicyVerdict extends ToolPolicyOpinion {\n    readonly opinions: readonly ToolPolicyOpinion[];\n}',
   },
   {
     name: 'ToolPresentationMode',

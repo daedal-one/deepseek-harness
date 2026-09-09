@@ -6,6 +6,8 @@ declare module '@deepseek-ai/dsh-session/types' {
     'memory/extraction-request': {
       turn: number
       sourceEventSeqs: number[]
+      /** Generation containing the captured input events; retained across migrations. */
+      sourceSessionFormatVersion?: number
       route: { provider: string; model: string }
       system: string
       messages: Message[]

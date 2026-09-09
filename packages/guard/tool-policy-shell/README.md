@@ -1,4 +1,26 @@
+---
+description: "Review shell commands against user intent and deployment policy before execution."
+kind: "package-reference"
+---
+
 # dsh-tool-policy-shell
+
+## Summary
+
+Review shell commands against user intent and deployment policy before execution. Deterministic rules cover known cases; configured auxiliary model routes classify other effects. Missing, invalid, or late classifier evidence requires approval instead of allowing the command.
+
+## Table of Contents
+
+- [Use this package](#use-this-package)
+- [Configuration and behavior](#configuration-and-behavior)
+- [Security behavior](#security-behavior)
+- [Model Experience](#model-experience)
+- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+- [Dev Note](#dev-note)
+
+-----
+
+## Use this package
 
 This effect-scoped provider interprets explicitly mapped shell tools through the existing `ctx.toolPolicy` service. It combines fixed security checks, ordered deployment rules, a conservative parsed read-only set, and bounded independent intent and command-effect review. Bash and PowerShell are supported by configuration; neither tool name nor argument name is built in.
 
@@ -15,6 +37,8 @@ For an enforced session, `prewarm()` sends bounded ordered direct-user messages 
 ## Security behavior
 
 Diagnostics retain only the bounded sanitized intent context and closed effects. Raw user text, acting-model intent, and command arguments remain in their existing `user/message` and `tool/call` events. Classifier-request events record routes, prompts, selectors, bounds, and the referenced intent-context event so each request is reconstructible without duplicating raw input.
+
+No invariant companion is published because the tool-policy service owns its emitted decision and classifier evidence.
 
 ## Model Experience
 
@@ -36,3 +60,7 @@ Classifier requests use a fixed system prefix and stable line order, improving a
 
 - The fast path intentionally recognizes only a small shell grammar; commands outside it use independent model evidence.
 - A bounded command that exceeds its configured limit asks instead of sending a truncated command to a classifier.
+
+### Dev Note
+
+None.

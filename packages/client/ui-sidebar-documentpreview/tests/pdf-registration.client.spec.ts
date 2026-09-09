@@ -16,6 +16,7 @@ import { en, zh } from '../src/client/pdf/locales.ts'
 describe('PDF registration', () => {
   it('registers a builtin complete-bytes body and removes all contributions and retained view state on dispose', async () => {
     const ctx = new Context()
+    ctx.provide('connection', { rpc: { call: vi.fn() } } as never)
     const previews = new DocumentPreviewRegistry()
     const dictionaries = new Map<string, unknown>()
     const entries: Array<{

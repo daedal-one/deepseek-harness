@@ -419,7 +419,7 @@ describe('task admission and package contracts', () => {
     const fiber = await ctx.plugin(claudeCode, {})
     expect(ctx.subagents.getProvider('claude-code')).toMatchObject({
       name: 'claude-code',
-      capabilities: {
+      capabilities: { principal: false,
         outputSchema: false,
         depthLimit: false,
         toolFilter: false,

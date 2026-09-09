@@ -28,6 +28,7 @@
   "dsh": {
     "client": {
       "inject": [
+        "@deepseek-ai/dsh-client-connection",
         "@deepseek-ai/dsh-api-gateway",
         "@deepseek-ai/dsh-api-workspace-files",
         "@deepseek-ai/dsh-client-ui-sidebar-right",
@@ -68,7 +69,8 @@
     "clsx": "^2.0.0",
     "pdfjs-dist": "6.3.289",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "@deepseek-ai/dsh-client-connection": "workspace:^"
   },
   "files": [
     "lib/index.js",

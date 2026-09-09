@@ -23,6 +23,18 @@
     - id: plugin-package-inventory-deepseek
       name: '@deepseek-ai/dsh-plugin-package-inventory-deepseek'
 
+    - id: llm-pi-ai
+      name: '@deepseek-ai/dsh-llm-pi-ai'
+      config:
+        providers:
+          openrouter:
+            api: openai-completions
+            apiKeyEnv: OPENROUTER_API_KEY
+            modelAliases:
+              deepseek/deepseek-v4-flash-0731:nitro:
+                catalogModel: deepseek/deepseek-v4-flash
+                name: DeepSeek V4 Flash 0731 (Nitro)
+
     - id: llm-deepseek
       name: '@deepseek-ai/dsh-llm-deepseek'
       config:

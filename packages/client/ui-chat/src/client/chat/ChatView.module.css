@@ -237,7 +237,6 @@
 /* Host open-path refusal: same dialog family as the workspace folder error. */
 .modalAction {
   min-width: 72px;
-
 }
 
 @media (max-width: 767px) {
@@ -246,4 +245,4 @@
     padding-left: 12px;
   }
 
-}}
+}

@@ -34,7 +34,7 @@ describe('memory extractor lifecycle', () => {
     const session = ctx.sessions.create(SessionId('extract'), { meta: { cwd: '/repo' } })
     class Adapter extends LlmAdapter {
       async * stream(_options: GenerateOptions): AsyncIterable<StreamChunk> {
-        expect(session.events.some(event => event.type === 'memory/extraction-request')).toBe(true)
+        expect(session.snapshotEvents().some(event => event.type === 'memory/extraction-request')).toBe(true)
         yield { type: 'text-delta', index: 0, text: '{"proposals":[{"statement":"Uses pnpm","trust":0.8}]}' }
         yield { type: 'finish', reason: { kind: 'stop' } }
       }
@@ -62,7 +62,7 @@ describe('memory extractor lifecycle', () => {
       trust: { score: 0.8, source: 'extracted' },
       evidence: [{ kind: 'session', ref: 'extract:turn:1' }],
     })
-    expect(session.events.map(event => event.type)).toEqual([
+    expect(session.snapshotEvents().map(event => event.type)).toEqual([
       'turn/start', 'turn/end', 'memory/extraction-request', 'memory/extraction-result',
     ])
   })
@@ -95,8 +95,8 @@ describe('memory extractor lifecycle', () => {
     expect(() => session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })).not.toThrow()
     await settled
 
-    expect(session.events.find(event => event.type === 'turn/end')).toMatchObject({ data: { reason: { kind: 'completed' } } })
-    expect(session.events.find(event => event.type === 'memory/extraction-result')).toMatchObject({
+    expect(session.snapshotEvents().find(event => event.type === 'turn/end')).toMatchObject({ data: { reason: { kind: 'completed' } } })
+    expect(session.snapshotEvents().find(event => event.type === 'memory/extraction-result')).toMatchObject({
       data: { proposedIds: [], failure: { code: 'provider-error' } },
     })
   })

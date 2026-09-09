@@ -1,6 +1,6 @@
 # Template: package-library
 
-Use this template for a package with no plugin surface: its entry exports a plain module API and it registers nothing into a composition. Examples: `boot/app-boot`, `util/*`, `sdk/protocol`, `typert/generator`. The `boot/app-boot` README pair is the worked example.
+Use this template for a package with no plugin surface: its entry exports a plain module API and it registers nothing into a composition. Examples: `boot/app-boot`, `util/*`, `sdk/protocol`, `typert/generator`. The `boot/app-boot` README is the worked example.
 
 A library README differs from a package reference in three ways: no "install into a profile" guidance (a library is a dependency, not a layer), no mount configuration (there is no `cordis.yml` row), and a Model Experience section only in the audited form the gate assigns (most libraries are `none` or `indirect`).
 
@@ -91,4 +91,3 @@ None.
 
 - **Classify by the entry, not the folder.** Read `src/index.ts` before choosing this template: `export default` a service class or an `apply` export makes the package a `package-reference`, and `dsh.bundle.patch` in `package.json` makes it a `package-bundle`. A plain module API without those is a library.
 - **Never write profile-install guidance.** `dsh plugin --profile <name> add <package>` installs any npm dependency but activates a profile layer only for `dsh.bundle`-declaring packages; for a library it is at best a no-op dependency and must not appear as an install path.
-- Re-run `pnpm run verify-translation-pairing --write packages/<group>/<pkg>/README.md` after editing the pair.

@@ -1,6 +1,7 @@
+import { SessionSeq } from '@deepseek-ai/dsh-session'
 import { describe, expect, it } from 'vitest'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { CallId, createToolResultMessage } from '@deepseek-ai/dsh-llm'
+import { ToolCallId, createToolResultMessage } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 import type {
   SubagentResultValidationRequest,
@@ -26,7 +27,7 @@ function request(
   const localAgent = {
     session: {
       header: { cwd: '/workspace' },
-      events,
+      snapshotEvents: () => events,
     },
   } as unknown as Agent
   const run = {
@@ -46,17 +47,18 @@ function request(
 
 /** Authored successful tool-call pair for durable evidence checks. */
 function successfulCall(name: string, args: Record<string, unknown>): SessionEvent[] {
-  const callId = CallId('call-1')
+  const callId = ToolCallId('call-1')
   return [
     {
       type: 'tool/call',
-      seq: 0,
+      seq: SessionSeq(0),
       time: 1,
       data: { turn: 1, step: 1, callId, name, arguments: JSON.stringify(args) },
     },
     {
       type: 'tool/result',
-      seq: 1,
+      surfaceOp: 'append',
+      seq: SessionSeq(1),
       time: 2,
       data: {
         turn: 1,

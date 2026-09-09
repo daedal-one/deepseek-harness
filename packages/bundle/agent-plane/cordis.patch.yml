@@ -52,6 +52,10 @@
 # The roster is host-visible so a runner can resolve the selected preset before
 # it creates the Session header, then mount that preset in the new Agent scope.
 - insert:
+    # Preset delegation tools sample this Host preference at Session creation.
+    - id: subagent-model-selection-settings
+      name: '@deepseek-ai/dsh-tool-subagent/model-selection-settings'
+
     - id: agent-presets
       name: '@deepseek-ai/dsh-agent-presets'
       config:

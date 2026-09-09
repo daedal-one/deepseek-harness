@@ -31,6 +31,7 @@ describe('dsh-sdk-minimal bundle', () => {
       ['deepseek-llm-api-extensions', '@deepseek-ai/dsh-deepseek-llm-api-extensions'],
       ['session-log-deepseek', '@deepseek-ai/dsh-session-log-deepseek'],
       ['plugin-package-inventory-deepseek', '@deepseek-ai/dsh-plugin-package-inventory-deepseek'],
+      ['llm-pi-ai', '@deepseek-ai/dsh-llm-pi-ai'],
       ['llm-deepseek', '@deepseek-ai/dsh-llm-deepseek'],
       ['sandbox', '@deepseek-ai/dsh-sandbox-local'],
       ['session-projection', '@deepseek-ai/dsh-session-projection'],

@@ -88,9 +88,22 @@ export class FixtureSession implements SessionFace {
   }
 
   /**
-   * Fail-loud stub; supply `prompt` on the fixture's session face to exercise it.
+   * Fail-loud stub; supply `retryOpen` on the fixture's session face to exercise it.
    * @returns never — always throws.
    */
+  retryOpen(): never {
+    throw new Error(`test session "${this.sessionId}": retryOpen is not stubbed`)
+  }
+
+  /**
+   * Fail-loud history detail stub.
+   * @returns never — supply the fixture operation.
+   */
+  loadHistoryDetail(): never {
+    throw new Error(`test session "${this.sessionId}": loadHistoryDetail is not stubbed`)
+  }
+
+  /** Fail-loud prompt stub. @returns never — supply the fixture operation. */
   prompt(): never {
     throw new Error(`test session "${this.sessionId}": prompt is not stubbed — supply it on the fixture's session face`)
   }

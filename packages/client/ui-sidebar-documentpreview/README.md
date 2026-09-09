@@ -61,7 +61,7 @@ Initial reads, additional pages, and HTML/PDF/image preparation share a loading 
 <a id="model-experience"></a>
 ## Model Experience
 
-None, as the preview is a browser-only viewer that registers no tool, prompt section, or session event.
+None, as the preview is a document viewer that registers no tool, prompt section, or session event.
 
 #### KV Cache effect
 
@@ -83,7 +83,7 @@ No direct effect; what the user reads here never enters a model request.
 <details>
 <summary>Working context for maintainers — click to expand</summary>
 
-None.
+PDF binary resources belong to the Host build. The authenticated `/api/pdf-assets` exact Connection Fetch route admits only exact version-pinned names, and the PDF document lifetime cancels outstanding reads. Browser startup transfers no worker source, font, character-map, or decoder resource. Opening a PDF fetches its worker source and PDF.js requests any additional resources. Both artifacts retain their PDF.js license notices.
 
 </details>
 

@@ -624,6 +624,13 @@ export class Session implements SessionFace {
     await events?.dispose()
   }
 
+  /** Keep an open transcript readable while its Host generation is unavailable. */
+  handleDisconnected(): void {
+    if (this.openState !== 'open' || this.syncing) return
+    this.syncing = true
+    this.notifier.markDirty()
+  }
+
   // ---- Private ----
 
   /** @param generation - openGeneration at launch; stale passes cannot publish after replacement. */
@@ -817,6 +824,7 @@ export class Session implements SessionFace {
     this.events = undefined
     this.openPromise = null
     this.openState = 'error'
+    this.syncing = false
     this.openError = error
     void events.dispose()
     this.notifier.markDirty()

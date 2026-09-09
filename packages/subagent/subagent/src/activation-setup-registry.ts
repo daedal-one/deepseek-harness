@@ -12,7 +12,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import type { AgentSetupCommit } from '@deepseek-ai/dsh-agent'
+import type { Agent, AgentSetupCommit } from '@deepseek-ai/dsh-agent'
 import { errorChain } from '@deepseek-ai/dsh-llm'
 import { SubagentError } from './error.ts'
 
@@ -21,12 +21,10 @@ import { SubagentError } from './error.ts'
  * creation context. It composes synchronously before publication and returns
  * the disposer for exactly that installation.
  * @param childCtx - the child's unpublished scoped context.
+ * @param child - the unpublished Agent receiving the capability.
  * @returns the disposer revoking this installation.
  */
-export type SubagentChildSetupContribution = (childCtx: Context) => () => void
-
-/** Backwards-compatible name for setup composed into every continuable child. */
-export type ContinuableSetupContribution = SubagentChildSetupContribution
+export type SubagentChildSetupContribution = (childCtx: Context, child: Agent) => () => void
 
 /** One contribution's live registration. */
 interface Registration {
@@ -88,9 +86,10 @@ export class SubagentActivationSetupRegistry {
   /**
    * Install every live contribution into one unpublished child context.
    * @param childCtx - the child's unpublished scoped context.
+   * @param child - the unpublished Agent receiving the capability.
    * @returns the provisioning commit consumed at Agent publication.
    */
-  apply(childCtx: Context): AgentSetupCommit {
+  apply(childCtx: Context, child: Agent): AgentSetupCommit {
     const state: TransactionState = { installations: [], invalidated: false }
     try {
       for (const registration of [...this.registrations]) {
@@ -100,7 +99,7 @@ export class SubagentActivationSetupRegistry {
         const installation: Installation = {
           registration,
           childCtx,
-          dispose: registration.contribution(childCtx),
+          dispose: registration.contribution(childCtx, child),
           released: false,
           transaction: state,
         }
