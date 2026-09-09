@@ -1,3 +1,3 @@
-baseline = "forge-spec-v0.6.0"
+baseline = "forge-spec-v0.7.0"
 project = "PROJECT:deepseek-harness"
 intellect_provider = "forge-intellect"
