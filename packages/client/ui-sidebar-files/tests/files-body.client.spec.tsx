@@ -16,7 +16,7 @@ import type { RemoteFailure } from '@deepseek-ai/dsh-api-remotes/client'
 import { fileAddressFor } from '@deepseek-ai/dsh-util-workspace-path'
 import { failureLine, orderEntries } from '../src/client/FilesBody.tsx'
 import type { DirLevel } from '../src/client/store.ts'
-import { zh } from '../src/client/locales.ts'
+import { en as copy } from '../src/client/locales.ts'
 import { mountBody, ROOT, SESSION, TAB } from './mount.client.tsx'
 
 const ROOT_LEVEL: DirLevel = {
@@ -39,7 +39,7 @@ function names(root: HTMLElement): string[] {
 describe('FilesBody', () => {
   it('says so when the session has no workspace directory, and asks for nothing', () => {
     const { view, script } = mountBody(null)
-    expect(view.container.querySelector('[data-files-state="no-workspace"]')?.textContent).toBe(zh.noWorkspace)
+    expect(view.container.querySelector('[data-files-state="no-workspace"]')?.textContent).toBe(copy.noWorkspace)
     expect(script.list).not.toHaveBeenCalled()
   })
 
@@ -141,16 +141,16 @@ describe('FilesBody', () => {
     expect(tabActions.openResource).toHaveBeenCalledWith('dsh-resource://file/session/s-test/README.md')
     const other = view.container.querySelector(`[data-files-path="${ROOT}/pipe"]`)!
     expect(other.querySelector('button')).toBeNull()
-    expect(other.querySelector('[aria-disabled="true"]')?.getAttribute('title')).toBe(zh['entry.other'])
+    expect(other.querySelector('[aria-disabled="true"]')?.getAttribute('title')).toBe(copy['entry.other'])
   })
 
   it('marks a cut listing and an empty one', async () => {
     const { view, script } = mountBody()
     await act(() => script.settle({ ok: true, value: { entries: [{ name: 'd', type: 'directory' }], truncated: true } }))
-    expect(view.container.querySelector('[data-files-row="truncated"]')?.textContent).toBe(zh.truncated)
+    expect(view.container.querySelector('[data-files-row="truncated"]')?.textContent).toBe(copy.truncated)
     act(() => { fireEvent.click(view.container.querySelector(`[data-files-path="${ROOT}/d"] > button`)!) })
     await act(() => script.settle({ ok: true, value: { entries: [], truncated: false } }))
-    expect(view.container.querySelector('[data-files-row="empty"]')?.textContent).toBe(zh.empty)
+    expect(view.container.querySelector('[data-files-row="empty"]')?.textContent).toBe(copy.empty)
   })
 
   it('shows a failed level under its directory with the failure code', async () => {
@@ -161,7 +161,7 @@ describe('FilesBody', () => {
     }))
     const failed = view.container.querySelector('[data-files-row="failed"]')
     expect(failed?.getAttribute('data-files-code')).toBe('workspace-file/not-found')
-    expect(failed?.textContent).toBe(zh['error.notFound'])
+    expect(failed?.textContent).toBe(copy['error.notFound'])
   })
 
   it('reload resets every level and lists the expanded ones again', async () => {
@@ -181,7 +181,7 @@ describe('FilesBody', () => {
     const state = instance.getSnapshot().byTab[TAB]!
     expect(state.expanded).toEqual([ROOT, child])
     expect(state.levels).toEqual({ [ROOT]: { kind: 'loading' }, [child]: { kind: 'loading' } })
-    expect(view.container.querySelector('[data-files-reload]')?.getAttribute('aria-label')).toBe(zh.reload)
+    expect(view.container.querySelector('[data-files-reload]')?.getAttribute('aria-label')).toBe(copy.reload)
   })
 
   it('an aborted record is forgotten and not seeded again while the body is still mounted', async () => {
@@ -215,18 +215,18 @@ describe('orderEntries', () => {
 })
 
 describe('failureLine', () => {
-  const t = makeTranslate(zh)
+  const t = makeTranslate(copy)
 
   it('names each directory failure', () => {
-    expect(failureLine(t, new RemoteError('workspace-file/not-found', 'x', { path: 'p' }))).toBe(zh['error.notFound'])
+    expect(failureLine(t, new RemoteError('workspace-file/not-found', 'x', { path: 'p' }))).toBe(copy['error.notFound'])
     expect(failureLine(t, new RemoteError('workspace-file/outside-workspace', 'x', { path: 'p' })))
-      .toBe(zh['error.outsideWorkspace'])
+      .toBe(copy['error.outsideWorkspace'])
     expect(failureLine(t, new RemoteError('workspace-file/not-directory', 'x', { path: 'p', kind: 'file' })))
-      .toBe(zh['error.notDirectory'])
+      .toBe(copy['error.notDirectory'])
   })
 
   it('carries an unclassified failure\'s own message', () => {
     const failure = { code: 'remote/transport', message: 'socket closed' } as unknown as RemoteFailure
-    expect(failureLine(t, failure)).toBe('读取失败：socket closed')
+    expect(failureLine(t, failure)).toBe('Read failed: socket closed')
   })
 })

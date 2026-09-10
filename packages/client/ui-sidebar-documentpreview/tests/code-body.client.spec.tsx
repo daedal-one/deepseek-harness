@@ -10,7 +10,7 @@ import { absoluteFileAddress, sessionFileAddress } from '@deepseek-ai/dsh-util-w
 import { CodeBody } from '../src/client/code/CodeBody.tsx'
 import type { CodeBodyProps } from '../src/client/code/CodeBody.tsx'
 import type { DocumentContent } from '../src/client/document/contract.ts'
-import { en, zh } from '../src/client/code/locales.ts'
+import { en, en as copy } from '../src/client/code/locales.ts'
 import css from '../src/client/code/CodeBody.module.css'
 import primitiveCss from '../../ui-primitives/src/markdown/CodeBlock.module.css'
 
@@ -141,8 +141,8 @@ describe('CodeBody', () => {
   })
 
   it('passes localized controls and ignores byte contents outside its loading mode', () => {
-    const view = render(<CodeBody {...props(contents(['const a = 1'], true), { t: key => zh[key as keyof typeof zh] })} />)
-    expect(view.getByRole('button', { name: '复制' })).toBeTruthy()
+    const view = render(<CodeBody {...props(contents(['const a = 1'], true), { t: key => copy[key as keyof typeof copy] })} />)
+    expect(view.getByRole('button', { name: 'Copy' })).toBeTruthy()
     view.rerender(<CodeBody {...props({ kind: 'bytes', data: new TextEncoder().encode('a') })} />)
     expect(view.container.querySelector('.md-code-block')).toBeNull()
   })

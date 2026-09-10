@@ -38,9 +38,9 @@ import { renderToolsSdkPy } from './py-types.ts'
  * at. The `satisfies` clause pins this table's key set to that union, which
  * the flavor table is checked against too, so any of the three left out is a
  * typecheck failure. What no check reaches is the prose that names the values
- * instead of deriving them: the seam's `dsh-code-runtime` README pair, its
+ * instead of deriving them: the `dsh-code-runtime` README, its
  * `CodeRuntime.language` JSDoc, and `docs/subsystems/code-runtime.md`
- * with its zh pair, plus this package's own README pair and the
+ * plus this package's README and the
  * {@link Config.mode} JSDoc.
  */
 /**

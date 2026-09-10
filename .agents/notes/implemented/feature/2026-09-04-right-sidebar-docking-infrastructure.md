@@ -94,7 +94,6 @@ The surface renders tabs whose bodies it does not know: each tab carries a `kind
 
 - A z-index token layer, then the panel's, the float host's, and the menu's hard-coded values.
 - The assembled session-switch case, blocked on the fixture composition opening its settings surface by default.
-- Chinese counterparts for the new packages' READMEs and for the English documentation this change edited.
 - Snap or priority pane sizing, touch tuning, and keyboard routes for split, move, and float.
 - Persistence of the layout, popout windows, and a content navigation stack (entries keyed by pane and content, adjacent duplicates replaced, a `navigating` guard, closed tabs left in the stack).
 - A non-closable tab (a `closable` flag on `TabRecord`, drawn as a fixed leading marker rather than a capsule) once a tab type needs one.

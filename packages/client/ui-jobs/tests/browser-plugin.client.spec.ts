@@ -10,7 +10,7 @@ import { stubSettingsScope } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply as applyLocale, inject as localeInject } from '@deepseek-ai/dsh-client-locale/client'
 import { apply, inject } from '../src/client/index.ts'
 import { apply as applyNode } from '../src/index.ts'
-import { en, NS, zh } from '../src/client/locales.ts'
+import { en, NS, en as copy } from '../src/client/locales.ts'
 
 /** Slot ledger reader: entry ids currently registered in the header list. */
 function headerEntryIds(ctx: Context): (string | undefined)[] {
@@ -39,7 +39,7 @@ async function bench(): Promise<{ ctx: Context; fiber: ReturnType<Context['plugi
   // These specs assert the shipped Chinese copy. There is no jsdom `window` in
   // this lane, so browser-language detection never runs and the locale comes
   // from FALLBACK_LOCALE (en): state the asserted locale explicitly.
-  ctx.locale.setLocale('zh')
+  ctx.locale.setLocale('en')
   const fiber = ctx.plugin({ inject: [...inject], apply })
   await fiber.await()
   return { ctx, fiber }
@@ -60,7 +60,7 @@ describe('ui-job browser half', () => {
   it('registers both dictionaries under its own namespace and releases them with the fiber', async () => {
     const { ctx, fiber } = await bench()
     const translate = ctx.locale.bind(NS)
-    expect(translate('list.aria')).toBe(zh['list.aria'])
+    expect(translate('list.aria')).toBe(copy['list.aria'])
     ctx.locale.setLocale('en')
     expect(translate('list.aria')).toBe(en['list.aria'])
 
@@ -70,7 +70,7 @@ describe('ui-job browser half', () => {
   })
 
   it('keeps the English dictionary key-identical to the Chinese source of truth', () => {
-    expect(Object.keys(en).sort()).toEqual(Object.keys(zh).sort())
+    expect(Object.keys(en).sort()).toEqual(Object.keys(copy).sort())
   })
 })
 

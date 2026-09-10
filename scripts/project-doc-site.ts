@@ -102,12 +102,6 @@ function sourceMap(pages: DocsPage[]): Map<string, Map<DocsLocale, DocsPage>> {
   return map
 }
 
-function counterpartSource(source: string): string {
-  return source.endsWith('.zh.md')
-    ? source.replace(/\.zh\.md$/, '.md')
-    : source.replace(/\.md$/, '.zh.md')
-}
-
 function resolveRepositoryTarget(sourceAbs: string, rawPath: string, repoRoot: string): { absPath: string; line?: number } {
   const decoded = decodePath(rawPath)
   let absPath = resolve(dirname(sourceAbs), decoded)
@@ -165,11 +159,7 @@ export function rewriteMarkdown(source: string, options: RewriteMarkdownOptions)
     if (path === '') return
     const { absPath, line } = resolveRepositoryTarget(sourceAbs, path, options.repoRoot)
     const targetPath = repoPath(absPath, options.repoRoot)
-    const isLanguageSwitcher = targetPath === counterpartSource(options.sourcePath)
-    const targetLocale: DocsLocale = isLanguageSwitcher
-      ? 'root'
-      : options.locale
-    const page = published.get(targetPath)?.get(targetLocale)
+    const page = published.get(targetPath)?.get(options.locale)
     const nextUrl = page !== undefined
       ? routeTarget(options.route, page.route, suffix)
       : node.type === 'image' && options.placeImage !== undefined
@@ -217,30 +207,20 @@ export function addProjectionFrontmatter(markdown: string, page: Pick<DocsPage, 
   return `---\n${fields}\n---\n\n${markdown}`
 }
 
-/** The switcher line a canonical page carries so its GitHub reader can reach the other language. */
-const LANGUAGE_SWITCHER = /^(?:English \| \[中文\]\([^)]*\)|\[English\]\([^)]*\) \| 中文)$/
-
 /** The repository badge a canonical page carries for its GitHub reader. */
 const REPOSITORY_BADGE = /^\[!\[[^\]]*\]\(https:\/\/img\.shields\.io\/[^)]*\)\]\([^)]*\)$/
 
 /**
  * Drop the lines that address a canonical page's GitHub reader.
  *
- * The site carries a locale switcher in its navigation bar and links the
- * repository from every page, so projecting these lines would repeat both — the
- * switcher as the first element under each heading.
+ * The site links the repository from its navigation, so a repeated badge
+ * is omitted from projected page content.
  *
  * @param markdown Rewritten canonical Markdown content.
- * @returns The content without the switcher line or the repository badge.
+ * @returns The content without the repository badge.
  */
 function withoutRepositoryChrome(markdown: string): string {
   const lines = markdown.split('\n')
-  const switcher = lines.findIndex(line => LANGUAGE_SWITCHER.test(line))
-  // Only the switcher introducing the page qualifies; further down the same
-  // text is prose or a sample rather than the page's own header.
-  if (switcher !== -1 && switcher < 8) {
-    lines.splice(switcher, lines[switcher + 1] === '' ? 2 : 1)
-  }
   const badge = lines.findLastIndex(line => REPOSITORY_BADGE.test(line))
   if (badge !== -1) {
     lines.splice(lines[badge - 1] === '' ? badge - 1 : badge, lines[badge - 1] === '' ? 2 : 1)
@@ -560,7 +540,7 @@ export function llmsTxt(site: LlmsTxtSite): string {
     '',
     `> ${site.description}`,
     '',
-    '页面 URL 去掉末尾斜杠再加 `.md` 即为该页原始 Markdown(根路径用 `/index.md`);下方列表是各页精确地址。Drop any trailing slash and append `.md` to a page URL for its raw Markdown (the site root is `/index.md`); the list below carries the exact addresses.',
+    'Drop any trailing slash and append `.md` to a page URL for its raw Markdown (the site root is `/index.md`); the list below carries the exact addresses.',
   ]
   for (const { heading, locale } of llmsTxtLocales) {
     lines.push('', `## ${heading}`, '')

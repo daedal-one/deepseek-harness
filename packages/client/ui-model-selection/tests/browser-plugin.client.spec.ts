@@ -19,7 +19,7 @@ import type { ModelSelection, ModelSelectionProjection } from '@deepseek-ai/dsh-
 import type { CommandContribution, PopupSelectSpec, SelectOption } from '@deepseek-ai/dsh-client-ui-commands/client'
 import type { ModelSelectInjected } from '../src/client/slots.ts'
 import { apply, inject } from '../src/client/index.ts'
-import { zh } from '../src/client/locales.ts'
+import { en as copy } from '../src/client/locales.ts'
 
 const sid = (k: string): SessionId => k as SessionId
 
@@ -65,7 +65,7 @@ const GROUPS = [{
 }]
 
 /** Boot the plugin over fake faces + a stateful fake host (current moves on selectModel). */
-async function bench(locale: 'zh' | 'en' = 'zh') {
+async function bench(locale: 'en' = 'en') {
   const ctx = new Context()
   let defaultSelection: ModelSelection = { provider: 'deepseek-official', model: 'deepseek-v4-flash' }
   let selected = defaultSelection
@@ -202,10 +202,10 @@ describe('ui-model-selection dual entry', () => {
     ])
     expect(options[0]).toMatchObject({
       active: true,
-      detail: 'DeepSeek · 快速、高效且经济；适合目标明确、常规或并行任务。',
+      detail: 'DeepSeek · Fast, efficient, and economical; suited to focused, routine, or parallel tasks.',
     })
     expect(options[1]?.detail)
-      .toBe('DeepSeek · 更强的自主编码、知识与复杂推理能力；适合复杂或质量优先的任务，但成本更高。')
+      .toBe('DeepSeek · Stronger agentic coding, knowledge, and difficult reasoning; suited to complex or quality-critical tasks at higher cost.')
     expect(options[2]?.detail).toBe('External Provider · Provider-authored description.')
     expect(options[1]?.active).toBeUndefined()
   })
@@ -349,7 +349,7 @@ describe('ui-model-selection dual entry', () => {
     b.remote.emit('settings/document-updated', ['llm-deepseek', 1])
     await Promise.resolve()
     await Promise.resolve()
-    expect(b.blockOf('s1')?.reason).toBe(zh['blocked.composer'])
+    expect(b.blockOf('s1')?.reason).toBe(copy['blocked.composer'])
     expect(b.calls.models).toBe(2)
 
     // Recovering clears it without a reload of the surface.

@@ -1,5 +1,5 @@
 ---
-description: "Localization for the web GUI: the zh/en preference, browser-derived fallback, typed namespace dictionaries, and the framework translation seat, for users and plugin authors."
+description: "Localization for the web GUI: the English default and language-pack preference, browser-derived fallback, typed namespace dictionaries, and the framework translation seat, for users and plugin authors."
 kind: "package-reference"
 ---
 
@@ -7,7 +7,7 @@ kind: "package-reference"
 
 ## Summary
 
-Use `dsh-client-locale` to switch the web GUI between the shipped English and Chinese locales or languages added by client plugins. User selections take effect immediately; loopback pages persist them in `$DSH_HOME/settings.yaml`, while non-loopback pages keep them only for the current process. New browsers use the first supported language requested by the browser until an allowed stored preference arrives. Plugin authors add typed namespace dictionaries and translate through the public locale API; slot-rendered copy updates without a reload.
+Use `dsh-client-locale` to render the web GUI in English or a language supplied by a client plugin. User selections take effect immediately; loopback pages persist them in `$DSH_HOME/settings.yaml`, while non-loopback pages keep them only for the current process. New browsers use the first supported language requested by the browser until an allowed stored preference arrives. Plugin authors add typed namespace dictionaries and translate through the public locale API; slot-rendered copy updates without a reload.
 
 ## Table of Contents
 
@@ -31,7 +31,7 @@ Open Settings → General and select a registered language. The active locale is
 
 ### Registering a dictionary
 
-Call `ctx.locale.register(ns, { zh, en })` with a namespace merged into `LocaleNamespaceMap`; the compiler checks every key against the namespace's typed key union and requires both shipped locales. Consumers translate through `ctx.locale.bind(ns)` or the framework-injected `t` seat. A dictionary registered after the UI is already mounted is picked up without a remount.
+Call `ctx.locale.register(ns, { en })` with a namespace merged into `LocaleNamespaceMap`; the compiler checks every key against the namespace's typed key union and requires the built-in English dictionary. Consumers translate through `ctx.locale.bind(ns)` or the framework-injected `t` seat. A dictionary registered after the UI is already mounted is picked up without a remount.
 
 ### Registering a language pack
 
@@ -42,13 +42,13 @@ export const inject = ['locale']
 
 export function apply(ctx) {
   ctx.effect(
-    () => ctx.locale.addLanguage({ id: 'ja', label: '日本語', fallback: 'en' }),
+    () => ctx.locale.addLanguage({ id: 'fr', label: 'Français', fallback: 'en' }),
     'my-locale: language',
   )
   ctx.effect(
-    () => ctx.locale.register('common', 'ja', {
-      cancel: 'キャンセル',
-      close: '閉じる',
+    () => ctx.locale.register('common', 'fr', {
+      cancel: 'Annuler',
+      close: 'Fermer',
     }),
     'my-locale: common dictionary',
   )
@@ -90,7 +90,7 @@ The typed object form requires complete dictionaries for both built-in locales. 
 | [`src/client/index.ts`](src/client/index.ts) | `LocaleRuntime`, dictionary registry, Language row registration, `locale/change` event |
 | [`src/index.ts`](src/index.ts) | Node half: registers the `locale` settings namespace |
 | [`src/locale-settings.ts`](src/locale-settings.ts) | The durable schema for `locale.preference` |
-| [`src/locales/`](src/locales/) | The shipped `zh`/`en` dictionaries |
+| [`src/locales/`](src/locales/) | The built-in English dictionaries |
 
 </details>
 

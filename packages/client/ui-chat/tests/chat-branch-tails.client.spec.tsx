@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
+import { en as commonCopy } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import type {
   ChatConversationViewNode, ConversationNode,
 } from '@deepseek-ai/dsh-client-ui-chat/client'
@@ -17,7 +17,7 @@ import {
 } from '../src/client/chat/MessageItem.tsx'
 import { AssistantMarkdown, type AssistantMarkdownProps } from '../src/client/chat/AssistantMarkdown.tsx'
 import { StatsPills } from '../src/client/chat/StatsPills.tsx'
-import { zh } from '../src/client/locale.ts'
+import { en as copy } from '../src/client/locale.ts'
 import { chatSnapshotFixture } from './chat-snapshot-fixture.client.ts'
 
 afterEach(() => {
@@ -26,7 +26,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-const t: ChatNodeViewProps['t'] = makeTranslate(zh, commonZh)
+const t: ChatNodeViewProps['t'] = makeTranslate(copy, commonCopy)
 const renderMessageImages: AssistantMarkdownProps['renderMessageImages'] = () => null
 const RETRY_ID = 'retry-fixture' as Extract<ConversationNode, { kind: 'model-retry' }>['retryId']
 
@@ -100,7 +100,7 @@ describe('MessageItem arms', () => {
     expect(view.container.querySelector('[data-ref-chip="session"]')?.textContent).toBe('你好')
     expect(view.container.querySelector('[data-ref-chip="session"] svg')).not.toBeNull()
     expect(view.getByText('这个在讲啥')).toBeTruthy()
-    expect(view.getByText('引用会话 · 你好')).toBeTruthy()
+    expect(view.getByText('Referenced session · 你好')).toBeTruthy()
   })
 
   it('renders the complete metadata-confirmed multi-word session label', () => {
@@ -119,7 +119,7 @@ describe('MessageItem arms', () => {
     )
     expect(view.container.querySelector('[data-ref-chip="session"]')?.textContent).toBe('Research notes')
     expect(view.getByText('what changed?')).toBeTruthy()
-    expect(view.getByText('引用会话 · Research notes')).toBeTruthy()
+    expect(view.getByText('Referenced session · Research notes')).toBeTruthy()
   })
 
   it('renders no-extension paths as files and leaves sentence punctuation outside the reference', () => {
@@ -172,10 +172,10 @@ describe('MessageItem arms', () => {
       />,
     )
     expect(screen.getByText('14:24')).toBeTruthy()
-    expect(screen.getByRole('button', { name: '复制' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: '在新对话中分支' })).toBeNull()
-    expect(screen.queryByRole('button', { name: '编辑' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '复制' }))
+    expect(screen.getByRole('button', { name: 'Duplicate' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Branch into a new conversation' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate' }))
     expect(writeText).toHaveBeenCalledWith('hello bubble')
   })
 
@@ -197,7 +197,7 @@ describe('MessageItem arms', () => {
       }}
       />,
     )
-    fireEvent.click(screen.getByRole('button', { name: '复制' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate' }))
     expect(exec).toHaveBeenCalledWith('copy')
   })
 
@@ -214,12 +214,12 @@ describe('MessageItem arms', () => {
       }}
       />,
     )
-    fireEvent.click(screen.getByRole('button', { name: '复制' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate' }))
     await act(async () => {
       await Promise.resolve()
       await Promise.resolve()
     })
-    expect(screen.getByRole('button', { name: '复制' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Duplicate' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: '复制成功' })).toBeNull()
   })
 
@@ -238,7 +238,7 @@ describe('MessageItem arms', () => {
       }}
       />,
     )
-    const copy = screen.getByRole('button', { name: '复制' })
+    const copy = screen.getByRole('button', { name: 'Duplicate' })
     fireEvent.click(copy)
     fireEvent.click(copy)
     expect(writeText).toHaveBeenCalledTimes(1)
@@ -252,7 +252,7 @@ describe('MessageItem arms', () => {
     fireEvent.click(done)
     expect(writeText).toHaveBeenCalledTimes(1)
     act(() => { vi.advanceTimersByTime(1000) })
-    expect(screen.getByRole('button', { name: '复制' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Duplicate' })).toBeTruthy()
   })
 
   it('clears copy feedback work when the message unmounts', async () => {
@@ -271,7 +271,7 @@ describe('MessageItem arms', () => {
       }}
       />,
     )
-    fireEvent.click(screen.getByRole('button', { name: '复制' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate' }))
     view.unmount()
     await act(async () => {
       finishWrite()
@@ -292,7 +292,7 @@ describe('MessageItem arms', () => {
       configurable: true,
       value: { writeText: vi.fn().mockResolvedValue(undefined) },
     })
-    fireEvent.click(screen.getByRole('button', { name: '复制' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate' }))
     await act(async () => {
       await Promise.resolve()
       await Promise.resolve()
@@ -318,9 +318,9 @@ describe('MessageItem arms', () => {
     expect(view.queryByText('插话')).toBeNull()
     expect(view.getByText('steer!')).toBeTruthy()
     expect(view.getByText(/附加内容块/)).toBeTruthy()
-    fireEvent.click(view.getByRole('button', { name: '复制' }))
+    fireEvent.click(view.getByRole('button', { name: 'Duplicate' }))
     expect(writeText).toHaveBeenCalledWith('steer!')
-    expect(view.queryByRole('button', { name: '在新对话中分支' })).toBeNull()
+    expect(view.queryByRole('button', { name: 'Branch into a new conversation' })).toBeNull()
   })
 
   it('context uses the Tool calls disclosure chrome and keeps its body collapsed by default', () => {
@@ -425,7 +425,7 @@ describe('MessageItem arms', () => {
       } as never}
       />,
     )
-    fireEvent.click(view.getByRole('button', { name: '上下文注入' }))
+    fireEvent.click(view.getByRole('button', { name: 'Context injection' }))
     const texts = [...view.container.querySelectorAll('[data-context-text]')].map(node => node.textContent)
     expect(texts).toEqual(['before', 'after'])
     expect(view.getByText(/未知内容块/)).toBeTruthy()
@@ -472,7 +472,7 @@ describe('MessageItem arms', () => {
       />,
     )
     fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*skill-catalog$/ }))
-    expect(view.container.querySelector('[data-context-catalog-update]')?.textContent).toBe('替换目录')
+    expect(view.container.querySelector('[data-context-catalog-update]')?.textContent).toBe('Replacement catalog')
   })
 
   it('a partially unreadable catalog falls back whole rather than showing a short list', () => {
@@ -533,7 +533,7 @@ describe('MessageItem arms', () => {
       } as never}
       />,
     )
-    fireEvent.click(view.getByRole('button', { name: '上下文注入' }))
+    fireEvent.click(view.getByRole('button', { name: 'Context injection' }))
     expect(view.container.querySelector('[data-context-text]')?.textContent).toBe('firstsecond')
   })
 
@@ -569,7 +569,7 @@ describe('MessageItem arms', () => {
       />,
     )
     fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*skill-catalog$/ }))
-    expect(view.container.querySelector('[data-context-catalog-update]')?.textContent).toBe('替换目录')
+    expect(view.container.querySelector('[data-context-catalog-update]')?.textContent).toBe('Replacement catalog')
     expect(view.container.querySelectorAll('[data-context-entries] li')).toHaveLength(0)
     expect(view.container.querySelector('[data-context-injection-body]')?.getAttribute('data-context-form'))
       .toBe('catalog')
@@ -605,7 +605,7 @@ describe('MessageItem arms', () => {
     )
     fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*skill-catalog$/ }))
     expect(view.container.querySelectorAll('[data-context-entries] li')).toHaveLength(200)
-    expect(view.container.querySelector('[data-context-entries-truncated]')?.textContent).toBe('…还有 5 条')
+    expect(view.container.querySelector('[data-context-entries-truncated]')?.textContent).toBe('… 5 more')
   })
 
   it('a catalog keeps a content block this version does not know', () => {
@@ -750,7 +750,7 @@ describe('MessageItem arms', () => {
     )
     fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*plugin$/ }))
     expect(view.container.querySelector('[data-context-snapshot-supersedes]')?.textContent)
-      .toBe('取代先前的快照')
+      .toBe('Supersedes earlier snapshots')
   })
 
   it('a relay names the agent that sent it above what it said', () => {
@@ -766,7 +766,7 @@ describe('MessageItem arms', () => {
       />,
     )
     fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*agent-message$/ }))
-    expect(view.container.querySelector('[data-context-relay-sender]')?.textContent).toBe('来自会话 child-7')
+    expect(view.container.querySelector('[data-context-relay-sender]')?.textContent).toBe('From session child-7')
     expect(view.container.querySelector('[data-context-text]')?.textContent).toBe('child report body')
   })
 
@@ -819,7 +819,7 @@ describe('MessageItem arms', () => {
     )
     const row = view.getByRole('button', { name: /上下文已压缩/ })
     expect(row.getAttribute('aria-expanded')).toBe('false')
-    expect(view.getByText('已压缩 16 条历史记录（约 11309 tokens）')).toBeTruthy()
+    expect(view.getByText('Compacted 16 history items (~11309 tokens)')).toBeTruthy()
     expect(view.queryByText(/保留的事实/)).toBeNull()
     fireEvent.click(row)
     expect(row.getAttribute('aria-expanded')).toBe('true')
@@ -836,7 +836,7 @@ describe('MessageItem arms', () => {
     const row = view.getByRole('button', { name: /上下文已压缩/ })
     expect(row).toHaveProperty('disabled', true)
     expect(row.getAttribute('aria-expanded')).toBeNull()
-    expect(view.getByText('压缩摘要不可用')).toBeTruthy()
+    expect(view.getByText('Compaction summary unavailable')).toBeTruthy()
     fireEvent.click(row) // a disabled control stays collapsed
     expect(row.getAttribute('aria-expanded')).toBeNull()
   })
@@ -870,8 +870,8 @@ describe('MessageItem arms', () => {
     expect(details?.open).toBe(false)
     expect(details?.dataset.active).toBe('true')
     expect(view.getByRole('status').textContent).toBe('正在重试模型请求（1/2） · 3s')
-    expect(view.getByText('重试延迟：').parentElement?.textContent).toBe('重试延迟：2500毫秒')
-    expect(view.getByText('失败原因：').parentElement?.textContent).toBe('失败原因：连接被重置')
+    expect(view.getByText('Retry delay: ').parentElement?.textContent).toBe('重试延迟：2500毫s')
+    expect(view.getByText('Failure reason: ').parentElement?.textContent).toBe('失败原因：连接被重置')
 
     act(() => { vi.advanceTimersByTime(1_100) })
     expect(view.getByRole('status').textContent).toBe('正在重试模型请求（1/2） · 2s')
@@ -1053,13 +1053,13 @@ describe('small branch tails', () => {
     )
     // The untimed counts pill renders static, so the usage pill is the only button.
     const [usagePill] = [...view.getAllByRole('button')] as [HTMLElement]
-    expect(view.getByText('1 轮 1 步').closest('button')).toBeNull()
+    expect(view.getByText('1 turns 1 steps').closest('button')).toBeNull()
     expect(usagePill.textContent).toBe('10 tok')
     // Pure output accounting still reaches the usage pill's click-open dialog rows.
     fireEvent.click(usagePill)
     const dialog = view.getByRole('dialog')
     expect(dialog.textContent).toContain('输出10 tok')
-    expect(dialog.textContent).not.toContain('缓存命中')
+    expect(dialog.textContent).not.toContain('Cache hit')
   })
 })
 

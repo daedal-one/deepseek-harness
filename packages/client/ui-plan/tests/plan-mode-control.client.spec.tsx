@@ -11,13 +11,13 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { PlanProjection } from '@deepseek-ai/dsh-plan-mode/client'
 import { PlanChip, type PlanChipProps } from '../src/client/PlanModeControl.tsx'
-import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
-import { zh } from '../src/client/locales.ts'
+import { en as commonCopy } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
+import { en as copy } from '../src/client/locales.ts'
 
 afterEach(cleanup)
 
-// The framework-injected t seat, stubbed over the zh dictionaries (the default locale).
-const t: PlanChipProps['t'] = makeTranslate(zh, commonZh)
+// The framework-injected t seat, stubbed over the English dictionaries (the default locale).
+const t: PlanChipProps['t'] = makeTranslate(copy, commonCopy)
 
 function setup(
   plan: PlanProjection | undefined,
@@ -81,7 +81,7 @@ describe('PlanChip', () => {
       .mockRejectedValueOnce('socket closed')
     setup({ active: true, pending: false }, exitPlanMode)
     fireEvent.click(chip())
-    expect((await screen.findByText('退出 plan mode 失败')).getAttribute('title')).toBe('host said no')
+    expect((await screen.findByText('Failed to exit plan mode')).getAttribute('title')).toBe('host said no')
     expect(chip()).toBeTruthy()
 
     fireEvent.click(chip())

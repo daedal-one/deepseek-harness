@@ -4,13 +4,13 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RunningToolCall, ToolResultNode } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
+import { en as commonCopy } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import { SkillRow } from '../src/client/SkillRow.tsx'
-import { zh } from '../src/client/locales.ts'
+import { en as copy } from '../src/client/locales.ts'
 
 type SkillRowProps = Parameters<typeof SkillRow>[0]
 
-const t: SkillRowProps['t'] = makeTranslate(zh, commonZh)
+const t: SkillRowProps['t'] = makeTranslate(copy, commonCopy)
 
 afterEach(cleanup)
 
@@ -62,7 +62,7 @@ describe('SkillRow', () => {
     const card = screen.getByLabelText('Instructions')
     expect(card.textContent).toBe('InstructionsFollow the issue workflow.\nKeep project fields in sync.')
     expect(view.container.textContent).not.toContain('{"name":"dsh-manage-issues"}')
-    fireEvent.click(screen.getByRole('button', { name: '查看' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect' }))
     expect(inspect).toHaveBeenCalledTimes(1)
 
     fireEvent.click(row)

@@ -1232,7 +1232,7 @@ describe('createFixtureApi', () => {
     const controlPromise = collectValues(
       api.sessionRemote.control(controlAbort.signal),
       controlAbort,
-      frames => frames.some(frame => frame.type === 'projection' && frame.key === 'title' && frame.value === '重命名'),
+      frames => frames.some(frame => frame.type === 'projection' && frame.key === 'title' && frame.value === 'Rename'),
     )
     await new Promise(resolve => setTimeout(resolve, 10))
 
@@ -1265,7 +1265,7 @@ describe('createFixtureApi', () => {
       frame.type === 'projection'
       && frame.key === 'title'
       && frame.sessionId === sid('fx-alpha')
-      && frame.value === '重命名')
+      && frame.value === 'Rename')
     expect(titleFrames).toHaveLength(1)
     expect(titleFrames[0]).toMatchObject({ seq: acceptedSeq })
   })

@@ -15,11 +15,11 @@ import type { PopupSpec, TokenSegment } from '../src/client/popup.ts'
 import { PopupSelectController } from '../src/client/popup.ts'
 import { PopupSelectView } from '../src/client/PopupSelectView.tsx'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
-import { zh } from '../src/client/locales.ts'
+import { en as commonCopy } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
+import { en as copy } from '../src/client/locales.ts'
 
-// The framework-injected t seat, stubbed over the zh dictionaries (the default locale).
-const t: Parameters<typeof PopupSelectView>[0]['t'] = makeTranslate(zh, commonZh)
+// The framework-injected t seat, stubbed over the English dictionaries (the default locale).
+const t: Parameters<typeof PopupSelectView>[0]['t'] = makeTranslate(copy, commonCopy)
 
 // jsdom has no scrollIntoView; the view calls it on the highlighted row.
 const scrollIntoView = vi.fn()

@@ -91,10 +91,9 @@ pnpm run test:snapshot scripts/session-snapshot-corpus.corpus.ts
 
 After implementing the new edge, add its actual test path to the focused Vitest run. Add the changed JSONL, replay, projection, and SDK tests selected by the actual diff, plus the built publication-Worker smoke when that path changes. Require successful strict migration, identity preservation for the skeleton, malformed and unknown-required-event refusal, deterministic repeated restores, independent concurrent stage state, seeded multi-hop cuts, unchanged predecessors, and no fallback. Report exact commands and failures, not an inferred full-suite result.
 
-Update the [owning Agent Note](../../.agents/notes/implemented/architecture/2026-08-31-released-session-format-migrations.md) rather than adding a redundant decision record. Keep the [release record](../session-format-status.md#updating-the-record) unchanged until publication; after publication, update it with verified release evidence. Audit related active notes for supersession; retain independent rationale and leave archived notes frozen. Update bilingual prose together, re-record each changed pair with the repository tool, then run documentation checks:
+Update the [owning Agent Note](../../.agents/notes/implemented/architecture/2026-08-31-released-session-format-migrations.md) rather than adding a redundant decision record. Keep the [release record](../session-format-status.md#updating-the-record) unchanged until publication; after publication, update it with verified release evidence. Audit related active notes for supersession; retain independent rationale and leave archived notes frozen. Update the affected documentation and run its checks:
 
 ```sh
-pnpm run verify-translation-pairing --write docs/cookbook/adding-a-session-format-version.md
 pnpm run test:docs
 pnpm run doc-sync
 pnpm run lint

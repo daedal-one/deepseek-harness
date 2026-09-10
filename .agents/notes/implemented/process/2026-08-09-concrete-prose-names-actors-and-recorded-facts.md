@@ -32,4 +32,4 @@ This decision complements the [documentation tiers and budgets](2026-07-04-doc-t
 
 ## Consequences
 
-Documentation and diagnostics may use a few more words, but each statement tells readers which value or process matters without requiring source inspection. Repository-wide prose audits require semantic classification and cannot use blind replacement. Bilingual counterparts preserve the same concrete fact, and generated copies are refreshed only after their owning source changes.
+Documentation and diagnostics may use a few more words, but each statement tells readers which value or process matters without requiring source inspection. Repository-wide prose audits require semantic classification and cannot use blind replacement. Generated copies are refreshed only after their owning source changes.

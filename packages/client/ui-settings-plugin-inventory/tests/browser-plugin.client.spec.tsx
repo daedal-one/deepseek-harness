@@ -11,7 +11,7 @@ import { PluginInventorySettingsTab } from '../src/client/PluginInventorySetting
 import type { PluginInventorySettingsTabInjected } from '../src/client/PluginInventorySettingsTab.tsx'
 import { apply as hostApply } from '../src/index.ts'
 
-usePinnedBrowserLanguages('zh-CN')
+usePinnedBrowserLanguages('en-US')
 afterEach(cleanup)
 
 const EMPTY = { entries: [] }
@@ -72,8 +72,8 @@ describe('ui-settings-plugin-inventory browser plugin', () => {
 
     // Shipped preset names resolve over the agent-preset dictionaries the
     // real plugin registers; user-authored metadata stays untranslated.
-    b.locale.register('settings.agentPreset', 'zh', { presetStandardName: '标准模式' } as never)
-    expect(injected.presetName({ id: 'standard', trust: 'system', isDefault: true, rows: [] })).toBe('标准模式')
+    b.locale.register('settings.agentPreset', 'en', { presetStandardName: 'Standard mode' } as never)
+    expect(injected.presetName({ id: 'standard', trust: 'system', isDefault: true, rows: [] })).toBe('Standard mode')
     expect(injected.presetName({ id: 'mine', trust: 'user', name: '我自己的', isDefault: false, rows: [] })).toBe('我自己的')
     await b.ctx.fiber.dispose()
   })
@@ -98,7 +98,7 @@ describe('ui-settings-plugin-inventory browser plugin', () => {
 
     await fiber.dispose()
     expect(b.slots.entries('settings.plugins.tab')).toHaveLength(0)
-    expect(() => b.locale.register(NS, 'zh', {})).not.toThrow()
+    expect(() => b.locale.register(NS, 'en', {})).not.toThrow()
     await b.ctx.fiber.dispose()
   })
 })

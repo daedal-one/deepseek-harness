@@ -11,12 +11,14 @@
  */
 
 import { readFile } from 'node:fs/promises'
+import { pathToFileURL } from 'node:url'
 import { load } from 'js-yaml'
 import type { FiberState } from '@deepseek-ai/cordis'
 import { isJsExpr, type EntryTree } from '@deepseek-ai/cordis-plugin-loader'
 import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
 import { entryListProblem } from './discovery.ts'
 import type { PresetTrust } from './preset.ts'
+import { classifyRowSpecifier } from './specifier.ts'
 
 /**
  * Effective enablement of one composition row: a literal or evaluated
@@ -41,6 +43,10 @@ export interface AgentPresetCompositionRow {
   readonly entryId: string | null
   /** Module specifier the row names. */
   readonly moduleName: string
+  /** Owning composition's module resolution URL; absent on a tree without one. */
+  readonly baseUrl?: string
+  /** Literal row description for display; blank or non-string metadata is omitted. */
+  readonly purpose?: string
   /** Effective enablement, including disabled ancestor groups. */
   readonly enabled: CompositionRowEnablement
   /** The row's own `!!js` disabled expression, when it carries one. */
@@ -114,6 +120,19 @@ interface RawRow {
   readonly group?: unknown
   readonly config?: unknown
   readonly disabled?: unknown
+  readonly description?: unknown
+}
+
+/** Read display-only metadata without evaluating expressions or plugin config. */
+function rowPurpose(row: RawRow): { purpose?: string } {
+  const purpose = typeof row.description === 'string' ? row.description.trim() : ''
+  return purpose === '' ? {} : { purpose }
+}
+
+/** Match preset imports: package names use the harness, relative files use the preset. */
+function rowBaseUrl(moduleName: string, presetBase: string | undefined, harnessBase: string | undefined): string | undefined {
+  const kind = classifyRowSpecifier(moduleName).kind
+  return kind === 'package' || kind === 'builtin' ? harnessBase ?? presetBase : presetBase
 }
 
 /**
@@ -124,23 +143,30 @@ interface RawRow {
  * @param outerDisabled - the combined ancestor-group disabled state.
  * @param evaluateExpression - the Loader-context evaluator for `!!js` nodes.
  * @param found - the accumulator receiving flattened rows.
+ * @param baseUrl - the owning composition's module resolution URL.
+ * @param harnessBase - installed harness URL for bare package names.
  */
 function flattenRows(
   rows: readonly unknown[],
   outerDisabled: boolean | 'conditional',
   evaluateExpression: DisabledExpressionEvaluator,
   found: AgentPresetCompositionRow[],
+  baseUrl: string,
+  harnessBase: string | undefined,
 ): void {
   for (const value of rows) {
     const row = value as RawRow
     const disabled = combineDisabled(outerDisabled, disabledContribution(row.disabled, evaluateExpression))
     if (row.group === true) {
-      flattenRows(row.config as readonly unknown[], disabled, evaluateExpression, found)
+      flattenRows(row.config as readonly unknown[], disabled, evaluateExpression, found, baseUrl, harnessBase)
       continue
     }
+    const importBase = rowBaseUrl(row.name, baseUrl, harnessBase)
     found.push({
       entryId: typeof row.id === 'string' && row.id !== '' ? row.id : null,
       moduleName: row.name,
+      ...importBase === undefined ? {} : { baseUrl: importBase },
+      ...rowPurpose(row),
       enabled: disabled === true ? false : disabled === 'conditional' ? 'conditional' : true,
       ...isJsExpr(row.disabled) ? { condition: row.disabled.__jsExpr } : {},
     })
@@ -157,11 +183,13 @@ function flattenRows(
  * reason rather than dropping the rows silently.
  * @param path - absolute path of the composition file.
  * @param evaluateExpression - the Loader-context evaluator for `!!js` nodes.
+ * @param harnessBase - installed harness URL for bare package names.
  * @returns flattened rows in composition order, or why they cannot be read.
  */
 export async function fileComposition(
   path: string,
   evaluateExpression: DisabledExpressionEvaluator,
+  harnessBase?: string,
 ): Promise<{ rows: AgentPresetCompositionRow[] } | { broken: string }> {
   let rows: unknown
   try {
@@ -173,22 +201,26 @@ export async function fileComposition(
   const problem = entryListProblem(rows)
   if (problem !== undefined) return { broken: problem }
   const found: AgentPresetCompositionRow[] = []
-  flattenRows(rows as readonly unknown[], false, evaluateExpression, found)
+  flattenRows(rows as readonly unknown[], false, evaluateExpression, found, pathToFileURL(path).href, harnessBase)
   return { rows: found }
 }
 
 /**
  * Plugin rows of one live standing composition, in Loader-entry order.
  * @param tree - the standing mount's entry tree.
+ * @param harnessBase - installed harness URL for bare package names.
  * @returns rows with the Loader's evaluated enablement and root-fiber states.
  */
-export function mountedCompositionRows(tree: EntryTree): AgentPresetCompositionRow[] {
+export function mountedCompositionRows(tree: EntryTree, harnessBase?: string): AgentPresetCompositionRow[] {
   const found: AgentPresetCompositionRow[] = []
   for (const entry of tree.entries()) {
     if (entry.options.group) continue
+    const baseUrl = rowBaseUrl(entry.options.name, entry.parent.tree.ctx.baseUrl, harnessBase)
     found.push({
       entryId: entry.id,
       moduleName: entry.options.name,
+      ...baseUrl === undefined ? {} : { baseUrl },
+      ...rowPurpose(entry.options),
       enabled: !entry.disabled,
       ...isJsExpr(entry.options.disabled) ? { condition: entry.options.disabled.__jsExpr } : {},
       ...entry.fiber === undefined ? {} : { fiberState: entry.fiber.state },

@@ -399,7 +399,7 @@ describe('prompt and cancel errors', () => {
       parentAvailable: true,
     })
     await session.open()
-    const prompted = await session.prompt([{ type: 'text', text: '继续' }], 'queue')
+    const prompted = await session.prompt([{ type: 'text', text: 'Continue' }], 'queue')
     const steered = await session.prompt([{ type: 'text', text: '现在处理' }], 'steer')
     const cancelled = await session.cancel()
 
@@ -422,7 +422,7 @@ describe('prompt and cancel errors', () => {
         parentSessionId: PARENT, childSessionId: SID,
         mode: 'continuable',
         delivery: 'queue',
-        content: [{ type: 'text', text: '继续' }],
+        content: [{ type: 'text', text: 'Continue' }],
         clientTimeZone: new Intl.DateTimeFormat().resolvedOptions().timeZone,
       },
       {
@@ -500,7 +500,7 @@ describe('prompt and cancel errors', () => {
 
     const prompted = await session.prompt([
       { type: 'file', receiptId: 'receipt' as never },
-      { type: 'text', text: '继续' },
+      { type: 'text', text: 'Continue' },
     ], 'queue')
 
     expect(prompted).toMatchObject({
@@ -522,7 +522,7 @@ describe('prompt and cancel errors', () => {
       address: { parentSessionId: PARENT, childSessionId: SID, mode: 'one-shot' },
     })
     await session.open()
-    const prompted = await session.prompt([{ type: 'text', text: '继续' }], 'queue')
+    const prompted = await session.prompt([{ type: 'text', text: 'Continue' }], 'queue')
     const cancelled = await session.cancel()
 
     // The Host reads the durable descriptor; the wire marker stays 'continuable'.

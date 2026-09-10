@@ -27,7 +27,7 @@ function displayTitle(node: SessionNode, t: RowTranslate): string {
   return node.blank ? t('session.new') : node.title
 }
 
-/** Localized compact relative time ("now"/"5min" in en; the zh dictionary now shares that English copy). */
+/** Compact relative time using the active locale’s labels. */
 function timeLabel(updatedAt: number, now: number, t: RowTranslate): string {
   const { unit, n } = relativeTime(updatedAt, now)
   return unit === 'now' ? t('time.now') : t(`time.${unit}`, { n })

@@ -316,14 +316,14 @@ export class AgentPresets extends TypertRemoteService {
       // superseded generation's record precedes its replacement's.
       const mount = livePresetMounts(rootFiber).findLast(candidate => candidate.presetId === preset.id)
       if (mount !== undefined) {
-        found.push({ ...identity, rows: mountedCompositionRows(mount.tree) })
+        found.push({ ...identity, rows: mountedCompositionRows(mount.tree, this.ctx.baseUrl) })
         continue
       }
       if (preset.broken !== undefined) {
         found.push({ ...identity, broken: preset.broken, rows: [] })
         continue
       }
-      const read = await fileComposition(preset.path, evaluateExpression)
+      const read = await fileComposition(preset.path, evaluateExpression, this.ctx.baseUrl)
       found.push('broken' in read
         ? { ...identity, broken: read.broken, rows: [] }
         : { ...identity, rows: read.rows })

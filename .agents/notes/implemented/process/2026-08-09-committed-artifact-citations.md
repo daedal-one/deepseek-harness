@@ -15,10 +15,10 @@ Durable prose — comments, JSDoc, docs, notes, test comments and titles — cit
 - Fixed regressions are pinned as present-tense counterfactuals ("without X, Y happens"; "a naive X would…"), never as repo history ("used to Y").
 - Implemented notes state shipped reality: a "deferred to a later PR" claim whose target shipped names the shipped note instead.
 - Recorded fixtures, snapshots, and archived notes are exempt: recorded model output and sealed history keep their original voice. Inside a note's change-story sections, a historical stage name ("the first cut shipped X") is current-state-safe; indexical stamps ("this cut") stay banned everywhere.
-- Recall probes use lexical boundaries and are calibrated against a known positive and a near-miss negative. Authoring-language probes target the opposite-language surface instead of treating the complete Chinese corpus as untranslated residue.
-- Owner-first edits trace every generated consumer. Verbatim code fences are copied byte-for-byte across bilingual pairs; model- or user-visible wording changes only with its owning behavior evidence, otherwise the audit leaves it unchanged and reports the deferral.
+- Recall probes use lexical boundaries and are calibrated against a known positive and a near-miss negative.
+- Owner-first edits trace every generated consumer. model- or user-visible wording changes only with its owning behavior evidence, otherwise the audit leaves it unchanged and reports the deferral.
 
-One repo-wide purge applied these rules across the prose surfaces, including the generator-owned templates (`scripts/gen-doc-graphs.ts`, `scripts/gen-tool-catalog.ts`, the typert generator's page notice) with regeneration, the type-equiv source JSDoc with page re-pastes, and the bilingual counterparts with pair re-records. The [dsh-trim-cot-leakage skill](../../../skills/dsh-trim-cot-leakage/SKILL.md) operationalizes these rules: the audit taxonomy, the committed recall batteries, and few-shot examples for deciding what to keep or delete.
+One repo-wide purge applied these rules across the prose surfaces, including the generator-owned templates (`scripts/gen-doc-graphs.ts`, `scripts/gen-tool-catalog.ts`, the typert generator's page notice) with regeneration, the type-equiv source JSDoc with page re-pastes. The [dsh-trim-cot-leakage skill](../../../skills/dsh-trim-cot-leakage/SKILL.md) operationalizes these rules: the audit taxonomy, the committed recall batteries, and few-shot examples for deciding what to keep or delete.
 
 ## Alternatives considered
 
@@ -28,7 +28,7 @@ One repo-wide purge applied these rules across the prose surfaces, including the
 
 ## Verification
 
-The audit's grep batteries (English and Chinese, comments and prose, `--hidden` for `.agents/`) return no design-ordinal citations outside recorded fixtures, archived notes, the trim skill's own files, and this note's quoted evidence; `verify-type-equiv`, the `gen-*` freshness checks, and `verify-translation-pairing` pin the regenerated and re-recorded surfaces. Coverage gap: no gate rejects a new ordinal citation — review owns the rule.
+The audit's grep batteries (comments and prose, `--hidden` for `.agents/`) return no design-ordinal citations outside recorded fixtures, archived notes, the trim skill's own files, and this note's quoted evidence; `verify-type-equiv` and the `gen-*` freshness checks pin the regenerated and re-recorded surfaces. Coverage gap: no gate rejects a new ordinal citation — review owns the rule.
 
 ## Consequences
 

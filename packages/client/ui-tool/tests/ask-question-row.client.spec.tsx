@@ -10,10 +10,10 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ToolResultNode } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
+import { en as commonCopy } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 // Export discipline: packages/client/AGENTS.md.
 import { AskQuestionRow, askQuestionToolview } from '../src/client/tool/toolviews/ask-question-row.tsx'
-import { zh } from '@deepseek-ai/dsh-client-ui-conversation/src/client/locales.ts'
+import { en as copy } from '@deepseek-ai/dsh-client-ui-conversation/src/client/locales.ts'
 
 afterEach(cleanup)
 
@@ -34,7 +34,7 @@ const resultNode = (argsRaw: string, resultText: string | null, over?: Partial<T
 const runningCall = (argsRaw: string) =>
   ({ callId: 'c1', name: 'ask_user_question', argsRaw, turn: 1, step: 1, time: 1_000, subCalls: [] })
 
-const t = makeTranslate(zh, commonZh)
+const t = makeTranslate(copy, commonCopy)
 
 function rowProps(block: unknown): Parameters<typeof AskQuestionRow>[0] {
   return {
@@ -79,7 +79,7 @@ describe('AskQuestionRow', () => {
     expect(screen.getByText('Which project should this apply to?')).toBeTruthy()
     expect(screen.getByText('deepseek-harness')).toBeTruthy()
     expect(screen.getByText('Anything else?')).toBeTruthy()
-    expect(screen.getByText('未回答')).toBeTruthy()
+    expect(screen.getByText('Not answered')).toBeTruthy()
     expect(screen.queryByText(/"questions"/)).toBeNull()
     expect(screen.queryByText(/"answers"/)).toBeNull()
   })
@@ -150,7 +150,7 @@ describe('AskQuestionRow', () => {
     const view = render(<AskQuestionRow {...rowProps(resultNode(args, answers([
       { id: 'a', selected: ['x'] },
     ])))} />)
-    expect(screen.getByText('1/1 已回答')).toBeTruthy()
+    expect(screen.getByText('1/1 answered')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { expanded: false }))
     expect(view.container.querySelector('[class*="ioCard"]')).not.toBeNull()
   })
@@ -174,7 +174,7 @@ describe('AskQuestionRow', () => {
     expect(screen.getByText('cancelled')).toBeTruthy()
     expect(view.container.querySelector('[data-state="ok"]')).not.toBeNull()
     fireEvent.click(screen.getByRole('button', { expanded: false }))
-    expect(screen.getByText('本轮已取消，未提交回答')).toBeTruthy()
+    expect(screen.getByText('This question set was cancelled before answers were submitted.')).toBeTruthy()
     expect(screen.getByText('What do you want to accomplish?')).toBeTruthy()
     expect(screen.getByText('Which project should this apply to?')).toBeTruthy()
     expect(screen.getByText('Anything else?')).toBeTruthy()
@@ -190,7 +190,7 @@ describe('AskQuestionRow', () => {
     expect(screen.getByText('interrupted')).toBeTruthy()
     expect(view.container.querySelector('[data-state="stopped"]')).not.toBeNull()
     fireEvent.click(screen.getByRole('button', { expanded: false }))
-    expect(screen.getByText('本轮已中断，未提交回答')).toBeTruthy()
+    expect(screen.getByText('This question set was interrupted before answers were submitted.')).toBeTruthy()
     expect(screen.getByText('What do you want to accomplish?')).toBeTruthy()
     expect(view.container.querySelector('[class*="ioCard"]')).toBeNull()
   })

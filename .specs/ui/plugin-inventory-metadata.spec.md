@@ -24,6 +24,10 @@ remains authoritative for composition and lifecycle state.
 - {#c-presentation} Every Plugin list card MUST display author, description, and
   version before disclosure, MUST use explicit copy for unavailable fields, and
   MUST include available metadata in local search.
+- {#c-preset-purpose} Preset cards MUST resolve package metadata from the owning
+  composition's module resolution context. A literal, non-empty row description
+  MUST take precedence as the displayed purpose, without evaluating metadata
+  expressions or exposing plugin configuration or persona prompts.
 - {#c-layout} The Plugin catalog MUST render one card per row at every viewport
   width so each card has the full catalog width for metadata and status labels.
 - {#c-state-filter} The Plugin catalog MUST offer a state filter beside search,

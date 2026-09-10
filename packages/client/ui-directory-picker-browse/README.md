@@ -37,7 +37,7 @@ Step through folders, edit the path directly, or filter the last pane by prefix;
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The dialog is a 680×500 Miller-column view (clamped on short or narrow viewports), driven by the host `listDirectory` and `createDirectory` primitives through `ctx.workspaces`. Both registrations install as one transactional effect through nested `ctx.slots.inject()` calls, because either declaring entry may activate later or replace its declaration; the dialog's copy lives in this package's own locale namespace so the two dictionaries land as a unit. Browse failures stay inside the dialog's own alert surfaces, so this occupant never drives the owner's `onError` arm. The node half is an empty `apply` that keeps the plugin on the host roster.
+The dialog is a 680×500 Miller-column view (clamped on short or narrow viewports), driven by the host `listDirectory` and `createDirectory` primitives through `ctx.workspaces`. Both registrations install as one transactional effect through nested `ctx.slots.inject()` calls, because either declaring entry may activate later or replace its declaration; the dialog's copy lives in this package's own locale namespace with one English dictionary. Browse failures stay inside the dialog's own alert surfaces, so this occupant never drives the owner's `onError` arm. The node half is an empty `apply` that keeps the plugin on the host roster.
 
 </details>
 

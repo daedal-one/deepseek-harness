@@ -94,7 +94,7 @@ describe('projectUserText', () => {
   })
 
   it('prefers the longer recall label when one nests inside another', () => {
-    const host = project('@会话一 收尾', ['会话', '会话一'])
+    const host = project('@会话一 收尾', ['Sessions', '会话一'])
     const chips = [...host.querySelectorAll('[data-ref-chip="session"]')]
     expect(chips.map(c => c.textContent)).toEqual(['会话一'])
     expect(host.textContent).toBe('会话一 收尾')

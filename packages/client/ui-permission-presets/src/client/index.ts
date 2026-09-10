@@ -29,9 +29,7 @@ import type { ClientSessionContext } from '@deepseek-ai/dsh-client-ui-input-trig
 import type { PermissionSelect } from '@deepseek-ai/dsh-permission-presets/client'
 import { PermissionRow } from './PermissionRow.tsx'
 import type { PermissionRowInjected } from './PermissionRow.tsx'
-import {
-  accessEn, accessZh, en, zh,
-} from './locales.ts'
+import { accessEn, en } from './locales.ts'
 import {
   displayPermissionPreset, FULL_ACCESS_PRESET,
 } from './presentation.ts'
@@ -88,38 +86,12 @@ export function apply(ctx: ClientContext): void {
   const sessions = ctx.sessions
   // This optional bundle and ui-conversation can load independently, so each
   // owns the same safety copy under its own locale namespace.
-  /* jscpd:ignore-start */
-  ctx.effect(() => {
-    const disposers = [
-      ctx.locale.register(ACCESS_NS, 'zh', {
-        'preset.readOnly': accessZh['preset.readOnly'],
-        'preset.workspaceWrite': accessZh['preset.workspaceWrite'],
-        'preset.fullAccess': accessZh['preset.fullAccess'],
-        'confirm.title': accessZh['confirm.title'],
-        'confirm.description': accessZh['confirm.description'],
-        'confirm.acknowledge': accessZh['confirm.acknowledge'],
-        'confirm.cancel': accessZh['confirm.cancel'],
-        'confirm.enable': accessZh['confirm.enable'],
-      }),
-      ctx.locale.register(ACCESS_NS, 'en', {
-        'preset.readOnly': accessEn['preset.readOnly'],
-        'preset.workspaceWrite': accessEn['preset.workspaceWrite'],
-        'preset.fullAccess': accessEn['preset.fullAccess'],
-        'confirm.title': accessEn['confirm.title'],
-        'confirm.description': accessEn['confirm.description'],
-        'confirm.acknowledge': accessEn['confirm.acknowledge'],
-        'confirm.cancel': accessEn['confirm.cancel'],
-        'confirm.enable': accessEn['confirm.enable'],
-      }),
-    ]
-    return () => { for (const dispose of disposers) dispose() }
-  }, 'ui-permission: Full access confirmation dictionaries')
-  /* jscpd:ignore-end */
+  ctx.effect(() => ctx.locale.register(ACCESS_NS, 'en', accessEn), 'ui-permission: Full access confirmation dictionary')
   const t = ctx.locale.bind(ACCESS_NS)
   const sessionFor = (session: ClientSessionContext): SessionFace | undefined =>
     sessions.binding(session.sessionId)?.session
 
-  ctx.effect(() => ctx.locale.register('settings.permission', { zh, en }), 'ui-permission: settings row dictionaries')
+  ctx.effect(() => ctx.locale.register('settings.permission', { en }), 'ui-permission: settings row dictionaries')
 
   // The shared SettingsScope mirror updates after document commits and reconnects.
   const controller = new PermissionPresetSettingsController(

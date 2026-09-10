@@ -8,7 +8,7 @@ import type { RenderMessageImages } from '@deepseek-ai/dsh-client-ui-conversatio
 import { TrajectoryTable as LocalizedTrajectoryTable } from '../src/client/TrajectoryTable.tsx'
 import { deriveTrajectoryLayout, type TrajectoryTurnModel } from '../src/client/layout.ts'
 import { trajectoryRecordId } from '../src/client/trajectory-record.ts'
-import { t, tZh } from './locale.client.ts'
+import { t, t as tCopy } from './locale.client.ts'
 
 const renderImagesStub: RenderMessageImages = ({ images }) => (
   <div data-testid="record-images" data-count={images.length}>
@@ -164,7 +164,7 @@ describe('TrajectoryTable', () => {
     const assistant = TURNS[0]!.groups[0]!.cells[0]!
     render(
       <LocalizedTrajectoryTable
-        t={tZh}
+        t={tCopy}
         renderImages={renderImagesStub}
         turns={TURNS}
         collapsedTurns={new Set<number>()}
@@ -427,7 +427,7 @@ describe('TrajectoryTable', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Request #1' }))
 
     view.rerender(
-      <TrajectoryTable turns={[turn('步骤 1')]} requestNumbers={request('步骤 1')} {...FOLD_PROPS} />,
+      <TrajectoryTable turns={[turn('Step 1')]} requestNumbers={request('Step 1')} {...FOLD_PROPS} />,
     )
 
     expect(screen.getByRole('button', { name: 'Request #1' })

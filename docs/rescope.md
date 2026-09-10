@@ -49,4 +49,4 @@ pnpm run rescope-vendor:check      # assert the post-state; runs in the hygiene 
 pnpm run rescope-vendor --apply --reverse   # return to the upstream names
 ```
 
-Re-apply it after an upstream sync ([procedure](../vendor/README.md)), and follow it with the regeneration it prints: `pnpm install` for the lockfile, `pnpm run gen-third-party-notices`, and `pnpm run verify-translation-pairing --write` for the bilingual pairs it touched.
+Re-apply it after an upstream sync ([procedure](../vendor/README.md)), and follow it with the regeneration it prints: `pnpm install` for the lockfile, `pnpm run gen-third-party-notices`.

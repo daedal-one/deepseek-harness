@@ -29,7 +29,7 @@ import {
   type DeliverablesTurnData,
 } from '../src/client/turn-deliverables.ts'
 import { apply, inject } from '../src/client/index.ts'
-import { en, zh } from '../src/client/locales.ts'
+import { en, en as copy } from '../src/client/locales.ts'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 
@@ -425,18 +425,18 @@ describe('produced-file Turn data', () => {
 })
 
 describe('ProducedFiles row', () => {
-  const t = makeTranslate(zh)
+  const t = makeTranslate(copy)
 
   it('renders the bounded chips and opens the file it was clicked for', () => {
     const paths = ['deep/a.html', 'b.css', 'c.ts', 'd.ts', 'e.ts', 'f.ts', 'g.ts', 'h.ts']
     const openFile = vi.fn<(path: string) => void>()
 
     const view = render(<ProducedFiles matched={paths} openFile={openFile} t={t} />)
-    expect(view.getByText('本轮文件改动')).toBeTruthy()
+    expect(view.getByText('Files changed')).toBeTruthy()
     const row = view.container.querySelector('[data-produced-files-row]')
     if (!(row instanceof HTMLElement)) throw new Error('produced row missing')
     expect(within(row).getAllByRole('button')).toHaveLength(6)
-    expect(within(row).getByText('+ 2 个文件')).toBeTruthy()
+    expect(within(row).getByText('+ 2 files')).toBeTruthy()
     const chip = view.getByRole('button', { name: 'Open deep/a.html' })
     expect(chip.textContent).toBe('a.html')
     expect(chip.getAttribute('title')).toBe('deep/a.html')

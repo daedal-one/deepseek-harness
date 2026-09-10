@@ -123,7 +123,7 @@ describe('fileComposition', () => {
         { entryId: 'buried', moduleName: 'pkg-buried', enabled: false },
         { entryId: 'maybe', moduleName: 'pkg-maybe', enabled: 'conditional' },
         { entryId: 'certainly-off', moduleName: 'pkg-certainly-off', enabled: false },
-      ],
+      ].map(row => ({ ...row, baseUrl: pathToFileURL(path).href })),
     })
   })
 
@@ -144,7 +144,7 @@ describe('fileComposition', () => {
       rows: [
         { entryId: 'off', moduleName: 'pkg-off', enabled: false, condition: '1 === 1' },
         { entryId: 'on', moduleName: 'pkg-on', enabled: true, condition: '1 === 2' },
-      ],
+      ].map(row => ({ ...row, baseUrl: pathToFileURL(path).href })),
     })
   })
 
@@ -164,6 +164,48 @@ describe('fileComposition', () => {
     await writeFile(rowless, 'foo: bar\n')
     expect(await fileComposition(rowless, refuseExpression)).toEqual({
       broken: 'the composition must be a top-level list of plugin rows',
+    })
+  })
+
+  it('reads only literal row descriptions and keeps plugin config private', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-composition-purpose-'))
+    roots.push(dir)
+    const path = join(dir, COMPOSITION_FILE)
+    await writeFile(path, [
+      '- name: reviewer',
+      '  description: "  Checks changes against the request.  "',
+      '  config:',
+      '    persona: private prompt',
+      '- name: expression',
+      '  description: !!js throw new Error("must not execute")',
+      '- name: blank',
+      '  description: "  "',
+      '- name: numeric',
+      '  description: 42',
+    ].join('\n'))
+    const evaluator = vi.fn(refuseExpression)
+    expect(await fileComposition(path, evaluator)).toEqual({
+      rows: [
+        { moduleName: 'reviewer', purpose: 'Checks changes against the request.' },
+        { moduleName: 'expression' },
+        { moduleName: 'blank' },
+        { moduleName: 'numeric' },
+      ].map(row => ({ ...row, entryId: null, enabled: true, baseUrl: pathToFileURL(path).href })),
+    })
+    expect(evaluator).not.toHaveBeenCalled()
+  })
+
+  it('resolves bare names from the harness and relative files from the preset', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-composition-base-'))
+    roots.push(root)
+    const path = join(root, COMPOSITION_FILE)
+    await writeFile(path, '- name: package-plugin\n- name: ./local.js\n')
+    const harnessBase = pathToFileURL(FIXTURES).href + '/'
+    expect(await fileComposition(path, refuseExpression, harnessBase)).toEqual({
+      rows: [
+        { entryId: null, moduleName: 'package-plugin', enabled: true, baseUrl: harnessBase },
+        { entryId: null, moduleName: './local.js', enabled: true, baseUrl: pathToFileURL(path).href },
+      ],
     })
   })
 })
@@ -262,7 +304,15 @@ describe('AgentPresets.compositionInventory', () => {
           },
         ],
       },
-    ])
+    ].map(preset => ({
+      ...preset,
+      rows: preset.rows.map(row => ({
+        ...row,
+        baseUrl: preset.trust === 'system'
+          ? pathToFileURL(join(SYSTEM_ROOT.path, preset.id, COMPOSITION_FILE)).href
+          : pathToFileURL(FIXTURES).href + '/',
+      })),
+    })))
     // Reading is never mounting: every unmounted preset above was answered
     // from its file, so listing plugins cannot activate a preset early.
     expect(livePresetMounts()).toEqual([])
@@ -290,7 +340,7 @@ describe('AgentPresets.compositionInventory', () => {
         fiberState: FiberState.ACTIVE,
       },
       { entryId: 'alpha-extra', moduleName: '../../plugins/contribute.js', enabled: false },
-    ])
+    ].map(row => ({ ...row, baseUrl: pathToFileURL(join(SYSTEM_ROOT.path, 'standard')).href + '/' })))
   })
 
   it('prefers the standing mount over a file that broke after mounting', async () => {
@@ -300,7 +350,7 @@ describe('AgentPresets.compositionInventory', () => {
     const plugin = join(FIXTURES, 'plugins', 'contribute.js')
     await writeFile(
       join(root, 'volatile', COMPOSITION_FILE),
-      `- id: only\n  name: ${plugin}\n  config:\n    tool: volatile\n`,
+      `- id: only\n  name: ${plugin}\n  description: Checks the original request.\n  config:\n    tool: volatile\n`,
     )
     const ctx = await harness({
       default: 'volatile',
@@ -320,7 +370,11 @@ describe('AgentPresets.compositionInventory', () => {
     expect(volatile).toMatchObject({ id: 'volatile', trust: 'user', isDefault: true })
     expect(volatile?.broken).toBeUndefined()
     expect(volatile?.rows).toEqual([
-      { entryId: 'only', moduleName: plugin, enabled: true, fiberState: FiberState.ACTIVE },
+      {
+        entryId: 'only', moduleName: plugin, enabled: true, fiberState: FiberState.ACTIVE,
+        purpose: 'Checks the original request.',
+        baseUrl: pathToFileURL(join(root, 'volatile')).href + '/',
+      },
     ])
   })
 

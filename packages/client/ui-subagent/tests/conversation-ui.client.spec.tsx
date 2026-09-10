@@ -10,7 +10,7 @@ import {
   SubagentHeaderLineage, type SubagentHeaderLineageProps,
 } from '../src/client/SubagentHeaderLineage.tsx'
 import { SubagentReadOnlyComposer } from '../src/client/SubagentReadOnlyComposer.tsx'
-import { zh } from '../src/client/locales.ts'
+import { en as copy } from '../src/client/locales.ts'
 
 afterEach(() => {
   cleanup()
@@ -21,7 +21,7 @@ afterEach(() => {
 const PARENT = 'parent' as SessionId
 const CHILD = 'child' as SessionId
 const GRANDCHILD = 'grandchild' as SessionId
-const t: SubagentHeaderLineageProps['t'] = makeTranslate(zh)
+const t: SubagentHeaderLineageProps['t'] = makeTranslate(copy)
 
 function catalog(over: Partial<SubagentCatalogSnapshot> = {}): SubagentCatalogSnapshot {
   return {
@@ -127,7 +127,7 @@ describe('SubagentHeaderLineage', () => {
       ...summaries,
       [GRANDCHILD]: { ...summaries[GRANDCHILD]!, running: false },
     })} />)
-    const inactiveTrigger = screen.getByRole('button', { name: '3 个子代理' })
+    const inactiveTrigger = screen.getByRole('button', { name: '3 subagent' })
     expect(inactiveTrigger.querySelector('[data-state="ongoing"]')).toBeNull()
   })
 
@@ -690,7 +690,7 @@ describe('SubagentHeaderLineage', () => {
     }
     render(<SubagentHeaderLineage {...input} />)
 
-    const switcher = screen.getByRole('button', { name: '切换子代理：worker' })
+    const switcher = screen.getByRole('button', { name: 'Switch subagent: worker' })
     expect(switcher.className).toContain('switcherTrigger')
     expect(within(switcher).getByText('worker')).toBeTruthy()
     expect(switcher.querySelector('svg')).not.toBeNull()
@@ -750,7 +750,7 @@ describe('SubagentHeaderLineage', () => {
     }
     render(<SubagentHeaderLineage {...input} />)
 
-    const switcher = screen.getByRole('button', { name: '切换子代理：worker' })
+    const switcher = screen.getByRole('button', { name: 'Switch subagent: worker' })
     expect(switcher.className).toContain('ancestorSwitcherTrigger')
     expect(screen.queryByRole('button', { name: /1 个子代理/ })).toBeNull()
     vi.useFakeTimers()
@@ -808,7 +808,7 @@ describe('SubagentHeaderLineage', () => {
     }
     render(<SubagentHeaderLineage {...input} />)
 
-    hoverCatalog(screen.getByRole('button', { name: '切换子代理：indexer' }))
+    hoverCatalog(screen.getByRole('button', { name: 'Switch subagent: indexer' }))
 
     expect(input.setCatalogOpen).toHaveBeenCalledWith(CHILD, true)
     const current = screen.getByRole('treeitem', { name: /indexer/ })

@@ -1,57 +1,7 @@
-/** Copy dictionaries for the plugin inventory Settings section. */
-
-/** Simplified Chinese dictionary and key source of truth. */
-export const zh = {
-  tab: 'Plugin list',
-  loading: 'Reading plugins…',
-  error: 'Plugins are temporarily unavailable.',
-  retry: 'Retry',
-  search: 'Search plugins',
-  filterState: 'Filter by state',
-  allStates: 'All states',
-  catalog: 'Plugin list',
-  empty: 'No plugins are available.',
-  emptySearch: 'No matching plugins.',
-  presetTitle: 'Session plugins',
-  presetSubtitle: 'Composed per session by agent presets',
-  countUnit: 'plugins',
-  switcherLabel: 'Choose the agent preset to inspect',
-  presetOptionDefault: '{name} (default)',
-  presetOptionBroken: '{name} (failed to load)',
-  globalTitle: 'Global plugins',
-  globalSubtitle: 'Shared by the system and every session',
-  presetProvidedDetail: 'Disabled globally; agent presets provide it per session',
-  enabledIn: 'Enabled in',
-  viewInPreset: 'View in the preset group',
-  matchesInOtherPresets: '{count} more matches in other presets: ',
-  failedCountLabel: 'failed',
-  enabledTag: 'Enabled',
-  disabledTag: 'Disabled',
-  conditionalTag: 'Conditional',
-  presetEnabledTag: 'Enabled via presets',
-  failedTag: 'Failed',
-  moduleLabel: 'Module',
-  fromPreset: 'From',
-  condition: 'Disabled when',
-  author: 'Author',
-  authorUnavailable: 'Not provided',
-  descriptionUnavailable: 'No description provided.',
-  version: 'Version',
-  versionUnavailable: 'Not provided',
-  configuration: 'Configuration',
-  runtime: 'Status',
-  unobserved: 'Not running',
-  pending: 'Waiting for dependencies',
-  loadingPhase: 'Loading',
-  active: 'Running',
-  failed: 'Failed to start',
-  unloading: 'Unloading',
-} satisfies Record<string, string>
-
 /** Plugin inventory locale key union. */
-export type PluginInventoryLocaleKey = keyof typeof zh
+export type PluginInventoryLocaleKey = keyof typeof en
 
-/** English dictionary checked against the Chinese key set. */
+/** English copy for this feature. */
 export const en = {
   tab: 'Plugin list',
   loading: 'Reading plugins…',
@@ -97,4 +47,4 @@ export const en = {
   active: 'Running',
   failed: 'Failed to start',
   unloading: 'Unloading',
-} satisfies Record<PluginInventoryLocaleKey, string>
+} satisfies Record<string, string>

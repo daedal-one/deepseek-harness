@@ -208,7 +208,7 @@ test('structures the pull request template around motivation, changes, and testi
   assert.doesNotMatch(source, /^### /m)
   assert.match(
     source,
-    /<!-- 高层次说明命令[^\n]+ -->\n<!-- 高层次说明用户[^\n]+ -->/,
+    /<!-- Summarize changes to commands[^\n]+ -->\n<!-- Summarize changes in behavior[^\n]+ -->/,
   )
   assert.match(source, /- <!-- [^\n]+ -->\n\n  <details>\n  <summary>Proof<\/summary>/)
   assert.equal(source.match(/<details>/g)?.length, 1)
@@ -359,7 +359,7 @@ test('keeps terminal Status aligned with the native close reason', () => {
     }),
     [],
   )
-  assert.ok(validateIssue({ ...legalIssue, status: 'Done' }).includes('Done must correspond to the Completed close reason')
+  assert.ok(validateIssue({ ...legalIssue, status: 'Done' }).includes('Done must correspond to the Completed close reason'))
 })
 
 test('separates resolving and informational references', () => {
@@ -375,7 +375,7 @@ test('separates resolving and informational references', () => {
 test('converts PR creation timestamps to Shanghai Project dates', () => {
   assert.equal(projectDate('2026-08-27T15:59:59Z', 'Asia/Shanghai'), '2026-08-27')
   assert.equal(projectDate('2026-08-27T16:00:00Z', 'Asia/Shanghai'), '2026-08-28')
-  assert.throws(() => projectDate('invalid', 'Asia/Shanghai'), /无效的 PR 创建时间/)
+  assert.throws(() => projectDate('invalid', 'Asia/Shanghai'), /Invalid PR creation time/)
 })
 
 test('initializes every referenced Issue only for a PR opened event', async () => {
@@ -502,13 +502,13 @@ test('rejects a missing, non-Date, or Issue-level Start Date field', async (t) =
   let response = projectGraphqlData({ startDateField: false })
   const requests = mockGraphql(t, () => response)
 
-  await assert.rejects(initializeIssueStartDate(42, '2026-08-28'), /Project 缺少 Start Date 字段/)
+  await assert.rejects(initializeIssueStartDate(42, '2026-08-28'), /Project is missing the Start Date field/)
   response = projectGraphqlData({ startDateType: 'TEXT' })
-  await assert.rejects(initializeIssueStartDate(42, '2026-08-28'), /Start Date 字段必须为 Date/)
+  await assert.rejects(initializeIssueStartDate(42, '2026-08-28'), /Start Date field must be Date/)
   response = projectGraphqlData({ startDateIsIssueField: true })
   await assert.rejects(
     initializeIssueStartDate(42, '2026-08-28'),
-    /Start Date 字段必须为 Project Date 字段/,
+    /Start Date field must be a Project Date field/,
   )
   assert.equal(requests.length, 3)
 })
@@ -517,16 +517,16 @@ test('rejects a missing, non-select, or Issue-level Priority field', async (t) =
   let response = projectGraphqlData({ priorityField: false })
   const requests = mockGraphql(t, () => response)
 
-  await assert.rejects(initializeIssueStartDate(42, '2026-08-28'), /Project 缺少 Priority 字段/)
+  await assert.rejects(initializeIssueStartDate(42, '2026-08-28'), /Project is missing the Priority field/)
   response = projectGraphqlData({ priorityType: 'TEXT' })
   await assert.rejects(
     initializeIssueStartDate(42, '2026-08-28'),
-    /Priority 字段必须为 Single Select/,
+    /Priority field must be Single Select/,
   )
   response = projectGraphqlData({ priorityIsIssueField: true })
   await assert.rejects(
     initializeIssueStartDate(42, '2026-08-28'),
-    /Priority 字段必须为 Project custom field/,
+    /Priority field must be a Project custom field/,
   )
   assert.equal(requests.length, 3)
 })

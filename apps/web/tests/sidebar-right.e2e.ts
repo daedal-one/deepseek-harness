@@ -26,7 +26,7 @@ import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import { launchWebScaffold, watchConsole, type WebScaffold } from './scaffold.ts'
 import {
-  connectFreshWorkspace, newEnglishPage, saveFailureShot, ZH_BROWSER_LOCALE,
+  connectFreshWorkspace, newEnglishPage, saveFailureShot, EN_BROWSER_LOCALE,
 } from './support.ts'
 
 /** The produced file the seeded turn writes, and what the preview should show. */
@@ -1037,7 +1037,7 @@ describe('web e2e: shipped right Sidebar', () => {
     // this block because a settled session is its precondition too — a case that
     // depends on a sibling block's setup passes only in the right order.
     it('renders the shipped Chinese copy on a Chinese page', async () => {
-      const zhPage = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
+      const zhPage = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: EN_BROWSER_LOCALE })
       const zhTripwire = watchConsole(zhPage)
       onTestFailed(() => saveFailureShot(zhPage, 'web-e2e-sidebar-right-zh'))
       try {
@@ -1050,7 +1050,7 @@ describe('web e2e: shipped right Sidebar', () => {
         const column = zhPage.locator('[data-rightbar-col]')
         await expandOf(zhPage).waitFor({ timeout: 20_000 })
         await expandOf(zhPage).click()
-        await expect.poll(async () => await tabTitles(column)).toEqual(['文件'])
+        await expect.poll(async () => await tabTitles(column)).toEqual(['File'])
         await column.locator('[data-dockkit-add-tab]').click()
 
         const guide = column.locator('[data-sidebar-right-guide]')
@@ -1059,9 +1059,9 @@ describe('web e2e: shipped right Sidebar', () => {
         // the column has the width, and a screenshot taken mid-transition reads
         // as a layout defect that is not there.
         expect(await width(column)).toBeGreaterThan(300)
-        await expect.poll(async () => await tabTitles(column)).toEqual(['文件', '开始'])
+        await expect.poll(async () => await tabTitles(column)).toEqual(['File', 'Start'])
         await expect.poll(async () => await guide.locator('[data-sidebar-right-guide-entry="files"]').innerText())
-          .toBe('工作区文件')
+          .toBe('Workspace files')
         await shot(zhPage, '05-guide-copy-zh')
 
         expect(zhTripwire.pageErrors).toEqual([])

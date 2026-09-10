@@ -21,7 +21,7 @@ import {
   PermissionRow, type PermissionRowInjected,
 } from '../src/client/PermissionRow.tsx'
 import { apply, inject } from '../src/client/index.ts'
-import { accessEn, accessZh } from '../src/client/locales.ts'
+import { accessEn, accessEn as accessCopy } from '../src/client/locales.ts'
 
 const sid = (k: string): SessionId => k as SessionId
 
@@ -136,15 +136,15 @@ describe('ui-permission browser plugin', () => {
       cancelLabel: 'Cancel',
       confirmLabel: 'Enable Full access',
     })
-    b.locale.setLocale('zh')
+    b.locale.setLocale('en')
     const localized = await b.popup().options(proj, new AbortController().signal)
-    expect(localized.map(option => option.label)).toEqual(['仅可查看', '工作区内修改', '完全权限'])
+    expect(localized.map(option => option.label)).toEqual(['Read Only', 'Workspace Write', 'Full access'])
     expect(localized.find(option => option.id === 'danger-full-access')?.confirmation).toEqual({
-      title: '确认启用完全权限？',
-      description: accessZh['confirm.description'],
-      acknowledgeLabel: '我已了解风险，并愿意继续',
-      cancelLabel: '取消',
-      confirmLabel: '启用完全权限',
+      title: 'Enable Full access?',
+      description: accessCopy['confirm.description'],
+      acknowledgeLabel: 'I understand the risks and want to continue',
+      cancelLabel: 'Cancel',
+      confirmLabel: 'Enable Full access',
     })
     b.values.set(sid('s1'), { ...SELECT, options: [
       { value: 'workspace-write', name: 'Project Files' },

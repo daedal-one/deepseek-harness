@@ -4,12 +4,12 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { GoalSnapshot } from '@deepseek-ai/dsh-goal/client'
 import { makeTranslate, RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
-import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
+import { en as commonCopy } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import { GoalBar } from '../src/client/GoalBar.tsx'
 import type { GoalActionResult, GoalBarActions } from '../src/client/slots.ts'
-import { zh } from '../src/client/locales.ts'
+import { en as copy } from '../src/client/locales.ts'
 
-const t: Parameters<typeof GoalBar>[0]['t'] = makeTranslate(zh, commonZh)
+const t: Parameters<typeof GoalBar>[0]['t'] = makeTranslate(copy, commonCopy)
 
 afterEach(cleanup)
 
@@ -137,10 +137,10 @@ describe('GoalBar', () => {
   it('active disarmed goal: "未运行的目标" with a resume action instead of pause', () => {
     const actions = makeActions()
     render(<GoalBar goal={makeGoal()} activation="disarmed" {...actions} t={t} />)
-    expect(screen.getByText('未运行的目标')).toBeTruthy()
+    expect(screen.getByText('Inactive Goal')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Resume goal' }))
     expect(actions.onResume).toHaveBeenCalledTimes(1)
-    expect(screen.queryByRole('button', { name: '暂停目标' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Pause goal' })).toBeNull()
   })
 
   it('paused goal: "Paused Goal" with a resume action before edit', () => {

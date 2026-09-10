@@ -36,11 +36,13 @@ export interface PluginInventoryEntry extends PluginPackageMetadata {
 export type PresetPluginEnablement = boolean | 'conditional'
 
 /** One plugin row an agent preset's composition names. */
-export interface AgentPresetPluginRow {
+export interface AgentPresetPluginRow extends PluginPackageMetadata {
   /** Composition row id, or null when the row declares none. */
   readonly entryId: string | null
   /** Module specifier the row names. */
   readonly moduleName: string
+  /** Literal composition-row description, preferred over the package description for display. */
+  readonly purpose?: string
   /**
    * Effective enablement, including disabled ancestor groups. `'conditional'`
    * marks a `!!js` disabled expression on a composition no session has

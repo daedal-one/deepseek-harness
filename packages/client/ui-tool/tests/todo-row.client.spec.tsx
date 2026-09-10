@@ -5,15 +5,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TodoItem } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { ToolResultNode } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
+import { en as commonCopy } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import { TodoRow, todoToolview } from '../src/client/tool/toolviews/todo-row.tsx'
 import { planSummary } from '../src/client/tool/toolviews/plan-summary.ts'
 import { CONVERSATION_NS as NS } from '../src/client/locale.ts'
-import { zh } from '@deepseek-ai/dsh-client-ui-conversation/src/client/locales.ts'
+import { en as copy } from '@deepseek-ai/dsh-client-ui-conversation/src/client/locales.ts'
 
 type TodoRowProps = Parameters<typeof TodoRow>[0]
 
-const t: TodoRowProps['t'] = makeTranslate(zh, commonZh)
+const t: TodoRowProps['t'] = makeTranslate(copy, commonCopy)
 
 afterEach(cleanup)
 

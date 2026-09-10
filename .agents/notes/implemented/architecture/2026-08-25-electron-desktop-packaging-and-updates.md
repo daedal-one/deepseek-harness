@@ -32,7 +32,7 @@ The browser Web UI, dsh backend, existing `dsh plugin` CLI, user npm, and user p
 | Shared `.dsh` owners | Sessions, settings, credentials, workspaces, and storage, guarded by their existing locks and format versions |
 | npm-installed dsh | Its own executable installation and user-managed profiles; no access to the reserved desktop profile or package state |
 
-The renderer uses `nodeIntegration: false`, `contextIsolation: true`, and `sandbox: true`. Preload exposes typed RPC, lifecycle, update, locale, and desktop-plugin actions rather than raw `ipcRenderer`, filesystem access, shell commands, or pnpm arguments. Electron selects a typed English or Chinese dictionary from its application locale and falls back to English; menus, native dialogs, and the plugin-management renderer use that locale-owned copy.
+The renderer uses `nodeIntegration: false`, `contextIsolation: true`, and `sandbox: true`. Preload exposes typed RPC, lifecycle, update, locale, and desktop-plugin actions rather than raw `ipcRenderer`, filesystem access, shell commands, or pnpm arguments. Electron selects a typed English dictionary; menus, native dialogs, and the plugin-management renderer use that locale-owned copy.
 
 ## Filesystem layout
 

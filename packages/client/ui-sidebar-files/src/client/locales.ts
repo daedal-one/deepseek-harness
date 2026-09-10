@@ -18,26 +18,10 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
-/** Simplified Chinese dictionary and key-set source of truth. */
-export const zh = {
-  'type.label': 'Files',
-  'guide.title': 'Workspace files',
-  loading: 'Reading…',
-  empty: 'Empty directory',
-  truncated: 'Too many entries, showing only some of them.',
-  noWorkspace: 'This session has no workspace directory.',
-  reload: 'Reload',
-  'entry.other': 'Not a file or a directory, so it cannot be opened.',
-  'error.notFound': 'That directory is gone. It may have been moved or deleted.',
-  'error.outsideWorkspace': 'That directory is outside the workspace, so the sidebar will not read it.',
-  'error.notDirectory': 'That is not a directory.',
-  'error.unavailable': 'Read failed: {message}',
-} satisfies Record<string, string>
-
 /** Files dictionary key union. */
-export type SidebarFilesKey = keyof typeof zh
+export type SidebarFilesKey = keyof typeof en
 
-/** English dictionary, checked against the Chinese key set. */
+/** English copy for this feature. */
 export const en = {
   'type.label': 'Files',
   'guide.title': 'Workspace files',
@@ -51,4 +35,4 @@ export const en = {
   'error.outsideWorkspace': 'That directory is outside the workspace, so the sidebar will not read it.',
   'error.notDirectory': 'That is not a directory.',
   'error.unavailable': 'Read failed: {message}',
-} satisfies Record<SidebarFilesKey, string>
+} satisfies Record<string, string>

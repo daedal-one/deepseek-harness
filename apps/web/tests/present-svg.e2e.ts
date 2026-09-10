@@ -12,7 +12,7 @@ import {
   fixtureUserPrompts, launchWebScaffold, recordFixture, watchConsole,
   webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { connectFreshWorkspaceZh, ZH_BROWSER_LOCALE } from './support.ts'
+import { connectFreshWorkspace, EN_BROWSER_LOCALE } from './support.ts'
 
 const DIR = fileURLToPath(new URL('../../../snapshots/web/present-svg', import.meta.url))
 const FIXTURE = join(DIR, 'session.v3.jsonl')
@@ -45,12 +45,12 @@ describe('web e2e: requested SVG is explicitly delivered', () => {
     })
     browser = await chromium.launch()
     page = await browser.newPage({
-      viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE, timezoneId: 'Asia/Shanghai',
+      viewport: { width: 1680, height: 1000 }, locale: EN_BROWSER_LOCALE, timezoneId: 'Asia/Shanghai',
     })
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]')
-    await connectFreshWorkspaceZh(page, scaffold.workspaceCwd)
+    await connectFreshWorkspace(page, scaffold.workspaceCwd)
   })
 
   afterAll(async () => {
@@ -107,7 +107,7 @@ describe('web e2e: requested SVG is explicitly delivered', () => {
     expect(await card.count()).toBe(1)
     expect(await page.getByText('产物', { exact: true }).count()).toBe(0)
     if (await page.locator('[data-produced-files-row]').count() > 0) {
-      expect(await page.getByText('本轮文件改动', { exact: true }).count()).toBe(1)
+      expect(await page.getByText('Files changed', { exact: true }).count()).toBe(1)
     }
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])

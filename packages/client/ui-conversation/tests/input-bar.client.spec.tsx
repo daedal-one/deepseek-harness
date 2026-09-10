@@ -18,7 +18,7 @@ import {
 } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { SessionListState, SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
-import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
+import { en as commonCopy } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SubmitOutcome } from '../src/client/contract/input.ts'
@@ -30,7 +30,7 @@ import type {
 import type { DraftAttachmentId } from '../src/client/contract/input.ts'
 import { InputBar } from '../src/client/skeleton/InputBar.tsx'
 import type { InputBarProps } from '../src/client/skeleton/InputBar.tsx'
-import { zh } from '../src/client/locales.ts'
+import { en as copy } from '../src/client/locales.ts'
 
 // Every fixture carries the resource hook the resources plugin merges into GlobalStandardProps.
 const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined })) as GlobalStandardProps['useResource']
@@ -203,7 +203,7 @@ function bench(over?: BenchOptions) {
     stop,
     command: over?.command ?? (() => Promise.resolve(true)),
     // Mirrors the real lookup chain (conversation namespace, then common).
-    t: over?.t ?? makeTranslate(zh, commonZh),
+    t: over?.t ?? makeTranslate(copy, commonCopy),
     renderSlot,
     variant: over?.variant ?? 'composer',
     ...(over?.inert === true ? { disabled: true } : {}),
@@ -232,10 +232,10 @@ function bench(over?: BenchOptions) {
     attachment.kind === 'file' && over?.fileUploads?.[attachment.id]?.status !== 'ready')
   const plainMessageDraft = sendableDraft && !uploadsPending && !(over?.draft?.trimStart().startsWith('/') ?? false)
   const primaryLabel = primaryStops
-    ? '停止生成'
+    ? 'Stop generating'
     : over?.running === true && steeringAvailable && !composerLocked && plainMessageDraft
-      ? (over.busyEnter === 'steer' ? '插话发送' : '排队发送')
-      : '发送消息'
+      ? (over.busyEnter === 'steer' ? 'Steer message' : 'Queue message')
+      : 'Send message'
   const button = view.container.querySelector<HTMLButtonElement>(`button[aria-label="${primaryLabel}"]`)!
   const interruptButton = view.container.querySelector<HTMLButtonElement>('button[aria-label="Stop generating"]')
   return {
@@ -374,7 +374,7 @@ describe('image draft rail', () => {
   })
 
   it('announces the format problem before any limit when the batch holds a non-image', () => {
-    const addFiles = vi.fn(() => '仅支持 PNG、JPG、WebP、GIF 格式的图片')
+    const addFiles = vi.fn(() => 'Only PNG, JPG, WebP, and GIF images are supported')
     const result = bench({
       addFiles,
       imageLimits: {
@@ -393,7 +393,7 @@ describe('image draft rail', () => {
     ]
     act(() => { attachmentOwner(result.slotCalls).onAddFiles(files) })
     expect(addFiles).toHaveBeenCalledWith(files)
-    expect(result.view.getByRole('alert').textContent).toContain('仅支持 PNG、JPG、WebP、GIF 格式的图片')
+    expect(result.view.getByRole('alert').textContent).toContain('Only PNG, JPG, WebP, and GIF images are supported')
   })
 
   it('projects display-ready limits into the attachment slot', () => {
@@ -431,7 +431,7 @@ describe('image draft rail', () => {
         }),
       },
     })
-    expect(subagent.view.getByRole('alert').textContent).toContain('当前模型不支持图片，请切换支持图片的模型')
+    expect(subagent.view.getByRole('alert').textContent).toContain('The current model does not support images; switch to a model that does')
     cleanup()
     const other = bench({
       promptError: { op: 'send', error: new RemoteError('gateway/internal', 'boom', {}) },
@@ -488,7 +488,7 @@ describe('image draft rail', () => {
   it('announces an image-intake rejection as a fading toast, repeatable for the same reason', () => {
     vi.useFakeTimers()
     try {
-      const addFiles = vi.fn(() => '仅支持 PNG、JPG、WebP、GIF 格式的图片')
+      const addFiles = vi.fn(() => 'Only PNG, JPG, WebP, and GIF images are supported')
       const { view, textarea } = bench({ addFiles })
       const paste = () => {
         fireEvent.paste(textarea, {
@@ -525,7 +525,7 @@ describe('image draft rail', () => {
 describe('Enter semantics', () => {
   it('advertises the empty-draft whole-queue steering gesture when it is available', () => {
     const { placeholder } = bench({ running: true, queue: [row('q-1')], steerQueue: vi.fn() })
-    expect(placeholder).toBe('Cmd/Ctrl+Enter 插话发送全部排队消息')
+    expect(placeholder).toBe('Cmd/Ctrl+Enter steers all queued messages')
     expect(bench({
       running: true,
       queue: [row('q-1')],
@@ -533,13 +533,13 @@ describe('Enter semantics', () => {
         address: { parentSessionId: 'parent' as SessionId, childSessionId: SID, mode: 'continuable' },
         parentAvailable: true,
       },
-    }).placeholder).toBe('Cmd/Ctrl+Enter 插话发送全部排队消息')
+    }).placeholder).toBe('Cmd/Ctrl+Enter steers all queued messages')
   })
 
   it('keeps the owning placeholder or ordinary guidance when whole-queue steering is unavailable', () => {
-    expect(bench({ running: true }).placeholder).toBe('发消息或创建任务, / 调用指令, @ 文件或对话')
-    expect(bench({ queue: [row('q-1')] }).placeholder).toBe('发消息或创建任务, / 调用指令, @ 文件或对话')
-    expect(bench({ running: true, queue: [row('q-1')], draft: '消息' }).placeholder).toBe('发消息或创建任务, / 调用指令, @ 文件或对话')
+    expect(bench({ running: true }).placeholder).toBe('Message or run a task, / commands, @ files or sessions')
+    expect(bench({ queue: [row('q-1')] }).placeholder).toBe('Message or run a task, / commands, @ files or sessions')
+    expect(bench({ running: true, queue: [row('q-1')], draft: 'Message' }).placeholder).toBe('Message or run a task, / commands, @ files or sessions')
     expect(bench({
       running: true,
       queue: [row('q-1')],
@@ -551,14 +551,14 @@ describe('Enter semantics', () => {
       running: true,
       queue: [row('q-1')],
       commandMenuOpen: true,
-    }).placeholder).toBe('发消息或创建任务, / 调用指令, @ 文件或对话')
+    }).placeholder).toBe('Message or run a task, / commands, @ files or sessions')
     // The steer hint intentionally outranks the plan placeholder: while it
     // shows, the whole-queue gesture is genuinely available in plan mode.
     expect(bench({
       running: true,
       queue: [row('q-1')],
       plan: { active: true, pending: false },
-    }).placeholder).toBe('Cmd/Ctrl+Enter 插话发送全部排队消息')
+    }).placeholder).toBe('Cmd/Ctrl+Enter steers all queued messages')
   })
 
   it('an open command menu withholds the whole-queue steering gesture', () => {
@@ -788,7 +788,7 @@ describe('running and lock semantics', () => {
       const { button, view, session } = bench({ running: true })
       fireEvent.mouseEnter(button)
       act(() => { vi.advanceTimersByTime(500) })
-      expect(view.getByRole('tooltip').textContent).toBe('停止生成')
+      expect(view.getByRole('tooltip').textContent).toBe('Stop generating')
 
       // Disabling a hovered native button need not deliver mouseleave.
       act(() => { session.set(snapshotOf({ running: false })) })
@@ -808,29 +808,29 @@ describe('running and lock semantics', () => {
     expect(stop).toHaveBeenCalledTimes(1)
 
     writeDraft(shell, '排队消息')
-    expect(button.getAttribute('aria-label')).toBe('排队发送')
+    expect(button.getAttribute('aria-label')).toBe('Queue message')
     writeDraft(shell, '   ')
     expect(button.getAttribute('aria-label')).toBe('Stop generating')
     writeDraft(shell, '排队消息2')
-    expect(button.getAttribute('aria-label')).toBe('排队发送')
+    expect(button.getAttribute('aria-label')).toBe('Queue message')
     fireEvent.click(button)
     expect(sink).toHaveBeenCalledWith('排队消息2', [], 'queue', expect.any(AbortSignal))
-    await vi.waitFor(() => { expect(button.getAttribute('aria-label')).toBe('停止生成') })
+    await vi.waitFor(() => { expect(button.getAttribute('aria-label')).toBe('Stop generating') })
     expect(stop).toHaveBeenCalledTimes(1)
   })
 
   it('running Send follows the busy-state Steer preference and labels the delivery', () => {
     const { button, sink } = bench({ running: true, busyEnter: 'steer', draft: '按钮插话' })
-    expect(button.getAttribute('aria-label')).toBe('插话发送')
+    expect(button.getAttribute('aria-label')).toBe('Steer message')
     fireEvent.click(button)
     expect(sink).toHaveBeenCalledWith('按钮插话', [], 'steer', expect.any(AbortSignal))
   })
 
   it('running Send relabels when the busy-state preference changes live', () => {
     const { button, busyEnter, sink } = bench({ running: true, draft: '跟随设置' })
-    expect(button.getAttribute('aria-label')).toBe('排队发送')
+    expect(button.getAttribute('aria-label')).toBe('Queue message')
     act(() => { busyEnter.set('steer') })
-    expect(button.getAttribute('aria-label')).toBe('插话发送')
+    expect(button.getAttribute('aria-label')).toBe('Steer message')
     fireEvent.click(button)
     expect(sink).toHaveBeenCalledWith('跟随设置', [], 'steer', expect.any(AbortSignal))
   })
@@ -839,7 +839,7 @@ describe('running and lock semantics', () => {
     // An unclaimed `/` line adjudicates on submit; a claimed command executes
     // instead of delivering a message. Neither click is a Queue/Steer delivery.
     const slash = bench({ running: true, busyEnter: 'steer', draft: '/goal inspect' })
-    expect(slash.button.getAttribute('aria-label')).toBe('发送消息')
+    expect(slash.button.getAttribute('aria-label')).toBe('Send message')
     expect(slash.button.disabled).toBe(false)
 
     const claimed = bench({ running: true, busyEnter: 'steer' })
@@ -862,7 +862,7 @@ describe('running and lock semantics', () => {
       running: true, busyEnter: 'steer', draft: '带附件', attachments: [file],
       fileUploads: { [file.id]: { status: 'uploading', loaded: 0 } },
     })
-    expect(pending.button.getAttribute('aria-label')).toBe('发送消息')
+    expect(pending.button.getAttribute('aria-label')).toBe('Send message')
     expect(pending.button.disabled).toBe(true)
 
     // A failed upload holds the same gate until it is retried or removed.
@@ -870,14 +870,14 @@ describe('running and lock semantics', () => {
       running: true, busyEnter: 'steer', draft: '带附件', attachments: [file],
       fileUploads: { [file.id]: { status: 'error', message: 'upload failed' } },
     })
-    expect(failed.button.getAttribute('aria-label')).toBe('发送消息')
+    expect(failed.button.getAttribute('aria-label')).toBe('Send message')
     expect(failed.button.disabled).toBe(true)
 
     const ready = bench({
       running: true, busyEnter: 'steer', draft: '带附件', attachments: [file],
       fileUploads: { [file.id]: { status: 'ready', receiptId: 'receipt-1' as never, file: { kind: 'file' } as never } },
     })
-    expect(ready.button.getAttribute('aria-label')).toBe('插话发送')
+    expect(ready.button.getAttribute('aria-label')).toBe('Steer message')
     expect(ready.button.disabled).toBe(false)
   })
 
@@ -896,10 +896,10 @@ describe('running and lock semantics', () => {
       previewUrl: 'blob:pixel',
     }
     const { button, sink } = bench({ running: true, attachments: [attachment] })
-    expect(button.getAttribute('aria-label')).toBe('排队发送')
+    expect(button.getAttribute('aria-label')).toBe('Queue message')
     fireEvent.click(button)
     expect(sink).toHaveBeenCalledWith('', ['draft-1'], 'queue', expect.any(AbortSignal))
-    await vi.waitFor(() => { expect(button.getAttribute('aria-label')).toBe('停止生成') })
+    await vi.waitFor(() => { expect(button.getAttribute('aria-label')).toBe('Stop generating') })
   })
 
   it('running blocked composer keeps Stop with a retained draft', () => {
@@ -947,10 +947,10 @@ describe('running and lock semantics', () => {
         parentAvailable: true,
       },
     })
-    expect(button.getAttribute('aria-label')).toBe('排队发送')
+    expect(button.getAttribute('aria-label')).toBe('Queue message')
     expect(interruptButton).not.toBeNull()
     expect(textarea.getAttribute('aria-disabled')).not.toBe('true')
-    expect((view.getByLabelText('添加附件') as HTMLButtonElement).disabled).toBe(true)
+    expect((view.getByLabelText('Add attachment') as HTMLButtonElement).disabled).toBe(true)
     expect(view.container.querySelector<HTMLInputElement>('input[type="file"]')?.disabled).toBe(true)
     expect(attachmentOwner(slotCalls).canAcceptDrop).toBe(false)
     fireEvent.click(button)
@@ -969,14 +969,14 @@ describe('running and lock semantics', () => {
       parentAvailable: true,
     }
     const { button, sink } = bench({ running: true, busyEnter: 'steer', draft: '子代理插话', subagent })
-    expect(button.getAttribute('aria-label')).toBe('插话发送')
+    expect(button.getAttribute('aria-label')).toBe('Steer message')
     fireEvent.click(button)
     expect(sink).toHaveBeenCalledWith('子代理插话', [], 'steer', expect.any(AbortSignal))
 
     // No draft: the child has no Stop seat to fall back to, so its disabled
     // Send keeps the plain label instead of naming a delivery it cannot make.
     const empty = bench({ running: true, busyEnter: 'steer', subagent })
-    expect(empty.button.getAttribute('aria-label')).toBe('发送消息')
+    expect(empty.button.getAttribute('aria-label')).toBe('Send message')
     expect(empty.button.disabled).toBe(true)
   })
 
@@ -986,7 +986,7 @@ describe('running and lock semantics', () => {
   ])('%s keeps ordinary generic-file intake enabled', (_name, projection) => {
     const added = vi.fn(() => null)
     const { view, slotCalls } = bench({ ...projection, addFiles: added })
-    expect((view.getByLabelText('添加附件') as HTMLButtonElement).disabled).toBe(false)
+    expect((view.getByLabelText('Add attachment') as HTMLButtonElement).disabled).toBe(false)
     expect(view.container.querySelector<HTMLInputElement>('input[type="file"]')?.disabled).toBe(false)
     expect(attachmentOwner(slotCalls).canAcceptDrop).toBe(true)
   })
@@ -1005,8 +1005,8 @@ describe('running and lock semantics', () => {
       },
     })
     expect(textarea.getAttribute('aria-disabled')).toBe('true')
-    expect(placeholderOf(view.container)).toBe('父会话已离线，无法继续发送；仍可停止当前运行')
-    expect((view.getByLabelText('指令') as HTMLButtonElement).disabled).toBe(true)
+    expect(placeholderOf(view.container)).toBe('Parent session offline; sending is unavailable but you can still stop the run')
+    expect((view.getByLabelText('Commands') as HTMLButtonElement).disabled).toBe(true)
     expect(button.getAttribute('aria-label')).toBe('Send message')
     expect(button.disabled).toBe(true)
     expect(interruptButton?.disabled).toBe(false)
@@ -1057,8 +1057,8 @@ describe('running and lock semantics', () => {
   it('disabled (session removed) locks the textarea and chrome', () => {
     const { textarea, view } = bench({ disabled: true })
     expect(textarea.getAttribute('aria-disabled')).toBe('true')
-    expect(placeholderOf(view.container)).toBe('会话不可用')
-    expect((view.getByLabelText('指令') as HTMLButtonElement).disabled).toBe(true)
+    expect(placeholderOf(view.container)).toBe('Session unavailable')
+    expect((view.getByLabelText('Commands') as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('idle primary sends and disables on empty draft', () => {
@@ -1194,9 +1194,9 @@ describe('running and lock semantics', () => {
   })
 
   it('disabled state shows the unavailable placeholder; custom placeholder wins', () => {
-    expect(bench({ disabled: true }).placeholder).toBe('会话不可用')
+    expect(bench({ disabled: true }).placeholder).toBe('Session unavailable')
     const live = bench()
-    expect(live.placeholder).toBe('发消息或创建任务, / 调用指令, @ 文件或对话')
+    expect(live.placeholder).toBe('Message or run a task, / commands, @ files or sessions')
     const custom = bench({ placeholder: 'Custom placeholder' })
     expect(custom.placeholder).toBe('Custom placeholder')
   })
@@ -1213,7 +1213,7 @@ describe('running and lock semantics', () => {
     expect(editableOf(textarea)).toBe(false)
     expect(textarea.getAttribute('aria-haspopup')).toBe('menu')
     expect(textarea.getAttribute('aria-expanded')).toBe('false')
-    expect((view.getByLabelText('指令') as HTMLButtonElement).disabled).toBe(true)
+    expect((view.getByLabelText('Commands') as HTMLButtonElement).disabled).toBe(true)
 
     fireEvent.click(textarea)
     fireEvent.keyDown(textarea, { key: 'Enter' })
@@ -1243,7 +1243,7 @@ describe('running and lock semantics', () => {
     expect(entering.placeholder).toBe('描述你的任务以生成计划')
     // Pending exit: target is default again.
     const leaving = bench({ plan: { active: true, pending: true } })
-    expect(leaving.placeholder).toBe('发消息或创建任务, / 调用指令, @ 文件或对话')
+    expect(leaving.placeholder).toBe('Message or run a task, / commands, @ files or sessions')
     // Owner placeholder outranks the plan swap.
     const custom = bench({ plan: { active: true, pending: false }, placeholder: 'Custom placeholder' })
     expect(custom.placeholder).toBe('Custom placeholder')
@@ -1290,7 +1290,7 @@ describe('decorations', () => {
       shell.editor.update(() => {}, { discrete: true }) // flush the queued decoration refresh
     })
     expect(tokenSpanOf(view.container)?.textContent).toBe('/goal ')
-    expect(textarea.style.getPropertyValue('--dsh-composer-hint')).toBe(JSON.stringify('目标内容'))
+    expect(textarea.style.getPropertyValue('--dsh-composer-hint')).toBe(JSON.stringify('Goal objective'))
     // Args typed: the hint disappears, the token style stays.
     act(() => { shell.setDraft('/goal release') })
     act(() => { shell.editor.update(() => {}, { discrete: true }) }) // flush the queued decoration refresh
@@ -1307,7 +1307,7 @@ describe('decorations', () => {
         { start: 0, end: 6, draftRev: shell.snapshot.draftRev },
       )
     })
-    expect(textarea.style.getPropertyValue('--dsh-composer-hint')).toBe(JSON.stringify('输入目标，智能体将持续执行'))
+    expect(textarea.style.getPropertyValue('--dsh-composer-hint')).toBe(JSON.stringify('describe the objective for a long-running task'))
   })
 
   it('an inserted reference renders a real chip capsule with its icon and label', () => {
@@ -1516,7 +1516,7 @@ describe('strips and variants', () => {
 describe('command launcher chrome and control seats', () => {
   it('renders the command launcher; the Access chip is absent without the permissions projection; the control seats render EMPTY without entries', () => {
     const { view, slotCalls } = bench()
-    expect(view.getByLabelText('指令')).toBeTruthy()
+    expect(view.getByLabelText('Commands')).toBeTruthy()
     // Capability absent (no projection value): the chip renders nothing.
     expect(view.queryByLabelText(/^Access mode/)).toBeNull()
     // Every seat dispatched, nothing rendered (render passes may repeat; the
@@ -1535,7 +1535,7 @@ describe('command launcher chrome and control seats', () => {
     const toggleCommandMenu = vi.fn()
     const { view, shell, menuLauncher } = bench({ draft: 'draft text', toggleCommandMenu })
     act(() => { shell.editor.update(() => { $selectDetectSpan({ start: 2, end: 7 }) }, { discrete: true }) })
-    const launcher = view.getByLabelText('指令')
+    const launcher = view.getByLabelText('Commands')
     expect(launcher.getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(launcher)
     expect(toggleCommandMenu).toHaveBeenCalledExactlyOnceWith({ start: 2, end: 7 })
@@ -1556,16 +1556,16 @@ describe('command launcher chrome and control seats', () => {
     const { view } = bench({ permissions, command })
     const trigger = view.getByLabelText(/^Access mode/) as HTMLButtonElement
     // Product-label display is presentation only; the menu ids stay machine names.
-    expect(trigger.textContent).toBe('仅可查看')
+    expect(trigger.textContent).toBe('Read Only')
     expect([...trigger.querySelectorAll('svg')]
       .every(icon => icon.closest('[aria-hidden="true"]') !== null)).toBe(true)
     fireEvent.click(trigger)
     const items = view.getAllByRole('menuitem')
-    expect(items.map(o => o.textContent)).toEqual(['仅可查看', '工作区内修改', '完全权限'])
+    expect(items.map(o => o.textContent)).toEqual(['Read Only', 'Workspace Write', 'Full access'])
     fireEvent.click(items[1]!)
     // Optimistic pick + disable until admission resolves (command stub resolves true).
     const busy = view.getByLabelText(/^Access mode/) as HTMLButtonElement
-    expect(busy.textContent).toBe('工作区内修改')
+    expect(busy.textContent).toBe('Workspace Write')
     expect(busy.disabled).toBe(true)
     expect(command).toHaveBeenCalledWith('/permission workspace-write')
     await act(async () => {})
@@ -1602,11 +1602,11 @@ describe('command launcher chrome and control seats', () => {
     }
     const { view } = bench({ permissions, command })
     fireEvent.click(view.getByLabelText(/^Access mode/))
-    fireEvent.click(view.getByRole('menuitem', { name: '完全权限' }))
+    fireEvent.click(view.getByRole('menuitem', { name: 'Full access' }))
 
     expect(command).not.toHaveBeenCalled()
-    expect(view.getByRole('dialog', { name: '确认启用完全权限？' })).toBeTruthy()
-    const enable = view.getByRole('button', { name: '启用完全权限' }) as HTMLButtonElement
+    expect(view.getByRole('dialog', { name: 'Enable Full access?' })).toBeTruthy()
+    const enable = view.getByRole('button', { name: 'Enable Full access' }) as HTMLButtonElement
     expect(enable.disabled).toBe(true)
 
     fireEvent.click(view.getByRole('checkbox', { name: 'I understand the risks and want to continue' }))
@@ -1616,7 +1616,7 @@ describe('command launcher chrome and control seats', () => {
     expect(command).toHaveBeenCalledOnce()
     expect(command).toHaveBeenCalledWith('/permission danger-full-access')
     expect(view.queryByRole('dialog')).toBeNull()
-    expect((view.getByLabelText(/^访问模式/) as HTMLButtonElement).textContent).toBe('完全权限')
+    expect((view.getByLabelText(/^访问模式/) as HTMLButtonElement).textContent).toBe('Full access')
     await act(async () => {})
   })
 
@@ -1632,18 +1632,18 @@ describe('command launcher chrome and control seats', () => {
     const { view } = bench({ permissions, command })
     const openConfirmation = () => {
       fireEvent.click(view.getByLabelText(/^Access mode/))
-      fireEvent.click(view.getByRole('menuitem', { name: '完全权限' }))
+      fireEvent.click(view.getByRole('menuitem', { name: 'Full access' }))
     }
 
     openConfirmation()
     fireEvent.click(view.getByRole('checkbox'))
     fireEvent.click(view.getByRole('button', { name: 'Cancel' }))
     expect(command).not.toHaveBeenCalled()
-    expect((view.getByLabelText(/^访问模式/) as HTMLButtonElement).textContent).toBe('工作区内修改')
+    expect((view.getByLabelText(/^访问模式/) as HTMLButtonElement).textContent).toBe('Workspace Write')
 
     openConfirmation()
     expect((view.getByRole('checkbox') as HTMLInputElement).checked).toBe(false)
-    expect((view.getByRole('button', { name: '启用完全权限' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((view.getByRole('button', { name: 'Enable Full access' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('revokes an open full access confirmation when the task locks', () => {
@@ -1657,7 +1657,7 @@ describe('command launcher chrome and control seats', () => {
     }
     const { view, session } = bench({ permissions, command })
     fireEvent.click(view.getByLabelText(/^Access mode/))
-    fireEvent.click(view.getByRole('menuitem', { name: '完全权限' }))
+    fireEvent.click(view.getByRole('menuitem', { name: 'Full access' }))
     fireEvent.click(view.getByRole('checkbox'))
     act(() => { session.set(snapshotOf({ removed: true })) })
     expect(view.queryByRole('dialog')).toBeNull()
@@ -1675,7 +1675,7 @@ describe('command launcher chrome and control seats', () => {
     }
     const { view, props } = bench({ permissions, command })
     fireEvent.click(view.getByLabelText(/^Access mode/))
-    fireEvent.click(view.getByRole('menuitem', { name: '完全权限' }))
+    fireEvent.click(view.getByRole('menuitem', { name: 'Full access' }))
     fireEvent.click(view.getByRole('checkbox'))
     view.rerender(<InputBar {...props} sessionId={'s2' as SessionId} />)
     expect(view.queryByRole('dialog')).toBeNull()
@@ -1705,7 +1705,7 @@ describe('command launcher chrome and control seats', () => {
   it('disabled locks the Access chip and command launcher (running does not)', () => {
     const permissions = { options: [{ value: 'workspace-write', name: 'workspace-write' }], currentValue: 'workspace-write' }
     const { view } = bench({ disabled: true, permissions })
-    expect((view.getByLabelText('指令') as HTMLButtonElement).disabled).toBe(true)
+    expect((view.getByLabelText('Commands') as HTMLButtonElement).disabled).toBe(true)
     expect((view.getByLabelText(/^Access mode/) as HTMLButtonElement).disabled).toBe(true)
     cleanup()
     const live = bench({ running: true, permissions })

@@ -13,10 +13,10 @@ function props(title: string): PropsRuntime<'sidebar.right.pane.tab.title'> {
 
 describe('FilesTitle', () => {
   it('draws the folder sheet before the title text, sized to the chip line', () => {
-    const { container } = render(<FilesTitle {...props('文件')} />)
+    const { container } = render(<FilesTitle {...props('Files')} />)
     const svg = container.querySelector('svg')
     expect(svg?.getAttribute('width')).toBe('16')
     expect(svg?.getAttribute('aria-hidden')).toBe('true')
-    expect(container.textContent).toBe('文件')
+    expect(container.textContent).toBe('Files')
   })
 })

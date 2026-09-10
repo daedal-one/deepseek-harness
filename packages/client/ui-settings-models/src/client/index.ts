@@ -9,7 +9,7 @@
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { AgentsSection, type AgentsSectionInjected } from './AgentsSection.tsx'
-import { agentEn, agentZh, type AgentModelsKey } from './agent-locales.ts'
+import { agentEn, type AgentModelsKey } from './agent-locales.ts'
 // Type-only: pulls the shell's SlotMap merge (the 'settings.section' entry).
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
@@ -28,7 +28,7 @@ import { decodeWelcomeSection, WelcomeNoticeStore } from './welcome-store.ts'
 import { ModelsSettingsStore } from './store.ts'
 import { createModelsOperations } from './operations.ts'
 import { createSettingsSchemaOperations } from './schema-operations.ts'
-import { en, zh, type ModelsKey } from './locales.ts'
+import { en, type ModelsKey } from './locales.ts'
 import { WELCOME_NOTICE_SETTINGS_NAMESPACE } from '../onboarding-copy.ts'
 
 export type { ModelsSectionInjected, ModelsSectionProps } from './ModelsSection.tsx'
@@ -77,9 +77,9 @@ export const inject = [
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-settings-models: copy dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { en }), 'ui-settings-models: copy dictionaries')
 
-  ctx.effect(() => ctx.locale.register('settings.agents', { zh: agentZh, en: agentEn }), 'ui-settings-models: Agent dictionaries')
+  ctx.effect(() => ctx.locale.register('settings.agents', { en: agentEn }), 'ui-settings-models: Agent dictionaries')
 
   const schema = createSettingsSchemaOperations(ctx.settingsSchema)
   // Bound once here, where the Remote namespaces are declared in this plugin's

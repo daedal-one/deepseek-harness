@@ -37,7 +37,7 @@ import { RightbarRoot } from './shell/RightbarRoot.tsx'
 import { createSidebarRightController, type SidebarRightController } from './service.ts'
 import { SidebarRightTabRegistry } from './tab-registry.ts'
 import { createSidebarRightStore } from './stores.ts'
-import { en, zh } from './locales.ts'
+import { en } from './locales.ts'
 import { GUIDE_ID, guideDefinition } from './tabs/guide/definition.ts'
 import { guideTabInfoFactory, tabInfoFactory } from './tab-info.ts'
 import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
@@ -117,7 +117,7 @@ export function apply(ctx: ClientContext): void {
     void disposeRegistry()
   }, 'ui-sidebar-right: service faces')
 
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-sidebar-right: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { en }), 'ui-sidebar-right: dictionaries')
 
   ctx.effect(() => {
     const handle = createSidebarRightStore(() => defaultSeed(tabs))

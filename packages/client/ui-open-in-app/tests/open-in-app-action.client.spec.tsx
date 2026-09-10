@@ -6,7 +6,7 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { OpenInAppAction, type OpenInAppActionProps } from '../src/client/OpenInAppAction.tsx'
-import { zh } from '../src/client/locales.ts'
+import { en as copy } from '../src/client/locales.ts'
 
 afterEach(() => {
   cleanup()
@@ -15,7 +15,7 @@ afterEach(() => {
 })
 
 const SESSION = 'session' as SessionId
-const t: OpenInAppActionProps['t'] = makeTranslate(zh)
+const t: OpenInAppActionProps['t'] = makeTranslate(copy)
 
 interface Bench {
   props: OpenInAppActionProps
@@ -79,11 +79,11 @@ describe('OpenInAppAction visibility', () => {
 
   it('shows the remembered choice, falling back to the first available app when it is gone', () => {
     render(<OpenInAppAction {...bench({ apps: ['finder', 'cursor'], choice: 'cursor', cwd: '/w' }).props} />)
-    expect(screen.getByRole('button', { name: zh['open.title'].replace('{app}', 'Cursor') })).toBeDefined()
+    expect(screen.getByRole('button', { name: copy['open.title'].replace('{app}', 'Cursor') })).toBeDefined()
     cleanup()
 
     render(<OpenInAppAction {...bench({ apps: ['finder', 'cursor'], choice: 'vscode', cwd: '/w' }).props} />)
-    expect(screen.getByRole('button', { name: zh['open.title'].replace('{app}', zh['app.finder']) })).toBeDefined()
+    expect(screen.getByRole('button', { name: copy['open.title'].replace('{app}', copy['app.finder']) })).toBeDefined()
   })
 })
 
@@ -96,7 +96,7 @@ describe('OpenInAppAction launching', () => {
       launch: () => new Promise((r) => { resolve = r }),
     })
     render(<OpenInAppAction {...b.props} />)
-    const main = screen.getByRole('button', { name: zh['open.title'].replace('{app}', zh['app.finder']) })
+    const main = screen.getByRole('button', { name: copy['open.title'].replace('{app}', copy['app.finder']) })
     fireEvent.click(main)
     expect(b.launch).toHaveBeenCalledWith('finder', '/w/dir')
     // No flash: the button keeps its idle dress while the launch is fast.
@@ -122,7 +122,7 @@ describe('OpenInAppAction launching', () => {
       launch: () => new Promise((_, r) => { reject = r }),
     })
     render(<OpenInAppAction {...b.props} />)
-    const main = screen.getByRole('button', { name: zh['open.title'].replace('{app}', zh['app.finder']) })
+    const main = screen.getByRole('button', { name: copy['open.title'].replace('{app}', copy['app.finder']) })
     fireEvent.click(main)
 
     // The busy dress appears only after the launch has taken a while.
@@ -132,7 +132,7 @@ describe('OpenInAppAction launching', () => {
 
     act(() => { reject(new Error('launch failed')) })
     await act(async () => { await vi.runOnlyPendingTimersAsync() })
-    expect(screen.getByRole('button', { name: zh['open.title'].replace('{app}', zh['app.finder']) })).toBeDefined()
+    expect(screen.getByRole('button', { name: copy['open.title'].replace('{app}', copy['app.finder']) })).toBeDefined()
   })
 
   it('shows the error state and decays back to idle after a fast failure', async () => {
@@ -142,33 +142,33 @@ describe('OpenInAppAction launching', () => {
       launch: () => Promise.reject(new Error('launch failed')),
     })
     render(<OpenInAppAction {...b.props} />)
-    const main = screen.getByRole('button', { name: zh['open.title'].replace('{app}', zh['app.finder']) })
+    const main = screen.getByRole('button', { name: copy['open.title'].replace('{app}', copy['app.finder']) })
     fireEvent.click(main)
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: zh['open.error'] })).toBeDefined()
+      expect(screen.getByRole('button', { name: copy['open.error'] })).toBeDefined()
     })
     // The error state decays back to idle.
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: zh['open.title'].replace('{app}', zh['app.finder']) })).toBeDefined()
+      expect(screen.getByRole('button', { name: copy['open.title'].replace('{app}', copy['app.finder']) })).toBeDefined()
     }, { timeout: 4_000 })
   })
 
   it('shows the product tooltip on hover instead of a native title', async () => {
     render(<OpenInAppAction {...bench({ apps: ['finder'], cwd: '/w/dir' }).props} />)
-    const main = screen.getByRole('button', { name: zh['open.title'].replace('{app}', zh['app.finder']) })
+    const main = screen.getByRole('button', { name: copy['open.title'].replace('{app}', copy['app.finder']) })
     expect(main.getAttribute('title')).toBeNull()
     fireEvent.mouseEnter(main)
-    expect(await screen.findByText(zh['open.tooltip'])).toBeDefined()
+    expect(await screen.findByText(copy['open.tooltip'])).toBeDefined()
     fireEvent.mouseLeave(main)
     await waitFor(() => {
-      expect(screen.queryByText(zh['open.tooltip'])).toBeNull()
+      expect(screen.queryByText(copy['open.tooltip'])).toBeNull()
     })
   })
 
   it('opens the menu from the chevron, launches and persists a picked app', async () => {
     const b = bench({ apps: ['finder', 'cursor', 'terminal'], cwd: '/w/dir' })
     render(<OpenInAppAction {...b.props} />)
-    fireEvent.click(screen.getByRole('button', { name: zh['menu.toggle'] }))
+    fireEvent.click(screen.getByRole('button', { name: copy['menu.toggle'] }))
     const cursorItem = await screen.findByText('Cursor')
     fireEvent.click(cursorItem)
     expect(b.choose).toHaveBeenCalledWith('cursor')
@@ -183,9 +183,9 @@ describe('OpenInAppAction launching', () => {
       launch: () => new Promise((r) => { resolve = r }),
     })
     render(<OpenInAppAction {...b.props} />)
-    fireEvent.click(screen.getByRole('button', { name: zh['open.title'].replace('{app}', zh['app.finder']) }))
+    fireEvent.click(screen.getByRole('button', { name: copy['open.title'].replace('{app}', copy['app.finder']) }))
     expect(b.launch).toHaveBeenCalledTimes(1)
-    fireEvent.click(screen.getByRole('button', { name: zh['menu.toggle'] }))
+    fireEvent.click(screen.getByRole('button', { name: copy['menu.toggle'] }))
     fireEvent.click(await screen.findByText('Cursor'))
     // Mid-flight the pick is ignored whole: no persisted choice, no launch.
     expect(b.choose).not.toHaveBeenCalled()
@@ -207,13 +207,13 @@ describe('OpenInAppAction launching', () => {
       launch: () => (outcomes.shift() ?? (() => Promise.resolve()))(),
     })
     render(<OpenInAppAction {...b.props} />)
-    fireEvent.click(screen.getByRole('button', { name: zh['open.title'].replace('{app}', zh['app.finder']) }))
+    fireEvent.click(screen.getByRole('button', { name: copy['open.title'].replace('{app}', copy['app.finder']) }))
     await act(async () => {})
-    fireEvent.click(screen.getByRole('button', { name: zh['open.error'] }))
+    fireEvent.click(screen.getByRole('button', { name: copy['open.error'] }))
     // Past the first failure's 2s decay: the stale timer must not flip the
     // in-flight retry's busy dress back to a clickable idle button.
     act(() => { vi.advanceTimersByTime(2_500) })
-    const main = screen.getByRole('button', { name: zh['open.title'].replace('{app}', zh['app.finder']) })
+    const main = screen.getByRole('button', { name: copy['open.title'].replace('{app}', copy['app.finder']) })
     expect(main.getAttribute('data-state')).toBe('busy')
     expect((main as HTMLButtonElement).disabled).toBe(true)
   })
@@ -221,11 +221,11 @@ describe('OpenInAppAction launching', () => {
   it('closes an open menu on Escape without launching', async () => {
     const b = bench({ apps: ['finder', 'terminal'], cwd: '/w/dir' })
     render(<OpenInAppAction {...b.props} />)
-    fireEvent.click(screen.getByRole('button', { name: zh['menu.toggle'] }))
-    await screen.findByText(zh['app.terminal'])
+    fireEvent.click(screen.getByRole('button', { name: copy['menu.toggle'] }))
+    await screen.findByText(copy['app.terminal'])
     fireEvent.keyDown(document, { key: 'Escape' })
     await waitFor(() => {
-      expect(screen.queryByText(zh['app.terminal'])).toBeNull()
+      expect(screen.queryByText(copy['app.terminal'])).toBeNull()
     })
     expect(b.launch).not.toHaveBeenCalled()
   })

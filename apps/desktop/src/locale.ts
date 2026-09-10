@@ -1,4 +1,4 @@
-/** Typed English and Chinese copy owned by the Electron shell. */
+/** Typed English copy owned by the Electron shell. */
 
 export const en = {
   application: 'Application',
@@ -36,56 +36,18 @@ export const en = {
   loadingPlugins: 'Reading Desktop plugins…',
 } as const
 
-/** Every Desktop locale supplies the complete English key set. */
+/** English message keys with values suitable for the Desktop renderer. */
 export type DesktopMessages = { readonly [Key in keyof typeof en]: string }
-
-export const zh = {
-  application: 'Application',
-  startupFailed: 'DeepSeek Harness could not start',
-  pluginsMenu: 'Desktop Plugins…',
-  pluginsMenuPackagedOnly: 'Desktop Plugins… (available in packaged applications)',
-  checkUpdatesMenu: 'Check for Updates…',
-  updateCheckFailedTitle: 'Update Check Failed',
-  unknownError: 'Unknown error',
-  updateCheckTitle: 'Check for Updates',
-  updateCurrent: 'You already have the latest version.',
-  updateTitle: 'DeepSeek Harness Update',
-  updateAvailable: 'An update is available',
-  updateDetail: 'DeepSeek Harness {version}\n\nThis release includes its matching dsh version. The application will restart after installation.',
-  installAndRestart: 'Install and Restart',
-  later: 'Later',
-  updateFailedTitle: 'Update Failed',
-  pluginManagerTitle: 'Desktop Plugins',
-  pluginWindowTitle: 'DeepSeek Harness — Desktop Plugins',
-  pluginManagerDescription: 'Plugins are installed only in the Desktop node_modules and are managed by the bundled pnpm.',
-  refresh: 'Refresh',
-  npmPackage: 'npm package',
-  install: 'Install',
-  installed: 'Installed',
-  noPlugins: 'No Desktop plugins are installed.',
-  remove: 'Remove',
-  update: 'Update',
-  targetVersion: 'Enter the target version for {name}',
-  removing: 'Removing {name}…',
-  updating: 'Updating {name}…',
-  installing: 'Installing {spec}…',
-  operationComplete: 'Done. The Desktop backend has restarted.',
-  refreshing: 'Refreshing…',
-  refreshed: 'Plugin list refreshed.',
-  loadingPlugins: 'Reading Desktop plugins…',
-} as const satisfies DesktopMessages
 
 /** Locale payload exposed to the Desktop-owned renderer. */
 export interface DesktopLocale {
-  readonly id: 'en' | 'zh-CN'
+  readonly id: 'en'
   readonly messages: DesktopMessages
 }
 
 /** Resolve Electron's locale to one shipped Desktop dictionary. */
-export function resolveDesktopLocale(locale: string): DesktopLocale {
-  return locale.toLowerCase().startsWith('zh')
-    ? { id: 'zh-CN', messages: zh }
-    : { id: 'en', messages: en }
+export function resolveDesktopLocale(_locale: string): DesktopLocale {
+  return { id: 'en', messages: en }
 }
 
 /** Replace named placeholders in one locale-owned message. */

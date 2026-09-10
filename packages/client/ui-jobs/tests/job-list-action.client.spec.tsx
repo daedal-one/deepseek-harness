@@ -6,7 +6,7 @@ import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/c
 import type { SessionJob as JobView } from '@deepseek-ai/dsh-api-session-controller/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { JobListAction, type JobListActionProps } from '../src/client/JobListAction.tsx'
-import { zh } from '../src/client/locales.ts'
+import { en as copy } from '../src/client/locales.ts'
 
 // Live rows render `now - startedAt`, so every assertion needs a pinned clock.
 beforeEach(() => {
@@ -22,7 +22,7 @@ afterEach(() => {
 
 const SESSION = 'session' as SessionId
 const START = 1_700_000_000_000
-const t: JobListActionProps['t'] = makeTranslate(zh)
+const t: JobListActionProps['t'] = makeTranslate(copy)
 
 function job(over: Partial<JobView> = {}): JobView {
   return {
@@ -57,7 +57,7 @@ function props(jobs: readonly JobView[] | undefined): JobListActionProps {
  * time rather than split out of a flattened string.
  */
 function rowCells(): string[][] {
-  return within(screen.getByRole('list', { name: zh['list.aria'] }))
+  return within(screen.getByRole('list', { name: copy['list.aria'] }))
     .getAllByRole('listitem')
     .map(row => [...row.children]
       .map(cell => cell.textContent ?? '')
@@ -81,7 +81,7 @@ describe('JobListAction visibility', () => {
   it('closes and unmounts when the last job disappears while the list is open', () => {
     const { container, rerender } = render(<JobListAction {...props([job()])} />)
     fireEvent.click(screen.getByRole('button'))
-    expect(screen.getByRole('list', { name: zh['list.aria'] })).toBeDefined()
+    expect(screen.getByRole('list', { name: copy['list.aria'] })).toBeDefined()
 
     rerender(<JobListAction {...props([])} />)
     expect(container.innerHTML).toBe('')
@@ -207,7 +207,7 @@ describe('JobListAction dismissal', () => {
     const trigger = screen.getByRole('button')
     fireEvent.click(trigger)
 
-    fireEvent.pointerDown(screen.getByRole('list', { name: zh['list.aria'] }))
+    fireEvent.pointerDown(screen.getByRole('list', { name: copy['list.aria'] }))
     expect(trigger.getAttribute('aria-expanded')).toBe('true')
 
     fireEvent.pointerDown(document.body)

@@ -29,9 +29,13 @@ Call `pluginInventory/list` when a client or settings page needs to show what is
 
 Each row is one non-group Loader entry: its entry id, the exact module specifier, the effective enablement (including disabled ancestor groups), and the current root Fiber phase. `pending` means the entry waits to load, `loading` that it is being read, `active` that it is running, `failed` that its fiber rejected, and `unloading` that it is being torn down; `null` means no live root Fiber exists at all. Structural group rows are skipped.
 
+Each global or preset row also carries its package author, description, and version. Missing manifest fields remain `null`. Package lookup follows preset imports: bare package names resolve from the installed harness, while relative files resolve beside their composition. Resolution URLs remain Host-only.
+
 ### Per-preset compositions
 
 With a roster composed, `agentPresets` carries one group per preset in roster order: its id, whether the deployment ships it or the user owns it (`trust`, which clients use to localize shipped names), published display name, whether a session naming no preset composes it, and flattened plugin rows — entry id (null when the file row declares none), module specifier, effective enablement, the row's own `!!js` disabled expression when it carries one, and a root-fiber phase when the composition is live. A preset some session already composed answers from its newest standing generation — even when its file has since broken, because the mount is what those sessions run; one never composed since boot answers from its composition file with disabled gates evaluated against the Loader context, and reading never mounts a preset. `conditional` enablement marks a gate the Host could not evaluate, and a broken preset nothing composed stays listed with its reason and no rows. Without a roster the field is absent.
+
+Preset rows may carry `purpose`: the trimmed, non-empty literal `description` on the composition row. Clients prefer it over the package description when explaining a configured role. Blank or non-string descriptions are omitted; the inventory never evaluates metadata expressions or projects plugin config or persona prompts.
 
 ### What you can and cannot do with it
 
@@ -47,7 +51,7 @@ The inventory is a snapshot for display and diagnostics: a client can render the
 
 ### Design concept
 
-The gateway is a direct projection with no second lifecycle truth: every `list()` call reads `ctx.loader.entries()` and maps each non-group entry to its public row. Cordis's internal plugin/status events already maintain `Entry.fiber` and `Fiber.state`, so a cache would only add another lifecycle truth to keep synchronized. The agent-preset roster is an optional peer resolved per call through `ctx.get('agentPresets')`: its `compositionInventory()` owns every preset read, and this package only maps root-fiber states onto the public phase vocabulary.
+The gateway is a direct projection with no second lifecycle truth: every `list()` call reads `ctx.loader.entries()` and maps each non-group entry to its public row. Cordis's internal plugin/status events already maintain `Entry.fiber` and `Fiber.state`, so a cache would only add another lifecycle truth to keep synchronized. The agent-preset roster is an optional peer resolved per call through `ctx.get('agentPresets')`: its `compositionInventory()` owns every preset read, and this package resolves display metadata and maps root-fiber states onto the public phases.
 
 ### The phase mapping
 
@@ -107,5 +111,3 @@ These limits define what a point-in-time inventory cannot tell a client. They ar
 None.
 
 </details>
-
-Global plugin entries expose their package author, description, and version. Missing manifest fields remain null; the inventory displays that absence explicitly and includes metadata in text searches.

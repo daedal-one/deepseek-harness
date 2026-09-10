@@ -6,8 +6,8 @@ type: Feature
 
 ## Motivation
 
-<!-- 说明当前问题、受影响的用户，以及为什么需要这项变化。 -->
+<!-- Explain the current problem, who it affects, and why the change is needed. -->
 
 ## Behavior
 
-<!-- 说明预期的用户、模型或系统可观察行为。 -->
+<!-- Describe the expected behavior visible to users, models, or the system. -->

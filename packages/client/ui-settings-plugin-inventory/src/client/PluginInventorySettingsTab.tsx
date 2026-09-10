@@ -81,11 +81,24 @@ function entrySubtitle(entryId: string): string {
   return entryId.replace(/^include:/, '')
 }
 
-/** Whether one row's module name or entry id matches the catalog query. */
-function matches(moduleName: string, entryId: string | null, normalizedQuery: string): boolean {
+/** Whether one row's identity or display metadata matches the catalog query. */
+function matches(row: PluginInventoryEntry | AgentPresetRow, normalizedQuery: string): boolean {
   if (normalizedQuery.length === 0) return true
-  return [moduleName, ...entryId === null ? [] : [entryId]]
-    .some(value => value.toLocaleLowerCase().includes(normalizedQuery))
+  return [row.moduleName, row.entryId, row.description, row.author, row.version, 'purpose' in row ? row.purpose : undefined]
+    .some(value => value?.toLocaleLowerCase().includes(normalizedQuery))
+}
+
+/** Shared display metadata for global entries and preset instances. */
+function CardMetadata({ row, t }: { row: PluginInventoryEntry | AgentPresetRow; t: Translate }): ReactNode {
+  return (
+    <span className={css.cardSummary}>
+      <span className={css.cardDescription}>{('purpose' in row ? row.purpose : undefined) ?? row.description ?? t('descriptionUnavailable')}</span>
+      <span className={css.cardMetadata}>
+        <span>{t('author')}: {row.author ?? t('authorUnavailable')}</span>
+        <span>{t('version')}: {row.version ?? t('versionUnavailable')}</span>
+      </span>
+    </span>
+  )
 }
 
 /** Whether an inventory row matches the selected visible state. */
@@ -271,8 +284,8 @@ export function PluginInventorySettingsTab({ list, presetName, t }: PluginInvent
     else regularEntries.push(entry)
   }
 
-  const entryMatch = (entry: PluginInventoryEntry): boolean => matches([entry.moduleName, entry.author, entry.description, entry.version].filter(value => value !== null).join(' '), entry.entryId, normalizedQuery) && matchesState(entry, stateFilter)
-  const rowMatch = (row: AgentPresetRow): boolean => matches(row.moduleName, row.entryId, normalizedQuery) && matchesState(row, stateFilter)
+  const entryMatch = (entry: PluginInventoryEntry): boolean => matches(entry, normalizedQuery) && matchesState(entry, stateFilter)
+  const rowMatch = (row: AgentPresetRow): boolean => matches(row, normalizedQuery) && matchesState(row, stateFilter)
   const filteredFailed = failedEntries.filter(entryMatch)
   const filteredRegular = regularEntries.filter(entryMatch)
   const globalCount = filteredFailed.length + filteredRegular.length
@@ -310,6 +323,7 @@ export function PluginInventorySettingsTab({ list, presetName, t }: PluginInvent
         key={key}
         rowKey={key}
         moduleName={row.moduleName}
+        metadata={<CardMetadata row={row} t={t} />}
         entryId={row.entryId}
         failed={failed}
         expanded={expanded}
@@ -356,15 +370,7 @@ export function PluginInventorySettingsTab({ list, presetName, t }: PluginInvent
         key={key}
         rowKey={key}
         moduleName={entry.moduleName}
-        metadata={(
-          <span className={css.cardSummary}>
-            <span className={css.cardDescription}>{entry.description ?? t('descriptionUnavailable')}</span>
-            <span className={css.cardMetadata}>
-              <span>{t('author')}: {entry.author ?? t('authorUnavailable')}</span>
-              <span>{t('version')}: {entry.version ?? t('versionUnavailable')}</span>
-            </span>
-          </span>
-        )}
+        metadata={<CardMetadata row={entry} t={t} />}
         entryId={entry.entryId}
         failed={failed}
         expanded={expanded}

@@ -25,6 +25,7 @@
 # `{{model}}` and `{{cwd}}` resolve from the agent's own route and workspace.
 - id: persona
   name: '@deepseek-ai/dsh-persona'
+  description: Sets the agent’s identity, working context, and guidance for choosing specialist roles.
   config:
     prefix: |
       You are Daedal, a coding agent powered by the {{model}} model. Your working directory is {{cwd}}.
@@ -46,11 +47,13 @@
 
 - id: agent-instructions
   name: '@deepseek-ai/dsh-agent-instructions'
+  description: Loads repository instructions so the agent follows the project’s conventions and constraints.
   config:
     maxBytes: 65536
 
 - id: english-output-guard
   name: '@deepseek-ai/dsh-english-output-guard'
+  description: Keeps supported model responses in English before they reach the conversation.
   config:
     targets:
       - provider: openrouter
@@ -76,6 +79,7 @@
 # and SQLite provider stay on the host plane.
 - id: memory-extractor
   name: '@deepseek-ai/dsh-memory-extractor-llm'
+  description: Finds reusable facts and preferences in sessions and proposes them for durable memory.
   config:
     provider: openrouter
     model: deepseek/deepseek-v4-flash-0731:nitro
@@ -97,10 +101,12 @@
 # host-plane too.
 - id: tool-bash
   name: '@deepseek-ai/dsh-tool-bash'
+  description: Runs shell commands in the workspace through the configured permissions and sandbox.
   disabled: !!js process.platform === 'win32'
 
 - id: tool-pwsh
   name: '@deepseek-ai/dsh-tool-pwsh'
+  description: Runs PowerShell commands on Windows through the configured permissions and sandbox.
   disabled: !!js process.platform !== 'win32'
 
 # ── filesystem ──────────────────────────────────────────────────────────────
@@ -109,9 +115,11 @@
 # they need no realm. The `fs` service and its policy stay in the host.
 - id: tool-fs
   name: '@deepseek-ai/dsh-tool-fs'
+  description: Reads, creates, and edits workspace files, including images, within the configured access policy.
 
 - id: tool-fs-search
   name: '@deepseek-ai/dsh-tool-fs-search'
+  description: Finds workspace files and searches their contents by pattern.
   config:
     sampleOverCapGlobResults: false
 
@@ -126,6 +134,7 @@
 # chooses is whether its agent can collect and stop background work at all.
 - id: tool-jobs
   name: '@deepseek-ai/dsh-tool-jobs'
+  description: Lists background tasks, checks their progress, collects results, and stops work when requested.
 
 # ── skills ──────────────────────────────────────────────────────────────────
 
@@ -136,9 +145,11 @@
 # carries whatever the deployment registered globally (repository plugins).
 - id: skill-filesystem
   name: '@deepseek-ai/dsh-skill-filesystem'
+  description: Discovers installed skills and makes their instructions available to the agent.
 
 - id: tool-skill
   name: '@deepseek-ai/dsh-tool-skill'
+  description: Loads a selected skill’s instructions into the conversation when its workflow is needed.
 
 # ── goals ───────────────────────────────────────────────────────────────────
 
@@ -150,6 +161,7 @@
 # session. What a preset chooses is whether its agent can call the goal tool.
 - id: tool-goal
   name: '@deepseek-ai/dsh-tool-goal'
+  description: Creates and tracks a session goal so the agent can continue working toward a defined outcome.
 
 # ── plan mode ───────────────────────────────────────────────────────────────
 
@@ -163,6 +175,7 @@
   config:
     - id: plan-mode
       name: '@deepseek-ai/dsh-plan-mode'
+      description: Lets the agent enter planning mode and records the plan before implementation begins.
       config:
         section: |
               You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.
@@ -197,12 +210,15 @@
   config:
     - id: compaction-basic
       name: '@deepseek-ai/dsh-compaction-basic'
+      description: Summarizes older conversation history to make room for continued work.
 
     - id: command-compact
       name: '@deepseek-ai/dsh-command-compact'
+      description: Adds a command to compact the conversation when you want to free context space.
 
     - id: tool-result-pruner
       name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+      description: Removes expendable older tool output from the active context while retaining the session record.
       config:
         thresholdChars: 8192
         headChars: 4096
@@ -212,6 +228,7 @@
 
 - id: mcp-context7
   name: '@deepseek-ai/dsh-mcp-client'
+  description: Provides current library documentation and API examples through Context7.
   config:
     serverName: context7
     transport: streamable-http
@@ -222,6 +239,7 @@
 
 - id: mcp-agent-browser
   name: '@deepseek-ai/dsh-mcp-client'
+  description: Provides an isolated browser for reading pages and performing authorized interactions.
   config:
     serverName: agent_browser
     transport: stdio
@@ -250,6 +268,7 @@
 
 - id: mcp-firecrawl
   name: '@deepseek-ai/dsh-mcp-client'
+  description: Provides website crawling and structured content extraction through Firecrawl.
   disabled: !!js "!process.env.FIRECRAWL_API_KEY"
   config:
     serverName: firecrawl
@@ -266,6 +285,7 @@
 
 - id: mcp-chrome-devtools
   name: '@deepseek-ai/dsh-mcp-client'
+  description: Provides Chrome tools for inspecting page structure, console errors, network traffic, and performance.
   config:
     serverName: chrome_devtools
     transport: stdio
@@ -303,12 +323,15 @@
   config:
     - id: tool-subagent-control
       name: '@deepseek-ai/dsh-tool-subagent-control'
+      description: Sends follow-up messages to delegated agents and interrupts them when needed.
 
     - id: tool-subagent-list-agents
       name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
+      description: Lists delegated agents and their current progress so the parent can coordinate work.
 
     - id: tool-subagent
       name: '@deepseek-ai/dsh-tool-subagent'
+      description: Starts a specialist with a fresh conversation and keeps it available for follow-up work.
       config:
         provider: spawn
         toolName: subagent
@@ -316,6 +339,7 @@
 
     - id: tool-subagent-fork
       name: '@deepseek-ai/dsh-tool-subagent'
+      description: Starts a specialist with a copy of the parent conversation and keeps it available for follow-up work.
       config:
         provider: fork
         toolName: subagent_fork
@@ -325,6 +349,7 @@
     # preset and stripped of OpenCode's YAML frontmatter at load time.
     - id: role-coder
       name: '@deepseek-ai/dsh-tool-subagent'
+      description: Implements a well-defined change, runs relevant checks, and reports the result with its commit.
       config:
         provider: spawn
         toolName: coder
@@ -343,6 +368,7 @@
 
     - id: role-guru
       name: '@deepseek-ai/dsh-tool-subagent'
+      description: Investigates difficult bugs, architecture, and security-sensitive changes, and implements solutions when requested.
       config:
         provider: spawn
         toolName: guru
@@ -361,6 +387,7 @@
 
     - id: role-reviewer
       name: '@deepseek-ai/dsh-tool-subagent'
+      description: Reviews code changes against your original request, checks tests and supporting evidence, and reports defects with a final verdict.
       config:
         provider: spawn
         toolName: reviewer
@@ -379,6 +406,7 @@
 
     - id: role-researcher
       name: '@deepseek-ai/dsh-tool-subagent'
+      description: Researches current documentation, libraries, and APIs and returns findings with supporting sources.
       config:
         provider: spawn
         toolName: researcher
@@ -395,6 +423,7 @@
 
     - id: role-browser-reader
       name: '@deepseek-ai/dsh-tool-subagent'
+      description: Reads rendered web pages in an isolated browser and reports their content and visible state.
       config:
         provider: spawn
         toolName: browser_reader
@@ -411,6 +440,7 @@
 
     - id: role-browser-operator
       name: '@deepseek-ai/dsh-tool-subagent'
+      description: Carries out requested browser interactions, including clicks, forms, navigation, and tab management.
       config:
         provider: spawn
         toolName: browser_operator
@@ -427,6 +457,7 @@
 
     - id: role-toolsmith
       name: '@deepseek-ai/dsh-tool-subagent'
+      description: Finds useful skills and tools, explains installation requirements, and applies approved capability changes.
       config:
         provider: spawn
         toolName: toolsmith
@@ -442,6 +473,7 @@
 
     - id: role-orchestrator
       name: '@deepseek-ai/dsh-tool-subagent'
+      description: Plans multi-step work, assigns implementation to specialists, and coordinates independent review.
       config:
         provider: spawn
         toolName: orchestrator
@@ -457,6 +489,7 @@
 
     - id: role-crawler
       name: '@deepseek-ai/dsh-tool-subagent'
+      description: Extracts content from multiple web pages and runs structured crawl jobs through Firecrawl.
       disabled: !!js "!process.env.FIRECRAWL_API_KEY"
       config:
         provider: spawn
@@ -474,6 +507,7 @@
 
     - id: role-web-debugger
       name: '@deepseek-ai/dsh-tool-subagent'
+      description: Diagnoses web application problems using Chrome console, network, page, and performance tools.
       config:
         provider: spawn
         toolName: web_debugger
@@ -490,6 +524,7 @@
 
     - id: role-memory-reviewer
       name: '@deepseek-ai/dsh-tool-subagent'
+      description: Reviews proposed memories and updates, supersedes, or removes durable facts under the configured permissions.
       config:
         provider: spawn
         toolName: memory_reviewer
@@ -509,6 +544,7 @@
     # only to agents composed from the copy.
     - id: tool-subagent-codex
       name: '@deepseek-ai/dsh-tool-subagent'
+      description: Delegates a task to the configured Codex backend and returns its result.
       disabled: true
       config:
         provider: codex
@@ -518,6 +554,7 @@
 
     - id: tool-subagent-claude-code
       name: '@deepseek-ai/dsh-tool-subagent'
+      description: Delegates a task to the configured Claude Code backend and returns its result.
       disabled: true
       config:
         provider: claude-code
@@ -527,14 +564,17 @@
 
     - id: workflow-worker-thread
       name: '@deepseek-ai/dsh-workflow-worker-thread'
+      description: Runs delegated workflows in a worker thread so orchestration can continue independently.
       config:
         provider: spawn
 
     - id: tool-workflow
       name: '@deepseek-ai/dsh-tool-workflow'
+      description: Lets the agent run a programmed workflow that coordinates delegated tasks.
 
     - id: tool-ralph
       name: '@deepseek-ai/dsh-tool-ralph'
+      description: Repeats implementation and review rounds until the task is accepted or its configured limit is reached.
       config:
         subagentProvider: spawn
         maxRounds: 64
@@ -543,19 +583,23 @@
 
 - id: tool-ask-user
   name: '@deepseek-ai/dsh-tool-ask-user'
+  description: Asks you for missing information or decisions needed to continue the task.
 
 - id: tool-todo
   name: '@deepseek-ai/dsh-tool-todo'
+  description: Maintains a visible task list with progress and completion status.
   config:
     allowParallelInProgress: true
 
 - id: tool-memory
   name: '@deepseek-ai/dsh-tool-memory'
+  description: Retrieves durable memory and proposes facts or corrections for future sessions.
 
 # The `web` service and its search provider stay in the host composition; only
 # the model-facing tool is per-session.
 - id: tool-web
   name: '@deepseek-ai/dsh-tool-web'
+  description: Searches the web for current information and returns results the agent can cite.
   config:
     fetch: true
     fetchTimeoutMs: 30000

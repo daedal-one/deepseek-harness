@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { PresentedFileCard } from '../src/client/PresentedFileCard.tsx'
-import { en, zh } from '../src/client/locales.ts'
+import { en, en as copy } from '../src/client/locales.ts'
 
 afterEach(cleanup)
 const props = () => ({
@@ -75,8 +75,8 @@ it('opens the right sidebar from either the card or its primary button', () => {
 
 it('localizes reveal failures and accurately reports a directory-only action', () => {
   const p = props()
-  const view = render(<PresentedFileCard {...p} phase="revealError" t={makeTranslate(zh)} />)
-  expect(view.getByText(zh['presented.revealError'])).toBeTruthy()
+  const view = render(<PresentedFileCard {...p} phase="revealError" t={makeTranslate(copy)} />)
+  expect(view.getByText(copy['presented.revealError'])).toBeTruthy()
   view.rerender(<PresentedFileCard {...p} phase="revealed" host={{ ...p.host, fileManager: 'directory' }} />)
   expect(view.getByText(en['presented.directoryOpened'])).toBeTruthy()
   view.rerender(<PresentedFileCard {...p} phase="revealed" />)
@@ -155,7 +155,7 @@ it('keeps focus on the available preview button after selecting a native action'
   expect(document.activeElement).toBe(preview)
 })
 
-it.each([en, zh])('distinguishes directory-only progress and errors in each locale', (dictionary) => {
+it.each([en, copy])('distinguishes directory-only progress and errors in each locale', (dictionary) => {
   const p = { ...props(), t: makeTranslate(dictionary) }
   const view = render(<PresentedFileCard {...p} phase="revealing" />)
   expect(view.getByText(dictionary['presented.revealing'])).toBeTruthy()

@@ -51,8 +51,8 @@ describe('website source layout', () => {
     expect(unexpectedWebsiteMarkdown([
       'website/AGENTS.md',
       'website/docs.ts',
-      'website/zh-CN/api/harness/service.md',
-    ])).toEqual(['website/zh-CN/api/harness/service.md'])
+      'website/extra/api/harness/service.md',
+    ])).toEqual(['website/extra/api/harness/service.md'])
   })
 
   it('contains no tracked or unignored documentation copies', () => {
@@ -306,7 +306,6 @@ describe('canonical English publication routes', () => {
     for (const page of docsPages) {
       expect(page.locale).toBe('root')
       expect(page.contentLocale).toBe('en-US')
-      expect(page.source).not.toMatch(/\.zh\.md$/)
       expect(page.route).not.toMatch(/^en\//)
       expect(existsSync(resolve(repositoryRoot, page.source)), page.source).toBe(true)
       expect(routes.has(page.route), page.route).toBe(false)
@@ -347,8 +346,8 @@ describe('sidebar ordering', () => {
   })
 
   it('refuses a section with no declared placement', () => {
-    expect(() => sectionSpec('root', '数据结构'))
-      .toThrow('Sidebar section "数据结构" has no placement in the root locale.')
+    expect(() => sectionSpec('root', 'Unknown section'))
+      .toThrow('Sidebar section "Unknown section" has no placement in the root locale.')
   })
 
   it('lands every navigation item on a page the manifest publishes', () => {
@@ -411,7 +410,7 @@ describe('projectedPageContent', () => {
   const page = (sidebar: DocsPage['sidebar']): DocsPage => ({
     locale: 'root',
     contentLocale: 'en-US',
-    source: 'docs/index.zh.md',
+    source: 'docs/index.md',
     route: 'index.md',
     label: 'Home',
     sidebar,
@@ -431,42 +430,34 @@ describe('projectedPageContent', () => {
     expect(projectedPageContent(markdown, page('guide'))).toBe(markdown)
   })
 
-  it('drops the language switcher the navigation bar already offers', () => {
-    expect(projectedPageContent('# Guide\n\nEnglish | [中文](./guide)\n\nBody.\n', page('guide')))
-      .toBe('# Guide\n\nBody.\n')
-    expect(projectedPageContent('# 指南\n\n[English](./guide) | 中文\n\n正文。\n', page('guide')))
-      .toBe('# 指南\n\n正文。\n')
-  })
-
   it('drops the repository badge every page links from its footer', () => {
     const badge = '[![](https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square)](https://github.com/deepseek-ai/deepseek-harness)'
     expect(projectedPageContent(`# Guide\n\nBody.\n\n${badge}\n`, page('guide')))
       .toBe('# Guide\n\nBody.\n')
   })
 
-  it('keeps a switcher-shaped line that is not the page header', () => {
-    // A tutorial showing the convention must still render the example.
-    const sample = '# Guide\n\nA\n\nB\n\nC\n\nD\n\nE\n\nEnglish | [中文](./x)\n'
+  it('keeps inline navigation links in the page body', () => {
+    const sample = '# Guide\n\n[Previous](./previous) | [Next](./next)\n'
     expect(projectedPageContent(sample, page('guide'))).toBe(sample)
   })
 
   it('rejects a locale home source without frontmatter', () => {
     expect(() => projectedPageContent('# Harness\n', page(null)))
-      .toThrow('locale home source "docs/index.zh.md" must start with YAML frontmatter')
+      .toThrow('locale home source "docs/index.md" must start with YAML frontmatter')
   })
 })
 
 describe('rawMarkdownPageContent', () => {
   it('keeps the home body the rendered site omits and drops the VitePress frontmatter', () => {
     expect(rawMarkdownPageContent(
-      '---\nlayout: false\nhead:\n  - - meta\n    - http-equiv: refresh\n      content: 0; url=./guide/quickstart\n---\n\n# Harness\n\nEnglish | [中文](./index.md)\n\nBody.\n',
-      'docs/user/index.zh.md',
+      '---\nlayout: false\nhead:\n  - - meta\n    - http-equiv: refresh\n      content: 0; url=./guide/quickstart\n---\n\n# Harness\n\nBody.\n',
+      'docs/user/index.md',
     )).toBe('# Harness\n\nBody.\n')
   })
 
-  it('drops the language switcher and repository badge like the rendered site', () => {
+  it('drops the repository badge like the rendered site', () => {
     const badge = '[![](https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square)](https://github.com/deepseek-ai/deepseek-harness)'
-    expect(rawMarkdownPageContent(`# Guide\n\nEnglish | [中文](./x)\n\nBody.\n\n${badge}\n`, 'docs/guide.md'))
+    expect(rawMarkdownPageContent(`# Guide\n\nBody.\n\n${badge}\n`, 'docs/guide.md'))
       .toBe('# Guide\n\nBody.\n')
   })
 

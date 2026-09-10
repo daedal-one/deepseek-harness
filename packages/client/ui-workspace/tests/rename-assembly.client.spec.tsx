@@ -22,8 +22,8 @@ import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { apply, inject } from '@deepseek-ai/dsh-client-ui-workspace/client'
 
 // The service reads its initial locale from the browser; these specs pin the
-// browser they assume (the zh dictionary now carries the shared English copy).
-usePinnedBrowserLanguages('zh-CN')
+// browser they assume (the English dictionary now carries the shared English copy).
+usePinnedBrowserLanguages('en-US')
 
 const SID = 's1' as SessionId
 

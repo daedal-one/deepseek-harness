@@ -15,12 +15,12 @@ import type { SessionPendingInteractionSnapshot } from '@deepseek-ai/dsh-client-
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import type { ConversationRootProps } from '../src/client/skeleton/ConversationRoot.tsx'
 import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
-import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
+import { en as commonCopy } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import { EMPTY_CONVERSATION_SNAPSHOT } from '../src/client/contract/snapshot.ts'
 import type { ConversationSnapshot } from '../src/client/contract/snapshot.ts'
 import { createConversationStore } from '../src/client/stores.ts'
 import { SessionInputShell } from '../src/client/input/facade.ts'
-import { en, zh } from '../src/client/locales.ts'
+import { en, en as copy } from '../src/client/locales.ts'
 import { ConversationRoot } from '../src/client/skeleton/ConversationRoot.tsx'
 import { ConversationSession, ConversationSessionHeader } from '../src/client/skeleton/ConversationSession.tsx'
 import { conversationPhase } from '../src/client/contract/snapshot.ts'
@@ -83,7 +83,7 @@ beforeEach(() => {
   vi.stubGlobal('ResizeObserver', ResizeObserverStub)
 })
 
-const t: ConversationRootProps['t'] = makeTranslate(zh, commonZh)
+const t: ConversationRootProps['t'] = makeTranslate(copy, commonCopy)
 
 const sid = (id: string) => id as SessionId
 const wid = (id: string) => id as WorkspaceId

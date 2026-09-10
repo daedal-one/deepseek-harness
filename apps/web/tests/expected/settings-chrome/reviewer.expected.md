@@ -1,0 +1,7 @@
+- listitem:
+  - button "tool-subagent, role-reviewer, Enabled":
+    - strong: tool-subagent
+    - text: Enabled
+    - img
+    - text: "Reviews code changes against your original request, checks tests and supporting evidence, and reports defects with a final verdict. Author: Not provided Version: 0.1.5-alpha.2"
+    - code: role-reviewer

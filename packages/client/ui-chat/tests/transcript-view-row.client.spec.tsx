@@ -8,7 +8,7 @@ import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { TranscriptViewRow, type TranscriptViewRowProps } from '../src/client/settings/TranscriptViewRow.tsx'
-import { en, zh } from '../src/client/locale.ts'
+import { en, en as copy } from '../src/client/locale.ts'
 
 afterEach(cleanup)
 
@@ -31,7 +31,7 @@ function noPendingInteraction() {
 // The resource hook the resources plugin merges into GlobalStandardProps; this row reads no address.
 const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined })) as GlobalStandardProps['useResource']
 
-function mount(mode: 'normal' | 'compact' = 'compact', dictionary: typeof en | typeof zh = en) {
+function mount(mode: 'normal' | 'compact' = 'compact', dictionary: typeof en   = en) {
   const source = createSnapshotStore(mode)
   const setTranscriptView = vi.fn((next: 'normal' | 'compact') => { source.set(next) })
   const props: TranscriptViewRowProps = {
@@ -69,9 +69,9 @@ describe('TranscriptViewRow', () => {
   })
 
   it('shows the conversation-display values in Chinese', () => {
-    mount('compact', zh)
-    fireEvent.click(screen.getByRole('button', { name: '紧凑' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: '标准' }))
-    expect(screen.getByRole('button', { name: '标准' })).toBeDefined()
+    mount('compact', copy)
+    fireEvent.click(screen.getByRole('button', { name: 'Compact' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Normal' }))
+    expect(screen.getByRole('button', { name: 'Normal' })).toBeDefined()
   })
 })

@@ -83,8 +83,9 @@ export class PluginInventoryGateway extends TypertRemoteService {
     const agentPresets: AgentPresetPluginGroup[] = (await presets.compositionInventory()).map(
       composition => ({
         ...composition,
-        rows: composition.rows.map(({ fiberState, ...row }) => ({
+        rows: composition.rows.map(({ fiberState, baseUrl, ...row }) => ({
           ...row,
+          ...this.metadata.resolve(row.moduleName, baseUrl),
           fiberPhase: fiberState === undefined ? null : FIBER_PHASE[fiberState],
         })),
       }),

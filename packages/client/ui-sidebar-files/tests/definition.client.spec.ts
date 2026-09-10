@@ -11,9 +11,9 @@ import { sessionFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
 import {
   FILES_ID, FILES_KIND, filesDefinition,
 } from '../src/client/definition.ts'
-import { zh } from '../src/client/locales.ts'
+import { en as copy } from '../src/client/locales.ts'
 
-const t = makeTranslate(zh)
+const t = makeTranslate(copy)
 
 describe('filesDefinition', () => {
   it('registers under its kind and id and claims no address', () => {
@@ -30,7 +30,7 @@ describe('filesDefinition', () => {
     expect(rest).toEqual([])
     expect(entry?.order).toBe(10)
     expect(entry?.kind).toBe(FILES_KIND)
-    expect(entry?.title()).toBe(zh['guide.title'])
+    expect(entry?.title()).toBe(copy['guide.title'])
     expect(entry?.icon).toBeDefined()
   })
 
@@ -38,6 +38,6 @@ describe('filesDefinition', () => {
     const definition = filesDefinition(t)
     expect(definition.priority).toBe('builtin')
     expect(definition.patterns).toBeUndefined()
-    expect(definition.title('')).toBe(zh['type.label'])
+    expect(definition.title('')).toBe(copy['type.label'])
   })
 })

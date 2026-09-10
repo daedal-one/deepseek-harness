@@ -57,7 +57,7 @@ describe('MessageImage', () => {
       peek: vi.fn(() => 'blob:seeded'),
     })
     const view = render(<MessageImage image={{ attachment }} load={load} variant="single" labels={labels} />)
-    expect(view.queryByText('图片加载中…')).toBeNull()
+    expect(view.queryByText('Loading image…')).toBeNull()
     expect((view.getByAltText('history.png') as HTMLImageElement).src).toContain('blob:seeded')
     expect(load).toHaveBeenCalledWith(attachment)
   })
@@ -191,7 +191,7 @@ describe('MessageImage preview arm', () => {
     const view = render(
       <MessageImage image={{ preview: { url: 'blob:unprobed' } }} load={load} variant="single" labels={labels} />,
     )
-    const img = view.getByAltText('图片') as HTMLImageElement
+    const img = view.getByAltText('Image') as HTMLImageElement
     const frame = img.closest('button') as HTMLButtonElement
     expect(frame.style.width).toBe('240px')
     expect(frame.style.height).toBe('240px')
@@ -201,7 +201,7 @@ describe('MessageImage preview arm', () => {
     const view = render(
       <MessageImage image={{ preview: { url: 'blob:box' } }} load={vi.fn(async () => '')} variant="tile" labels={labels} />,
     )
-    fireEvent.click(view.getByRole('button', { name: '图片，点击查看原图' }))
+    fireEvent.click(view.getByRole('button', { name: 'Image, click to view original' }))
     expect(view.getByRole('dialog', { name: 'Original preview' })).toBeTruthy()
   })
 })
@@ -243,16 +243,16 @@ describe('ImageGallery', () => {
   it('renders the conversation slot entry with translated labels', async () => {
     const t = ((key: string, params?: Readonly<Record<string, unknown>>) => {
       const translated: Record<string, string> = {
-        'image.label': '图片',
-        'image.openOriginal': '查看原图',
-        'image.loading': '图片加载中…',
-        'image.loadFailed': '图片加载失败，点击重试',
-        'image.preview': '原图预览',
-        'image.closePreview': '关闭原图预览',
+        'image.label': 'Image',
+        'image.openOriginal': 'View original',
+        'image.loading': 'Loading image…',
+        'image.loadFailed': 'Image failed to load; click to retry',
+        'image.preview': 'Original image preview',
+        'image.closePreview': 'Close original image preview',
       }
       if (key === 'image.openOriginalLabel') {
         const label = params?.label
-        return `${typeof label === 'string' ? label : ''}，点击查看原图`
+        return `${typeof label === 'string' ? label : ''}, click to view original`
       }
       return translated[key] ?? key
     }) as MessageImagesProps['t']
@@ -295,7 +295,7 @@ describe('ImageGallery', () => {
     }
     const view = render(<MessageImages {...props} />)
     await waitFor(() => { expect(view.getByAltText('history.png')).toBeTruthy() })
-    expect(view.getByRole('button', { name: 'history.png，点击查看原图' })).toBeTruthy()
+    expect(view.getByRole('button', { name: 'history.png, click to view original' })).toBeTruthy()
     expect(view.container.querySelector('[data-align="end"]')).not.toBeNull()
   })
 })

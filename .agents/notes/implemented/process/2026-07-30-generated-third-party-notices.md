@@ -46,8 +46,6 @@ The Claude distribution tests prove that only the exact direct SDK identity bypa
 
 **Treat the Claude SDK terms as permissive or add a reusable non-permissive allowlist.** Either shape would misstate the upstream declaration and let an unrelated runtime inherit authorization it was never granted. The narrow exception keys only the official direct SDK identity, while its optional payload identities are accepted solely as data declared by that SDK and remain visibly non-permissive.
 
-**Emit the notices as a bilingual pair.** Every other root document is paired, but the file is a table of upstream package names, SPDX identifiers, and URLs; the translatable surface is a handful of section blurbs. `scripts/translation-pairing.ts` scopes discovery to `README*`, `.agents/notes/**`, `docs/**`, and `python/**`, so a root non-README file is outside the bilingual corpus by construction, and the README pair carries the bilingual entry points into it.
-
 ## Consequences
 
 A dependency edit now carries a regenerated notices file into the same commit. Contributors pay one generator run — about a second — on commits that touch a manifest, and nothing on any other commit. Committing with hooks disabled defers the cost to a test-lane failure that names the command.

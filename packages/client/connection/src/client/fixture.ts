@@ -688,7 +688,7 @@ function fixtureSettledStream(
 }
 
 /** Rendered system prompt of the fx-alpha history: surface node 0. */
-const FIXTURE_SYSTEM_PROMPT = '你是 DeepSeek Harness 的 fixture 助手。用简洁的中文回答，并在需要时调用工具。'
+const FIXTURE_SYSTEM_PROMPT = 'You are the DeepSeek Harness fixture assistant. Answer concisely in English and call tools when needed.'
 
 /** fx-alpha history script: 75 turns (~150+ messages -> 4 pages at PAGE_MESSAGES=50),
  *  mixing reasoning blocks / tool call+result / context. */
@@ -802,7 +802,7 @@ function buildAlphaLog(): SessionEvent[] {
   toolTurn(
     60,
     'bash',
-    '{"command":"ls -la\\necho done","description":"fixture 终端样本","workdir":"/tmp/fixture"}',
+    '{"command":"ls -la\\necho done","description":"fixture terminal sample","workdir":"/tmp/fixture"}',
     'total 2\ndrwxr-xr-x fixture\n-rw-r--r-- demo.txt',
   )
   toolTurn(
@@ -816,14 +816,14 @@ function buildAlphaLog(): SessionEvent[] {
     62,
     'edit',
     '{"file_path":"notes/demo.txt","old_string":"hello","new_string":"hello fixture"}',
-    '已编辑',
+    'Edited',
     { diffs: [{ path: 'notes/demo.txt', oldText: 'hello', newText: 'hello fixture' }] },
   )
   toolTurn(
     63,
     'write',
     '{"file_path":"notes/new-demo.txt","content":"hello fixture\\n"}',
-    '已写入',
+    'Written',
     { diffs: [{ path: 'notes/new-demo.txt', oldText: null, newText: 'hello fixture\n' }] },
   )
   // Turn 64: a multi-hunk edit — two scattered replacements in one file. Named
@@ -836,7 +836,7 @@ function buildAlphaLog(): SessionEvent[] {
     64,
     'edit',
     '{"file_path":"src/config.ts","old_string":"const timeout = 30","new_string":"const timeout = 60"}',
-    '已编辑',
+    'Edited',
     {
       diffs: [
         { path: 'src/config.ts', oldText: 'const timeout = 30', newText: 'const timeout = 60' },
@@ -909,7 +909,7 @@ function buildAlphaLog(): SessionEvent[] {
   toolTurn(
     66,
     'bash',
-    '{"command":"pnpm run check","description":"fixture 终端样本","workdir":"/tmp/fixture/deep/nested"}',
+    '{"command":"pnpm run check","description":"fixture terminal sample","workdir":"/tmp/fixture/deep/nested"}',
     `${TERMINAL_OUTPUT_FIXTURE}\n[exit code: 1]`,
   )
 
@@ -2492,9 +2492,9 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
    */
   const workspaceFileLines = (path: string): string[] => {
     const name = path.slice(path.lastIndexOf('/') + 1)
-    const head = [`# ${name}`, '', 'fixture 模式下的示例文本，用于验收侧栏的文本预览。', '真实构建从工作区读取同名文件。']
+    const head = [`# ${name}`, '', 'Sample text for verifying the sidebar preview in fixture mode.', 'The real application reads the corresponding file from the workspace.']
     return path.includes('demo') || path.includes('huge')
-      ? [...head, ...Array.from({ length: 12_000 }, (_, index) => `第 ${index + 5} 行：用于验收分页与滚动的长文本样本。`)]
+      ? [...head, ...Array.from({ length: 12_000 }, (_, index) => `Line ${index + 5}: long sample text for verifying paging and scrolling.`)]
       : head
   }
   const workspaceFileRemotes = {
@@ -2949,7 +2949,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       append(sessionId, { type: 'step/start', data: { turn, step: 1 } })
       beginAssistant(sessionId, turn, 1)
       pushAssistant(sessionId, { type: 'block-start', index: 0, blockType: 'text' })
-      pushAssistant(sessionId, { type: 'text-delta', index: 0, text: '应撤回的半截回复' })
+      pushAssistant(sessionId, { type: 'text-delta', index: 0, text: 'Partial reply to withdraw' })
     },
     /** Record one retry decision; the next attempt remains in the same step. */
     scheduleModelRetry(id: string, retry = 1, delayMs = 450): void {
@@ -2959,7 +2959,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       if (!scenario.stepStarted) {
         beginAssistant(sessionId, scenario.turn, 1)
         pushAssistant(sessionId, { type: 'block-start', index: 0, blockType: 'text' })
-        pushAssistant(sessionId, { type: 'text-delta', index: 0, text: `第 ${String(retry)} 次应撤回的回复` })
+        pushAssistant(sessionId, { type: 'text-delta', index: 0, text: `Reply ${String(retry)} to withdraw` })
         scenario.stepStarted = true
       }
       const failure = { code: 'TRANSPORT', message: 'connection reset' }
@@ -3013,7 +3013,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       const scenario = retryScenarios.get(sessionId)
       if (scenario === undefined) throw new Error(`fixture: no model retry scenario for ${id}`)
       retryScenarios.delete(sessionId)
-      const completed = '重试后的完整回复'
+      const completed = 'Complete reply after retry'
       beginAssistant(sessionId, scenario.turn, 1)
       pushAssistant(sessionId, { type: 'block-start', index: 0, blockType: 'text' })
       pushAssistant(sessionId, { type: 'text-delta', index: 0, text: completed })
@@ -3395,10 +3395,10 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
           : userText === 'report model'
             ? (() => {
               const selection = modelSelections.get(id)
-              return `当前模型：${selection?.provider ?? 'unknown'}/${selection?.model ?? 'unknown'}`
+              return `Current model: ${selection?.provider ?? 'unknown'}/${selection?.model ?? 'unknown'}`
                   + (selection?.reasoningEffort === undefined ? '' : ` · reasoning effort: ${selection.reasoningEffort}`)
             })()
-            : `回声：${userText}。这是 fixture 的流式回复，用于验证打字机增长与定稿切换。`,
+            : `Echo: ${userText}. This fixture streams a response to verify incremental text and final-message rendering.`,
       )
       return sessionOk({ accepted: true as const })
     },
@@ -3472,7 +3472,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
     agentId: sid('fx-alpha'),
     request: {
       toolName: 'dangerous_tool',
-      reason: 'fixture 常驻审批（可答：批准/拒绝后消失）',
+      reason: 'Fixture approval prompt (dismissed after approval or denial)',
     },
   })
 

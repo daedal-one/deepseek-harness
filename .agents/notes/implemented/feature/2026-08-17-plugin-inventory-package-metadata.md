@@ -12,7 +12,11 @@ The read-only Plugin list identified entries by a shortened Loader module name, 
 
 Installed-package metadata is cached for the Gateway lifetime because installation changes take effect on restart. Enablement and Fiber phase are never cached: every `pluginInventory/list` call reads the current Loader entries and their current fibers directly.
 
-The Plugin list renders description, author, and version on every collapsed card. Localized unavailable copy occupies a missing field, so every row keeps the same information structure. Search includes the available metadata beside module specifier and Loader entry id. Enabled runtime phase is a bordered text label rather than a color-only dot; disclosure still reveals the exact Loader entry id and configuration details.
+The Plugin list renders description, author, and version on every collapsed card. Localized unavailable copy occupies a missing field, so every row keeps the same information structure. Search includes the available metadata beside module specifier and Loader entry id. Disclosure reveals the exact Loader entry id and configuration details.
+
+Preset rows use the same metadata resolver and card renderer. Their composition inventory carries the actual import base: the installed harness for bare names and the owning composition for relative files. The Host consumes this URL without sending it to the browser. Using the preset directory for bare package names would miss the harness dependencies; using the harness for relative files would misidentify preset-owned plugins. Reading an unmounted preset remains a file read and activates no plugins.
+
+A literal composition-row `description` supplies the instance's `purpose`, preferred over the package summary. This lets a reviewer explain its task while other instances of the same delegation package retain their own roles. Blank or non-string metadata is omitted without evaluation. The inventory does not infer descriptions from entry ids, inspect persona prompts, or project plugin configuration. Package description, author, and version remain separate declared facts and all available display metadata participates in search.
 
 ## Alternatives considered
 
@@ -24,4 +28,4 @@ The Plugin list renders description, author, and version on every collapsed card
 
 ## Consequences
 
-The inventory Remote payload is larger by three nullable strings per entry, and the first read performs local manifest lookup. Later reads reuse immutable installed-package metadata while retaining live Loader state. Package authors control the displayed prose through standard manifest fields; a technical or absent description remains visible as authored or explicitly unavailable rather than being rewritten by the Harness.
+The inventory Remote payload is larger by three nullable strings per entry, and the first read performs local manifest lookup. Later reads reuse immutable installed-package metadata while retaining live Loader state. Package authors control the package summary through standard manifest fields; preset authors can supply an instance purpose through literal row metadata. The Harness displays authored text or explicit unavailable copy without generating a description.

@@ -11,7 +11,7 @@ afterEach(() => {
 })
 
 describe('cordisConfigFiles', () => {
-  it('finds Loader YAML without treating translation records as configs', () => {
+  it('finds Loader YAML outside vendored, installed, and assistant-managed directories', () => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-cordis-config-files-'))
     roots.push(root)
     for (const directory of ['.claude', 'apps/cli/config/examples', 'docs', 'node_modules/pkg', 'vendor/pkg']) {
@@ -19,7 +19,7 @@ describe('cordisConfigFiles', () => {
     }
     for (const file of [
       '.claude/hidden.cordis.yml',
-      'docs/cordis-primer.i18n.yaml',
+      'docs/settings.yaml',
       'apps/cli/config/examples/agent.cordis.yaml',
       'apps/cli/config/examples/headless.cordis.yml',
       'node_modules/pkg/hidden.cordis.yml',

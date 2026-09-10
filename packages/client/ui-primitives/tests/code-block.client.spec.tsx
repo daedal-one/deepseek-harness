@@ -80,7 +80,7 @@ describe('CodeBlock', () => {
       expect([...view.container.querySelectorAll('code > .line')].map(line => line.textContent))
         .toEqual(['const first = 1', '', 'const last = 3'])
       expect(view.container.querySelector('pre')!.textContent).toBe(code)
-      await act(async () => { fireEvent.click(view.getByRole('button', { name: '复制' })) })
+      await act(async () => { fireEvent.click(view.getByRole('button', { name: 'Copy' })) })
       expect(writeText).toHaveBeenCalledWith(code)
       await act(async () => { await vi.runOnlyPendingTimersAsync() })
     } finally {

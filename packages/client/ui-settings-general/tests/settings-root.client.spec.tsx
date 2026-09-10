@@ -6,7 +6,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SettingsRootComponentProps } from '../src/client/shell-contract.ts'
 import { SettingsRoot } from '../src/client/SettingsRoot.tsx'
-import { en, zh } from '../src/client/locales.ts'
+import { en, en as copy } from '../src/client/locales.ts'
 
 // Every fixture carries the resource hook the resources plugin merges into GlobalStandardProps.
 const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined, reload: () => {} })) as GlobalStandardProps['useResource']
@@ -49,7 +49,7 @@ function mount({
   ],
 }: {
   wide?: boolean
-  dictionary?: typeof en | typeof zh
+  dictionary?: typeof en
   connectionState?: ConnectionSnapshot
   onboardingActive?: boolean
   rows?: Row[]
@@ -132,8 +132,8 @@ describe('SettingsRoot trigger', () => {
   it.each([
     { column: 'expanded English', wide: true, dictionary: en, name: 'Settings' },
     { column: 'collapsed English', wide: false, dictionary: en, name: 'Settings' },
-    { column: 'expanded Chinese', wide: true, dictionary: zh, name: '设置' },
-    { column: 'collapsed Chinese', wide: false, dictionary: zh, name: '设置' },
+    { column: 'expanded Chinese', wide: true, dictionary: copy, name: 'Settings' },
+    { column: 'collapsed Chinese', wide: false, dictionary: copy, name: 'Settings' },
   ])('uses the locale name and accepts keyboard-style activation for the $column trigger', ({
     wide, dictionary, name,
   }) => {

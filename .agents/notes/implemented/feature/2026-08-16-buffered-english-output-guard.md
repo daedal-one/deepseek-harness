@@ -4,7 +4,7 @@ Status: implemented
 
 ## Problem
 
-Some exact model routes used by coding agents can answer explanatory prose or reasoning in Chinese even when their persona asks for English. Prompting alone does not enforce the user-visible language. Rewriting an already logged assistant message would split durable history from the text the UI displayed and the model later derived. Translation also handles untrusted model output, so it must not expose credentials, reinterpret tool arguments, or silently destroy code and identifiers.
+Some exact model routes used by coding agents can answer explanatory prose or reasoning in another language even when their persona asks for English. Prompting alone does not enforce the user-visible language. Rewriting an already logged assistant message would split durable history from the text the UI displayed and the model later derived. Translation also handles untrusted model output, so it must not expose credentials, reinterpret tool arguments, or silently destroy code and identifiers.
 
 ## Decision
 

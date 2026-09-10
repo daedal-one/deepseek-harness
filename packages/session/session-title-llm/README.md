@@ -42,7 +42,7 @@ Every field is required except the paired route override; there are no library d
 | Key | Default | Meaning |
 |---|---|---|
 | `targetWords` | required | Target word count for non-CJK titles |
-| `targetCjkCharacters` | required | Target character count for Chinese, Japanese, or Korean titles |
+| `targetCjkCharacters` | required | Target character count for CJK-script titles |
 | `maxInputBytes` | required | UTF-8 byte ceiling for the final JSON-framed user prompt |
 | `maxOutputTokens` | required | Auxiliary generation token cap |
 | `timeoutMs` | required | End-to-end deadline within the runtime timer limit |

@@ -23,7 +23,7 @@ import {
   launchWebScaffold, recordFixture, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import {
-  connectFreshWorkspace, newEnglishPage, saveFailureShot, writeComposerDraft, ZH_BROWSER_LOCALE,
+  connectFreshWorkspace, newEnglishPage, saveFailureShot, writeComposerDraft, EN_BROWSER_LOCALE,
 } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/lifecycle-chrome', import.meta.url))
@@ -112,15 +112,15 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
   })
 
   it.skipIf(MODE === 'record')('localizes slash-command descriptions from the browser language', async () => {
-    const zhPage = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
+    const zhPage = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: EN_BROWSER_LOCALE })
     const zhTripwire = watchConsole(zhPage)
     onTestFailed(() => saveFailureShot(zhPage, 'web-e2e-command-menu-zh'))
     try {
       await zhPage.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
       await zhPage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
-      const launcher = zhPage.getByRole('button', { name: '指令' })
+      const launcher = zhPage.getByRole('button', { name: 'Command' })
       await launcher.click()
-      const menu = zhPage.getByRole('listbox', { name: '触发候选建议' })
+      const menu = zhPage.getByRole('listbox', { name: 'Trigger suggestions' })
       await menu.getByRole('option').first().waitFor({ timeout: 10_000 })
       await menu.getByRole('status').waitFor({ state: 'hidden', timeout: 10_000 })
       const snapshot = await captureStableAria(zhPage, '[role="listbox"]', scaffold.workspaceCwd)

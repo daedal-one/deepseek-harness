@@ -15,14 +15,14 @@ Both ends run cordis. The host is a cordis plugin tree; the browser runs a secon
 ```
 ┌─ Host ─────────────────────────┐   ┌─ Browser ─────────────────────────────────────────┐
 │ sessions/agents/SessionLog     │   │ client cordis root ctx                             │
-│ Connection + Gateway: RPC/events│◀─▶│  ├ vendored Loader + ctx.modules（内核，壳静态持有）│
+│ Connection + Gateway: RPC/events│◀─▶│  ├ vendored Loader + ctx.modules (kernel held by the shell)│
 │ webserver:                     │   │  ├ immediately entries: connection/runtime/        │
 │  ├ GET /plugins/<id>/client.js │   │  │   ui-theme/i18n (fetch bundle, pre-fetched at boot) │
 │  └ GET / serving __DSH_BOOT__   │   │  ├ lazy entries: layout/sidebar/                   │
 │                                │   │  │   conversation/trajectory (fetch bundle, on demand) │
-└────────────────────────────────┘   │  ├ ui-renderer（fetch bundle，React 根）       │
+└────────────────────────────────┘   │  ├ ui-renderer (fetch bundle, React root)       │
                                      │  └ session scope ×N (view-driven, lazily created)     │
-                                     │ DOM loading 页 → settled → React UI 一次成型       │
+                                     │ DOM loading page → settled → React UI       │
                                      └────────────────────────────────────────────────────┘
 ```
 

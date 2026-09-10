@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { MarkdownBody, type MarkdownBodyProps } from '../src/client/markdown/MarkdownBody.tsx'
-import { en, zh } from '../src/client/markdown/locales.ts'
+import { en, en as copy } from '../src/client/markdown/locales.ts'
 import type { DocumentContent } from '../src/client/document/contract.ts'
 
 afterEach(cleanup)
@@ -88,10 +88,10 @@ describe('MarkdownBody', () => {
     const value = content([text], true)
     const view = render(<MarkdownBody {...props(value, t)} />)
     expect(view.getByRole('button', { name: 'Copy' })).toBeDefined()
-    dictionary = zh
+    dictionary = copy
     view.rerender(<MarkdownBody {...props(value, t)} />)
-    expect(view.getByRole('button', { name: '复制' })).toBeDefined()
-    expect(view.getByRole('heading', { name: '脚注' })).toBeDefined()
+    expect(view.getByRole('button', { name: 'Copy' })).toBeDefined()
+    expect(view.getByRole('heading', { name: 'Footnotes' })).toBeDefined()
   })
 
   it('renders empty text and leaves non-text deliveries to their selected implementation', () => {

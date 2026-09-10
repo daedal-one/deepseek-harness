@@ -13,7 +13,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { ComposerBlockRegistry } from '../src/client/input/blocks.ts'
 import { InputHub } from '../src/client/input/hub.ts'
 import { ConversationController } from '../src/client/service.ts'
-import { zh } from '../src/client/locales.ts'
+import { en as copy } from '../src/client/locales.ts'
 
 async function bench(maxConcurrentFileUploads = 2) {
   const runtime = await SlotTestRuntime.create()
@@ -37,7 +37,7 @@ async function bench(maxConcurrentFileUploads = 2) {
   })
   // config.input is required (the apply shares its hub with the inject
   // factories); the bench passes its own instance explicitly.
-  const hub = new InputHub(runtime.ctx, makeTranslate(zh, {}))
+  const hub = new InputHub(runtime.ctx, makeTranslate(copy, {}))
   const fiber = runtime.ctx.plugin(ConversationController, {
     input: hub,
     blocks: new ComposerBlockRegistry(),
@@ -474,7 +474,7 @@ describe('ConversationController', () => {
     // No Client Sessions service at all: a bare context lacks the assembled controller.
     const bare = new Context()
     await bare.plugin(ConversationController, {
-      input: new InputHub(bare, makeTranslate(zh, {})),
+      input: new InputHub(bare, makeTranslate(copy, {})),
       blocks: new ComposerBlockRegistry(),
       maxConcurrentFileUploads: 2,
     }).await()
@@ -683,7 +683,7 @@ describe('sendSession submission echo', () => {
       await vi.waitFor(() => {
         expect(b.root.fileUploads.getSnapshot()[attachments[1]!.id]?.status).toBe('ready')
       })
-      await expect(b.root.sendSession(session, '失败', attachments.map(attachment => attachment.id), 'queue'))
+      await expect(b.root.sendSession(session, 'Failed', attachments.map(attachment => attachment.id), 'queue'))
         .resolves.toEqual({ kind: 'error' })
       b.retire.onRetire?.({ reason: 'failed' })
       expect(b.root.resolveDraftAttachments(attachments.map(attachment => attachment.id))).toHaveLength(2)
@@ -726,8 +726,8 @@ describe('sendSession submission echo', () => {
     vi.stubGlobal('requestAnimationFrame', undefined)
     try {
       const session = b.runtime.sessions.binding('s1')!.session
-      await expect(b.root.sendSession(session, '纯文本', [], 'queue')).resolves.toEqual({ kind: 'success' })
-      expect(b.prompt).toHaveBeenCalledWith([{ type: 'text', text: '纯文本' }], 'queue', undefined, 'req-echo')
+      await expect(b.root.sendSession(session, 'Plain text', [], 'queue')).resolves.toEqual({ kind: 'success' })
+      expect(b.prompt).toHaveBeenCalledWith([{ type: 'text', text: 'Plain text' }], 'queue', undefined, 'req-echo')
     } finally {
       vi.unstubAllGlobals()
       b.restore()
@@ -763,9 +763,9 @@ describe('sendSession submission echo', () => {
       },
     })
     const prompt = vi.spyOn(session, 'prompt').mockResolvedValue({ ok: true, value: { accepted: true } })
-    await expect(b.root.sendSession(session, '继续', [], 'queue')).resolves.toEqual({ kind: 'success' })
+    await expect(b.root.sendSession(session, 'Continue', [], 'queue')).resolves.toEqual({ kind: 'success' })
     expect(beginSubmission).not.toHaveBeenCalled()
-    expect(prompt).toHaveBeenCalledWith([{ type: 'text', text: '继续' }], 'queue', undefined)
+    expect(prompt).toHaveBeenCalledWith([{ type: 'text', text: 'Continue' }], 'queue', undefined)
     await b.runtime.dispose()
   })
 })

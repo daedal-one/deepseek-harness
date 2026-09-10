@@ -14,9 +14,6 @@ import type {
 import { SubagentModelSelectionCardController } from '../src/client/subagent-model-selection-card-controller.ts'
 import { apply as hostApply } from '../src/index.ts'
 
-// These specs assert the shipped Chinese copy. The lane has no jsdom `window`,
-// so browser-language detection never runs and a fresh LocaleRuntime opens on
-// FALLBACK_LOCALE (en); bench stages zh explicitly on the locale instead.
 
 /**
  * @param served - namespaces the Host describes; omitted answers a failed read,
@@ -26,7 +23,7 @@ async function bench(served?: string[]) {
   const ctx = new Context()
   await ctx.plugin(SlotRegistry).await()
   const locale = new LocaleRuntime(ctx)
-  locale.setLocale('zh')
+  locale.setLocale('en')
   ctx.provide('locale', locale)
   const describeCredentials = vi.fn(() => Promise.resolve({
     ok: false, error: new RemoteError('gateway/internal', 'no provider', {}),

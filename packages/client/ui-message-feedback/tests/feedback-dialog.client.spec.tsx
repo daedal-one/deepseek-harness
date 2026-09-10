@@ -11,15 +11,15 @@ import { useSyncExternalStore } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
+import { en as commonCopy } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import { FEEDBACK_CATEGORIES } from '@deepseek-ai/dsh-command-feedback'
 import { FeedbackDialog } from '../src/client/FeedbackDialog.tsx'
 import type { FeedbackDialogState } from '../src/client/dialog.ts'
-import { en, zh } from '../src/client/locales.ts'
+import { en, en as copy } from '../src/client/locales.ts'
 
 afterEach(cleanup)
 
-const t = makeTranslate(zh, commonZh)
+const t = makeTranslate(copy, commonCopy)
 
 /** Render the entry over a fixed state and recording verbs. */
 function mount(overrides: Partial<FeedbackDialogState> = {}) {
@@ -41,7 +41,7 @@ function mount(overrides: Partial<FeedbackDialogState> = {}) {
 
 describe('FeedbackDialog', () => {
   it('discloses conversation-log inclusion in both supported locales', () => {
-    expect(zh['dialog.hint']).toBe('填写详情以帮助我们改进体验，提交内容会包括当前对话的日志')
+    expect(copy['dialog.hint']).toBe('Add details to help us improve. Your submission will include the current conversation log.')
     expect(en['dialog.hint']).toBe('Add details to help us improve. Your submission will include the current conversation log.')
   })
 
@@ -55,20 +55,20 @@ describe('FeedbackDialog', () => {
   it('shows every category, the detail box with the hint, and an enabled Submit for an empty draft', () => {
     const ui = mount()
 
-    const dialog = ui.getByRole('dialog', { name: zh['dialog.title'] })
+    const dialog = ui.getByRole('dialog', { name: copy['dialog.title'] })
     expect(dialog).toBeTruthy()
-    const chips = ui.getByRole('group', { name: zh['dialog.categories'] }).querySelectorAll('button')
+    const chips = ui.getByRole('group', { name: copy['dialog.categories'] }).querySelectorAll('button')
     expect([...chips].map(chip => chip.textContent)).toEqual(
-      FEEDBACK_CATEGORIES.map(category => zh[`category.${category}`]),
+      FEEDBACK_CATEGORIES.map(category => copy[`category.${category}`]),
     )
-    expect(ui.getByLabelText(zh['dialog.detail']).getAttribute('placeholder')).toBe(zh['dialog.hint'])
-    expect(ui.getByRole('button', { name: commonZh.submit }).hasAttribute('disabled')).toBe(false)
+    expect(ui.getByLabelText(copy['dialog.detail']).getAttribute('placeholder')).toBe(copy['dialog.hint'])
+    expect(ui.getByRole('button', { name: commonCopy.submit }).hasAttribute('disabled')).toBe(false)
   })
 
   it('selects a chip, and clears it when the selected chip is clicked again', () => {
     const ui = mount({ category: 'task-result' })
 
-    const chips = ui.getByRole('group', { name: zh['dialog.categories'] }).querySelectorAll('button')
+    const chips = ui.getByRole('group', { name: copy['dialog.categories'] }).querySelectorAll('button')
     expect(chips[0]?.getAttribute('aria-pressed')).toBe('true')
     expect(chips[1]?.getAttribute('aria-pressed')).toBe('false')
 
@@ -81,35 +81,35 @@ describe('FeedbackDialog', () => {
   it('forwards typing, submits, and closes through the injected verbs', () => {
     const ui = mount({ text: 'draft' })
 
-    fireEvent.change(ui.getByLabelText(zh['dialog.detail']), { target: { value: 'draft more' } })
+    fireEvent.change(ui.getByLabelText(copy['dialog.detail']), { target: { value: 'draft more' } })
     expect(ui.edit).toHaveBeenCalledWith({ text: 'draft more' })
 
-    fireEvent.click(ui.getByRole('button', { name: commonZh.submit }))
+    fireEvent.click(ui.getByRole('button', { name: commonCopy.submit }))
     expect(ui.submit).toHaveBeenCalledTimes(1)
 
-    fireEvent.click(ui.getByRole('button', { name: commonZh.close }))
+    fireEvent.click(ui.getByRole('button', { name: commonCopy.close }))
     expect(ui.dismiss).toHaveBeenCalledTimes(1)
   })
 
   it('disables Submit and the chips while a submission is in flight', () => {
     const ui = mount({ submitting: true })
 
-    expect(ui.getByRole('button', { name: commonZh.submitting }).hasAttribute('disabled')).toBe(true)
-    const chips = ui.getByRole('group', { name: zh['dialog.categories'] }).querySelectorAll('button')
+    expect(ui.getByRole('button', { name: commonCopy.submitting }).hasAttribute('disabled')).toBe(true)
+    const chips = ui.getByRole('group', { name: copy['dialog.categories'] }).querySelectorAll('button')
     expect([...chips].every(chip => chip.hasAttribute('disabled'))).toBe(true)
   })
 
   it('renders the conflict and size copy for their codes and the generic copy otherwise', () => {
     const conflict = mount({ failure: 'version-conflict' })
-    expect(conflict.getByRole('status').textContent).toBe(zh['error.conflict'])
+    expect(conflict.getByRole('status').textContent).toBe(copy['error.conflict'])
     cleanup()
 
     const oversized = mount({ failure: 'note-too-large' })
-    expect(oversized.getByRole('status').textContent).toBe(zh['error.noteTooLarge'])
+    expect(oversized.getByRole('status').textContent).toBe(copy['error.noteTooLarge'])
     cleanup()
 
     const other = mount({ failure: 'session-not-found' })
-    expect(other.getByRole('status').textContent).toBe(zh['error.generic'])
+    expect(other.getByRole('status').textContent).toBe(copy['error.generic'])
   })
 
   it('retires the toast when the entry unmounts, so a Session switch does not replay it', () => {
@@ -125,7 +125,7 @@ describe('FeedbackDialog', () => {
     try {
       const ui = mount({ target: null, toast: 3 })
 
-      expect(ui.getByRole('alert').textContent).toBe(zh['toast.recorded'])
+      expect(ui.getByRole('alert').textContent).toBe(copy['toast.recorded'])
       act(() => { vi.advanceTimersByTime(4000) })
       expect(ui.dismissToast).toHaveBeenCalledWith(3)
     } finally {

@@ -1,6 +1,7 @@
 - listitem:
-  - button "tool-subagent, tool-subagent, 已启用":
+  - button "tool-subagent, tool-subagent, Enabled":
     - strong: tool-subagent
-    - text: 已启用
+    - text: Enabled
     - img
+    - text: "Lets the agent delegate tasks to a configured specialist and collect its result, with optional background execution. Author: Not provided Version: 0.1.5-alpha.2"
     - code: tool-subagent

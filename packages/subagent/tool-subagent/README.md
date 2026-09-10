@@ -25,6 +25,8 @@ Use this package to give an agent a named tool that delegates work to a configur
 
 Mount one instance per delegation target, each with a distinct `toolName`. The tool exists exactly while its provider does, so sibling load order and provider reloads never strand it.
 
+When composing a specialist in an agent preset, add a literal row `description` to explain its role in Settings. This is display metadata; the model-facing tool description still comes from the provider and tool configuration.
+
 ### Minimal configuration
 
 Load the subagent service, an in-process or remote backend, and this tool; then name the provider. This composition exposes a `subagent` tool that delegates to the `spawn` backend:

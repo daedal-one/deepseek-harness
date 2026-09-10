@@ -19,7 +19,7 @@ import { SessionSeq, type SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import { createChatStore } from '../src/client/stores.ts'
 
-usePinnedBrowserLanguages('zh-CN')
+usePinnedBrowserLanguages('en-US')
 
 const ROOT = 'root-1' as SessionId
 const ATTACHMENT = {

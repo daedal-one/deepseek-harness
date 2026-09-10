@@ -266,7 +266,7 @@ const UNINSTALL_ROOTS = [
  * Parse `reg.exe query <root> /s` output into per-subkey string values.
  * `reg.exe` prints one key path line per subkey followed by indented value
  * lines; the value-name/type/data columns are matched by the `REG_*` type
- * token because the default-value marker localizes (`(Default)`, `(默认)`).
+ * token because the default-value marker localizes (`(Default)` or another localized label).
  * @param dump - raw `reg.exe` stdout.
  * @returns subkey path to its `REG_SZ`/`REG_EXPAND_SZ` values by value name
  *   (the default value under the name `(Default)` regardless of locale).

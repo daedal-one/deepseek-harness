@@ -18,7 +18,7 @@ import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { launchWebScaffold, watchConsole, type WebScaffold } from './scaffold.ts'
-import { ZH_BROWSER_LOCALE, connectFreshWorkspaceZh, saveFailureShot } from './support.ts'
+import { EN_BROWSER_LOCALE, connectFreshWorkspace, saveFailureShot } from './support.ts'
 
 /** Points the shipped shared Agent default at this scenario's own route. */
 const OVERLAY = fileURLToPath(new URL('./default-model.overlay.yml', import.meta.url))
@@ -78,13 +78,13 @@ describe('web e2e: the composer model switch is the default for later sessions',
       },
     })
     browser = await chromium.launch()
-    page = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
+    page = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: EN_BROWSER_LOCALE })
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
     // The composer's seats only exist once a workspace is connected: without
     // one the input is the locked placeholder and no session scope is open.
-    await connectFreshWorkspaceZh(page, scaffold.workspaceCwd)
+    await connectFreshWorkspace(page, scaffold.workspaceCwd)
   }, 120_000)
 
   afterAll(async () => {
@@ -138,7 +138,7 @@ describe('web e2e: the composer model switch is the default for later sessions',
     await scaffold.ctx.settings.replace('llm-pi-ai', { providers: {} })
 
     await expect.poll(async () => box.isEnabled(), { timeout: 15_000 }).toBe(false)
-    expect(await box.getAttribute('data-placeholder')).toBe('当前模型不可用，请先选择模型')
+    expect(await box.getAttribute('data-placeholder')).toBe('This model is unavailable — select one to continue')
 
     // The block is an affordance; the refusal is the Host's. A client that
     // never disabled anything still cannot start a turn on a dead route.

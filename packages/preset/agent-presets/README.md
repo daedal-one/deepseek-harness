@@ -120,6 +120,8 @@ This section explains the design behind the roster and the standing mount; obser
 
 ### The composition inventory
 
+Composition rows may declare a literal `description` beside `name` and `config` to explain the configured instance in the Plugin list. The inventory trims non-empty strings into `purpose` and omits blank or non-string metadata without evaluating it. Rows also identify their owning module resolution URL for Host-side package lookup; plugin config and persona prompts are not inventory fields.
+
 `compositionInventory()` answers plugin-listing surfaces with each preset's flattened rows beside its roster identity (id, trust, display name, default marking): a preset with a live standing mount — matched within this runtime's own root, so a second Cordis runtime in the same process never answers for it — answers from its newest generation's Loader entries, even when its file has since broken, because the mount is what sessions run and the broken verdict applies only to a preset nothing composed; one never composed since boot answers from its composition file with `!!js` disabled gates evaluated against the Loader context, so both answers reflect the same host. Reading never mounts a preset — a settings page listing every composition activates none of them. A gate the evaluator refuses stays `'conditional'`, and a file that stopped reading as a composition between discovery's health verdict and the row read is reported broken with the raced reason rather than dropped. The `./display` subpath exports the `presetDisplayText` fold mapping shipped preset ids to their dictionary copy keys; it has no imports, browser bundles inline it, and it is the one home for which shipped id carries which copy.
 
 ### The mount audit

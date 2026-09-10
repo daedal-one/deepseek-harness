@@ -3,8 +3,8 @@
 /** Dictionary namespace owned by this plugin. */
 export const NS = 'schedule.catalog'
 
-/** Simplified Chinese dictionary (the key-set source of truth). */
-export const zh = {
+/** English copy for this feature. */
+export const en = {
   'trigger.one': '{count} reminder',
   'trigger.other': '{count} reminders',
   'list.aria': 'Active reminders',
@@ -23,29 +23,7 @@ export const zh = {
   'relative.now': 'Due now',
   'relative.future': 'in {value} {unit}',
   'relative.overdue': '{value} {unit} overdue',
-} as const
-
-/** English dictionary, key-identical to the Chinese source of truth. */
-export const en: Record<ScheduleCatalogKey, string> = {
-  'trigger.one': '{count} reminder',
-  'trigger.other': '{count} reminders',
-  'list.aria': 'Active reminders',
-  'status.scheduled': 'Scheduled',
-  'status.overdue': 'Overdue',
-  'frequency.once': 'Once',
-  'frequency.every': 'Every {value} {unit}',
-  'unit.day.one': 'day',
-  'unit.day.other': 'days',
-  'unit.hour.one': 'hour',
-  'unit.hour.other': 'hours',
-  'unit.minute.one': 'minute',
-  'unit.minute.other': 'minutes',
-  'unit.second.one': 'second',
-  'unit.second.other': 'seconds',
-  'relative.now': 'Due now',
-  'relative.future': 'in {value} {unit}',
-  'relative.overdue': '{value} {unit} overdue',
-}
+} satisfies Record<string, string>
 
 /** Key domain of the Schedule catalog namespace. */
-export type ScheduleCatalogKey = keyof typeof zh
+export type ScheduleCatalogKey = keyof typeof en

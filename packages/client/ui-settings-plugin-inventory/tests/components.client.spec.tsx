@@ -17,6 +17,8 @@ const t = ((key: PluginInventoryLocaleKey, params?: Record<string, string>): str
     en[key],
   )) as PluginInventorySettingsTabProps['t']
 
+const UNAVAILABLE_METADATA = { author: null, description: null, version: null }
+
 function props(
   list: PluginInventorySettingsTabInjected['list'],
   presetName: PluginInventorySettingsTabInjected['presetName'] = preset => preset.name ?? preset.id,
@@ -43,7 +45,7 @@ const SNAPSHOT = {
     {
       id: 'standard',
       trust: 'system',
-      name: '标准模式',
+      name: 'Standard mode',
       isDefault: true,
       rows: [
         { entryId: 'bash', moduleName: '@deepseek-ai/dsh-tool-bash', enabled: true, fiberPhase: 'active' },
@@ -88,10 +90,10 @@ describe('PluginInventorySettingsTab', () => {
     const view = await renderReady()
 
     const switcher = screen.getByRole('button', { name: en.switcherLabel })
-    expect(switcher.textContent).toBe('标准模式 (default)')
+    expect(switcher.textContent).toBe('Standard mode (default)')
     fireEvent.click(switcher)
     expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual([
-      '标准模式 (default)',
+      'Standard mode (default)',
       'ptc',
       '坏预设 (failed to load)',
     ])
@@ -102,9 +104,9 @@ describe('PluginInventorySettingsTab', () => {
 
     // Only the preset group lists rows while the global plane stays collapsed.
     expect(screen.getAllByRole('listitem')).toHaveLength(6)
-    expect(screen.getAllByText(en.enabledTag)).toHaveLength(3)
+    expect(screen.getAllByText(en.enabledTag, { selector: 'span' })).toHaveLength(3)
     expect(screen.getByText(en.conditionalTag)).toBeTruthy()
-    expect(screen.getByText(en.disabledTag)).toBeTruthy()
+    expect(screen.getByText(en.disabledTag, { selector: 'span' })).toBeTruthy()
     expect(screen.getByText(en.failedTag)).toBeTruthy()
     expect(screen.getByRole('img', { name: 'Running' })).toBeTruthy()
     // No live fiber, no dot: file-state rows carry only their enablement tag.
@@ -117,7 +119,7 @@ describe('PluginInventorySettingsTab', () => {
     // A preset row expands into its provenance facts.
     fireEvent.click(screen.getByRole('button', { name: 'pwsh, pwsh, Conditional' }))
     expect(screen.getByText(en.fromPreset)).toBeTruthy()
-    expect(screen.getByText('标准模式')).toBeTruthy()
+    expect(screen.getByText('Standard mode')).toBeTruthy()
     expect(screen.getByText(en.condition)).toBeTruthy()
     expect(screen.getByText('process.platform === \'win32\'')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'pwsh, pwsh, Conditional' }))
@@ -126,7 +128,7 @@ describe('PluginInventorySettingsTab', () => {
     // A failed preset row names its runtime state instead of a condition.
     fireEvent.click(screen.getByRole('button', { name: 'crashy, crashy, Failed' }))
     expect(screen.getByText(en.runtime)).toBeTruthy()
-    expect(screen.getByText('Failed to start')).toBeTruthy()
+    expect(screen.getByText('Failed to start', { selector: 'dd' })).toBeTruthy()
 
     // A row declaring no id has no Loader identity line, only its module.
     fireEvent.click(screen.getByRole('button', { name: 'anonymous, Enabled' }))
@@ -144,8 +146,8 @@ describe('PluginInventorySettingsTab', () => {
         trust: 'user',
         isDefault: true,
         rows: [
-          { entryId: 'tool-subagent-primary', moduleName: '@deepseek-ai/dsh-tool-subagent', enabled: true, fiberPhase: null },
-          { entryId: longId, moduleName: '@deepseek-ai/dsh-tool-subagent', enabled: false, fiberPhase: null },
+          { ...UNAVAILABLE_METADATA, entryId: 'tool-subagent-primary', moduleName: '@deepseek-ai/dsh-tool-subagent', enabled: true, fiberPhase: null },
+          { ...UNAVAILABLE_METADATA, entryId: longId, moduleName: '@deepseek-ai/dsh-tool-subagent', enabled: false, fiberPhase: null },
         ],
       }],
     })
@@ -154,10 +156,10 @@ describe('PluginInventorySettingsTab', () => {
       .getAttribute('aria-expanded')).toBe('false')
     const secondary = screen.getByRole('button', { name: `tool-subagent, ${longId}, Disabled` })
     expect(secondary.getAttribute('aria-expanded')).toBe('false')
-    expect(secondary.children).toHaveLength(2)
     expect(secondary.children[0]?.textContent).toContain('tool-subagent')
     expect(secondary.children[0]?.textContent).toContain('Disabled')
-    expect(secondary.children[1]?.textContent).toBe(subtitle)
+    expect(secondary.querySelector('code')?.textContent).toBe(subtitle)
+    expect(secondary.textContent).toContain(en.descriptionUnavailable)
     expect(screen.getByTitle(longId).textContent).toBe(subtitle)
 
     fireEvent.change(screen.getByRole('searchbox', { name: en.search }), { target: { value: 'include:agent-presets:tool-subagent-secondary' } })
@@ -184,15 +186,15 @@ describe('PluginInventorySettingsTab', () => {
     fireEvent.click(screen.getByRole('button', { name: 'tool-bash, bash-host, Enabled via presets' }))
     expect(screen.getByText(en.presetProvidedDetail)).toBeTruthy()
     expect(screen.getByText(en.enabledIn)).toBeTruthy()
-    expect(screen.getByText('标准模式 · ptc')).toBeTruthy()
+    expect(screen.getByText('Standard mode · ptc')).toBeTruthy()
 
     // The failed global card reports its runtime state.
     fireEvent.click(screen.getByRole('button', { name: 'telemetry, telemetry, Failed' }))
-    expect(screen.getByText('Failed to start')).toBeTruthy()
+    expect(screen.getByText('Failed to start', { selector: 'dd' })).toBeTruthy()
 
     // An enabled entry with no live fiber says so in its details, dot-free.
     fireEvent.click(screen.getByRole('button', { name: 'unobserved-name, unobserved, Enabled' }))
-    expect(screen.getByText('Not running')).toBeTruthy()
+    expect(screen.getByText('Not running', { selector: 'dd' })).toBeTruthy()
 
     // A disabled row outside every preset stays plainly disabled.
     fireEvent.click(screen.getByRole('button', { name: 'dormant, dormant, Disabled' }))
@@ -277,7 +279,7 @@ describe('PluginInventorySettingsTab', () => {
     fireEvent.click(screen.getByRole('button', { name: 'tool-bash, bash-host, Enabled via presets' }))
     fireEvent.click(screen.getByRole('button', { name: en.viewInPreset }))
     expect(screen.getByRole('button', { name: en.switcherLabel }).textContent)
-      .toBe('标准模式 (default)')
+      .toBe('Standard mode (default)')
   })
 
   it('searches across scopes and points at matches in other presets', async () => {
@@ -338,13 +340,50 @@ describe('PluginInventorySettingsTab', () => {
         id: 'solo',
         trust: 'user',
         isDefault: false,
-        rows: [{ entryId: 'one', moduleName: '@fixture/one', enabled: true, fiberPhase: null }],
+        rows: [{ ...UNAVAILABLE_METADATA, entryId: 'one', moduleName: '@fixture/one', enabled: true, fiberPhase: null }],
       }],
     })
 
     expect(screen.queryByRole('button', { name: (name: string) => name.startsWith(en.globalTitle) })).toBeNull()
     expect(screen.queryByText(en.empty)).toBeNull()
     expect(screen.getAllByRole('listitem')).toHaveLength(1)
+  })
+
+  it('shows preset purpose before disclosure and searches purpose and package metadata', async () => {
+    await renderReady({
+      entries: [],
+      agentPresets: [{
+        id: 'review', trust: 'user', isDefault: true,
+        rows: [
+          {
+            entryId: 'reviewer', moduleName: '@fixture/specialist', enabled: true, fiberPhase: 'active',
+            purpose: 'Checks changes against the original request.', description: 'Delegates tasks.',
+            author: 'Example Author', version: '2.4.1',
+          },
+          {
+            ...UNAVAILABLE_METADATA, entryId: 'helper', moduleName: '@fixture/specialist', enabled: false,
+            fiberPhase: null, description: 'Delegates tasks.',
+          },
+          { ...UNAVAILABLE_METADATA, entryId: 'unknown', moduleName: '@fixture/unknown', enabled: true, fiberPhase: null },
+        ],
+      }],
+    })
+    const reviewer = screen.getByRole('button', { name: 'specialist, reviewer, Enabled' })
+    expect(reviewer.getAttribute('aria-expanded')).toBe('false')
+    expect(reviewer.textContent).toContain('Checks changes against the original request.')
+    expect(reviewer.textContent).toContain('Example Author')
+    expect(reviewer.textContent).toContain('2.4.1')
+    expect(reviewer.textContent).not.toContain('Delegates tasks.')
+    expect(screen.getByText('Delegates tasks.')).toBeTruthy()
+    expect(screen.getByText(en.descriptionUnavailable)).toBeTruthy()
+    const search = screen.getByRole('searchbox', { name: en.search })
+    for (const value of ['original request', 'example author', '2.4.1']) {
+      fireEvent.change(search, { target: { value } })
+      expect(screen.getAllByRole('listitem')).toHaveLength(1)
+      expect(screen.getByRole('button', { name: 'specialist, reviewer, Enabled' })).toBeTruthy()
+    }
+    fireEvent.change(search, { target: { value: 'delegates tasks' } })
+    expect(screen.getAllByRole('listitem')).toHaveLength(2)
   })
 
   it('shows a generic failure and retries into the empty state', async () => {

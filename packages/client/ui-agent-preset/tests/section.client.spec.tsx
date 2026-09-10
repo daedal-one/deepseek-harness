@@ -493,7 +493,7 @@ describe('a long card description', () => {
     clamp(true)
     vi.useFakeTimers()
     try {
-      renderSection({ rows: [{ id: 'zh', trust: 'user', isDefault: false, name: 'Chinese assistant', description: LONG }] })
+      renderSection({ rows: [{ id: 'zh', trust: 'user', isDefault: false, name: 'Custom assistant', description: LONG }] })
 
       fireEvent.mouseEnter(within(rowFor('zh')).getByText(LONG))
       act(() => { vi.advanceTimersByTime(400) })
@@ -508,7 +508,7 @@ describe('a long card description', () => {
     clamp(false)
     vi.useFakeTimers()
     try {
-      renderSection({ rows: [{ id: 'zh', trust: 'user', isDefault: false, name: 'Chinese assistant', description: 'A short description.' }] })
+      renderSection({ rows: [{ id: 'zh', trust: 'user', isDefault: false, name: 'Custom assistant', description: 'A short description.' }] })
 
       fireEvent.mouseEnter(within(rowFor('zh')).getByText('A short description.'))
       act(() => { vi.advanceTimersByTime(400) })

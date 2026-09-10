@@ -1,21 +1,13 @@
-/** Markdown implementation labels and primitive chrome. */
-export const zh = {
-  'viewer.label': 'Markdown',
-  'code.copy': 'Copy',
-  'code.copied': 'Copied',
-  'footnotes': 'Footnotes',
-} satisfies Record<string, string>
-
 /** Markdown namespace keys. */
-export type MarkdownPreviewKey = keyof typeof zh
+export type MarkdownPreviewKey = keyof typeof en
 
-/** English labels, paired with the Chinese key set. */
+/** English labels for the Markdown preview. */
 export const en = {
   'viewer.label': 'Markdown',
   'code.copy': 'Copy',
   'code.copied': 'Copied',
   'footnotes': 'Footnotes',
-} satisfies Record<MarkdownPreviewKey, string>
+} satisfies Record<string, string>
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {

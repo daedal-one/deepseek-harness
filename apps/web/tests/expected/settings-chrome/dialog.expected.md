@@ -1,50 +1,53 @@
-- dialog "设置":
+- dialog "Settings":
   - navigation:
-    - text: 设置
-    - button "通用设置":
+    - text: Settings
+    - button "General":
       - img
-      - text: 通用设置
-    - button "模型":
+      - text: General
+    - button "Models":
       - img
-      - text: 模型
-    - button "插件":
+      - text: Models
+    - button "Plugins":
       - img
-      - text: 插件
-    - button "Agent 预设":
+      - text: Plugins
+    - button "Agent presets":
       - img
-      - text: Agent 预设
-  - button "打开配置文件"
-  - button "关闭":
+      - text: Agent presets
+    - button "Agents":
+      - img
+      - text: Agents
+  - button "Open configuration file"
+  - button "Close":
     - img
-    - text: 关闭
-  - text: 权限 选择新会话的默认权限模式
-  - button "工作区内修改":
-    - text: 工作区内修改
+    - text: Close
+  - text: Permission Choose the default permission mode for new sessions
+  - button "Workspace Write":
+    - text: Workspace Write
     - img
-  - text: 语言
-  - button "中文":
-    - text: 中文
+  - text: Language
+  - button "English":
+    - text: English
     - img
-  - text: 外观
-  - button "浅色":
+  - text: Appearance
+  - button "Light":
     - img
-    - text: 浅色
-  - button "深色":
+    - text: Light
+  - button "Dark":
     - img
-    - text: 深色
-  - button "跟随系统" [pressed]:
+    - text: Dark
+  - button "System" [pressed]:
     - img
-    - text: 跟随系统
-  - text: 字号大小 仅影响会话内容的字号 14
-  - button "增大字号":
+    - text: System
+  - text: Font size Only affects conversation content 14
+  - button "Increase font size":
     - img
-  - button "减小字号":
+  - button "Decrease font size":
     - img
-  - text: px 对话显示 控制已完成轮次的过程内容
-  - button "紧凑":
-    - text: 紧凑
+  - text: px Conversation display Controls process content in completed turns
+  - button "Compact":
+    - text: Compact
     - img
-  - text: 繁忙时的发送行为 智能体运行时 Enter 键和发送按钮的行为；Cmd/Ctrl+Enter 使用另一行为
-  - button "排队发送":
-    - text: 排队发送
+  - text: Send behavior while busy What Enter and the Send button do while the agent is running; Cmd/Ctrl+Enter uses the other behavior
+  - button "Queue":
+    - text: Queue
     - img

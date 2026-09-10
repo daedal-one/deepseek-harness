@@ -37,8 +37,8 @@ const PRODUCT_NAMES = {
   'app.konsole': 'Konsole',
 } as const
 
-/** Simplified Chinese dictionary (the key-set source of truth). */
-export const zh = {
+/** English copy for this feature. */
+export const en = {
   'open.title': 'Open workspace in {app}',
   'open.tooltip': 'Open locally',
   'open.error': 'Failed to open',
@@ -49,21 +49,7 @@ export const zh = {
   'app.explorer': 'File Explorer',
   'app.filemanager': 'Files',
   'app.terminal': 'Terminal',
-} as const
+} satisfies Record<string, string>
 
-/** English dictionary, key-identical to the Chinese source of truth. */
-export const en: Record<OpenInAppKey, string> = {
-  'open.title': 'Open workspace in {app}',
-  'open.tooltip': 'Open locally',
-  'open.error': 'Failed to open',
-  'menu.toggle': 'Choose an app to open in',
-  'menu.aria': 'Open in',
-  ...PRODUCT_NAMES,
-  'app.finder': 'Finder',
-  'app.explorer': 'File Explorer',
-  'app.filemanager': 'Files',
-  'app.terminal': 'Terminal',
-}
-
-/** Key domain of the `open-in-app` namespace (zh is the source of truth). */
-export type OpenInAppKey = keyof typeof zh
+/** Typed copy keys for this feature. */
+export type OpenInAppKey = keyof typeof en

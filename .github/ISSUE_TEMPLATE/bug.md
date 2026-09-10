@@ -6,20 +6,20 @@ type: Bug
 
 ## Summary
 
-<!-- 简要说明发生了什么错误，以及受影响的用户或场景。 -->
+<!-- Summarize the error and the affected users or scenarios. -->
 
 ## Reproduction
 
-<!-- 列出能稳定触发问题的最小步骤、输入或代码。 -->
+<!-- List the smallest reproducible steps, input, or code. -->
 
 ## Current behavior
 
-<!-- 说明实际结果，并附上必要的错误信息、日志或截图。 -->
+<!-- Describe the actual result and include relevant errors, logs, or screenshots. -->
 
 ## Expected behavior
 
-<!-- 说明正确结果。 -->
+<!-- Describe the expected result. -->
 
 ## Environment
 
-<!-- 说明相关版本、平台、配置或运行条件。 -->
+<!-- Include relevant versions, platform, configuration, and runtime conditions. -->

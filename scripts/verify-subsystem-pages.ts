@@ -54,7 +54,7 @@ function subsystemLinks(source: string): string[] {
     if (node.type !== 'link') return
     const match = /^\.\.\/\.\.\/docs\/subsystems\/([^/#?]+\.md)(?:#[^?#]*)?$/.exec(node.url)
     const page = match?.[1]
-    if (page !== undefined && page !== 'README.md' && !page.endsWith('.zh.md')) links.add(`docs/subsystems/${page}`)
+    if (page !== undefined && page !== 'README.md') links.add(`docs/subsystems/${page}`)
   })
   return [...links].sort()
 }

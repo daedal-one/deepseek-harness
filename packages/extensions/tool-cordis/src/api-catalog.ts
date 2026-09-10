@@ -3822,7 +3822,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'AgentPresetCompositionRow',
-    declaration: 'export interface AgentPresetCompositionRow {\n    readonly entryId: string | null;\n    readonly moduleName: string;\n    readonly enabled: CompositionRowEnablement;\n    readonly condition?: string;\n    readonly fiberState?: FiberState;\n}',
+    declaration: 'export interface AgentPresetCompositionRow {\n    readonly entryId: string | null;\n    readonly moduleName: string;\n    readonly baseUrl?: string;\n    readonly purpose?: string;\n    readonly enabled: CompositionRowEnablement;\n    readonly condition?: string;\n    readonly fiberState?: FiberState;\n}',
   },
   {
     name: 'AgentPresetDirectoryOpenValue',

@@ -44,7 +44,6 @@ description: Use when reviewing a pull request in the deepseek-harness repo — 
 - **Invariant lifecycle and negative controls:** verify candidate observations are rejected before publication where possible, session-backed checks reconstruct durable history after late loading or HMR, and a deliberately invalid case fails through the real runner for the intended rule.
 - **Implemented Agent Notes match shipped reality:** when a PR implements a proposed Agent Note, move and rewrite it as present-tense shipped state in the same diff, then verify paths, names, and mechanisms against the implementation.
 - **Transcript changes:** editor-visible or model-visible changes update snapshots or explain why no snapshot applies. Review expected-output diffs as behavior changes, not formatting noise.
-- **Bilingual changes:** compare meaning and terminology on both sides; a green pairing hash does not prove translation quality.
 
 ## Reporting findings
 

@@ -4,15 +4,15 @@ import { act, cleanup, createEvent, fireEvent, render, screen } from '@testing-l
 import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
+import { en as commonCopy } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import type { RowDragProps } from '../src/client/rows/Rows.tsx'
 import { ProjectRowItem, SearchResultItem, SessionNodeItem } from '../src/client/rows/Rows.tsx'
 import type { GroupNode, SearchResultNode, SessionNode } from '../src/client/tree.ts'
-import { zh } from '../src/client/locales.ts'
+import { en as copy } from '../src/client/locales.ts'
 
 afterEach(cleanup)
 
-const t = makeTranslate(zh, commonZh) as never
+const t = makeTranslate(copy, commonCopy) as never
 
 const sid = (id: string) => id as SessionId
 const wid = (id: string) => id as WorkspaceId
@@ -106,9 +106,9 @@ describe('workspace browser rows', () => {
 
     const row = screen.getByRole('treeitem')
     const title = screen.getByText('Scheduled result')
-    const indicator = screen.getByRole('img', { name: '有活动定时任务' })
+    const indicator = screen.getByRole('img', { name: 'Has active scheduled task' })
     expect(title.nextElementSibling).toBe(indicator)
-    expect(indicator.getAttribute('title')).toBe('有活动定时任务')
+    expect(indicator.getAttribute('title')).toBe('Has active scheduled task')
     expect(indicator.getAttribute('tabindex')).toBeNull()
     expect(row.querySelectorAll('button')).toHaveLength(0)
 
@@ -182,11 +182,11 @@ describe('workspace browser rows', () => {
 
     const assertIndicator = (): HTMLElement => {
       const title = screen.getByText('Scheduled Session')
-      const time = screen.getByText('刚刚')
-      const indicator = screen.getByRole('img', { name: '有活动定时任务' })
+      const time = screen.getByText('now')
+      const indicator = screen.getByRole('img', { name: 'Has active scheduled task' })
       expect(title.nextElementSibling).toBe(indicator)
       expect(indicator.nextElementSibling).toBe(time)
-      expect(indicator.getAttribute('title')).toBe('有活动定时任务')
+      expect(indicator.getAttribute('title')).toBe('Has active scheduled task')
       expect(indicator.getAttribute('tabindex')).toBeNull()
       return indicator
     }

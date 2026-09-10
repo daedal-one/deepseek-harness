@@ -27,7 +27,9 @@ Open the Plugins section in Settings and select the **Plugin list** tab to inspe
 
 ### Reading a card
 
-Each collapsed card uses the short module name as its primary title, shows the stable entry id underneath, and carries a small enablement tag; enabled entries also show a colored root-fiber status dot. A composition-generated subtitle omits its leading `include:` marker, while hover, search, the accessible name, and expanded details retain the complete id. Long entry ids truncate in the row and remain available on hover. Expanding one card reveals the declared entry id, the full module specifier, and the state facts: a preset row names the preset it comes from, its runtime status when the composition is live, and its disable condition when it carries one; a preset-provided global row explains that agent presets provide it per session, names the presets that enable it, and offers a jump into the preset group. Preset names resolve through the shared `presetDisplayText` fold (`dsh-agent-presets/display`) over [`ui-agent-preset`](../ui-agent-preset/README.md)'s dictionaries: shipped presets follow the active locale while user-authored ones keep their own metadata, so an English surface never echoes the preset files' Chinese names. Search filters both groups by module name and entry id.
+Each collapsed card uses the short module name as its primary title, shows the stable entry id underneath, and carries a small enablement tag; enabled entries also show a colored root-fiber status dot. A composition-generated subtitle omits its leading `include:` marker, while hover, search, the accessible name, and expanded details retain the complete id. Long entry ids truncate in the row and remain available on hover. Expanding one card reveals the declared entry id, the full module specifier, and the state facts: a preset row names the preset it comes from, its runtime status when the composition is live, and its disable condition when it carries one; a preset-provided global row explains that agent presets provide it per session, names the presets that enable it, and offers a jump into the preset group. Preset names resolve through the shared `presetDisplayText` fold (`dsh-agent-presets/display`) over [`ui-agent-preset`](../ui-agent-preset/README.md)'s dictionaries: shipped presets follow the active locale while user-authored ones keep their own metadata, while preserving user-authored names. Search filters both groups by module name, entry id, purpose, package description, author, and version.
+
+Every collapsed card displays a description, author, and version, with explicit unavailable copy for missing metadata. Preset cards prefer a configured role's literal description over the package summary. The full description wraps within the card at every viewport width.
 
 ### The preset switcher
 
@@ -101,5 +103,3 @@ None.
 </details>
 
 **Runtime invariant:** No companion is published. This package owns a read-only Settings contribution.
-
-Global plugin entries expose their package author, description, and version. Missing manifest fields remain null; the inventory displays that absence explicitly and includes metadata in text searches.

@@ -7,12 +7,12 @@ import type {
   TeamTaskId, TeamTaskView as TeamTask, TeamView,
 } from '@deepseek-ai/dsh-experimental-agent-team/client'
 import { makeTranslate, RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
-import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
+import { en as commonCopy } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import {
   TeamAction, type TeamActionInjected, type TeamActionProps, type TeamActionResult,
   type TeamTaskActionResult,
 } from '../src/client/TeamAction.tsx'
-import { zh } from '../src/client/locales.ts'
+import { en as copy } from '../src/client/locales.ts'
 
 afterEach(cleanup)
 
@@ -72,7 +72,7 @@ function props(actions: TeamActionInjected, sessionId: SessionId = SESSION): Tea
   return {
     sessionId,
     ...actions,
-    t: makeTranslate(zh, commonZh),
+    t: makeTranslate(copy, commonCopy),
   } as unknown as TeamActionProps
 }
 
@@ -143,7 +143,7 @@ describe('TeamAction', () => {
     fireEvent.click(screen.getByRole('button', { name: /Agent Team/u }))
     await screen.findByText('Implement runtime')
 
-    const refresh = screen.getByRole('button', { name: zh.refresh })
+    const refresh = screen.getByRole('button', { name: copy.refresh })
     fireEvent.click(refresh)
     fireEvent.click(refresh)
     newer.resolve({ ok: true, value: newestView })
@@ -169,7 +169,7 @@ describe('TeamAction', () => {
     fireEvent.click(screen.getByRole('button', { name: /Agent Team/u }))
     await screen.findByText('Implement runtime')
 
-    fireEvent.click(screen.getByRole('button', { name: zh.refresh }))
+    fireEvent.click(screen.getByRole('button', { name: copy.refresh }))
     fireEvent.click(screen.getByRole('button', { name: /完成/u }))
     expect(await screen.findByRole('button', { name: /重开/u })).toBeTruthy()
 
@@ -193,11 +193,11 @@ describe('TeamAction', () => {
     fireEvent.click(screen.getByRole('button', { name: /Agent Team/u }))
     await screen.findByText('Implement runtime')
 
-    fireEvent.click(screen.getByRole('button', { name: zh.refresh }))
+    fireEvent.click(screen.getByRole('button', { name: copy.refresh }))
     fireEvent.click(screen.getByRole('button', { name: /新建任务/u }))
-    fireEvent.change(screen.getByPlaceholderText('任务标题'), { target: { value: 'New task' } })
-    fireEvent.change(screen.getByPlaceholderText('任务描述'), { target: { value: 'Details' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    fireEvent.change(screen.getByPlaceholderText('Task subject'), { target: { value: 'New task' } })
+    fireEvent.change(screen.getByPlaceholderText('Task description'), { target: { value: 'Details' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(await screen.findByText('New task')).toBeTruthy()
 
     stale.resolve({ ok: true, value: view })
@@ -216,7 +216,7 @@ describe('TeamAction', () => {
     }))} />)
     fireEvent.click(screen.getByRole('button', { name: /Agent Team/u }))
     await screen.findByText('Implement runtime')
-    fireEvent.click(screen.getByRole('button', { name: zh.refresh }))
+    fireEvent.click(screen.getByRole('button', { name: copy.refresh }))
     fireEvent.click(screen.getByRole('button', { name: /完成/u }))
     expect(await screen.findByText('task rejected (team-rejected)')).toBeTruthy()
     staleTask.resolve({ ok: true, value: view })
@@ -234,11 +234,11 @@ describe('TeamAction', () => {
     }))} />)
     fireEvent.click(screen.getByRole('button', { name: /Agent Team/u }))
     await screen.findByText('Implement runtime')
-    fireEvent.click(screen.getByRole('button', { name: zh.refresh }))
+    fireEvent.click(screen.getByRole('button', { name: copy.refresh }))
     fireEvent.click(screen.getByRole('button', { name: /新建任务/u }))
-    fireEvent.change(screen.getByPlaceholderText('任务标题'), { target: { value: 'Rejected task' } })
-    fireEvent.change(screen.getByPlaceholderText('任务描述'), { target: { value: 'Rejected details' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    fireEvent.change(screen.getByPlaceholderText('Task subject'), { target: { value: 'Rejected task' } })
+    fireEvent.change(screen.getByPlaceholderText('Task description'), { target: { value: 'Rejected details' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(await screen.findByText('create rejected (team-rejected)')).toBeTruthy()
     staleCreate.resolve({ ok: true, value: view })
     await Promise.resolve()
@@ -258,9 +258,9 @@ describe('TeamAction', () => {
     fireEvent.click(screen.getByRole('button', { name: /Agent Team/u }))
     await screen.findByText('Implement runtime')
     fireEvent.click(screen.getByRole('button', { name: /新建任务/u }))
-    fireEvent.change(screen.getByPlaceholderText('任务标题'), { target: { value: 'Concurrent task' } })
-    fireEvent.change(screen.getByPlaceholderText('任务描述'), { target: { value: 'Concurrent details' } })
-    const save = screen.getByRole<HTMLButtonElement>('button', { name: '保存' })
+    fireEvent.change(screen.getByPlaceholderText('Task subject'), { target: { value: 'Concurrent task' } })
+    fireEvent.change(screen.getByPlaceholderText('Task description'), { target: { value: 'Concurrent details' } })
+    const save = screen.getByRole<HTMLButtonElement>('button', { name: 'Save' })
     fireEvent.click(save)
     await waitFor(() => { expect(save.disabled).toBe(true) })
 
@@ -274,7 +274,7 @@ describe('TeamAction', () => {
 
     create.resolve(taskSuccess(createdTask))
     expect(await screen.findByText('Concurrent task')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: '保存' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
   })
 
   it('reloads derived fields for every task after a mutation', async () => {
@@ -311,11 +311,11 @@ describe('TeamAction', () => {
     fireEvent.click(screen.getByRole('button', { name: /Agent Team/u }))
     await screen.findByText('Implement runtime')
     fireEvent.click(screen.getByRole('button', { name: /新建任务/u }))
-    fireEvent.change(screen.getByPlaceholderText('任务标题'), { target: { value: ' New task ' } })
-    fireEvent.change(screen.getByPlaceholderText('任务描述'), { target: { value: ' Details ' } })
+    fireEvent.change(screen.getByPlaceholderText('Task subject'), { target: { value: ' New task ' } })
+    fireEvent.change(screen.getByPlaceholderText('Task description'), { target: { value: ' Details ' } })
     fireEvent.change(screen.getByPlaceholderText(/依赖任务/u), { target: { value: 'task-1, task-1' } })
     fireEvent.change(screen.getByPlaceholderText(/写入范围/u), { target: { value: 'src/a, src/b' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => {
       expect(createTask).toHaveBeenCalledWith(SESSION, {
         subject: 'New task',
@@ -385,11 +385,11 @@ describe('TeamAction', () => {
     })
 
     fireEvent.click(screen.getByRole('button', { name: /编辑/u }))
-    fireEvent.change(screen.getByPlaceholderText('任务标题'), { target: { value: 'Updated runtime' } })
-    fireEvent.change(screen.getByPlaceholderText('任务描述'), { target: { value: 'Updated details' } })
+    fireEvent.change(screen.getByPlaceholderText('Task subject'), { target: { value: 'Updated runtime' } })
+    fireEvent.change(screen.getByPlaceholderText('Task description'), { target: { value: 'Updated details' } })
     fireEvent.change(screen.getByPlaceholderText(/依赖任务/u), { target: { value: 'task-0' } })
     fireEvent.change(screen.getByPlaceholderText(/写入范围/u), { target: { value: 'src/runtime' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(await screen.findByText('Updated runtime')).toBeTruthy()
     expect(current).toMatchObject({
       revision: 4,
@@ -427,7 +427,7 @@ describe('TeamAction', () => {
     fireEvent.click(screen.getByRole('button', { name: /Agent Team/u }))
     await screen.findByText('Implement runtime')
     fireEvent.click(screen.getByRole('button', { name: /完成/u }))
-    expect(await screen.findByText(zh.conflict)).toBeTruthy()
+    expect(await screen.findByText(copy.conflict)).toBeTruthy()
     expect(load).toHaveBeenCalledTimes(2)
     expect(updateTask).toHaveBeenCalledTimes(1)
   })
@@ -444,7 +444,7 @@ describe('TeamAction', () => {
     await screen.findByText('Implement runtime')
     fireEvent.click(screen.getByRole('button', { name: /完成/u }))
     expect(await screen.findByText('task reload failed (gateway/internal)')).toBeTruthy()
-    expect(screen.queryByText(zh.conflict)).toBeNull()
+    expect(screen.queryByText(copy.conflict)).toBeNull()
     first.unmount()
 
     const dependencyLoad = vi.fn()
@@ -458,11 +458,11 @@ describe('TeamAction', () => {
     fireEvent.click(screen.getByRole('button', { name: /Agent Team/u }))
     await screen.findByText('Implement runtime')
     fireEvent.click(screen.getByRole('button', { name: /编辑/u }))
-    fireEvent.change(screen.getByPlaceholderText('任务标题'), { target: { value: 'Edited' } })
-    fireEvent.change(screen.getByPlaceholderText(zh.blockers), { target: { value: 'task-2' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    fireEvent.change(screen.getByPlaceholderText('Task subject'), { target: { value: 'Edited' } })
+    fireEvent.change(screen.getByPlaceholderText(copy.blockers), { target: { value: 'task-2' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(await screen.findByText('dependency reload failed (gateway/internal)')).toBeTruthy()
-    expect(screen.queryByText(zh.conflict)).toBeNull()
+    expect(screen.queryByText(copy.conflict)).toBeNull()
   })
 
   it('renders roster/task state variants and contains navigation, refresh, and close actions', async () => {
@@ -498,20 +498,20 @@ describe('TeamAction', () => {
     render(<TeamAction {...props(actions({ load, openTeammate }))} />)
     fireEvent.click(screen.getByRole('button', { name: /Agent Team/u }))
     expect(await screen.findByText('provider failed')).toBeTruthy()
-    expect(screen.getByText(zh.ready)).toBeTruthy()
-    expect(screen.getByText(zh.blocked)).toBeTruthy()
+    expect(screen.getByText(copy.ready)).toBeTruthy()
+    expect(screen.getByText(copy.blocked)).toBeTruthy()
     expect(screen.getByRole<HTMLButtonElement>('button', { name: /failed-worker/u }).disabled).toBe(true)
     expect(screen.getByRole<HTMLButtonElement>('button', { name: /provisioning-worker/u }).disabled).toBe(true)
 
     fireEvent.click(screen.getByRole('button', { name: /^worker运行中/u }))
     expect(await screen.findByText('Error: navigation failed')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: zh.refresh }))
+    fireEvent.click(screen.getByRole('button', { name: copy.refresh }))
     await waitFor(() => { expect(load).toHaveBeenCalledTimes(2) })
     fireEvent.click(screen.getByRole('button', { name: /Agent Team/u }))
     expect(screen.queryByRole('dialog')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /Agent Team/u }))
     await screen.findByRole('dialog')
-    fireEvent.click(screen.getByRole('button', { name: zh.close }))
+    fireEvent.click(screen.getByRole('button', { name: copy.close }))
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
@@ -529,9 +529,9 @@ describe('TeamAction', () => {
     fireEvent.click(screen.getByRole('button', { name: /Agent Team/u }))
     await screen.findByText('Implement runtime')
     fireEvent.click(screen.getByRole('button', { name: /新建任务/u }))
-    fireEvent.change(screen.getByPlaceholderText('任务标题'), { target: { value: 'Task' } })
-    fireEvent.change(screen.getByPlaceholderText('任务描述'), { target: { value: 'Description' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    fireEvent.change(screen.getByPlaceholderText('Task subject'), { target: { value: 'Task' } })
+    fireEvent.change(screen.getByPlaceholderText('Task description'), { target: { value: 'Description' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(await screen.findByText('create failed (gateway/internal)')).toBeTruthy()
     second.unmount()
 
@@ -540,9 +540,9 @@ describe('TeamAction', () => {
     fireEvent.click(screen.getByRole('button', { name: /Agent Team/u }))
     await screen.findByText('Implement runtime')
     fireEvent.click(screen.getByRole('button', { name: /新建任务/u }))
-    fireEvent.change(screen.getByPlaceholderText('任务标题'), { target: { value: 'Late task' } })
-    fireEvent.change(screen.getByPlaceholderText('任务描述'), { target: { value: 'Late description' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    fireEvent.change(screen.getByPlaceholderText('Task subject'), { target: { value: 'Late task' } })
+    fireEvent.change(screen.getByPlaceholderText('Task description'), { target: { value: 'Late description' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     third.rerender(<TeamAction {...props(actions(), 'next-session' as SessionId)} />)
     pending.resolve(taskSuccess({ ...task, id: 'late-task' as TeamTaskId }))
     await Promise.resolve()
@@ -588,7 +588,7 @@ describe('TeamAction', () => {
     reload.resolve({ ok: true, value: view })
     await Promise.resolve()
     await Promise.resolve()
-    expect(screen.queryByText(zh.conflict)).toBeNull()
+    expect(screen.queryByText(copy.conflict)).toBeNull()
   })
 
   it('does not settle a successful task after its reload switches sessions', async () => {
@@ -624,19 +624,19 @@ describe('TeamAction', () => {
     await screen.findByText('Implement runtime')
 
     fireEvent.click(screen.getByRole('button', { name: /新建任务/u }))
-    fireEvent.click(screen.getByRole('button', { name: '取消' }))
-    expect(screen.queryByPlaceholderText('任务标题')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByPlaceholderText('Task subject')).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: /编辑/u }))
-    fireEvent.click(screen.getByRole('button', { name: '取消' }))
-    expect(screen.queryByRole('button', { name: '保存' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /编辑/u }))
-    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(await screen.findByText('edit failed (gateway/internal)')).toBeTruthy()
 
-    fireEvent.change(screen.getByPlaceholderText('任务标题'), { target: { value: 'Saved edit' } })
-    fireEvent.change(screen.getByPlaceholderText(zh.blockers), { target: { value: 'task-2' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    fireEvent.change(screen.getByPlaceholderText('Task subject'), { target: { value: 'Saved edit' } })
+    fireEvent.change(screen.getByPlaceholderText(copy.blockers), { target: { value: 'task-2' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(await screen.findByText('dependency failed (team-rejected)')).toBeTruthy()
     expect(updateTask.mock.calls[2]?.[1]).toMatchObject({
       action: 'set_dependencies',
@@ -644,7 +644,7 @@ describe('TeamAction', () => {
       blockedBy: ['task-2'],
     })
 
-    fireEvent.click(screen.getByRole('button', { name: '取消' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     fireEvent.change(screen.getByRole('combobox'), { target: { value: '' } })
     await waitFor(() => {
       expect(updateTask).toHaveBeenLastCalledWith(SESSION, expect.objectContaining({
@@ -662,9 +662,9 @@ describe('TeamAction', () => {
     fireEvent.click(screen.getByRole('button', { name: /Agent Team/u }))
     await screen.findByText('Implement runtime')
     fireEvent.click(screen.getByRole('button', { name: /编辑/u }))
-    fireEvent.change(screen.getByPlaceholderText('任务标题'), { target: { value: 'Edited' } })
-    fireEvent.change(screen.getByPlaceholderText(zh.blockers), { target: { value: 'task-2' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    fireEvent.change(screen.getByPlaceholderText('Task subject'), { target: { value: 'Edited' } })
+    fireEvent.change(screen.getByPlaceholderText(copy.blockers), { target: { value: 'task-2' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(await screen.findByText('dependency transport failed (gateway/internal)')).toBeTruthy()
   })
@@ -681,10 +681,10 @@ describe('TeamAction', () => {
     fireEvent.click(screen.getByRole('button', { name: /Agent Team/u }))
     await screen.findByText('Implement runtime')
     fireEvent.click(screen.getByRole('button', { name: /编辑/u }))
-    fireEvent.change(screen.getByPlaceholderText('任务标题'), { target: { value: 'Same dependencies' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    fireEvent.change(screen.getByPlaceholderText('Task subject'), { target: { value: 'Same dependencies' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
-    await waitFor(() => { expect(screen.queryByRole('button', { name: '保存' })).toBeNull() })
+    await waitFor(() => { expect(screen.queryByRole('button', { name: 'Save' })).toBeNull() })
     expect(updateTask).toHaveBeenCalledTimes(1)
     expect(updateTask).toHaveBeenCalledWith(SESSION, expect.objectContaining({ action: 'edit' }))
   })
@@ -701,10 +701,10 @@ describe('TeamAction', () => {
     fireEvent.click(screen.getByRole('button', { name: /Agent Team/u }))
     await screen.findByText('Implement runtime')
     fireEvent.click(screen.getByRole('button', { name: /编辑/u }))
-    fireEvent.change(screen.getByPlaceholderText('任务标题'), { target: { value: 'Conflict edit' } })
-    fireEvent.change(screen.getByPlaceholderText(zh.blockers), { target: { value: 'task-2' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存' }))
-    expect(await screen.findByText(zh.conflict)).toBeTruthy()
+    fireEvent.change(screen.getByPlaceholderText('Task subject'), { target: { value: 'Conflict edit' } })
+    fireEvent.change(screen.getByPlaceholderText(copy.blockers), { target: { value: 'task-2' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByText(copy.conflict)).toBeTruthy()
     expect(load).toHaveBeenCalledTimes(3)
     first.unmount()
 
@@ -720,15 +720,15 @@ describe('TeamAction', () => {
     fireEvent.click(screen.getByRole('button', { name: /Agent Team/u }))
     await screen.findByText('Implement runtime')
     fireEvent.click(screen.getByRole('button', { name: /编辑/u }))
-    fireEvent.change(screen.getByPlaceholderText('任务标题'), { target: { value: 'Late edit' } })
-    fireEvent.change(screen.getByPlaceholderText(zh.blockers), { target: { value: 'task-2' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    fireEvent.change(screen.getByPlaceholderText('Task subject'), { target: { value: 'Late edit' } })
+    fireEvent.change(screen.getByPlaceholderText(copy.blockers), { target: { value: 'task-2' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => { expect(dependencyLoad).toHaveBeenCalledTimes(3) })
     second.rerender(<TeamAction {...props(actions(), 'next-session' as SessionId)} />)
     dependencyReload.resolve({ ok: true, value: { ...view, tasks: [{ ...task, revision: 3 }] } })
     await Promise.resolve()
     await Promise.resolve()
-    expect(screen.queryByText(zh.conflict)).toBeNull()
+    expect(screen.queryByText(copy.conflict)).toBeNull()
     second.unmount()
 
     const dependency = Promise.withResolvers<TeamTaskActionResult>()
@@ -739,12 +739,12 @@ describe('TeamAction', () => {
     fireEvent.click(screen.getByRole('button', { name: /Agent Team/u }))
     await screen.findByText('Implement runtime')
     fireEvent.click(screen.getByRole('button', { name: /编辑/u }))
-    fireEvent.change(screen.getByPlaceholderText('任务标题'), { target: { value: 'Late edit' } })
-    fireEvent.change(screen.getByPlaceholderText(zh.blockers), { target: { value: 'task-2' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    fireEvent.change(screen.getByPlaceholderText('Task subject'), { target: { value: 'Late edit' } })
+    fireEvent.change(screen.getByPlaceholderText(copy.blockers), { target: { value: 'task-2' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => { expect(lateUpdate).toHaveBeenCalledTimes(2) })
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: '保存' }).disabled).toBe(true)
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: '取消' }).disabled).toBe(true)
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Save' }).disabled).toBe(true)
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Cancel' }).disabled).toBe(true)
     third.rerender(<TeamAction {...props(actions(), 'next-session' as SessionId)} />)
     dependency.resolve(taskSuccess({ ...task, revision: 3, subject: 'Late dependency' }))
     await Promise.resolve()

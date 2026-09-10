@@ -8,7 +8,7 @@ import {
   WELCOME_NOTICE_COPY,
   type WebScaffold,
 } from './scaffold.ts'
-import { ZH_BROWSER_LOCALE } from './support.ts'
+import { EN_BROWSER_LOCALE } from './support.ts'
 
 const MODE = webSnapshotMode()
 
@@ -26,7 +26,7 @@ describe.skipIf(MODE === 'record')('web e2e: remote welcome notice', () => {
     browser = await chromium.launch()
     page = await browser.newPage({
       viewport: { width: 1440, height: 960 },
-      locale: ZH_BROWSER_LOCALE,
+      locale: EN_BROWSER_LOCALE,
     })
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })

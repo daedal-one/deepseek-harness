@@ -51,13 +51,13 @@ if (typeof config.lifecycleActor !== 'string' || !config.lifecycleActor) {
   throw new Error('config.lifecycleActor not set')
 }
 if (typeof config.priorityField !== 'string' || !config.priorityField) {
-  throw new Error('config.priorityField 未设置')
+  throw new Error('config.priorityField not set')
 }
 if (typeof config.startDateField !== 'string' || !config.startDateField) {
-  throw new Error('config.startDateField 未设置')
+  throw new Error('config.startDateField not set')
 }
 if (typeof config.projectTimeZone !== 'string' || !config.projectTimeZone) {
-  throw new Error('config.projectTimeZone 未设置')
+  throw new Error('config.projectTimeZone not set')
 }
 Intl.DateTimeFormat('en-US', { timeZone: config.projectTimeZone })
 
@@ -130,7 +130,7 @@ export function nextResolvingIssueStatus(currentStatus, command, currentStatusAc
  */
 export function projectDate(timestamp, timeZone = config.projectTimeZone) {
   const instant = new Date(timestamp)
-  if (Number.isNaN(instant.getTime())) throw new Error(`无效的 PR 创建时间：${timestamp}`)
+  if (Number.isNaN(instant.getTime())) throw new Error(`Invalid PR creation time: ${timestamp}`)
   const parts = Object.fromEntries(
     new Intl.DateTimeFormat('en-US', {
       timeZone,
@@ -454,24 +454,24 @@ async function projectContext(number, includeStatusActor = false, includeStartDa
   const statusField = project.fields.nodes.find((field) => field?.name === 'Status')
   if (!statusField) throw new Error('Project is missing the Status field')
   const priorityField = project.fields.nodes.find((field) => field?.name === config.priorityField)
-  if (!priorityField) throw new Error(`Project 缺少 ${config.priorityField} 字段`)
+  if (!priorityField) throw new Error(`Project is missing the ${config.priorityField} field`)
   if (priorityField.dataType !== 'SINGLE_SELECT') {
-    throw new Error(`Project ${config.priorityField} 字段必须为 Single Select`)
+    throw new Error(`Project ${config.priorityField} field must be Single Select`)
   }
   if (priorityField.isIssueField) {
-    throw new Error(`Project ${config.priorityField} 字段必须为 Project custom field`)
+    throw new Error(`Project ${config.priorityField} field must be a Project custom field`)
   }
   const startDateField = includeStartDate
     ? project.fields.nodes.find((field) => field?.name === config.startDateField)
     : null
   if (includeStartDate && !startDateField) {
-    throw new Error(`Project 缺少 ${config.startDateField} 字段`)
+    throw new Error(`Project is missing the ${config.startDateField} field`)
   }
   if (startDateField && startDateField.dataType !== 'DATE') {
-    throw new Error(`Project ${config.startDateField} 字段必须为 Date`)
+    throw new Error(`Project ${config.startDateField} field must be Date`)
   }
   if (startDateField?.isIssueField) {
-    throw new Error(`Project ${config.startDateField} 字段必须为 Project Date 字段`)
+    throw new Error(`Project ${config.startDateField} field must be a Project Date field`)
   }
   const item = issue.projectItems.nodes.find((candidate) => candidate.project.id === project.id)
   const latestStatusEvent = issue.timelineItems?.nodes

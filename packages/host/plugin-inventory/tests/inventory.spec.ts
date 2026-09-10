@@ -1,4 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { Context, FiberState, type Plugin } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { remoteMethods } from '@deepseek-ai/dsh-typert-protocol'
@@ -6,9 +10,11 @@ import type { AgentPresets } from '@deepseek-ai/dsh-agent-presets'
 import PluginInventoryGateway from '../src/index.ts'
 
 const contexts: Context[] = []
+const roots: string[] = []
 
 afterEach(async () => {
   await Promise.all(contexts.splice(0).map(ctx => ctx.fiber.dispose()))
+  await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })))
 })
 
 const activePlugin: Plugin.Function = () => {}
@@ -109,7 +115,7 @@ describe('PluginInventoryGateway', () => {
         {
           id: 'standard',
           trust: 'system',
-          name: '标准模式',
+          name: 'Standard mode',
           isDefault: true,
           rows: [
             { entryId: 'alpha', moduleName: 'pkg-alpha', enabled: true, fiberState: FiberState.ACTIVE },
@@ -125,14 +131,40 @@ describe('PluginInventoryGateway', () => {
       {
         id: 'standard',
         trust: 'system',
-        name: '标准模式',
+        name: 'Standard mode',
         isDefault: true,
         rows: [
-          { entryId: 'alpha', moduleName: 'pkg-alpha', enabled: true, fiberPhase: 'active' },
-          { entryId: null, moduleName: 'pkg-file', enabled: 'conditional', condition: 'x', fiberPhase: null },
+          { entryId: 'alpha', moduleName: 'pkg-alpha', enabled: true, fiberPhase: 'active', author: null, description: null, version: null },
+          { entryId: null, moduleName: 'pkg-file', enabled: 'conditional', condition: 'x', fiberPhase: null, author: null, description: null, version: null },
         ],
       },
       { id: 'damaged', trust: 'user', isDefault: false, broken: 'the composition file is missing', rows: [] },
     ])
+  })
+
+  it('resolves preset package metadata beside its composition and omits the private resolution URL', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-preset-metadata-'))
+    roots.push(root)
+    const packageRoot = join(root, 'node_modules', '@fixture', 'reviewer')
+    await mkdir(packageRoot, { recursive: true })
+    await writeFile(join(packageRoot, 'package.json'), JSON.stringify({
+      name: '@fixture/reviewer', author: 'Fixture Author', version: '1.2.3', description: 'Delegates a task.',
+    }))
+    const { ctx, inventory } = await harness()
+    ctx.provide('agentPresets', {
+      compositionInventory: async () => [{
+        id: 'review', trust: 'user', isDefault: true,
+        rows: [{
+          entryId: 'reviewer', moduleName: '@fixture/reviewer', enabled: true,
+          baseUrl: pathToFileURL(join(root, 'agent.cordis.yml')).href,
+          purpose: 'Checks changes against the request.',
+        }],
+      }],
+    } as Partial<AgentPresets> as never)
+    expect((await inventory.list()).agentPresets?.[0]?.rows).toEqual([{
+      entryId: 'reviewer', moduleName: '@fixture/reviewer', enabled: true, fiberPhase: null,
+      purpose: 'Checks changes against the request.',
+      author: 'Fixture Author', version: '1.2.3', description: 'Delegates a task.',
+    }])
   })
 })

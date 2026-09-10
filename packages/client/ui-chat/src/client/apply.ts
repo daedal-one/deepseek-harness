@@ -28,7 +28,7 @@ import { ChatView } from './chat/ChatView.tsx'
 import { registerChatNodeRenderers } from './chat/register-node-renderers.ts'
 import { StatsPills } from './chat/StatsPills.tsx'
 import { registerConversationNodes } from './conversation-nodes/register.ts'
-import { en, NS, zh } from './locale.ts'
+import { en, NS } from './locale.ts'
 import { TranscriptViewRow, type TranscriptViewRowInjected } from './settings/TranscriptViewRow.tsx'
 import { createChatStore } from './stores.ts'
 import { TranscriptViewPolicy } from './transcript-view.ts'
@@ -74,7 +74,7 @@ export function apply(ctx: Context): void {
     resolve: binding => ({ hooks: { chat: chatSource(binding) } }),
   })
 
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-chat: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { en }), 'ui-chat: dictionaries')
   const t = ctx.locale.bind(NS)
   const chatStore = createChatStore()
   const chatScrollPositions = new Map<SessionId, ChatScrollPosition>()

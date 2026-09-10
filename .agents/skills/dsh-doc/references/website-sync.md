@@ -18,7 +18,7 @@ The documentation website is a tested projection of repository Markdown, never a
 
 Read [docs/AGENTS.md](../../../../docs/AGENTS.md) and the current `DocsPage` type and entries in [website/docs.ts](../../../../website/docs.ts) before changing the manifest; do not rely on a remembered field set. Read [website/.vitepress/config.ts](../../../../website/.vitepress/config.ts) before adding a new section, sidebar collection, locale, or top-level navigation item. Edit canonical English sources and run the projection checks.
 
-Never edit or commit `website/.generated/`, `website/.cache/`, or `website/.dist/`. Except for `website/AGENTS.md`, never add Markdown under `website/`; locale and route directories such as `website/zh-CN/`, `website/en/`, and `website/api/` are invalid source layouts. Keep generated catalogs under `docs/`, freshness-gate them there, and publish them through the manifest.
+Never edit or commit `website/.generated/`, `website/.cache/`, or `website/.dist/`. Except for `website/AGENTS.md`, never add Markdown under `website/`; locale and route directories such as `website/translations/`, `website/locales/`, and `website/api/` are invalid source layouts. Keep generated catalogs under `docs/`, freshness-gate them there, and publish them through the manifest.
 
 ## Classify the change
 

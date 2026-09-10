@@ -3,15 +3,15 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { within, cleanup, fireEvent, render } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import { en as commonEn, zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/index.ts'
+import { en as commonEn, en as commonCopy } from '@deepseek-ai/dsh-client-locale/src/locales/index.ts'
 import { ContextMeter, type ContextMeterProps } from '../src/client/skeleton/ContextMeter.tsx'
 import { contextOccupancy } from '../src/client/context-occupancy.ts'
 import css from '../src/client/skeleton/ContextMeter.module.css'
-import { en, zh } from '../src/client/locales.ts'
+import { en, en as copy } from '../src/client/locales.ts'
 
 afterEach(cleanup)
 
-const t = makeTranslate(zh, commonZh) as ContextMeterProps['t']
+const t = makeTranslate(copy, commonCopy) as ContextMeterProps['t']
 const tEn = makeTranslate(en, commonEn) as ContextMeterProps['t']
 
 const BREAKDOWN = { systemTokens: 120, toolsTokens: 21_500, messageTokens: 477_000 }
@@ -72,9 +72,9 @@ describe('ContextMeter', () => {
       contextPressure: { pressureTokens: 32_000, contextWindow: 128_000 },
       contextBreakdown: BREAKDOWN,
     }
-    const zhView = meter(values)
-    fireEvent.click(within(zhView.container).getByRole('button', { name: '25% of context used' }))
-    expect(zhView.container.querySelector('[role="dialog"]')!.textContent)
+    const englishView = meter(values)
+    fireEvent.click(within(englishView.container).getByRole('button', { name: '25% of context used' }))
+    expect(englishView.container.querySelector('[role="dialog"]')!.textContent)
       .toMatch(/^25%of context used/)
     const enView = meter(values, tEn)
     fireEvent.click(within(enView.container).getByRole('button', { name: '25% of context used' }))

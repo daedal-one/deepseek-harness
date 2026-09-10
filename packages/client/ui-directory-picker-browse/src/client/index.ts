@@ -29,60 +29,28 @@ export const inject = ['slots', 'uiWorkspace', 'locale']
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
-  ctx.effect(() => {
-    // The two dictionaries land as a unit: if the second registration hits a
-    // rival owner of the namespace, the first rolls back before the throw —
-    // a failed activation must not squat the namespace's other locale.
-    const disposers: (() => void)[] = []
-    const dictionaries: [locale: string, dict: Record<string, string>][] = [
-      ['zh', {
-        'browser.title': 'Select Workspace Directory',
-        'browser.home': 'Home',
-        'browser.newFolder': 'New folder',
-        'browser.folderName': 'Folder name',
-        'browser.createIn': 'New folder in "{name}"',
-        'browser.untitledFolder': 'Untitled folder',
-        'browser.create': 'Create',
-        'browser.cancel': 'Cancel',
-        'browser.open': 'Open',
-        'browser.editPath': 'Edit path',
-        'browser.loading': 'Loading…',
-        'browser.truncated': 'Too many folders to list; only the beginning is shown.',
-        'browser.showHidden': 'Show hidden files',
-      }],
-      ['en', {
-        'browser.title': 'Select Workspace Directory',
-        'browser.home': 'Home',
-        'browser.newFolder': 'New folder',
-        'browser.folderName': 'Folder name',
-        'browser.createIn': 'New folder in "{name}"',
-        'browser.untitledFolder': 'Untitled folder',
-        'browser.create': 'Create',
-        'browser.cancel': 'Cancel',
-        'browser.open': 'Open',
-        'browser.editPath': 'Edit path',
-        'browser.loading': 'Loading…',
-        'browser.truncated': 'Too many folders to list; only the beginning is shown.',
-        'browser.showHidden': 'Show hidden files',
-      }],
-    ]
-    try {
-      for (const [locale, dict] of dictionaries) disposers.push(ctx.locale.register(LOCALE_NS, locale, dict))
-    } catch (error) {
-      for (const dispose of disposers.reverse()) dispose()
-      throw error
-    }
-    return () => { for (const dispose of disposers) dispose() }
-  }, 'directory-picker-browse: dialog dictionaries')
+  ctx.effect(() => ctx.locale.register(LOCALE_NS, 'en', {
+    'browser.title': 'Select Workspace Directory',
+    'browser.home': 'Home',
+    'browser.newFolder': 'New folder',
+    'browser.folderName': 'Folder name',
+    'browser.createIn': 'New folder in "{name}"',
+    'browser.untitledFolder': 'Untitled folder',
+    'browser.create': 'Create',
+    'browser.cancel': 'Cancel',
+    'browser.open': 'Open',
+    'browser.editPath': 'Edit path',
+    'browser.loading': 'Loading…',
+    'browser.truncated': 'Too many folders to list; only the beginning is shown.',
+    'browser.showHidden': 'Show hidden files',
+  }), 'directory-picker-browse: dialog dictionary')
 
   const injected = (): BrowseFlowInjected => ({
     listDirectory: (path, signal) => ctx.uiWorkspace.listDirectory(path, signal),
     createDirectory: (path, name) => ctx.uiWorkspace.createDirectory(path, name),
     t: ctx.locale.bind(LOCALE_NS),
   })
-  // Both declaration lifetimes must be live before the pair installs; the
-  // generator makes the two registrations one transactional effect. The
-  // outer/inner nesting order is arbitrary; neither hole has precedence.
+  // Both declaration lifetimes must be live before the pair installs.
   ctx.slots.inject('conversation.hero.workspace.directoryFlow', () =>
     ctx.slots.inject('sidebar.workspaces.directoryFlow', function* () {
       yield ctx.slots.register({

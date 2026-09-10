@@ -1,19 +1,7 @@
-/** `plan` namespace dictionaries (the composer plan chip's copy). */
-
-/** Simplified Chinese dictionary (the key-set source of truth). */
-export const zh = {
-  'chip.label': 'Plan',
-  'chip.on.aria': 'Plan mode on, press to turn off',
-  'chip.on.title': 'Plan mode on — click to turn off (/plan off)',
-  'chip.off.aria': 'Plan mode off, press to turn on',
-  'chip.off.title': 'Plan mode off — click to turn on (/plan)',
-  'chip.exitFailed': 'Failed to exit plan mode',
-} satisfies Record<string, string>
-
 /** The plan namespace key union. */
-export type PlanKey = keyof typeof zh
+export type PlanKey = keyof typeof en
 
-/** English dictionary, checked complete against the zh key set. */
+/** English copy for this feature. */
 export const en = {
   'chip.label': 'Plan',
   'chip.on.aria': 'Plan mode on, press to turn off',
@@ -21,4 +9,4 @@ export const en = {
   'chip.off.aria': 'Plan mode off, press to turn on',
   'chip.off.title': 'Plan mode off — click to turn on (/plan)',
   'chip.exitFailed': 'Failed to exit plan mode',
-} satisfies Record<PlanKey, string>
+} satisfies Record<string, string>

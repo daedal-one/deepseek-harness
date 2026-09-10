@@ -25,4 +25,4 @@ Run `pnpm build:ts`, `pnpm build:native`, `pnpm build:test-oracle`, `pnpm typech
 - Platform prepack rejects missing, undeclared, wrong-format, wrong-architecture, and non-Node-API addon payloads. Launcher executability is checked separately.
 - Platform tarballs use npm pack to preserve executable permissions. The entry uses pnpm pack for workspace version conversion.
 - Packed-install verification checks manifests, installs local tarballs without a registry, byte-pins payloads, and exercises both the installed flock binding and Landlock's functional probe.
-- Build outputs stay ignored. Source/consumer changes and their behavior tests land together; preserve bilingual READMEs and independent native publication.
+- Build outputs stay ignored. Source/consumer changes and their behavior tests land together; preserve package READMEs and independent native publication.

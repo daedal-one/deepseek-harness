@@ -78,12 +78,12 @@ export interface ThemeSnapshot {
 }
 
 export interface LocaleDefinition {
-  id: 'zh' | 'en'
+  id: 'en'
   label: string
 }
 
 export interface LocaleSnapshot {
-  active: 'zh' | 'en'
+  active: 'en'
   locales: readonly LocaleDefinition[]
   revision: number
 }

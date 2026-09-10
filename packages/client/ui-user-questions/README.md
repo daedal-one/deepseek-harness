@@ -53,7 +53,7 @@ The card claims a request only when it can send every answer that request allows
 
 ### Copy and locale
 
-Composer chrome copy (pager, buttons, placeholders, validation feedback) is bilingual: the plugin registers zh/en dictionaries under the `question` namespace of `dsh-client-locale` and hands the entry its bound translator plus the locale snapshot source through the inject face, so a locale switch re-renders a mounted composer. Question and option text arrives from the model and renders verbatim; carrier failure messages also display untranslated.
+Composer chrome copy (pager, buttons, placeholders, validation feedback) is English: the plugin registers its dictionary under the `question` namespace of `dsh-client-locale` and hands the entry its bound translator plus the locale snapshot source through the inject face, so a locale switch re-renders a mounted composer. Question and option text arrives from the model and renders verbatim; carrier failure messages also display untranslated.
 
 </details>
 

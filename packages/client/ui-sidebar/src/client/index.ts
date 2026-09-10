@@ -11,7 +11,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type { SidebarPanelMetadata, SidebarRootInjected } from './contract/slots.ts'
 import { SidebarRoot } from './SidebarRoot.tsx'
-import { en, zh, type SidebarKey } from './locales.ts'
+import { en, type SidebarKey } from './locales.ts'
 
 export type {
   SidebarBrandMarkOwnerProps, SidebarBrandNameOwnerProps, SidebarFooterActionOwnerProps,
@@ -42,7 +42,7 @@ export const inject = ['slots', 'layout', 'uiWorkspace', 'locale']
  */
 export function apply(ctx: ClientContext): void {
   const workspaceNavigation = ctx.get('uiWorkspace') as unknown as WorkspaceNavigation
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-sidebar: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { en }), 'ui-sidebar: dictionaries')
   const panels = createSnapshotStore<readonly SidebarPanelMetadata[]>([])
   const syncPanels = (): void => {
     const next = ctx.slots.entriesOfSlot('sidebar.panellist').map(({ options }) => {

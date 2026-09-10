@@ -53,7 +53,7 @@ export const SESSION_TITLE_TIMEOUT_CODE = 'SESSION_TITLE_TIMEOUT'
 export interface SessionTitleLlmConfig {
   /** Target word count for non-CJK titles. */
   readonly targetWords: number
-  /** Target character count for Chinese, Japanese, or Korean titles. */
+  /** Target character count for CJK-script titles. */
   readonly targetCjkCharacters: number
   /** Maximum UTF-8 bytes in the final JSON-framed user prompt. */
   readonly maxInputBytes: number

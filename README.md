@@ -10,7 +10,7 @@ Documentation: [https://deepseek-harness.github.io/deepseek-harness/](https://de
 
 Alongside minor cosmetic changes, this fork:
 
-- Keeps the maintained source, documentation, and website English-only, without the bilingual translation and synchronization system (a bit sad about this but my Chinese is not good enough and it was only wasting tokens).
+- Keeps the maintained source, documentation, and website English-only.
 - Adds the [Daedal reference setup](docs/reference/daedal/README.md): an OpenRouter-first coding preset with named roles, matching Web and headless composition, and per-role model and reasoning controls.
 - Routes conversation models and citation-backed web search through OpenRouter, with provider-routing controls, editable provider and model configuration, and native OpenAI Codex account authentication.
 - Adds [model-backed tool policy](docs/subsystems/tool-policy.md), including a Policy reviewed permission mode, independent intent and effect review, scoped MCP capabilities and clients, trusted subagent principals, and validated child results.
