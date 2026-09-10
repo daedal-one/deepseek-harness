@@ -474,7 +474,7 @@ describe('BashRow terminal card', () => {
 
     expect(row.getAttribute('aria-expanded')).toBe('true')
     expect(view.getByText('IN')).toBeTruthy()
-    expect(view.getByText('Output')).toBeTruthy()
+    expect(view.getByText('OUT')).toBeTruthy()
     expect(view.getByText(/"command": "ls -la"/)).toBeTruthy()
     expect(view.container.querySelector('[class*="_ioText_"][data-error]')).toBeNull()
     expect(view.container.querySelectorAll('[class*="_ioText_"]')[1]?.textContent)
@@ -517,7 +517,7 @@ describe('BashRow terminal card', () => {
 
     expect(row.getAttribute('aria-expanded')).toBe('true')
     expect(view.getByText('IN')).toBeTruthy()
-    expect(view.getByText('Output')).toBeTruthy()
+    expect(view.getByText('OUT')).toBeTruthy()
     expect(view.getByText(/"command": "ls -la"/)).toBeTruthy()
     expect(view.container.querySelector('[data-error]')?.textContent).toBe('Error: command aborted')
   })

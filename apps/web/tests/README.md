@@ -8,6 +8,8 @@ the deliberate composition divergences from `dsh web` — are documented in
 
 ## Completion observations
 
+The assembled poor-connection recovery case runs as `poor-connection-recovery.expected.e2e.ts` in `test:web`; its boot manifest requires built client modules. See the [fixture execution decision](../../../.agents/notes/implemented/testing/2026-09-10-fork-ci-fixture-contracts.md).
+
 State-sensitive cases use Workspace, admission, attachment, and model-stream barriers to separate visible intermediate states from completed operations. Details close waits for frame transitions; archive verification assigns an explicit title to the seeded Session and follows that identity across reload. See the [CI fixture synchronization decision](../../../.agents/notes/implemented/testing/2026-09-08-ci-completion-observations.md).
 
 ## These are Host-face tests

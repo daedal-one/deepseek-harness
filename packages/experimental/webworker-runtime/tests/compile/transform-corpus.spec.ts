@@ -41,7 +41,7 @@ test.each([
 ] as const)('classifies dockkit import: %s', (mode, status, finding) => {
   const root = new URL('../../../../../', import.meta.url)
   const bundle = 'packages/client/ui-dockkit/lib/index.js'
-  const css = fileURLToPath(new URL('packages/client/ui-dockkit/lib/components/dockkit.module.css', root))
+  const css = fileURLToPath(new URL('packages/client/ui-primitives/src/StateDot.module.css', root))
   const message = mode === 'error'
     ? 'dockkit-negative-control'
     : `Unknown file extension ".css" for ${mode === 'other-css' ? `${css}.other.css` : css}`

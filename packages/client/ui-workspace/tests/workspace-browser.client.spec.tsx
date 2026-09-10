@@ -499,7 +499,7 @@ describe('WorkspaceBrowser', () => {
     })
     fireEvent.click(screen.getByText('alpha'))
     expect(screen.getByText('child-s')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /展开|收起/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Expand|Show less/ })).toBeNull()
     expect(screen.getByText('child-s').closest('[role="treeitem"]')?.getAttribute('draggable')).toBe('true')
   })
 
@@ -529,8 +529,8 @@ describe('WorkspaceBrowser', () => {
     })
     // The loose session's group is UNGROUPED_KEY: expanded by the effect.
     expect(screen.getByText('loose')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Workspace actions for 未分组' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'New session in 未分组' }))
+    expect(screen.queryByRole('button', { name: 'Workspace actions for Ungrouped' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'New session in Ungrouped' }))
     expect(startSession).not.toHaveBeenCalled()
   })
 
@@ -1424,9 +1424,9 @@ describe('WorkspaceBrowser', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Workspace actions for Alpha' }))
     fireEvent.click(screen.getByRole('menuitem', { name: 'Delete workspace' }))
     const dialog = screen.getByRole('dialog', { name: 'Delete workspace' })
-    expect(dialog.textContent).toContain('将把“Alpha”从工作区列表中移除')
-    expect(dialog.textContent).toContain('文件夹与会话记录会保留')
-    expect(dialog.textContent).toContain('其会话将显示在“未分组”下')
+    expect(dialog.textContent).toContain('This removes “Alpha” from the workspace list')
+    expect(dialog.textContent).toContain('The folder and session logs will be kept')
+    expect(dialog.textContent).toContain('Its sessions will appear under Ungrouped')
 
     const confirm = screen.getByRole<HTMLButtonElement>('button', { name: 'Delete workspace' })
     fireEvent.click(confirm)

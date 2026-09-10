@@ -294,7 +294,7 @@
 
 .loadMore {
   align-self: center;
-  border: 1px solid var(--dsw-alias-border-secondary);
+  border: 0.5px solid var(--dsw-alias-border-secondary);
   border-radius: 14px;
   padding: 4px 12px;
   color: var(--dsw-alias-label-secondary);

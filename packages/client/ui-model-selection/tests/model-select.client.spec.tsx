@@ -214,7 +214,7 @@ describe('ModelSelect reasoning effort', () => {
         select={vi.fn().mockResolvedValue(true)}
         t={t}
       />)
-      const trigger = screen.getByRole('button', { name: /选择模型/ })
+      const trigger = screen.getByRole('button', { name: /Select model/ })
       fireEvent.click(trigger)
       const menu = screen.getByRole('menu')
       // Outside the composer subtree — column overflow clips cannot crop it.

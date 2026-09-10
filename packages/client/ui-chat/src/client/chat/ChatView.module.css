@@ -158,7 +158,7 @@
 }
 
 .openError button {
-  border: 1px solid var(--dsw-alias-border-secondary);
+  border: 0.5px solid var(--dsw-alias-border-secondary);
   border-radius: 12px;
   padding: 2px 8px;
   background: transparent;

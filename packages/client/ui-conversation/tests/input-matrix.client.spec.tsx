@@ -309,7 +309,7 @@ describe('matrix row: submitting', () => {
     act(() => { second.shell.setDraft('New draft typed mid-flight') })
     act(() => { rejectSubmit(new Error('Late failure')) })
     await vi.waitFor(() => { expect(second.shell.snapshot.phase).toBe('plain') })
-    expect(second.shell.snapshot.draft).toBe('用户飞行中打的新稿')
+    expect(second.shell.snapshot.draft).toBe('New draft typed mid-flight')
     expect(second.view.getByText('Late failure')).toBeTruthy()
   })
 })

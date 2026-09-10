@@ -252,7 +252,7 @@
     gap: 8px;
     width: 100%;
     padding: max(12px, env(safe-area-inset-top)) 12px 8px;
-    border-bottom: 1px solid var(--dsw-alias-border-l2);
+    border-bottom: 0.5px solid var(--dsw-alias-border-l2);
   }
 
   .navTitle {

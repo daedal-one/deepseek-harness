@@ -24,7 +24,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const repositoryRoot = fileURLToPath(new URL('../../../../../', import.meta.url))
 const DOCKKIT_BUNDLE = 'packages/client/ui-dockkit/lib/index.js'
-const DOCKKIT_CSS = join(repositoryRoot, 'packages/client/ui-dockkit/lib/components/dockkit.module.css')
+// Dockkit imports shared primitives before its own stylesheet; tsx resolves that dependency through source aliases.
+const DOCKKIT_CSS = join(repositoryRoot, 'packages/client/ui-primitives/src/StateDot.module.css')
 
 /**
  * Files Node's ESM loader cannot import in this repository. None is a finding:

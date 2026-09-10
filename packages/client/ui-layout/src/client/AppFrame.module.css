@@ -125,7 +125,7 @@
   left: 0;
   z-index: 40;
   width: min(86vw, 320px);
-  border-right-color: var(--dsw-alias-border-l1);
+  border-right: none;
   box-shadow: var(--dsw-shadow-lv3);
   transition: width var(--ds-transition-duration-slow) var(--ds-ease-in-out);
 }

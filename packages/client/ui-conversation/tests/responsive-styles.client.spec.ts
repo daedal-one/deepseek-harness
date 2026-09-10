@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 const skeleton = readFileSync(fileURLToPath(new URL('../src/client/skeleton/ConversationRoot.module.css', import.meta.url)), 'utf8')
-const chat = readFileSync(fileURLToPath(new URL('../src/client/chat/ChatView.module.css', import.meta.url)), 'utf8')
+const chat = readFileSync(fileURLToPath(new URL('../../ui-chat/src/client/chat/ChatView.module.css', import.meta.url)), 'utf8')
 
 describe('conversation responsive styles', () => {
   it('keeps phone chrome, composer, and transcript inside the visible viewport', () => {

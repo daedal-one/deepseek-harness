@@ -440,7 +440,7 @@ jobs:
       targets: node24-linux-x64,node24-win-x64
       ci: true
     secrets:
-      DEEPSEEK_API_KEY_EXTERNAL: ${{ secrets.DEEPSEEK_API_KEY_EXTERNAL }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 
   # Every pull request also gets real Windows-kernel signals. The former
   # monolithic windows-native job is split into smaller jobs so one slow

@@ -14,7 +14,7 @@ import {
   ScheduleCatalogAction,
   type ScheduleCatalogActionProps,
 } from '../src/client/ScheduleCatalogAction.tsx'
-import { en, en as copy } from '../src/client/locales.ts'
+import { en } from '../src/client/locales.ts'
 
 const SESSION = 'schedule-session' as SessionId
 const START = Date.parse('2026-08-25T12:00:00.000Z')
@@ -71,7 +71,7 @@ function sessionSnapshot(openState: SessionSnapshot['openState']): SessionSnapsh
 function props(
   records: readonly ScheduleRecord[] | undefined,
   openState: SessionSnapshot['openState'] = 'open',
-  dictionary: typeof copy   = en,
+  dictionary: typeof en = en,
 ): ScheduleCatalogActionProps {
   const snapshot = sessionSnapshot(openState)
   const useSession = <T,>(select: (value: SessionSnapshot) => T): T => select(snapshot)
@@ -182,25 +182,23 @@ describe('ScheduleCatalogAction rows', () => {
     expect(rows.every(row => row.tabIndex === -1)).toBe(true)
   })
 
-  it('renders exact recurring units without rounding and localizes both dictionaries', () => {
+  it('renders exact recurring units without rounding', () => {
     const tEn = makeTranslate(en)
-    const tZh = makeTranslate(copy)
     const samples = [
-      [86_400, 'Every 1 day', 'Every 1 天'],
-      [172_800, 'Every 2 days', 'Every 2 天'],
-      [3_600, 'Every 1 hour', 'Every 1 小时'],
-      [7_200, 'Every 2 hours', 'Every 2 小时'],
-      [300, 'Every 5 minutes', 'Every 5 分钟'],
-      [301, 'Every 301 seconds', 'Every 3 01秒'],
+      [86_400, 'Every 1 day'],
+      [172_800, 'Every 2 days'],
+      [3_600, 'Every 1 hour'],
+      [7_200, 'Every 2 hours'],
+      [300, 'Every 5 minutes'],
+      [301, 'Every 301 seconds'],
     ] as const
-    for (const [seconds, english, chinese] of samples) {
+    for (const [seconds, english] of samples) {
       const item = record(String(seconds), 'every', START + 1_000, { everySeconds: seconds })
       expect(formatScheduleFrequency(item, tEn)).toBe(english)
-      expect(formatScheduleFrequency(item, tZh)).toBe(chinese)
     }
-    expect(formatScheduleFrequency(record('once', 'at', START + 1_000), tZh)).toBe('Once')
-    expect(tZh('status.scheduled')).toBe('Scheduled')
-    expect(tZh('status.overdue')).toBe('Overdue')
+    expect(formatScheduleFrequency(record('once', 'at', START + 1_000), tEn)).toBe('Once')
+    expect(tEn('status.scheduled')).toBe('Scheduled')
+    expect(tEn('status.overdue')).toBe('Overdue')
   })
 
   it('formats absolute time with the active document locale instead of the runtime default', () => {

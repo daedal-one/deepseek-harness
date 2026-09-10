@@ -135,14 +135,8 @@
       "data": {
         "header": {
           "config": {
-            "provider": "deepseek-official",
-            "model": "smoke-model",
-            "maxTokens": 256000,
-            "reasoningEffort": "high"
-          },
-          "adapterDefaults": {
-            "reasoningEffort": true,
-            "maxTokens": true
+            "provider": "openrouter",
+            "model": "deepseek/deepseek-v4-flash"
           },
           "tools": [
             "cordis_define",
@@ -168,9 +162,9 @@
       "seq": 11,
       "time": 0,
       "data": {
-        "provider": "deepseek-official",
-        "model": "smoke-model",
-        "contextWindow": 1000000
+        "provider": "openrouter",
+        "model": "deepseek/deepseek-v4-flash",
+        "contextWindow": 1024000
       }
     },
     {
@@ -188,18 +182,8 @@
       }
     },
     {
-      "type": "session-log-deepseek/delivery-accepted",
-      "seq": 13,
-      "time": 0,
-      "data": {
-        "sessionId": "{{parent}}",
-        "sessionFormatVersion": 3,
-        "throughSeq": 12
-      }
-    },
-    {
       "type": "assistant/message",
-      "seq": 14,
+      "seq": 13,
       "time": 0,
       "data": {
         "turn": 1,
@@ -211,13 +195,28 @@
               "type": "tool-call",
               "id": "advanced-define",
               "name": "cordis_define",
-              "arguments": "{\"plugin\": {\"kind\": \"new\", \"idPrefix\": \"snap\"}, \"name\": \"Snapshot Double\", \"purpose\": \"Expose a deterministic doubling tool for executable snapshot verification.\", \"code\": {\"host\": \"return (ctx) => {\\n  harness.registerTool(ctx, harness.defineTool({\\n    name: 'snapshot_double',\\n    description: 'Double a number for executable snapshot verification.',\\n    parameters: { value: { type: 'number', required: true } },\\n    output: {\\n      schema: { type: 'number' },\\n      render(_args, value) {\\n        return [{ type: 'text', text: String(value) }]\\n      }\\n    },\\n    async execute(args) {\\n      return args.value * 2\\n    }\\n  }))\\n}\\n\"}}"
+              "arguments": "{\"plugin\":{\"kind\":\"new\",\"idPrefix\":\"snap\"},\"name\":\"Snapshot Double\",\"purpose\":\"Expose a deterministic doubling tool for executable snapshot verification.\",\"code\":{\"host\":\"return (ctx) => {\\n  harness.registerTool(ctx, harness.defineTool({\\n    name: 'snapshot_double',\\n    description: 'Double a number for executable snapshot verification.',\\n    parameters: { value: { type: 'number', required: true } },\\n    output: {\\n      schema: { type: 'number' },\\n      render(_args, value) {\\n        return [{ type: 'text', text: String(value) }]\\n      }\\n    },\\n    async execute(args) {\\n      return args.value * 2\\n    }\\n  }))\\n}\\n\"}}"
             }
           ],
           "source": {
             "kind": "model",
-            "provider": "deepseek-official",
-            "model": "smoke-model"
+            "provider": "openrouter",
+            "model": "deepseek/deepseek-v4-flash",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "openai-completions",
+                "provider": "openrouter",
+                "model": "deepseek/deepseek-v4-flash",
+                "stopReason": "toolUse"
+              },
+              "blocks": [
+                {
+                  "type": "tool-call"
+                }
+              ]
+            }
           },
           "id": "{{messageId}}"
         },
@@ -257,7 +256,7 @@
                 "type": "tool-call",
                 "id": "advanced-define",
                 "name": "cordis_define",
-                "arguments": "{\"plugin\": {\"kind\": \"new\", \"idPrefix\": \"snap\"}, \"name\": \"Snapshot Double\", \"purpose\": \"Expose a deterministic doubling tool for executable snapshot verification.\", \"code\": {\"host\": \"return (ctx) => {\\n  harness.registerTool(ctx, harness.defineTool({\\n    name: 'snapshot_double',\\n    description: 'Double a number for executable snapshot verification.',\\n    parameters: { value: { type: 'number', required: true } },\\n    output: {\\n      schema: { type: 'number' },\\n      render(_args, value) {\\n        return [{ type: 'text', text: String(value) }]\\n      }\\n    },\\n    async execute(args) {\\n      return args.value * 2\\n    }\\n  }))\\n}\\n\"}}"
+                "arguments": "{\"plugin\":{\"kind\":\"new\",\"idPrefix\":\"snap\"},\"name\":\"Snapshot Double\",\"purpose\":\"Expose a deterministic doubling tool for executable snapshot verification.\",\"code\":{\"host\":\"return (ctx) => {\\n  harness.registerTool(ctx, harness.defineTool({\\n    name: 'snapshot_double',\\n    description: 'Double a number for executable snapshot verification.',\\n    parameters: { value: { type: 'number', required: true } },\\n    output: {\\n      schema: { type: 'number' },\\n      render(_args, value) {\\n        return [{ type: 'text', text: String(value) }]\\n      }\\n    },\\n    async execute(args) {\\n      return args.value * 2\\n    }\\n  }))\\n}\\n\"}}"
               }
             }
           },
@@ -280,6 +279,21 @@
               "type": "finish",
               "reason": {
                 "kind": "tool-calls"
+              },
+              "replayState": {
+                "response": {
+                  "kind": "pi-ai",
+                  "version": 2,
+                  "api": "openai-completions",
+                  "provider": "openrouter",
+                  "model": "deepseek/deepseek-v4-flash",
+                  "stopReason": "toolUse"
+                },
+                "blocks": [
+                  {
+                    "type": "tool-call"
+                  }
+                ]
               }
             }
           }
@@ -289,19 +303,19 @@
     },
     {
       "type": "tool/call",
-      "seq": 15,
+      "seq": 14,
       "time": 0,
       "data": {
         "turn": 1,
         "step": 1,
         "callId": "advanced-define",
         "name": "cordis_define",
-        "arguments": "{\"plugin\": {\"kind\": \"new\", \"idPrefix\": \"snap\"}, \"name\": \"Snapshot Double\", \"purpose\": \"Expose a deterministic doubling tool for executable snapshot verification.\", \"code\": {\"host\": \"return (ctx) => {\\n  harness.registerTool(ctx, harness.defineTool({\\n    name: 'snapshot_double',\\n    description: 'Double a number for executable snapshot verification.',\\n    parameters: { value: { type: 'number', required: true } },\\n    output: {\\n      schema: { type: 'number' },\\n      render(_args, value) {\\n        return [{ type: 'text', text: String(value) }]\\n      }\\n    },\\n    async execute(args) {\\n      return args.value * 2\\n    }\\n  }))\\n}\\n\"}}"
+        "arguments": "{\"plugin\":{\"kind\":\"new\",\"idPrefix\":\"snap\"},\"name\":\"Snapshot Double\",\"purpose\":\"Expose a deterministic doubling tool for executable snapshot verification.\",\"code\":{\"host\":\"return (ctx) => {\\n  harness.registerTool(ctx, harness.defineTool({\\n    name: 'snapshot_double',\\n    description: 'Double a number for executable snapshot verification.',\\n    parameters: { value: { type: 'number', required: true } },\\n    output: {\\n      schema: { type: 'number' },\\n      render(_args, value) {\\n        return [{ type: 'text', text: String(value) }]\\n      }\\n    },\\n    async execute(args) {\\n      return args.value * 2\\n    }\\n  }))\\n}\\n\"}}"
       }
     },
     {
       "type": "tool/result",
-      "seq": 16,
+      "seq": 15,
       "time": 0,
       "data": {
         "turn": 1,
@@ -333,13 +347,13 @@
         }
       },
       "sourceEventSeqs": [
-        15
+        14
       ],
       "surfaceOp": "append"
     },
     {
       "type": "step/end",
-      "seq": 17,
+      "seq": 16,
       "time": 0,
       "data": {
         "turn": 1,
@@ -348,7 +362,7 @@
     },
     {
       "type": "step/start",
-      "seq": 18,
+      "seq": 17,
       "time": 0,
       "data": {
         "turn": 1,
@@ -356,18 +370,8 @@
       }
     },
     {
-      "type": "session-log-deepseek/delivery-accepted",
-      "seq": 19,
-      "time": 0,
-      "data": {
-        "sessionId": "{{parent}}",
-        "sessionFormatVersion": 3,
-        "throughSeq": 18
-      }
-    },
-    {
       "type": "assistant/message",
-      "seq": 20,
+      "seq": 18,
       "time": 0,
       "data": {
         "turn": 1,
@@ -379,13 +383,28 @@
               "type": "tool-call",
               "id": "advanced-run",
               "name": "cordis_run",
-              "arguments": "{\"pluginId\": \"snap-1\", \"packageId\": \"pkg-1\", \"mode\": \"run\"}"
+              "arguments": "{\"pluginId\":\"snap-1\",\"packageId\":\"pkg-1\",\"mode\":\"run\"}"
             }
           ],
           "source": {
             "kind": "model",
-            "provider": "deepseek-official",
-            "model": "smoke-model"
+            "provider": "openrouter",
+            "model": "deepseek/deepseek-v4-flash",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "openai-completions",
+                "provider": "openrouter",
+                "model": "deepseek/deepseek-v4-flash",
+                "stopReason": "toolUse"
+              },
+              "blocks": [
+                {
+                  "type": "tool-call"
+                }
+              ]
+            }
           },
           "id": "{{messageId}}"
         },
@@ -425,7 +444,7 @@
                 "type": "tool-call",
                 "id": "advanced-run",
                 "name": "cordis_run",
-                "arguments": "{\"pluginId\": \"snap-1\", \"packageId\": \"pkg-1\", \"mode\": \"run\"}"
+                "arguments": "{\"pluginId\":\"snap-1\",\"packageId\":\"pkg-1\",\"mode\":\"run\"}"
               }
             }
           },
@@ -448,6 +467,21 @@
               "type": "finish",
               "reason": {
                 "kind": "tool-calls"
+              },
+              "replayState": {
+                "response": {
+                  "kind": "pi-ai",
+                  "version": 2,
+                  "api": "openai-completions",
+                  "provider": "openrouter",
+                  "model": "deepseek/deepseek-v4-flash",
+                  "stopReason": "toolUse"
+                },
+                "blocks": [
+                  {
+                    "type": "tool-call"
+                  }
+                ]
               }
             }
           }
@@ -457,19 +491,19 @@
     },
     {
       "type": "tool/call",
-      "seq": 21,
+      "seq": 19,
       "time": 0,
       "data": {
         "turn": 1,
         "step": 2,
         "callId": "advanced-run",
         "name": "cordis_run",
-        "arguments": "{\"pluginId\": \"snap-1\", \"packageId\": \"pkg-1\", \"mode\": \"run\"}"
+        "arguments": "{\"pluginId\":\"snap-1\",\"packageId\":\"pkg-1\",\"mode\":\"run\"}"
       }
     },
     {
       "type": "tool/result",
-      "seq": 22,
+      "seq": 20,
       "time": 0,
       "data": {
         "turn": 1,
@@ -502,13 +536,13 @@
         }
       },
       "sourceEventSeqs": [
-        21
+        19
       ],
       "surfaceOp": "append"
     },
     {
       "type": "step/end",
-      "seq": 23,
+      "seq": 21,
       "time": 0,
       "data": {
         "turn": 1,
@@ -517,7 +551,7 @@
     },
     {
       "type": "step/start",
-      "seq": 24,
+      "seq": 22,
       "time": 0,
       "data": {
         "turn": 1,
@@ -526,7 +560,7 @@
     },
     {
       "type": "system/message",
-      "seq": 25,
+      "seq": 23,
       "time": 0,
       "data": {
         "turn": 1,
@@ -557,19 +591,13 @@
     },
     {
       "type": "request/header",
-      "seq": 26,
+      "seq": 24,
       "time": 0,
       "data": {
         "header": {
           "config": {
-            "provider": "deepseek-official",
-            "model": "smoke-model",
-            "maxTokens": 256000,
-            "reasoningEffort": "high"
-          },
-          "adapterDefaults": {
-            "reasoningEffort": true,
-            "maxTokens": true
+            "provider": "openrouter",
+            "model": "deepseek/deepseek-v4-flash"
           },
           "tools": [
             "cordis_define",
@@ -593,18 +621,8 @@
       }
     },
     {
-      "type": "session-log-deepseek/delivery-accepted",
-      "seq": 27,
-      "time": 0,
-      "data": {
-        "sessionId": "{{parent}}",
-        "sessionFormatVersion": 3,
-        "throughSeq": 26
-      }
-    },
-    {
       "type": "assistant/message",
-      "seq": 28,
+      "seq": 25,
       "time": 0,
       "data": {
         "turn": 1,
@@ -616,13 +634,28 @@
               "type": "tool-call",
               "id": "advanced-code",
               "name": "run_code",
-              "arguments": "{\"code\": \"return await tools.snapshot_double({ value: 21 })\", \"description\": \"Run the temporary Plugin tool\"}"
+              "arguments": "{\"code\":\"return await tools.snapshot_double({ value: 21 })\",\"description\":\"Run the temporary Plugin tool\"}"
             }
           ],
           "source": {
             "kind": "model",
-            "provider": "deepseek-official",
-            "model": "smoke-model"
+            "provider": "openrouter",
+            "model": "deepseek/deepseek-v4-flash",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "openai-completions",
+                "provider": "openrouter",
+                "model": "deepseek/deepseek-v4-flash",
+                "stopReason": "toolUse"
+              },
+              "blocks": [
+                {
+                  "type": "tool-call"
+                }
+              ]
+            }
           },
           "id": "{{messageId}}"
         },
@@ -662,7 +695,7 @@
                 "type": "tool-call",
                 "id": "advanced-code",
                 "name": "run_code",
-                "arguments": "{\"code\": \"return await tools.snapshot_double({ value: 21 })\", \"description\": \"Run the temporary Plugin tool\"}"
+                "arguments": "{\"code\":\"return await tools.snapshot_double({ value: 21 })\",\"description\":\"Run the temporary Plugin tool\"}"
               }
             }
           },
@@ -685,6 +718,21 @@
               "type": "finish",
               "reason": {
                 "kind": "tool-calls"
+              },
+              "replayState": {
+                "response": {
+                  "kind": "pi-ai",
+                  "version": 2,
+                  "api": "openai-completions",
+                  "provider": "openrouter",
+                  "model": "deepseek/deepseek-v4-flash",
+                  "stopReason": "toolUse"
+                },
+                "blocks": [
+                  {
+                    "type": "tool-call"
+                  }
+                ]
               }
             }
           }
@@ -694,19 +742,19 @@
     },
     {
       "type": "tool/call",
-      "seq": 29,
+      "seq": 26,
       "time": 0,
       "data": {
         "turn": 1,
         "step": 3,
         "callId": "advanced-code",
         "name": "run_code",
-        "arguments": "{\"code\": \"return await tools.snapshot_double({ value: 21 })\", \"description\": \"Run the temporary Plugin tool\"}"
+        "arguments": "{\"code\":\"return await tools.snapshot_double({ value: 21 })\",\"description\":\"Run the temporary Plugin tool\"}"
       }
     },
     {
       "type": "tool/ptc-dispatch-start",
-      "seq": 30,
+      "seq": 27,
       "time": 0,
       "data": {
         "rootCallId": "advanced-code",
@@ -720,7 +768,7 @@
     },
     {
       "type": "tool/ptc-dispatch",
-      "seq": 31,
+      "seq": 28,
       "time": 0,
       "data": {
         "rootCallId": "advanced-code",
@@ -741,7 +789,7 @@
     },
     {
       "type": "tool/result",
-      "seq": 32,
+      "seq": 29,
       "time": 0,
       "data": {
         "turn": 1,
@@ -769,13 +817,13 @@
         }
       },
       "sourceEventSeqs": [
-        29
+        26
       ],
       "surfaceOp": "append"
     },
     {
       "type": "step/end",
-      "seq": 33,
+      "seq": 30,
       "time": 0,
       "data": {
         "turn": 1,
@@ -784,7 +832,7 @@
     },
     {
       "type": "step/start",
-      "seq": 34,
+      "seq": 31,
       "time": 0,
       "data": {
         "turn": 1,
@@ -792,18 +840,8 @@
       }
     },
     {
-      "type": "session-log-deepseek/delivery-accepted",
-      "seq": 35,
-      "time": 0,
-      "data": {
-        "sessionId": "{{parent}}",
-        "sessionFormatVersion": 3,
-        "throughSeq": 34
-      }
-    },
-    {
       "type": "assistant/message",
-      "seq": 36,
+      "seq": 32,
       "time": 0,
       "data": {
         "turn": 1,
@@ -815,13 +853,28 @@
               "type": "tool-call",
               "id": "advanced-direct-child",
               "name": "subagent",
-              "arguments": "{\"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
+              "arguments": "{\"description\":\"Check direct child\",\"prompt\":\"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
             }
           ],
           "source": {
             "kind": "model",
-            "provider": "deepseek-official",
-            "model": "smoke-model"
+            "provider": "openrouter",
+            "model": "deepseek/deepseek-v4-flash",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "openai-completions",
+                "provider": "openrouter",
+                "model": "deepseek/deepseek-v4-flash",
+                "stopReason": "toolUse"
+              },
+              "blocks": [
+                {
+                  "type": "tool-call"
+                }
+              ]
+            }
           },
           "id": "{{messageId}}"
         },
@@ -861,7 +914,7 @@
                 "type": "tool-call",
                 "id": "advanced-direct-child",
                 "name": "subagent",
-                "arguments": "{\"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
+                "arguments": "{\"description\":\"Check direct child\",\"prompt\":\"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
               }
             }
           },
@@ -884,6 +937,21 @@
               "type": "finish",
               "reason": {
                 "kind": "tool-calls"
+              },
+              "replayState": {
+                "response": {
+                  "kind": "pi-ai",
+                  "version": 2,
+                  "api": "openai-completions",
+                  "provider": "openrouter",
+                  "model": "deepseek/deepseek-v4-flash",
+                  "stopReason": "toolUse"
+                },
+                "blocks": [
+                  {
+                    "type": "tool-call"
+                  }
+                ]
               }
             }
           }
@@ -893,19 +961,19 @@
     },
     {
       "type": "tool/call",
-      "seq": 37,
+      "seq": 33,
       "time": 0,
       "data": {
         "turn": 1,
         "step": 4,
         "callId": "advanced-direct-child",
         "name": "subagent",
-        "arguments": "{\"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
+        "arguments": "{\"description\":\"Check direct child\",\"prompt\":\"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
       }
     },
     {
       "type": "subagent/catalog",
-      "seq": 38,
+      "seq": 34,
       "time": 0,
       "data": {
         "version": 0,
@@ -917,7 +985,7 @@
     },
     {
       "type": "tool/result",
-      "seq": 39,
+      "seq": 35,
       "time": 0,
       "data": {
         "turn": 1,
@@ -945,13 +1013,13 @@
         }
       },
       "sourceEventSeqs": [
-        37
+        33
       ],
       "surfaceOp": "append"
     },
     {
       "type": "step/end",
-      "seq": 40,
+      "seq": 36,
       "time": 0,
       "data": {
         "turn": 1,
@@ -960,7 +1028,7 @@
     },
     {
       "type": "step/start",
-      "seq": 41,
+      "seq": 37,
       "time": 0,
       "data": {
         "turn": 1,
@@ -968,18 +1036,8 @@
       }
     },
     {
-      "type": "session-log-deepseek/delivery-accepted",
-      "seq": 42,
-      "time": 0,
-      "data": {
-        "sessionId": "{{parent}}",
-        "sessionFormatVersion": 3,
-        "throughSeq": 41
-      }
-    },
-    {
       "type": "assistant/message",
-      "seq": 43,
+      "seq": 38,
       "time": 0,
       "data": {
         "turn": 1,
@@ -991,13 +1049,28 @@
               "type": "tool-call",
               "id": "advanced-workflow",
               "name": "workflow",
-              "arguments": "{\"script\": \"phase('Delegate')\\nconst reply = await agent('Reply with exactly WORKFLOW_CHILD_OK and nothing else.', { label: 'workflow-child' })\\nreturn { reply }\", \"meta\": {\"name\": \"advanced-exe-snapshot\", \"description\": \"exercise one packaged workflow child\"}}"
+              "arguments": "{\"script\":\"phase('Delegate')\\nconst reply = await agent('Reply with exactly WORKFLOW_CHILD_OK and nothing else.', { label: 'workflow-child' })\\nreturn { reply }\",\"meta\":{\"name\":\"advanced-exe-snapshot\",\"description\":\"exercise one packaged workflow child\"}}"
             }
           ],
           "source": {
             "kind": "model",
-            "provider": "deepseek-official",
-            "model": "smoke-model"
+            "provider": "openrouter",
+            "model": "deepseek/deepseek-v4-flash",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "openai-completions",
+                "provider": "openrouter",
+                "model": "deepseek/deepseek-v4-flash",
+                "stopReason": "toolUse"
+              },
+              "blocks": [
+                {
+                  "type": "tool-call"
+                }
+              ]
+            }
           },
           "id": "{{messageId}}"
         },
@@ -1037,7 +1110,7 @@
                 "type": "tool-call",
                 "id": "advanced-workflow",
                 "name": "workflow",
-                "arguments": "{\"script\": \"phase('Delegate')\\nconst reply = await agent('Reply with exactly WORKFLOW_CHILD_OK and nothing else.', { label: 'workflow-child' })\\nreturn { reply }\", \"meta\": {\"name\": \"advanced-exe-snapshot\", \"description\": \"exercise one packaged workflow child\"}}"
+                "arguments": "{\"script\":\"phase('Delegate')\\nconst reply = await agent('Reply with exactly WORKFLOW_CHILD_OK and nothing else.', { label: 'workflow-child' })\\nreturn { reply }\",\"meta\":{\"name\":\"advanced-exe-snapshot\",\"description\":\"exercise one packaged workflow child\"}}"
               }
             }
           },
@@ -1060,6 +1133,21 @@
               "type": "finish",
               "reason": {
                 "kind": "tool-calls"
+              },
+              "replayState": {
+                "response": {
+                  "kind": "pi-ai",
+                  "version": 2,
+                  "api": "openai-completions",
+                  "provider": "openrouter",
+                  "model": "deepseek/deepseek-v4-flash",
+                  "stopReason": "toolUse"
+                },
+                "blocks": [
+                  {
+                    "type": "tool-call"
+                  }
+                ]
               }
             }
           }
@@ -1069,19 +1157,19 @@
     },
     {
       "type": "tool/call",
-      "seq": 44,
+      "seq": 39,
       "time": 0,
       "data": {
         "turn": 1,
         "step": 5,
         "callId": "advanced-workflow",
         "name": "workflow",
-        "arguments": "{\"script\": \"phase('Delegate')\\nconst reply = await agent('Reply with exactly WORKFLOW_CHILD_OK and nothing else.', { label: 'workflow-child' })\\nreturn { reply }\", \"meta\": {\"name\": \"advanced-exe-snapshot\", \"description\": \"exercise one packaged workflow child\"}}"
+        "arguments": "{\"script\":\"phase('Delegate')\\nconst reply = await agent('Reply with exactly WORKFLOW_CHILD_OK and nothing else.', { label: 'workflow-child' })\\nreturn { reply }\",\"meta\":{\"name\":\"advanced-exe-snapshot\",\"description\":\"exercise one packaged workflow child\"}}"
       }
     },
     {
       "type": "tool-workflow/run-start",
-      "seq": 45,
+      "seq": 40,
       "time": 0,
       "data": {
         "runId": "{{workflow-run}}",
@@ -1090,7 +1178,7 @@
     },
     {
       "type": "subagent/catalog",
-      "seq": 46,
+      "seq": 41,
       "time": 0,
       "data": {
         "version": 0,
@@ -1101,7 +1189,7 @@
     },
     {
       "type": "tool-workflow/agent-start",
-      "seq": 47,
+      "seq": 42,
       "time": 0,
       "data": {
         "runId": "{{workflow-run}}",
@@ -1113,7 +1201,7 @@
     },
     {
       "type": "tool-workflow/agent-end",
-      "seq": 48,
+      "seq": 43,
       "time": 0,
       "data": {
         "runId": "{{workflow-run}}",
@@ -1123,7 +1211,7 @@
     },
     {
       "type": "tool-workflow/run-end",
-      "seq": 49,
+      "seq": 44,
       "time": 0,
       "data": {
         "runId": "{{workflow-run}}",
@@ -1132,7 +1220,7 @@
     },
     {
       "type": "tool/result",
-      "seq": 50,
+      "seq": 45,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1160,13 +1248,13 @@
         }
       },
       "sourceEventSeqs": [
-        44
+        39
       ],
       "surfaceOp": "append"
     },
     {
       "type": "step/end",
-      "seq": 51,
+      "seq": 46,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1175,7 +1263,7 @@
     },
     {
       "type": "step/start",
-      "seq": 52,
+      "seq": 47,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1183,18 +1271,8 @@
       }
     },
     {
-      "type": "session-log-deepseek/delivery-accepted",
-      "seq": 53,
-      "time": 0,
-      "data": {
-        "sessionId": "{{parent}}",
-        "sessionFormatVersion": 3,
-        "throughSeq": 52
-      }
-    },
-    {
       "type": "assistant/message",
-      "seq": 54,
+      "seq": 48,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1206,13 +1284,28 @@
               "type": "tool-call",
               "id": "advanced-undefine",
               "name": "cordis_undefine",
-              "arguments": "{\"pluginId\": \"snap-1\"}"
+              "arguments": "{\"pluginId\":\"snap-1\"}"
             }
           ],
           "source": {
             "kind": "model",
-            "provider": "deepseek-official",
-            "model": "smoke-model"
+            "provider": "openrouter",
+            "model": "deepseek/deepseek-v4-flash",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "openai-completions",
+                "provider": "openrouter",
+                "model": "deepseek/deepseek-v4-flash",
+                "stopReason": "toolUse"
+              },
+              "blocks": [
+                {
+                  "type": "tool-call"
+                }
+              ]
+            }
           },
           "id": "{{messageId}}"
         },
@@ -1252,7 +1345,7 @@
                 "type": "tool-call",
                 "id": "advanced-undefine",
                 "name": "cordis_undefine",
-                "arguments": "{\"pluginId\": \"snap-1\"}"
+                "arguments": "{\"pluginId\":\"snap-1\"}"
               }
             }
           },
@@ -1275,6 +1368,21 @@
               "type": "finish",
               "reason": {
                 "kind": "tool-calls"
+              },
+              "replayState": {
+                "response": {
+                  "kind": "pi-ai",
+                  "version": 2,
+                  "api": "openai-completions",
+                  "provider": "openrouter",
+                  "model": "deepseek/deepseek-v4-flash",
+                  "stopReason": "toolUse"
+                },
+                "blocks": [
+                  {
+                    "type": "tool-call"
+                  }
+                ]
               }
             }
           }
@@ -1284,19 +1392,19 @@
     },
     {
       "type": "tool/call",
-      "seq": 55,
+      "seq": 49,
       "time": 0,
       "data": {
         "turn": 1,
         "step": 6,
         "callId": "advanced-undefine",
         "name": "cordis_undefine",
-        "arguments": "{\"pluginId\": \"snap-1\"}"
+        "arguments": "{\"pluginId\":\"snap-1\"}"
       }
     },
     {
       "type": "tool/result",
-      "seq": 56,
+      "seq": 50,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1324,13 +1432,13 @@
         }
       },
       "sourceEventSeqs": [
-        55
+        49
       ],
       "surfaceOp": "append"
     },
     {
       "type": "step/end",
-      "seq": 57,
+      "seq": 51,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1339,7 +1447,7 @@
     },
     {
       "type": "step/start",
-      "seq": 58,
+      "seq": 52,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1348,7 +1456,7 @@
     },
     {
       "type": "system/message",
-      "seq": 59,
+      "seq": 53,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1369,29 +1477,23 @@
         }
       },
       "sourceEventSeqs": [
-        25
+        23
       ],
       "surfaceOp": {
         "op": "replace",
-        "startSeq": 25,
-        "endSeq": 25
+        "startSeq": 23,
+        "endSeq": 23
       }
     },
     {
       "type": "request/header",
-      "seq": 60,
+      "seq": 54,
       "time": 0,
       "data": {
         "header": {
           "config": {
-            "provider": "deepseek-official",
-            "model": "smoke-model",
-            "maxTokens": 256000,
-            "reasoningEffort": "high"
-          },
-          "adapterDefaults": {
-            "reasoningEffort": true,
-            "maxTokens": true
+            "provider": "openrouter",
+            "model": "deepseek/deepseek-v4-flash"
           },
           "tools": [
             "cordis_define",
@@ -1414,18 +1516,8 @@
       }
     },
     {
-      "type": "session-log-deepseek/delivery-accepted",
-      "seq": 61,
-      "time": 0,
-      "data": {
-        "sessionId": "{{parent}}",
-        "sessionFormatVersion": 3,
-        "throughSeq": 60
-      }
-    },
-    {
       "type": "assistant/message",
-      "seq": 62,
+      "seq": 55,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1440,8 +1532,23 @@
           ],
           "source": {
             "kind": "model",
-            "provider": "deepseek-official",
-            "model": "smoke-model"
+            "provider": "openrouter",
+            "model": "deepseek/deepseek-v4-flash",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "openai-completions",
+                "provider": "openrouter",
+                "model": "deepseek/deepseek-v4-flash",
+                "stopReason": "stop"
+              },
+              "blocks": [
+                {
+                  "type": "text"
+                }
+              ]
+            }
           },
           "id": "{{message:1}}"
         },
@@ -1500,6 +1607,21 @@
               "type": "finish",
               "reason": {
                 "kind": "stop"
+              },
+              "replayState": {
+                "response": {
+                  "kind": "pi-ai",
+                  "version": 2,
+                  "api": "openai-completions",
+                  "provider": "openrouter",
+                  "model": "deepseek/deepseek-v4-flash",
+                  "stopReason": "stop"
+                },
+                "blocks": [
+                  {
+                    "type": "text"
+                  }
+                ]
               }
             }
           }
@@ -1509,7 +1631,7 @@
     },
     {
       "type": "step/end",
-      "seq": 63,
+      "seq": 56,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1518,7 +1640,7 @@
     },
     {
       "type": "command/run",
-      "seq": 64,
+      "seq": 57,
       "time": 0,
       "data": {
         "commandId": "{{command:1}}",
@@ -1530,7 +1652,7 @@
     },
     {
       "type": "feedback/record",
-      "seq": 65,
+      "seq": 58,
       "time": 0,
       "data": {
         "text": "The session needs a clearer explanation."
@@ -1538,7 +1660,7 @@
     },
     {
       "type": "command/done",
-      "seq": 66,
+      "seq": 59,
       "time": 0,
       "data": {
         "commandId": "{{command:1}}",
@@ -1548,7 +1670,7 @@
     },
     {
       "type": "feedback/record",
-      "seq": 67,
+      "seq": 60,
       "time": 0,
       "data": {
         "category": "other"
@@ -1556,7 +1678,7 @@
     },
     {
       "type": "feedback/message-put",
-      "seq": 68,
+      "seq": 61,
       "time": 0,
       "data": {
         "sessionId": "{{parent}}",
@@ -1573,7 +1695,7 @@
     },
     {
       "type": "feedback/message-put",
-      "seq": 69,
+      "seq": 62,
       "time": 0,
       "data": {
         "sessionId": "{{parent}}",
@@ -1589,7 +1711,7 @@
     },
     {
       "type": "feedback/message-delete",
-      "seq": 70,
+      "seq": 63,
       "time": 0,
       "data": {
         "sessionId": "{{parent}}",
@@ -1598,7 +1720,7 @@
     },
     {
       "type": "turn/end",
-      "seq": 71,
+      "seq": 64,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1795,14 +1917,8 @@
           "data": {
             "header": {
               "config": {
-                "provider": "deepseek-official",
-                "model": "smoke-model",
-                "maxTokens": 256000,
-                "reasoningEffort": "high"
-              },
-              "adapterDefaults": {
-                "reasoningEffort": true,
-                "maxTokens": true
+                "provider": "openrouter",
+                "model": "deepseek/deepseek-v4-flash"
               },
               "tools": [
                 "cordis_define",
@@ -1834,9 +1950,9 @@
           "seq": 11,
           "time": 0,
           "data": {
-            "provider": "deepseek-official",
-            "model": "smoke-model",
-            "contextWindow": 1000000
+            "provider": "openrouter",
+            "model": "deepseek/deepseek-v4-flash",
+            "contextWindow": 1024000
           }
         }
       }
@@ -1866,24 +1982,8 @@
       "payload": {
         "sessionId": "{{parent}}",
         "event": {
-          "type": "session-log-deepseek/delivery-accepted",
-          "seq": 13,
-          "time": 0,
-          "data": {
-            "sessionId": "{{parent}}",
-            "sessionFormatVersion": 3,
-            "throughSeq": 12
-          }
-        }
-      }
-    },
-    {
-      "method": "session.event",
-      "payload": {
-        "sessionId": "{{parent}}",
-        "event": {
           "type": "assistant/message",
-          "seq": 14,
+          "seq": 13,
           "time": 0,
           "data": {
             "turn": 1,
@@ -1895,13 +1995,28 @@
                   "type": "tool-call",
                   "id": "advanced-define",
                   "name": "cordis_define",
-                  "arguments": "{\"plugin\": {\"kind\": \"new\", \"idPrefix\": \"snap\"}, \"name\": \"Snapshot Double\", \"purpose\": \"Expose a deterministic doubling tool for executable snapshot verification.\", \"code\": {\"host\": \"return (ctx) => {\\n  harness.registerTool(ctx, harness.defineTool({\\n    name: 'snapshot_double',\\n    description: 'Double a number for executable snapshot verification.',\\n    parameters: { value: { type: 'number', required: true } },\\n    output: {\\n      schema: { type: 'number' },\\n      render(_args, value) {\\n        return [{ type: 'text', text: String(value) }]\\n      }\\n    },\\n    async execute(args) {\\n      return args.value * 2\\n    }\\n  }))\\n}\\n\"}}"
+                  "arguments": "{\"plugin\":{\"kind\":\"new\",\"idPrefix\":\"snap\"},\"name\":\"Snapshot Double\",\"purpose\":\"Expose a deterministic doubling tool for executable snapshot verification.\",\"code\":{\"host\":\"return (ctx) => {\\n  harness.registerTool(ctx, harness.defineTool({\\n    name: 'snapshot_double',\\n    description: 'Double a number for executable snapshot verification.',\\n    parameters: { value: { type: 'number', required: true } },\\n    output: {\\n      schema: { type: 'number' },\\n      render(_args, value) {\\n        return [{ type: 'text', text: String(value) }]\\n      }\\n    },\\n    async execute(args) {\\n      return args.value * 2\\n    }\\n  }))\\n}\\n\"}}"
                 }
               ],
               "source": {
                 "kind": "model",
-                "provider": "deepseek-official",
-                "model": "smoke-model"
+                "provider": "openrouter",
+                "model": "deepseek/deepseek-v4-flash",
+                "replayState": {
+                  "response": {
+                    "kind": "pi-ai",
+                    "version": 2,
+                    "api": "openai-completions",
+                    "provider": "openrouter",
+                    "model": "deepseek/deepseek-v4-flash",
+                    "stopReason": "toolUse"
+                  },
+                  "blocks": [
+                    {
+                      "type": "tool-call"
+                    }
+                  ]
+                }
               },
               "id": "{{messageId}}"
             },
@@ -1941,7 +2056,7 @@
                     "type": "tool-call",
                     "id": "advanced-define",
                     "name": "cordis_define",
-                    "arguments": "{\"plugin\": {\"kind\": \"new\", \"idPrefix\": \"snap\"}, \"name\": \"Snapshot Double\", \"purpose\": \"Expose a deterministic doubling tool for executable snapshot verification.\", \"code\": {\"host\": \"return (ctx) => {\\n  harness.registerTool(ctx, harness.defineTool({\\n    name: 'snapshot_double',\\n    description: 'Double a number for executable snapshot verification.',\\n    parameters: { value: { type: 'number', required: true } },\\n    output: {\\n      schema: { type: 'number' },\\n      render(_args, value) {\\n        return [{ type: 'text', text: String(value) }]\\n      }\\n    },\\n    async execute(args) {\\n      return args.value * 2\\n    }\\n  }))\\n}\\n\"}}"
+                    "arguments": "{\"plugin\":{\"kind\":\"new\",\"idPrefix\":\"snap\"},\"name\":\"Snapshot Double\",\"purpose\":\"Expose a deterministic doubling tool for executable snapshot verification.\",\"code\":{\"host\":\"return (ctx) => {\\n  harness.registerTool(ctx, harness.defineTool({\\n    name: 'snapshot_double',\\n    description: 'Double a number for executable snapshot verification.',\\n    parameters: { value: { type: 'number', required: true } },\\n    output: {\\n      schema: { type: 'number' },\\n      render(_args, value) {\\n        return [{ type: 'text', text: String(value) }]\\n      }\\n    },\\n    async execute(args) {\\n      return args.value * 2\\n    }\\n  }))\\n}\\n\"}}"
                   }
                 }
               },
@@ -1964,6 +2079,21 @@
                   "type": "finish",
                   "reason": {
                     "kind": "tool-calls"
+                  },
+                  "replayState": {
+                    "response": {
+                      "kind": "pi-ai",
+                      "version": 2,
+                      "api": "openai-completions",
+                      "provider": "openrouter",
+                      "model": "deepseek/deepseek-v4-flash",
+                      "stopReason": "toolUse"
+                    },
+                    "blocks": [
+                      {
+                        "type": "tool-call"
+                      }
+                    ]
                   }
                 }
               }
@@ -1979,14 +2109,14 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/call",
-          "seq": 15,
+          "seq": 14,
           "time": 0,
           "data": {
             "turn": 1,
             "step": 1,
             "callId": "advanced-define",
             "name": "cordis_define",
-            "arguments": "{\"plugin\": {\"kind\": \"new\", \"idPrefix\": \"snap\"}, \"name\": \"Snapshot Double\", \"purpose\": \"Expose a deterministic doubling tool for executable snapshot verification.\", \"code\": {\"host\": \"return (ctx) => {\\n  harness.registerTool(ctx, harness.defineTool({\\n    name: 'snapshot_double',\\n    description: 'Double a number for executable snapshot verification.',\\n    parameters: { value: { type: 'number', required: true } },\\n    output: {\\n      schema: { type: 'number' },\\n      render(_args, value) {\\n        return [{ type: 'text', text: String(value) }]\\n      }\\n    },\\n    async execute(args) {\\n      return args.value * 2\\n    }\\n  }))\\n}\\n\"}}"
+            "arguments": "{\"plugin\":{\"kind\":\"new\",\"idPrefix\":\"snap\"},\"name\":\"Snapshot Double\",\"purpose\":\"Expose a deterministic doubling tool for executable snapshot verification.\",\"code\":{\"host\":\"return (ctx) => {\\n  harness.registerTool(ctx, harness.defineTool({\\n    name: 'snapshot_double',\\n    description: 'Double a number for executable snapshot verification.',\\n    parameters: { value: { type: 'number', required: true } },\\n    output: {\\n      schema: { type: 'number' },\\n      render(_args, value) {\\n        return [{ type: 'text', text: String(value) }]\\n      }\\n    },\\n    async execute(args) {\\n      return args.value * 2\\n    }\\n  }))\\n}\\n\"}}"
           }
         }
       }
@@ -1997,7 +2127,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/result",
-          "seq": 16,
+          "seq": 15,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2029,7 +2159,7 @@
             }
           },
           "sourceEventSeqs": [
-            15
+            14
           ],
           "surfaceOp": "append"
         }
@@ -2041,7 +2171,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/end",
-          "seq": 17,
+          "seq": 16,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2056,7 +2186,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/start",
-          "seq": 18,
+          "seq": 17,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2070,24 +2200,8 @@
       "payload": {
         "sessionId": "{{parent}}",
         "event": {
-          "type": "session-log-deepseek/delivery-accepted",
-          "seq": 19,
-          "time": 0,
-          "data": {
-            "sessionId": "{{parent}}",
-            "sessionFormatVersion": 3,
-            "throughSeq": 18
-          }
-        }
-      }
-    },
-    {
-      "method": "session.event",
-      "payload": {
-        "sessionId": "{{parent}}",
-        "event": {
           "type": "assistant/message",
-          "seq": 20,
+          "seq": 18,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2099,13 +2213,28 @@
                   "type": "tool-call",
                   "id": "advanced-run",
                   "name": "cordis_run",
-                  "arguments": "{\"pluginId\": \"snap-1\", \"packageId\": \"pkg-1\", \"mode\": \"run\"}"
+                  "arguments": "{\"pluginId\":\"snap-1\",\"packageId\":\"pkg-1\",\"mode\":\"run\"}"
                 }
               ],
               "source": {
                 "kind": "model",
-                "provider": "deepseek-official",
-                "model": "smoke-model"
+                "provider": "openrouter",
+                "model": "deepseek/deepseek-v4-flash",
+                "replayState": {
+                  "response": {
+                    "kind": "pi-ai",
+                    "version": 2,
+                    "api": "openai-completions",
+                    "provider": "openrouter",
+                    "model": "deepseek/deepseek-v4-flash",
+                    "stopReason": "toolUse"
+                  },
+                  "blocks": [
+                    {
+                      "type": "tool-call"
+                    }
+                  ]
+                }
               },
               "id": "{{messageId}}"
             },
@@ -2145,7 +2274,7 @@
                     "type": "tool-call",
                     "id": "advanced-run",
                     "name": "cordis_run",
-                    "arguments": "{\"pluginId\": \"snap-1\", \"packageId\": \"pkg-1\", \"mode\": \"run\"}"
+                    "arguments": "{\"pluginId\":\"snap-1\",\"packageId\":\"pkg-1\",\"mode\":\"run\"}"
                   }
                 }
               },
@@ -2168,6 +2297,21 @@
                   "type": "finish",
                   "reason": {
                     "kind": "tool-calls"
+                  },
+                  "replayState": {
+                    "response": {
+                      "kind": "pi-ai",
+                      "version": 2,
+                      "api": "openai-completions",
+                      "provider": "openrouter",
+                      "model": "deepseek/deepseek-v4-flash",
+                      "stopReason": "toolUse"
+                    },
+                    "blocks": [
+                      {
+                        "type": "tool-call"
+                      }
+                    ]
                   }
                 }
               }
@@ -2183,14 +2327,14 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/call",
-          "seq": 21,
+          "seq": 19,
           "time": 0,
           "data": {
             "turn": 1,
             "step": 2,
             "callId": "advanced-run",
             "name": "cordis_run",
-            "arguments": "{\"pluginId\": \"snap-1\", \"packageId\": \"pkg-1\", \"mode\": \"run\"}"
+            "arguments": "{\"pluginId\":\"snap-1\",\"packageId\":\"pkg-1\",\"mode\":\"run\"}"
           }
         }
       }
@@ -2201,7 +2345,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/result",
-          "seq": 22,
+          "seq": 20,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2234,7 +2378,7 @@
             }
           },
           "sourceEventSeqs": [
-            21
+            19
           ],
           "surfaceOp": "append"
         }
@@ -2246,7 +2390,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/end",
-          "seq": 23,
+          "seq": 21,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2261,7 +2405,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/start",
-          "seq": 24,
+          "seq": 22,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2276,7 +2420,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "system/message",
-          "seq": 25,
+          "seq": 23,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2313,19 +2457,13 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "request/header",
-          "seq": 26,
+          "seq": 24,
           "time": 0,
           "data": {
             "header": {
               "config": {
-                "provider": "deepseek-official",
-                "model": "smoke-model",
-                "maxTokens": 256000,
-                "reasoningEffort": "high"
-              },
-              "adapterDefaults": {
-                "reasoningEffort": true,
-                "maxTokens": true
+                "provider": "openrouter",
+                "model": "deepseek/deepseek-v4-flash"
               },
               "tools": [
                 "cordis_define",
@@ -2355,24 +2493,8 @@
       "payload": {
         "sessionId": "{{parent}}",
         "event": {
-          "type": "session-log-deepseek/delivery-accepted",
-          "seq": 27,
-          "time": 0,
-          "data": {
-            "sessionId": "{{parent}}",
-            "sessionFormatVersion": 3,
-            "throughSeq": 26
-          }
-        }
-      }
-    },
-    {
-      "method": "session.event",
-      "payload": {
-        "sessionId": "{{parent}}",
-        "event": {
           "type": "assistant/message",
-          "seq": 28,
+          "seq": 25,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2384,13 +2506,28 @@
                   "type": "tool-call",
                   "id": "advanced-code",
                   "name": "run_code",
-                  "arguments": "{\"code\": \"return await tools.snapshot_double({ value: 21 })\", \"description\": \"Run the temporary Plugin tool\"}"
+                  "arguments": "{\"code\":\"return await tools.snapshot_double({ value: 21 })\",\"description\":\"Run the temporary Plugin tool\"}"
                 }
               ],
               "source": {
                 "kind": "model",
-                "provider": "deepseek-official",
-                "model": "smoke-model"
+                "provider": "openrouter",
+                "model": "deepseek/deepseek-v4-flash",
+                "replayState": {
+                  "response": {
+                    "kind": "pi-ai",
+                    "version": 2,
+                    "api": "openai-completions",
+                    "provider": "openrouter",
+                    "model": "deepseek/deepseek-v4-flash",
+                    "stopReason": "toolUse"
+                  },
+                  "blocks": [
+                    {
+                      "type": "tool-call"
+                    }
+                  ]
+                }
               },
               "id": "{{messageId}}"
             },
@@ -2430,7 +2567,7 @@
                     "type": "tool-call",
                     "id": "advanced-code",
                     "name": "run_code",
-                    "arguments": "{\"code\": \"return await tools.snapshot_double({ value: 21 })\", \"description\": \"Run the temporary Plugin tool\"}"
+                    "arguments": "{\"code\":\"return await tools.snapshot_double({ value: 21 })\",\"description\":\"Run the temporary Plugin tool\"}"
                   }
                 }
               },
@@ -2453,6 +2590,21 @@
                   "type": "finish",
                   "reason": {
                     "kind": "tool-calls"
+                  },
+                  "replayState": {
+                    "response": {
+                      "kind": "pi-ai",
+                      "version": 2,
+                      "api": "openai-completions",
+                      "provider": "openrouter",
+                      "model": "deepseek/deepseek-v4-flash",
+                      "stopReason": "toolUse"
+                    },
+                    "blocks": [
+                      {
+                        "type": "tool-call"
+                      }
+                    ]
                   }
                 }
               }
@@ -2468,14 +2620,14 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/call",
-          "seq": 29,
+          "seq": 26,
           "time": 0,
           "data": {
             "turn": 1,
             "step": 3,
             "callId": "advanced-code",
             "name": "run_code",
-            "arguments": "{\"code\": \"return await tools.snapshot_double({ value: 21 })\", \"description\": \"Run the temporary Plugin tool\"}"
+            "arguments": "{\"code\":\"return await tools.snapshot_double({ value: 21 })\",\"description\":\"Run the temporary Plugin tool\"}"
           }
         }
       }
@@ -2486,7 +2638,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/ptc-dispatch-start",
-          "seq": 30,
+          "seq": 27,
           "time": 0,
           "data": {
             "rootCallId": "advanced-code",
@@ -2506,7 +2658,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/ptc-dispatch",
-          "seq": 31,
+          "seq": 28,
           "time": 0,
           "data": {
             "rootCallId": "advanced-code",
@@ -2533,7 +2685,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/result",
-          "seq": 32,
+          "seq": 29,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2561,7 +2713,7 @@
             }
           },
           "sourceEventSeqs": [
-            29
+            26
           ],
           "surfaceOp": "append"
         }
@@ -2573,7 +2725,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/end",
-          "seq": 33,
+          "seq": 30,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2588,7 +2740,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/start",
-          "seq": 34,
+          "seq": 31,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2602,24 +2754,8 @@
       "payload": {
         "sessionId": "{{parent}}",
         "event": {
-          "type": "session-log-deepseek/delivery-accepted",
-          "seq": 35,
-          "time": 0,
-          "data": {
-            "sessionId": "{{parent}}",
-            "sessionFormatVersion": 3,
-            "throughSeq": 34
-          }
-        }
-      }
-    },
-    {
-      "method": "session.event",
-      "payload": {
-        "sessionId": "{{parent}}",
-        "event": {
           "type": "assistant/message",
-          "seq": 36,
+          "seq": 32,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2631,13 +2767,28 @@
                   "type": "tool-call",
                   "id": "advanced-direct-child",
                   "name": "subagent",
-                  "arguments": "{\"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
+                  "arguments": "{\"description\":\"Check direct child\",\"prompt\":\"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
                 }
               ],
               "source": {
                 "kind": "model",
-                "provider": "deepseek-official",
-                "model": "smoke-model"
+                "provider": "openrouter",
+                "model": "deepseek/deepseek-v4-flash",
+                "replayState": {
+                  "response": {
+                    "kind": "pi-ai",
+                    "version": 2,
+                    "api": "openai-completions",
+                    "provider": "openrouter",
+                    "model": "deepseek/deepseek-v4-flash",
+                    "stopReason": "toolUse"
+                  },
+                  "blocks": [
+                    {
+                      "type": "tool-call"
+                    }
+                  ]
+                }
               },
               "id": "{{messageId}}"
             },
@@ -2677,7 +2828,7 @@
                     "type": "tool-call",
                     "id": "advanced-direct-child",
                     "name": "subagent",
-                    "arguments": "{\"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
+                    "arguments": "{\"description\":\"Check direct child\",\"prompt\":\"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
                   }
                 }
               },
@@ -2700,6 +2851,21 @@
                   "type": "finish",
                   "reason": {
                     "kind": "tool-calls"
+                  },
+                  "replayState": {
+                    "response": {
+                      "kind": "pi-ai",
+                      "version": 2,
+                      "api": "openai-completions",
+                      "provider": "openrouter",
+                      "model": "deepseek/deepseek-v4-flash",
+                      "stopReason": "toolUse"
+                    },
+                    "blocks": [
+                      {
+                        "type": "tool-call"
+                      }
+                    ]
                   }
                 }
               }
@@ -2715,14 +2881,14 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/call",
-          "seq": 37,
+          "seq": 33,
           "time": 0,
           "data": {
             "turn": 1,
             "step": 4,
             "callId": "advanced-direct-child",
             "name": "subagent",
-            "arguments": "{\"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
+            "arguments": "{\"description\":\"Check direct child\",\"prompt\":\"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
           }
         }
       }
@@ -2822,7 +2988,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "subagent/catalog",
-          "seq": 38,
+          "seq": 34,
           "time": 0,
           "data": {
             "version": 0,
@@ -2973,13 +3139,8 @@
           "data": {
             "header": {
               "config": {
-                "provider": "deepseek-official",
-                "model": "smoke-model",
-                "reasoningEffort": "high",
-                "maxTokens": 256000
-              },
-              "adapterDefaults": {
-                "maxTokens": true
+                "provider": "openrouter",
+                "model": "deepseek/deepseek-v4-flash"
               },
               "tools": [
                 "cordis_define",
@@ -3012,9 +3173,9 @@
           "seq": 12,
           "time": 0,
           "data": {
-            "provider": "deepseek-official",
-            "model": "smoke-model",
-            "contextWindow": 1000000
+            "provider": "openrouter",
+            "model": "deepseek/deepseek-v4-flash",
+            "contextWindow": 1024000
           }
         }
       }
@@ -3044,24 +3205,8 @@
       "payload": {
         "sessionId": "{{child-1}}",
         "event": {
-          "type": "session-log-deepseek/delivery-accepted",
-          "seq": 14,
-          "time": 0,
-          "data": {
-            "sessionId": "{{child-1}}",
-            "sessionFormatVersion": 3,
-            "throughSeq": 13
-          }
-        }
-      }
-    },
-    {
-      "method": "session.event",
-      "payload": {
-        "sessionId": "{{child-1}}",
-        "event": {
           "type": "assistant/message",
-          "seq": 15,
+          "seq": 14,
           "time": 0,
           "data": {
             "turn": 1,
@@ -3076,8 +3221,23 @@
               ],
               "source": {
                 "kind": "model",
-                "provider": "deepseek-official",
-                "model": "smoke-model"
+                "provider": "openrouter",
+                "model": "deepseek/deepseek-v4-flash",
+                "replayState": {
+                  "response": {
+                    "kind": "pi-ai",
+                    "version": 2,
+                    "api": "openai-completions",
+                    "provider": "openrouter",
+                    "model": "deepseek/deepseek-v4-flash",
+                    "stopReason": "stop"
+                  },
+                  "blocks": [
+                    {
+                      "type": "text"
+                    }
+                  ]
+                }
               },
               "id": "{{messageId}}"
             },
@@ -3136,6 +3296,21 @@
                   "type": "finish",
                   "reason": {
                     "kind": "stop"
+                  },
+                  "replayState": {
+                    "response": {
+                      "kind": "pi-ai",
+                      "version": 2,
+                      "api": "openai-completions",
+                      "provider": "openrouter",
+                      "model": "deepseek/deepseek-v4-flash",
+                      "stopReason": "stop"
+                    },
+                    "blocks": [
+                      {
+                        "type": "text"
+                      }
+                    ]
                   }
                 }
               }
@@ -3151,7 +3326,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "step/end",
-          "seq": 16,
+          "seq": 15,
           "time": 0,
           "data": {
             "turn": 1,
@@ -3166,7 +3341,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "turn/end",
-          "seq": 17,
+          "seq": 16,
           "time": 0,
           "data": {
             "turn": 1,
@@ -3207,7 +3382,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/result",
-          "seq": 39,
+          "seq": 35,
           "time": 0,
           "data": {
             "turn": 1,
@@ -3235,7 +3410,7 @@
             }
           },
           "sourceEventSeqs": [
-            37
+            33
           ],
           "surfaceOp": "append"
         }
@@ -3247,7 +3422,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/end",
-          "seq": 40,
+          "seq": 36,
           "time": 0,
           "data": {
             "turn": 1,
@@ -3262,7 +3437,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/start",
-          "seq": 41,
+          "seq": 37,
           "time": 0,
           "data": {
             "turn": 1,
@@ -3276,24 +3451,8 @@
       "payload": {
         "sessionId": "{{parent}}",
         "event": {
-          "type": "session-log-deepseek/delivery-accepted",
-          "seq": 42,
-          "time": 0,
-          "data": {
-            "sessionId": "{{parent}}",
-            "sessionFormatVersion": 3,
-            "throughSeq": 41
-          }
-        }
-      }
-    },
-    {
-      "method": "session.event",
-      "payload": {
-        "sessionId": "{{parent}}",
-        "event": {
           "type": "assistant/message",
-          "seq": 43,
+          "seq": 38,
           "time": 0,
           "data": {
             "turn": 1,
@@ -3305,13 +3464,28 @@
                   "type": "tool-call",
                   "id": "advanced-workflow",
                   "name": "workflow",
-                  "arguments": "{\"script\": \"phase('Delegate')\\nconst reply = await agent('Reply with exactly WORKFLOW_CHILD_OK and nothing else.', { label: 'workflow-child' })\\nreturn { reply }\", \"meta\": {\"name\": \"advanced-exe-snapshot\", \"description\": \"exercise one packaged workflow child\"}}"
+                  "arguments": "{\"script\":\"phase('Delegate')\\nconst reply = await agent('Reply with exactly WORKFLOW_CHILD_OK and nothing else.', { label: 'workflow-child' })\\nreturn { reply }\",\"meta\":{\"name\":\"advanced-exe-snapshot\",\"description\":\"exercise one packaged workflow child\"}}"
                 }
               ],
               "source": {
                 "kind": "model",
-                "provider": "deepseek-official",
-                "model": "smoke-model"
+                "provider": "openrouter",
+                "model": "deepseek/deepseek-v4-flash",
+                "replayState": {
+                  "response": {
+                    "kind": "pi-ai",
+                    "version": 2,
+                    "api": "openai-completions",
+                    "provider": "openrouter",
+                    "model": "deepseek/deepseek-v4-flash",
+                    "stopReason": "toolUse"
+                  },
+                  "blocks": [
+                    {
+                      "type": "tool-call"
+                    }
+                  ]
+                }
               },
               "id": "{{messageId}}"
             },
@@ -3351,7 +3525,7 @@
                     "type": "tool-call",
                     "id": "advanced-workflow",
                     "name": "workflow",
-                    "arguments": "{\"script\": \"phase('Delegate')\\nconst reply = await agent('Reply with exactly WORKFLOW_CHILD_OK and nothing else.', { label: 'workflow-child' })\\nreturn { reply }\", \"meta\": {\"name\": \"advanced-exe-snapshot\", \"description\": \"exercise one packaged workflow child\"}}"
+                    "arguments": "{\"script\":\"phase('Delegate')\\nconst reply = await agent('Reply with exactly WORKFLOW_CHILD_OK and nothing else.', { label: 'workflow-child' })\\nreturn { reply }\",\"meta\":{\"name\":\"advanced-exe-snapshot\",\"description\":\"exercise one packaged workflow child\"}}"
                   }
                 }
               },
@@ -3374,6 +3548,21 @@
                   "type": "finish",
                   "reason": {
                     "kind": "tool-calls"
+                  },
+                  "replayState": {
+                    "response": {
+                      "kind": "pi-ai",
+                      "version": 2,
+                      "api": "openai-completions",
+                      "provider": "openrouter",
+                      "model": "deepseek/deepseek-v4-flash",
+                      "stopReason": "toolUse"
+                    },
+                    "blocks": [
+                      {
+                        "type": "tool-call"
+                      }
+                    ]
                   }
                 }
               }
@@ -3389,14 +3578,14 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/call",
-          "seq": 44,
+          "seq": 39,
           "time": 0,
           "data": {
             "turn": 1,
             "step": 5,
             "callId": "advanced-workflow",
             "name": "workflow",
-            "arguments": "{\"script\": \"phase('Delegate')\\nconst reply = await agent('Reply with exactly WORKFLOW_CHILD_OK and nothing else.', { label: 'workflow-child' })\\nreturn { reply }\", \"meta\": {\"name\": \"advanced-exe-snapshot\", \"description\": \"exercise one packaged workflow child\"}}"
+            "arguments": "{\"script\":\"phase('Delegate')\\nconst reply = await agent('Reply with exactly WORKFLOW_CHILD_OK and nothing else.', { label: 'workflow-child' })\\nreturn { reply }\",\"meta\":{\"name\":\"advanced-exe-snapshot\",\"description\":\"exercise one packaged workflow child\"}}"
           }
         }
       }
@@ -3407,7 +3596,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool-workflow/run-start",
-          "seq": 45,
+          "seq": 40,
           "time": 0,
           "data": {
             "runId": "{{workflow-run}}",
@@ -3511,7 +3700,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "subagent/catalog",
-          "seq": 46,
+          "seq": 41,
           "time": 0,
           "data": {
             "version": 0,
@@ -3528,7 +3717,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool-workflow/agent-start",
-          "seq": 47,
+          "seq": 42,
           "time": 0,
           "data": {
             "runId": "{{workflow-run}}",
@@ -3678,13 +3867,8 @@
           "data": {
             "header": {
               "config": {
-                "provider": "deepseek-official",
-                "model": "smoke-model",
-                "reasoningEffort": "high",
-                "maxTokens": 256000
-              },
-              "adapterDefaults": {
-                "maxTokens": true
+                "provider": "openrouter",
+                "model": "deepseek/deepseek-v4-flash"
               },
               "tools": [
                 "cordis_define",
@@ -3717,9 +3901,9 @@
           "seq": 12,
           "time": 0,
           "data": {
-            "provider": "deepseek-official",
-            "model": "smoke-model",
-            "contextWindow": 1000000
+            "provider": "openrouter",
+            "model": "deepseek/deepseek-v4-flash",
+            "contextWindow": 1024000
           }
         }
       }
@@ -3749,24 +3933,8 @@
       "payload": {
         "sessionId": "{{child-2}}",
         "event": {
-          "type": "session-log-deepseek/delivery-accepted",
-          "seq": 14,
-          "time": 0,
-          "data": {
-            "sessionId": "{{child-2}}",
-            "sessionFormatVersion": 3,
-            "throughSeq": 13
-          }
-        }
-      }
-    },
-    {
-      "method": "session.event",
-      "payload": {
-        "sessionId": "{{child-2}}",
-        "event": {
           "type": "assistant/message",
-          "seq": 15,
+          "seq": 14,
           "time": 0,
           "data": {
             "turn": 1,
@@ -3781,8 +3949,23 @@
               ],
               "source": {
                 "kind": "model",
-                "provider": "deepseek-official",
-                "model": "smoke-model"
+                "provider": "openrouter",
+                "model": "deepseek/deepseek-v4-flash",
+                "replayState": {
+                  "response": {
+                    "kind": "pi-ai",
+                    "version": 2,
+                    "api": "openai-completions",
+                    "provider": "openrouter",
+                    "model": "deepseek/deepseek-v4-flash",
+                    "stopReason": "stop"
+                  },
+                  "blocks": [
+                    {
+                      "type": "text"
+                    }
+                  ]
+                }
               },
               "id": "{{messageId}}"
             },
@@ -3841,6 +4024,21 @@
                   "type": "finish",
                   "reason": {
                     "kind": "stop"
+                  },
+                  "replayState": {
+                    "response": {
+                      "kind": "pi-ai",
+                      "version": 2,
+                      "api": "openai-completions",
+                      "provider": "openrouter",
+                      "model": "deepseek/deepseek-v4-flash",
+                      "stopReason": "stop"
+                    },
+                    "blocks": [
+                      {
+                        "type": "text"
+                      }
+                    ]
                   }
                 }
               }
@@ -3856,7 +4054,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "step/end",
-          "seq": 16,
+          "seq": 15,
           "time": 0,
           "data": {
             "turn": 1,
@@ -3871,7 +4069,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "turn/end",
-          "seq": 17,
+          "seq": 16,
           "time": 0,
           "data": {
             "turn": 1,
@@ -3912,7 +4110,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool-workflow/agent-end",
-          "seq": 48,
+          "seq": 43,
           "time": 0,
           "data": {
             "runId": "{{workflow-run}}",
@@ -3928,7 +4126,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool-workflow/run-end",
-          "seq": 49,
+          "seq": 44,
           "time": 0,
           "data": {
             "runId": "{{workflow-run}}",
@@ -3943,7 +4141,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/result",
-          "seq": 50,
+          "seq": 45,
           "time": 0,
           "data": {
             "turn": 1,
@@ -3971,7 +4169,7 @@
             }
           },
           "sourceEventSeqs": [
-            44
+            39
           ],
           "surfaceOp": "append"
         }
@@ -3983,7 +4181,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/end",
-          "seq": 51,
+          "seq": 46,
           "time": 0,
           "data": {
             "turn": 1,
@@ -3998,7 +4196,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/start",
-          "seq": 52,
+          "seq": 47,
           "time": 0,
           "data": {
             "turn": 1,
@@ -4012,24 +4210,8 @@
       "payload": {
         "sessionId": "{{parent}}",
         "event": {
-          "type": "session-log-deepseek/delivery-accepted",
-          "seq": 53,
-          "time": 0,
-          "data": {
-            "sessionId": "{{parent}}",
-            "sessionFormatVersion": 3,
-            "throughSeq": 52
-          }
-        }
-      }
-    },
-    {
-      "method": "session.event",
-      "payload": {
-        "sessionId": "{{parent}}",
-        "event": {
           "type": "assistant/message",
-          "seq": 54,
+          "seq": 48,
           "time": 0,
           "data": {
             "turn": 1,
@@ -4041,13 +4223,28 @@
                   "type": "tool-call",
                   "id": "advanced-undefine",
                   "name": "cordis_undefine",
-                  "arguments": "{\"pluginId\": \"snap-1\"}"
+                  "arguments": "{\"pluginId\":\"snap-1\"}"
                 }
               ],
               "source": {
                 "kind": "model",
-                "provider": "deepseek-official",
-                "model": "smoke-model"
+                "provider": "openrouter",
+                "model": "deepseek/deepseek-v4-flash",
+                "replayState": {
+                  "response": {
+                    "kind": "pi-ai",
+                    "version": 2,
+                    "api": "openai-completions",
+                    "provider": "openrouter",
+                    "model": "deepseek/deepseek-v4-flash",
+                    "stopReason": "toolUse"
+                  },
+                  "blocks": [
+                    {
+                      "type": "tool-call"
+                    }
+                  ]
+                }
               },
               "id": "{{messageId}}"
             },
@@ -4087,7 +4284,7 @@
                     "type": "tool-call",
                     "id": "advanced-undefine",
                     "name": "cordis_undefine",
-                    "arguments": "{\"pluginId\": \"snap-1\"}"
+                    "arguments": "{\"pluginId\":\"snap-1\"}"
                   }
                 }
               },
@@ -4110,6 +4307,21 @@
                   "type": "finish",
                   "reason": {
                     "kind": "tool-calls"
+                  },
+                  "replayState": {
+                    "response": {
+                      "kind": "pi-ai",
+                      "version": 2,
+                      "api": "openai-completions",
+                      "provider": "openrouter",
+                      "model": "deepseek/deepseek-v4-flash",
+                      "stopReason": "toolUse"
+                    },
+                    "blocks": [
+                      {
+                        "type": "tool-call"
+                      }
+                    ]
                   }
                 }
               }
@@ -4125,14 +4337,14 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/call",
-          "seq": 55,
+          "seq": 49,
           "time": 0,
           "data": {
             "turn": 1,
             "step": 6,
             "callId": "advanced-undefine",
             "name": "cordis_undefine",
-            "arguments": "{\"pluginId\": \"snap-1\"}"
+            "arguments": "{\"pluginId\":\"snap-1\"}"
           }
         }
       }
@@ -4143,7 +4355,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/result",
-          "seq": 56,
+          "seq": 50,
           "time": 0,
           "data": {
             "turn": 1,
@@ -4171,7 +4383,7 @@
             }
           },
           "sourceEventSeqs": [
-            55
+            49
           ],
           "surfaceOp": "append"
         }
@@ -4183,7 +4395,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/end",
-          "seq": 57,
+          "seq": 51,
           "time": 0,
           "data": {
             "turn": 1,
@@ -4198,7 +4410,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/start",
-          "seq": 58,
+          "seq": 52,
           "time": 0,
           "data": {
             "turn": 1,
@@ -4213,7 +4425,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "system/message",
-          "seq": 59,
+          "seq": 53,
           "time": 0,
           "data": {
             "turn": 1,
@@ -4234,12 +4446,12 @@
             }
           },
           "sourceEventSeqs": [
-            25
+            23
           ],
           "surfaceOp": {
             "op": "replace",
-            "startSeq": 25,
-            "endSeq": 25
+            "startSeq": 23,
+            "endSeq": 23
           }
         }
       }
@@ -4250,19 +4462,13 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "request/header",
-          "seq": 60,
+          "seq": 54,
           "time": 0,
           "data": {
             "header": {
               "config": {
-                "provider": "deepseek-official",
-                "model": "smoke-model",
-                "maxTokens": 256000,
-                "reasoningEffort": "high"
-              },
-              "adapterDefaults": {
-                "reasoningEffort": true,
-                "maxTokens": true
+                "provider": "openrouter",
+                "model": "deepseek/deepseek-v4-flash"
               },
               "tools": [
                 "cordis_define",
@@ -4291,24 +4497,8 @@
       "payload": {
         "sessionId": "{{parent}}",
         "event": {
-          "type": "session-log-deepseek/delivery-accepted",
-          "seq": 61,
-          "time": 0,
-          "data": {
-            "sessionId": "{{parent}}",
-            "sessionFormatVersion": 3,
-            "throughSeq": 60
-          }
-        }
-      }
-    },
-    {
-      "method": "session.event",
-      "payload": {
-        "sessionId": "{{parent}}",
-        "event": {
           "type": "assistant/message",
-          "seq": 62,
+          "seq": 55,
           "time": 0,
           "data": {
             "turn": 1,
@@ -4323,8 +4513,23 @@
               ],
               "source": {
                 "kind": "model",
-                "provider": "deepseek-official",
-                "model": "smoke-model"
+                "provider": "openrouter",
+                "model": "deepseek/deepseek-v4-flash",
+                "replayState": {
+                  "response": {
+                    "kind": "pi-ai",
+                    "version": 2,
+                    "api": "openai-completions",
+                    "provider": "openrouter",
+                    "model": "deepseek/deepseek-v4-flash",
+                    "stopReason": "stop"
+                  },
+                  "blocks": [
+                    {
+                      "type": "text"
+                    }
+                  ]
+                }
               },
               "id": "{{message:1}}"
             },
@@ -4383,6 +4588,21 @@
                   "type": "finish",
                   "reason": {
                     "kind": "stop"
+                  },
+                  "replayState": {
+                    "response": {
+                      "kind": "pi-ai",
+                      "version": 2,
+                      "api": "openai-completions",
+                      "provider": "openrouter",
+                      "model": "deepseek/deepseek-v4-flash",
+                      "stopReason": "stop"
+                    },
+                    "blocks": [
+                      {
+                        "type": "text"
+                      }
+                    ]
                   }
                 }
               }
@@ -4398,7 +4618,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/end",
-          "seq": 63,
+          "seq": 56,
           "time": 0,
           "data": {
             "turn": 1,
@@ -4413,7 +4633,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "command/run",
-          "seq": 64,
+          "seq": 57,
           "time": 0,
           "data": {
             "commandId": "{{command:1}}",
@@ -4431,7 +4651,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "feedback/record",
-          "seq": 65,
+          "seq": 58,
           "time": 0,
           "data": {
             "text": "The session needs a clearer explanation."
@@ -4445,7 +4665,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "command/done",
-          "seq": 66,
+          "seq": 59,
           "time": 0,
           "data": {
             "commandId": "{{command:1}}",
@@ -4461,7 +4681,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "feedback/record",
-          "seq": 67,
+          "seq": 60,
           "time": 0,
           "data": {
             "category": "other"
@@ -4475,7 +4695,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "feedback/message-put",
-          "seq": 68,
+          "seq": 61,
           "time": 0,
           "data": {
             "sessionId": "{{parent}}",
@@ -4498,7 +4718,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "feedback/message-put",
-          "seq": 69,
+          "seq": 62,
           "time": 0,
           "data": {
             "sessionId": "{{parent}}",
@@ -4520,7 +4740,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "feedback/message-delete",
-          "seq": 70,
+          "seq": 63,
           "time": 0,
           "data": {
             "sessionId": "{{parent}}",
@@ -4535,7 +4755,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "turn/end",
-          "seq": 71,
+          "seq": 64,
           "time": 0,
           "data": {
             "turn": 1,

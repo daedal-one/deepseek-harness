@@ -56,8 +56,8 @@ def run_smoke(repo_root: Path, keep_sessions: bool) -> None:
 
     try:
         with DeepSeekHarness(
-            provider="deepseek-official",
-            model="sdk-smoke-model",
+            provider="openrouter",
+            model="deepseek/deepseek-v4-flash",
             cwd=str(repo_root / "python/sdk"),
             runtime_cwd=str(repo_root),
             _launch_args=(
@@ -72,8 +72,8 @@ def run_smoke(repo_root: Path, keep_sessions: bool) -> None:
                 "DSH_HOME": str(dsh_home),
                 "DSH_PERMISSION_MODE": "danger-full-access",
                 "DSH_TELEMETRY_DISABLED": "1",
-                "DEEPSEEK_BASE_URL": base_url,
-                "DEEPSEEK_API_KEY": "sdk-smoke-key",
+                "OPENROUTER_BASE_URL": base_url,
+                "OPENROUTER_API_KEY": "sdk-smoke-key",
             },
             request_timeout_seconds=20,
             shutdown_timeout_seconds=2,
@@ -88,7 +88,7 @@ def run_smoke(repo_root: Path, keep_sessions: bool) -> None:
         request = MockCompletionHandler.requests[0]
         print(json.dumps(request, ensure_ascii=False, indent=2)[:4000])
         assert request["authorization"] == "Bearer sdk-smoke-key"
-        assert request["body"]["model"] == "sdk-smoke-model"
+        assert request["body"]["model"] == "deepseek/deepseek-v4-flash"
 
         jsonl_files = sorted(session_root.rglob("*.jsonl.zstd"))
         assert jsonl_files, f"no Zstandard JSONL sessions were written under {session_root}"

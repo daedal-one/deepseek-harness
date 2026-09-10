@@ -13,6 +13,7 @@ import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import { boot, loadOverlayPatches } from '@deepseek-ai/dsh-app-boot'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
+import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import * as McpClient from '@deepseek-ai/dsh-mcp-client/src/index.ts'
 
 interface ExampleContract {
@@ -114,6 +115,7 @@ describe('third-party memory MCP example overlays', () => {
         env: {},
         cwd: root,
         toolCallTimeoutMs: 5_000,
+        failOnStartupError: true,
       },
     }
     const ctx = await boot(
@@ -124,6 +126,7 @@ describe('third-party memory MCP example overlays', () => {
         liveContexts.add(ctx)
         ctx.loader.builtins['memory-test-system-prompt'] = SystemPrompt
         ctx.loader.builtins['memory-test-tools'] = ToolRuntime
+        ctx.loader.builtins['memory-test-subprocess'] = LocalSubprocessRuntime
         ctx.loader.builtins['memory-test-mcp-client'] = McpClient
       },
     )

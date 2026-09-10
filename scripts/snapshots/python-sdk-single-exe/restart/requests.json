@@ -1,6 +1,6 @@
 [
   {
-    "model": "smoke-model",
+    "model": "deepseek/deepseek-v4-flash",
     "messages": [
       {
         "role": "system",
@@ -32,7 +32,7 @@
     ]
   },
   {
-    "model": "smoke-model",
+    "model": "deepseek/deepseek-v4-flash",
     "messages": [
       {
         "role": "system",

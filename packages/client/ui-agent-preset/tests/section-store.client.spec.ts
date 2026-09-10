@@ -355,7 +355,7 @@ describe('submitting a copy', () => {
     expect(state.rows.map(row => row.id)).toContain('my-copy')
     expect(rosterChanges()).toBe(1)
     expect(calls.find(call => call.method === 'copy')?.payload)
-      .toEqual({ from: 'standard', id: 'my-copy', name: '我的模式' })
+      .toEqual({ from: 'standard', id: 'my-copy', name: 'My mode' })
     // A preset is its files from here on, so landing in them completes the
     // copy rather than following it.
     expect(calls.find(call => call.method === 'openAgentPresetDirectory')?.payload)

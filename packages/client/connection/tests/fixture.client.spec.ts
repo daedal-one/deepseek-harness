@@ -958,7 +958,7 @@ describe('createFixtureApi', () => {
     const alpha = first.value.projections['fx-alpha']
     expect(alpha?.asOfSeq).toBeGreaterThan(0)
     expect(alpha?.values).toMatchObject({
-      title: 'Fixture 历史会话',
+      title: 'Fixture history session',
       plan: { active: false, pending: false },
       goal: null,
       imageLimits: { maxImagesPerMessage: 20, maxImageBytes: 5 * 1024 * 1024 },
@@ -1232,7 +1232,7 @@ describe('createFixtureApi', () => {
     const controlPromise = collectValues(
       api.sessionRemote.control(controlAbort.signal),
       controlAbort,
-      frames => frames.some(frame => frame.type === 'projection' && frame.key === 'title' && frame.value === 'Rename'),
+      frames => frames.some(frame => frame.type === 'projection' && frame.key === 'title' && frame.value === 'Renamed'),
     )
     await new Promise(resolve => setTimeout(resolve, 10))
 
@@ -1265,7 +1265,7 @@ describe('createFixtureApi', () => {
       frame.type === 'projection'
       && frame.key === 'title'
       && frame.sessionId === sid('fx-alpha')
-      && frame.value === 'Rename')
+      && frame.value === 'Renamed')
     expect(titleFrames).toHaveLength(1)
     expect(titleFrames[0]).toMatchObject({ seq: acceptedSeq })
   })
@@ -1551,8 +1551,8 @@ describe('createFixtureApi', () => {
     await vi.waitFor(() => {
       const snapshot = followed.find(frame => frame.type === 'snapshot')
       const events = snapshot === undefined ? [] : historyEvents(snapshot.records)
-      expect(events.some(event => JSON.stringify(event.data).includes('静默丢帧'))).toBe(true)
-      expect(events.some(event => JSON.stringify(event.data).includes('正常直播'))).toBe(true)
+      expect(events.some(event => JSON.stringify(event.data).includes('silent frame drop'))).toBe(true)
+      expect(events.some(event => JSON.stringify(event.data).includes('normal live stream'))).toBe(true)
     })
     hooks.appendTitle('fx-alpha', 'Fixture revised title')
     hooks.beginModelRetry('fx-alpha')
@@ -1562,19 +1562,19 @@ describe('createFixtureApi', () => {
     hooks.cancelModelRetryDuringBackoff('fx-alpha')
     await vi.waitFor(() => {
       expect(followed.some(frame => frame.type === 'event' && (frame.event as { type: string }).type === 'llm/retry')).toBe(true)
-      expect(followed.some(frame => frame.type === 'event' && JSON.stringify(frame.event.data).includes('重试后的完整回复'))).toBe(true)
+      expect(followed.some(frame => frame.type === 'event' && JSON.stringify(frame.event.data).includes('Complete reply after retry'))).toBe(true)
       expect(followed.some(frame => frame.type === 'event'
         && frame.event.type === 'turn/end'
         && frame.event.data.reason.kind === 'aborted')).toBe(true)
       expect(controlled.some(frame => frame.type === 'projection'
         && frame.key === 'title'
-        && frame.value === 'Fixture 修订标题')).toBe(true)
+        && frame.value === 'Fixture revised title')).toBe(true)
     })
     expect(followed.some(frame => frame.type === 'event' && (frame.event as { type: string }).type === 'session/title')).toBe(true)
     // Paging and resumed follow agree on the recovered durable event.
     const repull = await api.sessions.history(req({ sessionId: sid('fx-alpha'), maxMessages: 5 }))
     if (!repull.result.ok) throw new Error('repull failed')
-    expect(JSON.stringify(repull.result.value.records)).toContain('静默丢帧')
+    expect(JSON.stringify(repull.result.value.records)).toContain('silent frame drop')
     // breakStreams force-ends follow and control without client aborts.
     await new Promise(resolve => setTimeout(resolve, 10))
     hooks.breakStreams()

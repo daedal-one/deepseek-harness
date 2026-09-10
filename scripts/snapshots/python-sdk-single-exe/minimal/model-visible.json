@@ -17,7 +17,8 @@
             "required": [
               "command"
             ]
-          }
+          },
+          "strict": false
         }
       }
     ],
@@ -50,7 +51,8 @@
             "required": [
               "command"
             ]
-          }
+          },
+          "strict": false
         }
       }
     ],
@@ -97,7 +99,8 @@
             "required": [
               "command"
             ]
-          }
+          },
+          "strict": false
         }
       }
     ],

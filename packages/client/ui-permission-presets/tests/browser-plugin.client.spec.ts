@@ -138,7 +138,7 @@ describe('ui-permission browser plugin', () => {
     })
     b.locale.setLocale('en')
     const localized = await b.popup().options(proj, new AbortController().signal)
-    expect(localized.map(option => option.label)).toEqual(['Read Only', 'Workspace Write', 'Full access'])
+    expect(localized.map(option => option.label)).toEqual(['Read Only', 'Workspace Write', 'Policy reviewed', 'Full access'])
     expect(localized.find(option => option.id === 'danger-full-access')?.confirmation).toEqual({
       title: 'Enable Full access?',
       description: accessCopy['confirm.description'],

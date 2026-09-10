@@ -155,7 +155,7 @@ describe('QueueDock', () => {
     expect(view.getByRole('img', { name: 'Queued message image' }).getAttribute('src')).toBe('blob:queue-preview')
     expect(view.getByLabelText('Queued file notes.txt').textContent).toContain('2.4GB')
     expect(view.getByRole('status').textContent).toBe('Sending…')
-    for (const name of ['Edit queued message', 'Remove queued message', 'Steer message']) {
+    for (const name of ['Edit queued message', 'Remove queued message', 'Steer queued message']) {
       const button = view.getByRole('button', { name }) as HTMLButtonElement
       expect(button.disabled).toBe(true)
       fireEvent.click(button)
@@ -172,7 +172,7 @@ describe('QueueDock', () => {
     expect(view.getAllByText('等待上传')).toHaveLength(1)
     expect(view.container.querySelector('[data-submission-echo]')).toBeNull()
     expect(view.queryByRole('status')).toBeNull()
-    for (const name of ['Edit queued message', 'Remove queued message', 'Steer message']) {
+    for (const name of ['Edit queued message', 'Remove queued message', 'Steer queued message']) {
       expect((view.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(false)
     }
     fireEvent.click(view.getByRole('button', { name: 'Edit queued message' }))
@@ -226,7 +226,7 @@ describe('QueueDock', () => {
     const source = liveSession(pending)
     const view = render(<QueueDock {...kitFor(pending)} useSession={source.useSession} />)
     expect(view.getByRole('status').textContent).toBe('Sending…')
-    const header = view.getByRole('button', { name: /2 条排队消息\s*发送中…/ })
+    const header = view.getByRole('button', { name: /2 queued messages\s*Sending…/ })
     expect(header.getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(header)
     expect(view.getAllByRole('status')).toHaveLength(1)
@@ -550,7 +550,7 @@ describe('QueueDock', () => {
     expect(view.getByText('pending child follow-up')).toBeTruthy()
     expect(view.getByLabelText('Edit queued message')).toBeTruthy()
     expect(view.getByLabelText('Remove queued message')).toBeTruthy()
-    expect(view.getByLabelText('Steer message')).toBeTruthy()
+    expect(view.getByLabelText('Steer queued message')).toBeTruthy()
   })
 
   it('keeps a one-shot child Queue read-only', () => {

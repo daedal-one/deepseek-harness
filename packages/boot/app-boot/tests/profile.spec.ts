@@ -271,6 +271,7 @@ describe('loadProfile', () => {
   it('adds a shipped reload default only to an exact stock tuple and preserves explicit choices', () => {
     const anchor = stageInstallation({
       '@deepseek-ai/dsh-base': { patch: '[]\n' },
+      '@deepseek-ai/dsh-agent-plane': { patch: '[]\n' },
       '@deepseek-ai/dsh-web-app': { patch: '[]\n' },
     })
     const stockHome = tmp()

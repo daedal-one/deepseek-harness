@@ -1,6 +1,6 @@
 /** Resolve direct third-party browser inputs through the shipping build configurations, without emitting files. */
 
-import { globSync, readFileSync } from 'node:fs'
+import { globSync, readFileSync, realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -163,6 +163,8 @@ async function collectShell(
  * @returns Names of distributed browser inputs, excluding workspace packages and erased types.
  */
 export async function browserBundledExternals(root: string): Promise<Set<string>> {
+  // Vite resolves HTML entries through symlinks; its root must use the same physical path.
+  root = realpathSync(root)
   const manifests = new Map<string, Manifest>()
   for (const glob of ['packages/*/*/package.json', 'vendor/*/package.json']) {
     for (const path of globSync(glob, { cwd: root }).sort()) {

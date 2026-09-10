@@ -107,7 +107,7 @@ describe('AttachmentRail', () => {
     const view = render(
       <AttachmentRail items={[item('a')]} labels={labels} renderItem={renderItem} />,
     )
-    expect(view.getByRole('group', { name: 'Pending images' })).toBeTruthy()
+    expect(view.getByRole('group', { name: 'Images to send' })).toBeTruthy()
     view.unmount()
   })
 

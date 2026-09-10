@@ -538,7 +538,7 @@ describe('Chat node rendering', () => {
     expect(formatRunDuration(0, t)).toBe('0s')
     expect(formatRunDuration(-500, t)).toBe('0s')
     expect(formatRunDuration(15_999, t)).toBe('15s')
-    expect(formatRunDuration(125_000, t)).toBe('2分05s')
+    expect(formatRunDuration(125_000, t)).toBe('2m 05s')
   })
 
 })
@@ -975,7 +975,7 @@ describe('ChatView', () => {
     expect(view.queryByText('later')).toBeNull()
     const pendingBubble = view.getByText('interrupt now').closest('[data-pending-steering]')
     expect(pendingBubble).not.toBeNull()
-    fireEvent.click(within(pendingBubble as HTMLElement).getByRole('button', { name: 'Duplicate' }))
+    fireEvent.click(within(pendingBubble as HTMLElement).getByRole('button', { name: 'Copy' }))
     expect(writeText).toHaveBeenCalledWith('interrupt now')
     expect(within(pendingBubble as HTMLElement).queryByRole('button', { name: 'Branch into a new conversation' })).toBeNull()
     expect(view.getByRole('status').compareDocumentPosition(view.getByText('interrupt now'))
@@ -999,7 +999,7 @@ describe('ChatView', () => {
     // Only the durable steering bubble: the turn is still running, so its
     // assistant narration owns no footer yet, and a steering bubble never
     // carries a branch action.
-    expect(view.getAllByRole('button', { name: 'Duplicate' })).toHaveLength(1)
+    expect(view.getAllByRole('button', { name: 'Copy' })).toHaveLength(1)
     const durableBubble = view.getByText('interrupt now').closest('[class*="userRow"]') as HTMLElement
     expect(within(durableBubble).queryByRole('button', { name: 'Branch into a new conversation' })).toBeNull()
 
@@ -1246,14 +1246,14 @@ describe('ChatView', () => {
     const view = render(<h.ChatView {...h.props} />)
     const disclosure = view.container.querySelector('details') as HTMLDetailsElement
     expect(disclosure.dataset.active).toBe('true')
-    expect(within(disclosure).getByRole('status').textContent).toBe('正在重试模型请求（1/2） · 1s')
+    expect(within(disclosure).getByRole('status').textContent).toBe('Retrying model request (1/2) · 1s')
 
     act(() => {
       h.setChat({ nodes: [user(1, 'try'), nextRetry] })
     })
     expect(within(disclosure).getAllByRole('status')).toHaveLength(1)
     expect(view.container.querySelector('details')).toBe(disclosure)
-    expect(within(disclosure).getByRole('status').textContent).toBe('正在重试模型请求（2/2） · 1s')
+    expect(within(disclosure).getByRole('status').textContent).toBe('Retrying model request (2/2) · 1s')
 
     act(() => {
       h.setChat({
@@ -1267,7 +1267,7 @@ describe('ChatView', () => {
       h.setSession({ running: false })
     })
     expect(disclosure.dataset.active).toBeUndefined()
-    expect(within(disclosure).getByRole('status').textContent).toBe('已重试模型请求（2/2） · 1s')
+    expect(within(disclosure).getByRole('status').textContent).toBe('Retried model request (2/2) · 1s')
 
     act(() => {
       h.setChat({ nodes: [user(1, 'try'), { ...retry(6), retryState: 'cancelled' }] })
@@ -1275,7 +1275,7 @@ describe('ChatView', () => {
     })
     const cancelledDisclosure = view.container.querySelector('details') as HTMLDetailsElement
     expect(cancelledDisclosure.dataset.active).toBeUndefined()
-    expect(within(cancelledDisclosure).getByRole('status').textContent).toContain('重试已取消')
+    expect(within(cancelledDisclosure).getByRole('status').textContent).toContain('Model request retry cancelled')
   })
 
   it('renders terminal turn failures inline with their durable message and optional code', () => {
@@ -1283,8 +1283,8 @@ describe('ChatView', () => {
     const view = render(<h.ChatView {...h.props} />)
     const statuses = view.getAllByRole('status')
     expect(statuses.map(status => status.textContent)).toEqual([
-      '本轮运行失败API 密钥无效AUTH',
-      '本轮运行失败plugin exploded',
+      'This turn failedAPI key is invalidAUTH',
+      'This turn failedplugin exploded',
     ])
   })
 
@@ -1293,7 +1293,7 @@ describe('ChatView', () => {
     const view = render(<h.ChatView {...h.props} />)
     const statuses = view.getAllByRole('status')
     expect(statuses.map(status => status.textContent)).toEqual([
-      '已达到输出 token 上限回答被截断，已有输出保留在对话中。发送“继续”可让模型接着输出。',
+      'Output token limit reachedThe reply was cut off; earlier output is preserved in the conversation. Send "continue" to let the model resume.',
     ])
     expect(view.queryByText('This turn failed')).toBeNull()
   })
@@ -1321,7 +1321,7 @@ describe('ChatView', () => {
     })
     const view = render(<h.ChatView {...h.props} />)
     // Branch renders only under assistant answers; user bubbles keep copy alone.
-    expect(view.getAllByRole('button', { name: 'Duplicate' })).toHaveLength(4)
+    expect(view.getAllByRole('button', { name: 'Copy' })).toHaveLength(4)
     const branchButtons = view.getAllByRole('button', { name: 'Branch into a new conversation' })
     expect(branchButtons).toHaveLength(2)
     expect(branchButtons.map(button => button.getAttribute('aria-disabled'))).toEqual([null, null])
@@ -1348,7 +1348,7 @@ describe('ChatView', () => {
       turnEnds: new Map([[1, 6]]),
     })
     const view = render(<h.ChatView {...h.props} />)
-    const toggle = view.getByRole('button', { name: '1 次工具调用 · 1 条消息 · 1 subagent' })
+    const toggle = view.getByRole('button', { name: '1 tool call · 1 message · 1 subagent' })
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
     expect(toggle.getAttribute('data-turn-process-tool-calls')).toBe('1')
     expect(toggle.getAttribute('data-turn-process-messages')).toBe('1')
@@ -1379,7 +1379,7 @@ describe('ChatView', () => {
     act(() => { h.set({
       nodes: [user(1, 'question'), first, toolResult(3, 'a'), toolResult(4, 'b', 'subagent'), second],
     }) })
-    const renewedToggle = view.getByRole('button', { name: '1 次工具调用 · 1 条消息 · 1 subagent' })
+    const renewedToggle = view.getByRole('button', { name: '1 tool call · 1 message · 1 subagent' })
     expect(renewedToggle.getAttribute('aria-expanded')).toBe('true')
     expect(members[0]?.getAttribute('hidden')).toBeNull()
   })
@@ -1814,14 +1814,14 @@ describe('ChatView', () => {
     // 2 user + the settled turn-1 tail, which keeps its seat while a later
     // turn runs; turn 2's narration stays chrome-free while its tool runs, so
     // the footer never appears and then moves.
-    expect(view.getAllByRole('button', { name: 'Duplicate' })).toHaveLength(3)
+    expect(view.getAllByRole('button', { name: 'Copy' })).toHaveLength(3)
     expect(view.getByText('mid-turn text')).toBeTruthy()
     // turn/end lands: the same node becomes the settled answer and takes the seat.
     act(() => {
       h.setSession({ running: false })
       h.setChat({ runningCalls: [], turnEnds: new Map([[1, 3], [2, 6]]) })
     })
-    expect(view.getAllByRole('button', { name: 'Duplicate' })).toHaveLength(4)
+    expect(view.getAllByRole('button', { name: 'Copy' })).toHaveLength(4)
   })
 
   it('the actions-owning assistant footer shows the turn run time', () => {
@@ -1837,7 +1837,7 @@ describe('ChatView', () => {
     })
     const view = render(<h.ChatView {...h.props} />)
     // The exact turn/end includes trailing tool activity after the final text.
-    expect(view.container.querySelector('[data-turn-tail="1"]')?.textContent).toContain('用时 19s')
+    expect(view.container.querySelector('[data-turn-tail="1"]')?.textContent).toContain('Ran for 19s')
   })
 
   it('the settled footer exposes ttft, decode throughput, and usage as the details trigger', () => {
@@ -1864,27 +1864,27 @@ describe('ChatView', () => {
     })
     const view = render(<h.ChatView {...h.props} />)
     // The usage pill carries the compact total; cache hit stays dialog-only.
-    const trigger = view.getByRole('button', { name: /用量 10\.1K tok/ })
+    const trigger = view.getByRole('button', { name: /Usage 10\.1K tok/ })
     expect(trigger.textContent).toBe('Usage 10.1K tok')
     expect(view.queryByRole('dialog')).toBeNull()
     fireEvent.click(trigger)
     const dialog = view.getByRole('dialog')
     expect(dialog.getAttribute('aria-label')).toBe('Turn usage')
-    expect(dialog.firstChild?.textContent).toBe('本轮用量10,100 tok')
-    expect(dialog.textContent).toContain('缓存命中49.4%')
-    expect(dialog.textContent).toContain('未缓存输入5,060 tok')
+    expect(dialog.firstChild?.textContent).toBe('Turn usage10,100 tok')
+    expect(dialog.textContent).toContain('Cache hit49.4%')
+    expect(dialog.textContent).toContain('Uncached input5,060 tok')
     fireEvent.keyDown(document, { key: 'Escape' })
     // The time pill carries the run time; first-step ttft (1.2s) and 100
-    // tokens over 5s of decode move into its dialog.
-    const timeTrigger = view.getByRole('button', { name: /用时 19秒/ })
-    expect(timeTrigger.textContent).toBe('用时 19s')
+    // tokens over 6.4s of model requests move into its dialog.
+    const timeTrigger = view.getByRole('button', { name: /Ran for 19s/ })
+    expect(timeTrigger.textContent).toBe('Ran for 19s')
     expect(view.queryByText(/速度 20 tok\/s|首 token/)).toBeNull()
     fireEvent.click(timeTrigger)
     const timeDialog = view.getByRole('dialog')
     expect(timeDialog.getAttribute('aria-label')).toBe('Turn time and speed')
-    expect(timeDialog.textContent).toContain('本轮总用时19s')
-    expect(timeDialog.textContent).toContain('输出速度（TPS）20 tok/s')
-    expect(timeDialog.textContent).toContain('首 token 用时（TTFT）1.2s')
+    expect(timeDialog.textContent).toContain('Total run time19s')
+    expect(timeDialog.textContent).toContain('Tokens per second (TPS)16 tok/s')
+    expect(timeDialog.textContent).toContain('Time to first token (TTFT)1.2s')
   })
 
   it('withholds the usage-details trigger when turn usage is outside the window', () => {
@@ -1901,8 +1901,8 @@ describe('ChatView', () => {
     const view = render(<h.ChatView {...h.props} />)
     // Timing facts keep their pill, but with no usage in the window there is
     // no usage pill to click.
-    expect(view.getByRole('button', { name: /用时/ })).toBeTruthy()
-    expect(view.queryByRole('button', { name: /用量/ })).toBeNull()
+    expect(view.getByRole('button', { name: /Ran for/ })).toBeTruthy()
+    expect(view.queryByRole('button', { name: /Usage/ })).toBeNull()
   })
 
   it('withholds ttft and throughput while the turn is still running', () => {
@@ -1948,7 +1948,7 @@ describe('ChatView', () => {
       turnEnds: new Map([[1, 16]]),
     })
     const view = render(<h.ChatView {...h.props} />)
-    expect(view.queryByText(/用时/)).toBeNull()
+    expect(view.queryByText(/Ran for/)).toBeNull()
   })
 
   it('enables fork only on the finalized assistant at the completed transcript tail', () => {
@@ -1997,7 +1997,7 @@ describe('ChatView', () => {
       turnEnds: new Map([[1, 5]]),
     })
     const view = render(<h.ChatView {...h.props} />)
-    expect(view.getAllByRole('button', { name: 'Duplicate' })).toHaveLength(2)
+    expect(view.getAllByRole('button', { name: 'Copy' })).toHaveLength(2)
     const buttons = view.getAllByRole('button', { name: 'Branch into a new conversation' })
     expect(buttons).toHaveLength(1)
     expect(buttons[0]!.getAttribute('aria-disabled')).toBe('true')
@@ -2151,7 +2151,7 @@ describe('ChatView', () => {
     const view = render(<h.ChatView {...h.props} />)
     // Freshly mounted (as after a reload) yet already past the 15s gate.
     const status = view.getByRole('status')
-    expect(status.textContent).toMatch(/^深度求索中\.\.\.2分0\d秒$/)
+    expect(status.textContent).toMatch(/^Deep diving\.\.\.2m 0\ds$/)
     expect(status.querySelector('[aria-hidden="true"]')).not.toBeNull()
     act(() => {
       h.setSession({ queue: [{
@@ -2163,7 +2163,7 @@ describe('ChatView', () => {
         text: 'also',
       }] })
     })
-    expect(status.textContent).toMatch(/^深度求索中\.\.\.2分0\d秒$/)
+    expect(status.textContent).toMatch(/^Deep diving\.\.\.2m 0\ds$/)
   })
 
   it('hands each ordered root call to the keyed business-node slot', () => {
@@ -2757,7 +2757,7 @@ describe('ChatView', () => {
     fireEvent.click(view.getByText('Load earlier'))
     expect(h.loadOlder).toHaveBeenCalledTimes(1)
     act(() => { h.setSession({ loadingOlder: true }) })
-    expect(view.getByText('加载中…')).toBeTruthy()
+    expect(view.getByText('Loading…')).toBeTruthy()
   })
 
   it('shows open error and loading states', () => {
@@ -2766,7 +2766,7 @@ describe('ChatView', () => {
       openError: { code: 'gateway/internal', message: 'boom' } as never,
     })
     const view = render(<h.ChatView {...h.props} />)
-    expect(view.getByText(/历史加载失败：boom/)).toBeTruthy()
+    expect(view.getByText(/Failed to load history: boom/)).toBeTruthy()
     const loading = makeHarness({}, { openState: 'loading' })
     const lv = render(<loading.ChatView {...loading.props} />)
     expect(lv.getByText('Loading history…')).toBeTruthy()

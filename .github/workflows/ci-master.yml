@@ -39,7 +39,7 @@ jobs:
       targets: node24-linux-arm64,node24-macos-arm64,node24-macos-x64
       ci: true
     secrets:
-      DEEPSEEK_API_KEY_EXTERNAL: ${{ secrets.DEEPSEEK_API_KEY_EXTERNAL }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 
   # Wine runs once here, independently of the native serial standby aggregates.
   windows:

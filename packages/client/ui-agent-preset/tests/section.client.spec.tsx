@@ -177,7 +177,7 @@ describe('the preset list', () => {
       rows: [
         { id: 'standard', trust: 'system', isDefault: true },
         {
-          id: 'ghost', trust: 'user', isDefault: false, name: '幽灵预设', description: '我自己写的',
+          id: 'ghost', trust: 'user', isDefault: false, name: 'Ghost preset', description: '我自己写的',
           broken: 'the composition file agent.cordis.yml is missing',
         },
       ],
