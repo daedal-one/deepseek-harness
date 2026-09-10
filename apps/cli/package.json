@@ -47,7 +47,9 @@
     "@deepseek-ai/dsh-compaction-basic": "workspace:^",
     "@deepseek-ai/dsh-compaction-tool-result-pruner": "workspace:^",
     "@deepseek-ai/dsh-cordis-client-runner": "workspace:^",
+    "@deepseek-ai/dsh-deadal-intellect": "workspace:^",
     "@deepseek-ai/dsh-english-output-guard": "workspace:^",
+    "@deepseek-ai/dsh-forge-intellect": "workspace:^",
     "@deepseek-ai/dsh-forge-project-workspaces": "workspace:^",
     "@deepseek-ai/dsh-forge-session-adapter": "workspace:^",
     "@deepseek-ai/dsh-fs-local": "workspace:^",
@@ -60,6 +62,7 @@
     "@deepseek-ai/dsh-http-proxy": "workspace:^",
     "@deepseek-ai/dsh-jobs-local": "workspace:^",
     "@deepseek-ai/dsh-launch-environment": "workspace:^",
+    "@deepseek-ai/dsh-llm-replay": "workspace:^",
     "@deepseek-ai/dsh-mcp-client": "workspace:^",
     "@deepseek-ai/dsh-memory": "workspace:^",
     "@deepseek-ai/dsh-memory-extractor-llm": "workspace:^",
@@ -114,8 +117,7 @@
     "@deepseek-ai/schemastery": "workspace:^",
     "commander": "^15.0.0",
     "js-yaml": "^4.2.0",
-    "node-addon-require-builtin": "^0.1.4",
-    "@deepseek-ai/dsh-llm-replay": "workspace:^"
+    "node-addon-require-builtin": "^0.1.4"
   },
   "devDependencies": {
     "@agentclientprotocol/sdk": "1.4.0",

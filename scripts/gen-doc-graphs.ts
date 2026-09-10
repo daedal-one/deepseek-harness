@@ -99,6 +99,13 @@ const GROUP_ORDER = [
 
 const SERVICE_ROLES: ServiceRole[] = [
   {
+    key: 'forgeIntellect',
+    pkg: 'forge-intellect',
+    title: 'Native specification verification',
+    mode: 'core',
+    note: 'Owns immutable plans, approved native check jobs, independent reviewer sessions, and qualified attestation tools.',
+  },
+  {
     key: 'attachments',
     pkg: 'attachment',
     title: 'Durable binary attachment storage',

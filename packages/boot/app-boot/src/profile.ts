@@ -108,6 +108,14 @@ export function resolveProfileDir(name: string, home: string = resolveDshHome())
 
 /** The shipped profile templates auto-initialized on first use, by name. */
 export const PROFILE_TEMPLATES: Record<string, ProfileTemplate> = {
+  'deadal-intellect': {
+    bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-agent-plane', '@deepseek-ai/dsh-web-app', '@deepseek-ai/dsh-deadal-intellect'],
+    patchReload: 'startup',
+  },
+  'deadal-intellect-headless': {
+    bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-agent-plane', '@deepseek-ai/dsh-headless', '@deepseek-ai/dsh-deadal-intellect'],
+    patchReload: 'startup',
+  },
   acp: {
     bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-acp-app'],
     patchReload: 'startup',

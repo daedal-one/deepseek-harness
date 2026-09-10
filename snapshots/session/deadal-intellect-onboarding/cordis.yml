@@ -1,0 +1,23 @@
+# Applied after base, agent-plane, and the chosen browser/headless surface.
+- id: agent-presets
+  config:
+    default: deadal-intellect
+    roots:
+      - path: !!js >-
+          process.getBuiltinModule('path').join(process.getBuiltinModule('path').dirname(process.getBuiltinModule('module').createRequire(baseUrl).resolve('@deepseek-ai/dsh-deadal-intellect/package.json')), 'presets')
+        trust: system
+- id: agent-default-model
+  config:
+    provider: openrouter
+    model: deepseek/deepseek-v4-flash
+    presets:
+      deadal-intellect:
+        provider: openrouter
+        model: deepseek/deepseek-v4-flash
+        label: Deadal-intellect main agent
+- insert:
+    - id: forge-intellect
+      name: '@deepseek-ai/dsh-forge-intellect'
+
+- id: session-title-llm
+  disabled: true

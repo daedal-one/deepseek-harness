@@ -26,3 +26,7 @@ The agent can read and edit workspace files, run commands, delegate work, and ma
 - [Use the Python SDK](./python-sdk.md)
 - [Use other CLI modes](../../../apps/cli/README.md)
 - [Develop a plugin](../develop/basic/index.md)
+
+## Verify implementation against specifications
+
+Use [Deadal-intellect](deadal-intellect.md) to inspect Forge specifications, approve a check plan, and retain independent implementation evidence directly in a repository.

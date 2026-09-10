@@ -28,6 +28,9 @@
     // not declaration path aliases, keep each package/vendor source compiled
     // under its own tsconfig boundary.
     "paths": {
+      "@deepseek-ai/dsh-forge-intellect": ["./packages/integration/forge-intellect/src/index.ts"],
+      "@deepseek-ai/dsh-forge-intellect/tool": ["./packages/integration/forge-intellect/src/tool.ts"],
+      "@deepseek-ai/dsh-deadal-intellect": ["./packages/bundle/deadal-intellect/src/index.ts"],
       "@deepseek-ai/cordis": ["./vendor/cordis/src"],
       "@deepseek-ai/cosmokit": ["./vendor/cosmokit/src"],
       "@deepseek-ai/schemastery": ["./vendor/schemastery/src"],

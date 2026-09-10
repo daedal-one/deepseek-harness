@@ -986,6 +986,43 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'forgeIntellect',
+    summary: 'Local native provider and application service; model-facing tools live in the scoped ./tool entry.',
+    description: 'Local native provider and application service; model-facing tools live in the scoped ./tool entry.',
+    methods: [
+      {
+        signature: 'async overview(agent: Agent, signal: AbortSignal): Promise<JsonValue>',
+        description: 'Discover repository readiness without executing checks or reviews.',
+        parameters: [{ name: 'agent', description: 'conversation whose workspace is selected.' }, { name: 'signal', description: 'cancellation of discovery.' }],
+        returns: 'Repository, specifications, reviewer routes, diagnostics and retained runs.',
+      },
+      {
+        signature: 'async prepare(agent: Agent, input: PlanInput, signal: AbortSignal): Promise<Plan>',
+        description: 'Prepare an immutable plan without running checks or review models; dirty repositories reject.',
+        parameters: [{ name: 'agent', description: 'conversation whose workspace is selected.' }, { name: 'input', description: 'proposed subjects, source paths and fixed checks.' }, { name: 'signal', description: 'cancellation of preparation.' }],
+        returns: 'Validated plan retained with its native policy.',
+      },
+      {
+        signature: 'async start( agent: Agent, planId: string, signal: AbortSignal, callId?: ToolCallId, source?: string, ): Promise<{ runId: string; jobId: JobId; planId: string }>',
+        description: 'Request approval and start a native verification job; altered plans and stale candidates reject.',
+        parameters: [{ name: 'agent', description: 'conversation that owns approval and job collection.' }, { name: 'planId', description: 'retained execution plan.' }, { name: 'signal', description: 'cancellation through approval and launch; the job owns later cancellation.' }, { name: 'callId', description: 'originating tool call for the approval audit.' }, { name: 'source', description: 'original retained run when reassessing authenticated execution.' }],
+        returns: 'Retained run, job and effective plan identifiers after successful launch.',
+      },
+      {
+        signature: 'async result(agent: Agent, runId: string, signal: AbortSignal, evidence: boolean = false): Promise<JsonValue>',
+        description: 'Revalidate retained evidence and distinguish execution state from assessment and freshness.',
+        parameters: [{ name: 'agent', description: 'conversation selecting the repository.' }, { name: 'runId', description: 'retained run to inspect.' }, { name: 'signal', description: 'cancellation of native inspection.' }, { name: 'evidence', description: 'include authenticated detailed evidence when true.' }],
+        returns: 'Native status, or an explicit unavailable diagnostic for incomplete evidence.',
+      },
+      {
+        signature: 'async attest(agent: Agent, runId: string, signal: AbortSignal): Promise<JsonValue>',
+        description: 'Issue a native qualified attestation; failed eligibility rejects without a manual fallback.',
+        parameters: [{ name: 'agent', description: 'conversation selecting the repository.' }, { name: 'runId', description: 'retained run whose evidence supports issuance.' }, { name: 'signal', description: 'cancellation of native issuance.' }],
+        returns: 'Native immutable attestation result after successful local issuance.',
+      },
+    ],
+  },
+  {
     key: 'forgeProjectWorkspaces',
     summary: 'Forge-owned catalog reconciler and authenticated HTTP route owner.',
     description: 'Forge-owned catalog reconciler and authenticated HTTP route owner.',
@@ -5035,6 +5072,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'PermissionSelect',
     declaration: 'export interface PermissionSelect {\n    options: PresetOption[];\n    currentValue: string;\n}',
+  },
+  {
+    name: 'Plan',
+    declaration: 'export type Plan = z.infer<typeof planSchema>;',
+  },
+  {
+    name: 'PlanInput',
+    declaration: 'export type PlanInput = z.infer<typeof planInputSchema>;',
   },
   {
     name: 'PostToolDecision',

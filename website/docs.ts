@@ -72,6 +72,7 @@ export function sectionSpec(locale: DocsLocale, label: string): DocsSection & { 
 
 /** Every canonical page published by the documentation website. */
 export const docsPages: DocsPage[] = [
+  { locale: 'root', contentLocale: 'en-US', source: 'docs/user/guide/deadal-intellect.md', route: 'guide/deadal-intellect.md', label: 'Verify specifications', sidebar: 'guide', section: 'Integrations', order: 2 },
   { 'locale':'root','contentLocale':'en-US','source':'docs/user/index.md','route':'index.md','label':'DeepSeek Harness','sidebar':null,'section':'Home','order':0,'sourceAliases':[] },
   { 'locale':'root','contentLocale':'en-US','source':'docs/user/guide/index.md','route':'guide/quickstart.md','label':'Use the Web UI','sidebar':'guide','section':'Guide','order':1,'sourceAliases':['docs/user/guide'] },
   { 'locale':'root','contentLocale':'en-US','source':'docs/user/guide/providers.md','route':'guide/providers.md','label':'Configure models','sidebar':'guide','section':'Guide','order':2,'sourceAliases':[] },

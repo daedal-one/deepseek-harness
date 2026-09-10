@@ -7,7 +7,9 @@
  */
 
 import { globSync, readFileSync, writeFileSync } from 'node:fs'
-import { basename, resolve } from 'node:path'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { basename, resolve, join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
 import type { ToolSchema } from '@deepseek-ai/dsh-llm'
@@ -46,6 +48,11 @@ import * as ToolBashPersistent from '@deepseek-ai/dsh-tool-bash-persistent'
 import * as ToolPwshPersistent from '@deepseek-ai/dsh-tool-pwsh-persistent'
 import CordisHostRunner from '@deepseek-ai/dsh-cordis-host-runner'
 import * as ToolCordis from '@deepseek-ai/dsh-tool-cordis'
+import ForgeIntellect from '@deepseek-ai/dsh-forge-intellect'
+import * as ToolForgeIntellect from '@deepseek-ai/dsh-forge-intellect/tool'
+import AgentModelConfig from '@deepseek-ai/dsh-agent-default-model'
+import CredentialLocal from '@deepseek-ai/dsh-credentials-local'
+import UserApproval from '@deepseek-ai/dsh-user-approval'
 import * as ToolPresent from '@deepseek-ai/dsh-tool-present'
 import * as ToolFs from '@deepseek-ai/dsh-tool-fs'
 import * as ToolFsSearch from '@deepseek-ai/dsh-tool-fs-search'
@@ -199,6 +206,27 @@ export interface ToolPackage {
  * guard proves it is exhaustive against the on-disk glob.
  */
 const TOOL_PACKAGES: ToolPackage[] = [
+  {
+    pkg: '@deepseek-ai/dsh-forge-intellect',
+    dir: 'forge-intellect',
+    source: 'packages/integration/forge-intellect/src/tool.ts',
+    requires: ['ctx.tools', 'ctx.forgeIntellect', 'an owning Agent at execution time'],
+    writes: ['tool/call', 'tool/result', 'approved jobs and retained native verification evidence'],
+    async mount(ctx) {
+      const home = await mkdtemp(join(tmpdir(), 'dsh-catalog-intellect-'))
+      ctx.effect(() => () => rm(home, { recursive: true, force: true }))
+      await ctx.plugin(LlmRuntime)
+      await ctx.plugin(AgentRegistry)
+      await ctx.plugin(AgentModelConfig, { provider: 'openrouter', model: 'deepseek/deepseek-v4-flash' })
+      await ctx.plugin(LocalSubprocessRuntime)
+      await ctx.plugin(LocalJobRegistry)
+      await ctx.plugin(UserApproval)
+      await ctx.plugin(CredentialLocal, { dshHome: home, watch: false })
+      await ctx.plugin(ForgeIntellect, { stateRoot: join(home, 'verification') })
+      await ctx.plugin(ToolForgeIntellect)
+    },
+    note: 'The Deadal-intellect profiles mount these tools in the verification preset. Native tools own evidence validation and attestation; schema collection starts no native commands or models.',
+  },
   {
     pkg: '@deepseek-ai/dsh-tool-ask-user',
     dir: 'tool-ask-user',
@@ -790,7 +818,7 @@ export function render(catalog: ToolCatalog): string {
     '',
     'This file is GENERATED and verified fresh by `pnpm run verify-tool-catalog` (part of `doc-sync`) — do not edit it by hand. Unlike the cordis catalog (a pure source-AST pass), this generator BOOTS each tool plugin on a real context and reads `ctx.tools.schemas()`, because a tool schema is not statically knowable (runtime-spread enums, concatenated descriptions, config-driven names, raw-JSON-Schema MCP tools). A completeness guard globs `packages/*/tool-*` and fails if any package is missing from the generator\'s boot manifest, so a new tool cannot be silently undocumented.',
     '',
-    'Scope: shipped product tools under `packages/*/tool-*`, each booted with its DEFAULT config, except where a Config field is REQUIRED with no default — there the generator must choose, and the per-package note records which branch this page shows. The registered tool NAME can be a load-time config (e.g. `tool-subagent`\'s `toolName`), so a deployment may expose a package under a different or additional name — a per-package note records those shipped aliases where they exist. The `examples/` demo tools (e.g. `echo`) are excluded, matching the cordis catalog\'s packages-only scope.',
+    'Scope: shipped product tools under `packages/*/tool-*` and explicitly catalogued integration entries, each booted with its DEFAULT config, except where a Config field is REQUIRED with no default — there the generator must choose, and the per-package note records which branch this page shows. The registered tool NAME can be a load-time config (e.g. `tool-subagent`\'s `toolName`), so a deployment may expose a package under a different or additional name — a per-package note records those shipped aliases where they exist. The `examples/` demo tools (e.g. `echo`) are excluded, matching the cordis catalog\'s packages-only scope.',
     '',
     '## Tool Package Map',
     '',

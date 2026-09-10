@@ -1,0 +1,21 @@
+- id: agent-default-model
+  config:
+    provider: intellect-fixture
+    model: main
+- id: approval
+  config:
+    policy: ask
+- id: forge-intellect
+  config:
+    stateRoot: !!js process.cwd() + '/.git/verification-fixture'
+    reviewerProvider: intellect-fixture
+    reviewerModel: reviewer
+    reviewerTimeoutSeconds: 30
+    runTimeoutSeconds: 180
+- id: session-persistence-jsonl
+  config:
+    root: !!js dshHomePath('sessions')
+    compression: none
+- insert:
+    - id: intellect-fixture-model
+      name: ./model.ts

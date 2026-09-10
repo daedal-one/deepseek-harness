@@ -817,6 +817,40 @@ export interface Config {
 
 Source: [`packages/context/file-reference-local/src/index.ts:34`](../packages/context/file-reference-local/src/index.ts)
 
+<a id="deepseek-aidsh-forge-intellect"></a>
+
+## `@deepseek-ai/dsh-forge-intellect`
+
+Requires: `subprocess` · `agents` · `agentModels` · `jobs` · `approval` · `credentials`
+
+```ts config-catalog
+/** Host-owned execution limits and reviewer defaults; never read from model arguments. */
+export interface Config {
+  /** Native verification CLI, resolved before a run. */
+  intellect: string
+  /** Native accountable action gateway. */
+  action: string
+  /** Compatible canonical specification CLI. */
+  spec: string
+  /** Private persistent plans and results, outside captured repositories. */
+  stateRoot: string
+  /** Default provider for both reviewer settings targets. */
+  reviewerProvider: string
+  /** Default model for both reviewer settings targets. */
+  reviewerModel: string
+  /** Maximum output tokens per reviewer request, including corrections. */
+  maxTokens: number
+  /** Maximum seconds for a single reviewer stage. */
+  reviewerTimeoutSeconds: number
+  /** Maximum seconds for the complete native run. */
+  runTimeoutSeconds: number
+  /** Maximum bytes in a native model context packet. */
+  maxContextBytes: number
+}
+```
+
+Source: [`packages/integration/forge-intellect/src/index.ts:27`](../packages/integration/forge-intellect/src/index.ts)
+
 <a id="deepseek-aidsh-forge-project-workspaces"></a>
 
 ## `@deepseek-ai/dsh-forge-project-workspaces`
@@ -3933,6 +3967,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-command-goal` — requires `commands` · `goals` ([`packages/goal/command-goal/src/index.ts`](../packages/goal/command-goal/src/index.ts))
 - `@deepseek-ai/dsh-commands` ([`packages/interaction/commands/src/index.ts`](../packages/interaction/commands/src/index.ts))
 - `@deepseek-ai/dsh-cordis-client-runner` ([`packages/extensions/cordis-client-runner/src/index.ts`](../packages/extensions/cordis-client-runner/src/index.ts))
+- `@deepseek-ai/dsh-deadal-intellect` ([`packages/bundle/deadal-intellect/src/index.ts`](../packages/bundle/deadal-intellect/src/index.ts))
 - `@deepseek-ai/dsh-deepseek-llm-api-extensions` ([`packages/llm/deepseek-llm-api-extensions/src/index.ts`](../packages/llm/deepseek-llm-api-extensions/src/index.ts))
 - `@deepseek-ai/dsh-experimental-client-ui-agent-team` ([`packages/experimental/client-ui-agent-team/src/index.ts`](../packages/experimental/client-ui-agent-team/src/index.ts))
 - `@deepseek-ai/dsh-fs-e2b` — requires `e2b` ([`packages/e2b/fs-e2b/src/index.ts`](../packages/e2b/fs-e2b/src/index.ts))
