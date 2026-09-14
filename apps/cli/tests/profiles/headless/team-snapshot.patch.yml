@@ -13,7 +13,7 @@
     agents:
       - id: main
         provider: deepseek-official
-        model: deepseek-v4-flash
+        model: deepseek-flash
         cwd: !!js process.cwd()
 
 - id: session-persistence-jsonl

@@ -10,7 +10,7 @@ import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
 /** OpenRouter route used by the real-model filesystem tests. */
 export const E2E_PROVIDER = 'openrouter'
 /** Nitro model used by the real-model filesystem tests. */
-export const E2E_MODEL = 'deepseek/deepseek-v4-flash-0731:nitro'
+export const E2E_MODEL = 'deepseek/deepseek-v4.1-flash'
 
 /**
  * Build the real fs-tool stack for with-key e2e tests. Agents have no session

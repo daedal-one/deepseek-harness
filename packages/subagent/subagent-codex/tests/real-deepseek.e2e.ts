@@ -66,7 +66,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)(
       const bridge = await startDeepSeekResponsesBridge(nonce)
       bridges.push(bridge)
       writeFileSync(join(codexHome, 'config.toml'), [
-        'model = "deepseek-v4-flash"',
+        'model = "deepseek-flash"',
         'model_provider = "deepseek-e2e"',
         'approval_policy = "never"',
         'sandbox_mode = "read-only"',

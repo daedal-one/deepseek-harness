@@ -1,7 +1,7 @@
 ---
 description: Read-only verification subagent. DS4-flash verifies implementer diffs against the original spec and reports defects; never edits.
 mode: subagent
-model: openrouter/deepseek/deepseek-v4-flash-0731-nitro
+model: openrouter/deepseek/deepseek-v4.1-flash
 permission:
   edit: deny
   bash: ask

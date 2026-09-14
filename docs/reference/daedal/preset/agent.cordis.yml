@@ -57,7 +57,7 @@
   config:
     targets:
       - provider: openrouter
-        model: deepseek/deepseek-v4-flash-0731:nitro
+        model: deepseek/deepseek-v4.1-flash
       - provider: openrouter
         model: moonshotai/kimi-k2.7-code
       - provider: openrouter
@@ -82,7 +82,7 @@
   description: Finds reusable facts and preferences in sessions and proposes them for durable memory.
   config:
     provider: openrouter
-    model: deepseek/deepseek-v4-flash-0731:nitro
+    model: deepseek/deepseek-v4.1-flash
     maxInputBytes: 65536
     maxOutputTokens: 1024
     timeoutMs: 30000
@@ -394,7 +394,7 @@
         backgroundMode: one-shot
         agentOptions:
           provider: openrouter
-          model: deepseek/deepseek-v4-flash-0731:nitro
+          model: deepseek/deepseek-v4.1-flash
           maxTokens: 65536
         persona: !!js "((text) => text.slice(text.indexOf('\\n---\\n', 4) + 5).trim())(process.getBuiltinModule('node:fs').readFileSync(new URL('roles/reviewer.md', baseUrl), 'utf8'))"
         toolFilter:
@@ -413,7 +413,7 @@
         backgroundMode: one-shot
         agentOptions:
           provider: openrouter
-          model: deepseek/deepseek-v4-flash-0731:nitro
+          model: deepseek/deepseek-v4.1-flash
           maxTokens: 65536
         persona: !!js "((text) => text.slice(text.indexOf('\\n---\\n', 4) + 5).trim())(process.getBuiltinModule('node:fs').readFileSync(new URL('roles/researcher.md', baseUrl), 'utf8'))"
         toolFilter:
@@ -430,7 +430,7 @@
         backgroundMode: one-shot
         agentOptions:
           provider: openrouter
-          model: deepseek/deepseek-v4-flash-0731:nitro
+          model: deepseek/deepseek-v4.1-flash
           maxTokens: 65536
         persona: !!js "((text) => text.slice(text.indexOf('\\n---\\n', 4) + 5).trim())(process.getBuiltinModule('node:fs').readFileSync(new URL('roles/browser-reader.md', baseUrl), 'utf8'))"
         toolFilter:
@@ -447,7 +447,7 @@
         backgroundMode: one-shot
         agentOptions:
           provider: openrouter
-          model: deepseek/deepseek-v4-flash-0731:nitro
+          model: deepseek/deepseek-v4.1-flash
           maxTokens: 65536
         persona: !!js "((text) => text.slice(text.indexOf('\\n---\\n', 4) + 5).trim())(process.getBuiltinModule('node:fs').readFileSync(new URL('roles/browser-operator.md', baseUrl), 'utf8'))"
         toolFilter:
@@ -464,7 +464,7 @@
         backgroundMode: one-shot
         agentOptions:
           provider: openrouter
-          model: deepseek/deepseek-v4-flash-0731:nitro
+          model: deepseek/deepseek-v4.1-flash
           maxTokens: 65536
         persona: !!js "((text) => text.slice(text.indexOf('\\n---\\n', 4) + 5).trim())(process.getBuiltinModule('node:fs').readFileSync(new URL('roles/toolsmith.md', baseUrl), 'utf8'))"
         toolFilter:
@@ -480,7 +480,7 @@
         backgroundMode: one-shot
         agentOptions:
           provider: openrouter
-          model: deepseek/deepseek-v4-flash-0731:nitro
+          model: deepseek/deepseek-v4.1-flash
           maxTokens: 65536
         persona: !!js "((text) => text.slice(text.indexOf('\\n---\\n', 4) + 5).trim())(process.getBuiltinModule('node:fs').readFileSync(new URL('roles/orchestrator.md', baseUrl), 'utf8'))"
         toolFilter:
@@ -497,7 +497,7 @@
         backgroundMode: one-shot
         agentOptions:
           provider: openrouter
-          model: deepseek/deepseek-v4-flash-0731:nitro
+          model: deepseek/deepseek-v4.1-flash
           maxTokens: 65536
         persona: !!js "((text) => text.slice(text.indexOf('\\n---\\n', 4) + 5).trim())(process.getBuiltinModule('node:fs').readFileSync(new URL('roles/crawler.md', baseUrl), 'utf8'))"
         toolFilter:
@@ -514,7 +514,7 @@
         backgroundMode: one-shot
         agentOptions:
           provider: openrouter
-          model: deepseek/deepseek-v4-flash-0731:nitro
+          model: deepseek/deepseek-v4.1-flash
           maxTokens: 65536
         persona: !!js "((text) => text.slice(text.indexOf('\\n---\\n', 4) + 5).trim())(process.getBuiltinModule('node:fs').readFileSync(new URL('roles/web-debugger.md', baseUrl), 'utf8'))"
         toolFilter:

@@ -20,7 +20,7 @@ class DeepSeekHarnessConfig:
     """
 
     provider: str = "openrouter"
-    model: str = "deepseek/deepseek-v4-flash-0731:nitro"
+    model: str = "deepseek/deepseek-v4.1-flash"
     reasoning_effort: str | None = None
     max_tokens: int | None = None
     cwd: str | None = None

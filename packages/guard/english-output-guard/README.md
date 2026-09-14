@@ -35,7 +35,7 @@ Every deployment-varying choice is required; invalid, duplicate, blank, non-posi
   config:
     targets:
       - provider: openrouter
-        model: deepseek/deepseek-v4-flash-0731:nitro
+        model: deepseek/deepseek-v4.1-flash
     translator:
       provider: openrouter
       model: moonshotai/kimi-k2.7-code

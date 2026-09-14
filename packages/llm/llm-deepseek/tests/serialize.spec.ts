@@ -14,7 +14,7 @@ import type { ImageSerializationOptions } from '../src/serialize.ts'
 type FileResolver = Extract<ImageSerializationOptions['representation'], { kind: 'file' }>['resolveFileId']
 
 function request(overrides: Partial<GenerateOptions> = {}): GenerateOptions {
-  return { provider: 'deepseek-official', model: 'deepseek-v4-flash', messages: [], ...overrides }
+  return { provider: 'deepseek-official', model: 'deepseek-flash', messages: [], ...overrides }
 }
 
 function imageRef(mediaType: ImageMediaType = 'image/png', bytes = 3): ImageAttachmentRef {
@@ -236,7 +236,7 @@ describe('serializeRequest', () => {
   it('always streams with usage and maps the basics', () => {
     const wire = serializeRequest(request({ messages: history }))
     expect(wire).toEqual({
-      model: 'deepseek-v4-flash',
+      model: 'deepseek-flash',
       messages: [{ role: 'user', content: 'hi' }],
       stream: true,
       stream_options: { include_usage: true },
@@ -369,7 +369,7 @@ describe('image serialization', () => {
     const resolveFileId = fileResolver()
     const ref = imageRef(mediaType)
     const wire = await serializeRequestWithImages(request({
-      model: 'deepseek-v4-flash-vision-exp',
+      model: 'deepseek-flash',
       messages: [createUserMessage({
         content: [
           { type: 'text', text: 'before' },
@@ -399,7 +399,7 @@ describe('image serialization', () => {
   ] as const)('serializes every retained %s request version as an inline data URL', async (mediaType, url) => {
     const ref = imageRef(mediaType)
     const wire = await serializeRequestWithImages(request({
-      model: 'deepseek-v4-flash-vision-exp',
+      model: 'deepseek-flash',
       messages: [createUserMessage({
         content: [{ type: 'image', attachment: ref }],
         source: { kind: 'plugin', plugin: 'test' },
@@ -418,7 +418,7 @@ describe('image serialization', () => {
   it('gives image-only input a stable handle and request dimensions', async () => {
     const ref = imageRef()
     const wire = await serializeRequestWithImages(request({
-      model: 'deepseek-v4-flash-vision-exp',
+      model: 'deepseek-flash',
       messages: [createUserMessage({
         content: [{ type: 'image', attachment: ref }],
         source: { kind: 'plugin', plugin: 'test' },
@@ -445,7 +445,7 @@ describe('image serialization', () => {
     version.height = 565
     images.resolveImageAccess = () => ({ readonlyPath: '/tmp/dsh/objects/aa/object' })
     const wire = await serializeRequestWithImages(request({
-      model: 'deepseek-v4-flash-vision-exp',
+      model: 'deepseek-flash',
       messages: [createUserMessage({
         content: [{ type: 'image', attachment: ref }],
         source: { kind: 'plugin', plugin: 'test' },
@@ -615,7 +615,7 @@ describe('image serialization', () => {
       ? { readonlyPath: '/tmp/dsh/objects/png' }
       : undefined
     const wire = await serializeRequestWithImages(request({
-      model: 'deepseek-v4-flash-vision-exp',
+      model: 'deepseek-flash',
       messages: [createUserMessage({
         content: [
           { type: 'image', attachment: png },
@@ -643,7 +643,7 @@ describe('image serialization', () => {
   it('drops base64 history from a 20-unit high watermark to a 10-unit low watermark', async () => {
     const ref = imageRef('image/png', 3)
     const wire = await serializeRequestWithImages(request({
-      model: 'deepseek-v4-flash-vision-exp',
+      model: 'deepseek-flash',
       messages: [createUserMessage({
         content: Array.from({ length: 21 }, () => ({ type: 'image' as const, attachment: ref })),
         source: { kind: 'plugin', plugin: 'test' },
@@ -658,7 +658,7 @@ describe('image serialization', () => {
   it('rejects an unprepared image while computing exact request bytes', async () => {
     const ref = imageRef()
     await expect(serializeRequestWithImages(request({
-      model: 'deepseek-v4-flash-vision-exp',
+      model: 'deepseek-flash',
       messages: [createUserMessage({
         content: [{ type: 'image', attachment: ref }],
         source: { kind: 'plugin', plugin: 'test' },

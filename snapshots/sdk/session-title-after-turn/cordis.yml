@@ -11,4 +11,4 @@
         maxOutputTokens: 32
         timeoutMs: 5000
         provider: deepseek-official
-        model: deepseek-v4-flash
+        model: deepseek-flash

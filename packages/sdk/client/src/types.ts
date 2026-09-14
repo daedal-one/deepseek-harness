@@ -58,7 +58,7 @@ export interface DeepSeekHarnessOptions extends HarnessClientOptions {
   cwd?: string
   /** Provider route for SDK-created agents (default `openrouter`). */
   provider?: string
-  /** Model for SDK-created agents (default `deepseek/deepseek-v4-flash-0731:nitro`). */
+  /** Model for SDK-created agents (default `deepseek/deepseek-v4.1-flash`). */
   model?: string
   /** Adapter-owned reasoning effort for the selected provider/model route. */
   reasoningEffort?: ReasoningEffortId

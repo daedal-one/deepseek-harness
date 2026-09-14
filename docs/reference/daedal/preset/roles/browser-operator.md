@@ -1,7 +1,7 @@
 ---
 description: Interactive browser specialist with side-effect capabilities. Use for clicking, filling, typing, controls, and tab operations through an isolated Agent Browser MCP session. Invoke when the task requires browser side effects beyond reading.
 mode: subagent
-model: openrouter/deepseek/deepseek-v4-flash-0731-nitro
+model: openrouter/deepseek/deepseek-v4.1-flash
 permission:
   edit: deny
   bash: ask

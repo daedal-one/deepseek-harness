@@ -2,13 +2,13 @@
 # the fs backend's overwrite diff-basis limit shrunk so a modest replacement
 # crosses the exclusive bound and the write result falls back to a whole-file
 # diff. A config patch replaces the row's whole config, so `cwd` is restated
-# verbatim, and the acp-agent restatement re-pins `deepseek-v4-flash` to match
+# verbatim, and the acp-agent restatement re-pins `deepseek-flash` to match
 # the recorded corpus and its pinned request headers.
 - id: agent-default-model
   name: '@deepseek-ai/dsh-agent-default-model'
   config:
     provider: deepseek-official
-    model: deepseek-v4-flash
+    model: deepseek-flash
 
 - id: session-persistence-jsonl
   name: '@deepseek-ai/dsh-session-persistence-jsonl'

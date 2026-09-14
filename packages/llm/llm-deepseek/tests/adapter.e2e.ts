@@ -35,8 +35,10 @@ import { assemble, type AssembledResult } from './assemble.ts'
  * requires $DEEPSEEK_VISION_E2E=1 (see vitest.e2e.config.ts).
  */
 
-const FLASH = 'deepseek-v4-flash'
-const VISION = 'deepseek-v4-flash-vision-exp'
+// V4.1 Flash is one catalog entry carrying native image input, so the thinking
+// and vision smokes share a single model id.
+const FLASH = 'deepseek-flash'
+const VISION = 'deepseek-flash'
 const VISION_E2E_ENABLED = process.env.DEEPSEEK_VISION_E2E === '1'
 /** A model whose endpoint reads the latest `system` message at any position; unset skips the in-history smoke. */
 const IN_HISTORY_MODEL = process.env.DEEPSEEK_IN_HISTORY_MODEL

@@ -73,7 +73,7 @@ async function completeWithDeepSeek(
       'content-type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'deepseek-v4-flash',
+      model: 'deepseek-flash',
       messages: [
         {
           role: 'system',

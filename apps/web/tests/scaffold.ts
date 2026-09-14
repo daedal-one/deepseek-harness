@@ -195,8 +195,8 @@ const REPLAY_PROVIDERS: (ReplayProviderConfig & { models: NonNullable<ReplayProv
   id: 'openrouter',
   name: 'OpenRouter',
   models: [{
-    id: 'deepseek/deepseek-v4-flash-0731:nitro',
-    name: 'DeepSeek V4 Flash 0731 (Nitro)',
+    id: 'deepseek/deepseek-v4.1-flash',
+    name: 'DeepSeek V4.1 Flash',
     contextWindow: 1_000_000,
     reasoningEfforts: ['off', 'low', 'medium', 'high', 'xhigh', 'max'],
     defaultReasoningEffort: 'xhigh',
@@ -205,10 +205,9 @@ const REPLAY_PROVIDERS: (ReplayProviderConfig & { models: NonNullable<ReplayProv
   id: 'deepseek-official',
   name: 'DeepSeek',
   models: [
-    { id: 'deepseek-v4-flash', name: 'DeepSeek-V4-Flash', contextWindow: 128_000 },
     {
-      id: 'deepseek-v4-flash-vision-exp',
-      name: 'DeepSeek-V4-Flash-Vision-Exp',
+      id: 'deepseek-flash',
+      name: 'DeepSeek-V4.1-Flash',
       contextWindow: 1_000_000,
       inputModalities: ['text', 'image'] as const,
       defaultMaxTokens: 256_000,

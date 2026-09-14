@@ -40,7 +40,7 @@ export class DeepSeekHarness implements AsyncDisposable {
     // relative value would double-resolve (e.g. `worker` → `worker/worker`).
     this.cwd = resolve(options.cwd ?? options.processCwd ?? process.cwd())
     this.provider = options.provider ?? 'openrouter'
-    this.model = options.model ?? 'deepseek/deepseek-v4-flash-0731:nitro'
+    this.model = options.model ?? 'deepseek/deepseek-v4.1-flash'
     this.reasoningEffort = options.reasoningEffort
     this.maxTokens = options.maxTokens
   }

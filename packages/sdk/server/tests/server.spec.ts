@@ -1047,7 +1047,7 @@ describe('HarnessSdkJsonRpcServer', () => {
       await expect(server.handleRequest('initialize', {
         cwd: storageDir,
         provider: 'deepseek-official',
-        model: 'deepseek-v4-flash',
+        model: 'deepseek-flash',
         reasoningEffort: 'impossible',
       })).rejects.toThrow('does not support reasoning effort "impossible"')
       expect((server as unknown as { sessions: Map<string, unknown> }).sessions.size).toBe(0)

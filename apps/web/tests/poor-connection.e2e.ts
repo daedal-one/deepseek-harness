@@ -62,7 +62,7 @@ function appendFinalAssistant(session: Session, turn: number): void {
     step,
     message: createAssistantMessage({
       content: text(final),
-      source: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+      source: { provider: 'deepseek-official', model: 'deepseek-flash' },
     }),
     usage: { inputTokens: 1_024, outputTokens: 128 },
     stream: stream.map(chunk => ({ type: 'chunk', time: Date.now(), chunk })),
@@ -94,7 +94,7 @@ function productionHistoryFixture(): string {
       stream: [],
       message: createAssistantMessage({
         content: [{ type: 'tool-call', id: callId, name: 'poor_connection_probe', arguments: args }],
-        source: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+        source: { provider: 'deepseek-official', model: 'deepseek-flash' },
       }),
     }, { surfaceOp: 'append' })
     const call = session.append('tool/call', {

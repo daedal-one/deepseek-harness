@@ -87,7 +87,7 @@ workspace = Path("/absolute/path/to/disposable-workspace").resolve()
 dsh_home = Path("/absolute/path/to/example-dsh-home").resolve()
 with DeepSeekHarness(
     provider="deepseek-official",
-    model="deepseek-v4-flash",
+    model="deepseek-flash",
     max_tokens=49_152,
     cwd=str(workspace),
     dsh_home=str(dsh_home),
@@ -149,7 +149,7 @@ Pass `patches=("/absolute/path/to/editor.patch.yml",)` when constructing `DeepSe
 | Property | Value |
 |---|---|
 | System prompt | `DSH_SYSTEM_PROMPT`, falling back to `You are a helpful software engineer assistant.` |
-| Model in `minimal.py` | `--model`, then `DSH_MODEL`, then `deepseek-v4-flash` |
+| Model in `minimal.py` | `--model`, then `DSH_MODEL`, then `deepseek/deepseek-v4.1-flash` |
 | Model-facing tool | Persistent `bash` on Linux/macOS or `pwsh` on Windows |
 | Shell timeout | 300 seconds |
 | Runtime context and compaction | Absent |

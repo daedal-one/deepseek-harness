@@ -33,8 +33,8 @@
 - button "Add attachment":
   - img
 - 'button "Access mode, current: Full access"': Full access
-- button "Select model, current DeepSeek-V4-Flash":
-  - text: DeepSeek-V4-Flash
+- button "Select model, current DeepSeek-V4.1-Flash":
+  - text: DeepSeek-V4.1-Flash
   - img
 - button "Send message" [disabled]
 - button "1 turns 1 steps":

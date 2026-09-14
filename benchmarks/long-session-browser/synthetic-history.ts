@@ -65,7 +65,7 @@ export function syntheticHistory(): string {
     session.append('assistant/message', {
       turn, step: 1, stream: [...stream.snapshot()],
       message: createAssistantMessage({
-        source: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+        source: { provider: 'deepseek-official', model: 'deepseek-flash' },
         content: [
           { type: 'reasoning', text: reasoning },
           { type: 'text', text },

@@ -18,14 +18,14 @@
         maxDelayMs: 1
         jitterRatio: 0
     models:
-      - id: deepseek-v4-flash
+      - id: deepseek-flash
       - id: deepseek-v4-pro
 
 - id: agent-default-model
   name: '@deepseek-ai/dsh-agent-default-model'
   config:
     provider: deepseek-official
-    model: deepseek-v4-flash
+    model: deepseek-flash
 
 - id: session-persistence-jsonl
   name: '@deepseek-ai/dsh-session-persistence-jsonl'

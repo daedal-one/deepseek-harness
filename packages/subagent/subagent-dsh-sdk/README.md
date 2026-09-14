@@ -42,7 +42,7 @@ The provider advertises `agentOptions: true`, with `outputSchema`/`depthLimit`/`
 | `dshHome` | required | Absolute isolated Harness home for every nested child process |
 | `cwd` | parent session cwd | Working-directory override for the child process and its SDK session |
 | `provider` | `deepseek-official` | Provider route sent in the child's `initialize` |
-| `model` | `deepseek-v4-flash` | Model sent in the child's `initialize` |
+| `model` | `deepseek-flash` | Model sent in the child's `initialize` |
 | `maxTokens` | adapter/provider route default | Per-request output-token cap sent in the child's `initialize` |
 | `env` | `{}` | Explicit child environment layered over the credential-scrubbed parent environment |
 | `shutdownTimeoutMs` | `1000` | Bound on the protocol `shutdown` exchange during dispose |

@@ -1,7 +1,7 @@
 ---
 description: Research and documentation specialist. Use for gathering information via web search, fetching known URLs, and querying library/API documentation through Context7. Invoke when the orchestrator or another agent needs current information, API references, or library docs — not for browser interaction or implementation work.
 mode: subagent
-model: openrouter/deepseek/deepseek-v4-flash-0731-nitro
+model: openrouter/deepseek/deepseek-v4.1-flash
 permission:
   edit: deny
   bash: ask

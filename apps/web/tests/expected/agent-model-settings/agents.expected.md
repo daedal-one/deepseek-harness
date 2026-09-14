@@ -394,13 +394,14 @@
         - 'option "xAI: Grok Latest"'
         - 'option "Z.ai: GLM Flash Latest"'
         - 'option "Z.ai: GLM Latest"'
-        - option "DeepSeek V4 Flash 0731 (Nitro)" [selected]
+        - option "DeepSeek V4.1 Flash" [selected]
       - text: Reasoning
       - combobox "Reasoning":
         - option "Provider default"
         - option "Off"
-        - option "High"
-        - option "Xhigh" [selected]
+        - option "Low"
+        - option "High" [selected]
+        - option "Max"
       - button "Apply" [disabled]
     - listitem:
       - strong: Daedal OpenAI reviewer
@@ -786,13 +787,14 @@
         - 'option "xAI: Grok Latest"'
         - 'option "Z.ai: GLM Flash Latest"'
         - 'option "Z.ai: GLM Latest"'
-        - option "DeepSeek V4 Flash 0731 (Nitro)" [selected]
+        - option "DeepSeek V4.1 Flash" [selected]
       - text: Reasoning
       - combobox "Reasoning":
         - option "Provider default"
         - option "Off"
-        - option "High"
-        - option "Xhigh" [selected]
+        - option "Low"
+        - option "High" [selected]
+        - option "Max"
       - button "Apply" [disabled]
     - listitem:
       - strong: Guru
@@ -1164,13 +1166,14 @@
         - 'option "xAI: Grok Latest"'
         - 'option "Z.ai: GLM Flash Latest"'
         - 'option "Z.ai: GLM Latest"'
-        - option "DeepSeek V4 Flash 0731 (Nitro)" [selected]
+        - option "DeepSeek V4.1 Flash" [selected]
       - text: Reasoning
       - combobox "Reasoning":
         - option "Provider default"
         - option "Off"
-        - option "High"
-        - option "Xhigh" [selected]
+        - option "Low"
+        - option "High" [selected]
+        - option "Max"
       - button "Apply" [disabled]
     - listitem:
       - strong: Subagent
@@ -1542,11 +1545,12 @@
         - 'option "xAI: Grok Latest"'
         - 'option "Z.ai: GLM Flash Latest"'
         - 'option "Z.ai: GLM Latest"'
-        - option "DeepSeek V4 Flash 0731 (Nitro)" [selected]
+        - option "DeepSeek V4.1 Flash" [selected]
       - text: Reasoning
       - combobox "Reasoning":
         - option "Provider default"
         - option "Off"
-        - option "High"
-        - option "Xhigh" [selected]
+        - option "Low"
+        - option "High" [selected]
+        - option "Max"
       - button "Apply" [disabled]
