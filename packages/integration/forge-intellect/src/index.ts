@@ -49,7 +49,7 @@ export interface Config {
 export const Config: z<Config> = z.object({
   intellect: z.string().default('forge-intellect'), action: z.string().default('forge-intellect-action-mcp'), spec: z.string().default('spec'),
   stateRoot: z.string().default(dshHomePath('verification')),
-  reviewerProvider: z.string().default('openrouter'), reviewerModel: z.string().default('deepseek/deepseek-v4-flash'),
+  reviewerProvider: z.string().default('openrouter'), reviewerModel: z.string().default('deepseek/deepseek-v4.1-flash'),
   maxTokens: z.natural().min(1).default(20000), reviewerTimeoutSeconds: z.natural().min(1).default(420),
   runTimeoutSeconds: z.natural().min(1).default(3600), maxContextBytes: z.natural().min(1024).max(1500000).default(1500000),
 })

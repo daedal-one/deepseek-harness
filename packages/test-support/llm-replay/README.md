@@ -43,7 +43,7 @@ With `providers` configured, the plugin registers a replay-only adapter whose ca
             maxDelayMs: 1
             jitterRatio: 0
         models:
-          - id: deepseek-v4-flash
+          - id: deepseek-flash
             contextWindow: 128000
           - id: deepseek-v4-pro
   # file/overrideFile/childFiles default to $DSH_SNAPSHOT_FILE /

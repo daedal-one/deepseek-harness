@@ -74,8 +74,8 @@ const DeepSeekConfig = Schema.object({
   // composition entry, which is what the restore-defaults path has to read.
   })).default([
     {
-      id: 'deepseek-v4-flash',
-      name: 'DeepSeek-V4-Flash',
+      id: 'deepseek-flash',
+      name: 'DeepSeek-V4.1-Flash',
       description: '',
       contextWindow: 1_000_000,
     },
@@ -90,8 +90,8 @@ const DeepSeekConfig = Schema.object({
 
 const DEFAULT_DEEPSEEK_MODELS = [
   {
-    id: 'deepseek-v4-flash',
-    name: 'DeepSeek-V4-Flash',
+    id: 'deepseek-flash',
+    name: 'DeepSeek-V4.1-Flash',
     description: 'Preserved hidden detail',
     contextWindow: 1_000_000,
   },
@@ -668,7 +668,7 @@ describe('ModelsSection', () => {
     fireEvent.click(screen.getByText(en.customized))
     expect(screen.getByText(en.modelsInherited)).toBeTruthy()
     expect(screen.getAllByLabelText(new RegExp(en.modelId)).map(input => (input as HTMLInputElement).value))
-      .toEqual(['deepseek-v4-flash', 'deepseek-v4-pro'])
+      .toEqual(['deepseek-flash', 'deepseek-v4-pro'])
 
     fireEvent.click(screen.getByText(en.addModel))
     const ids = screen.getAllByLabelText(new RegExp(en.modelId))
@@ -700,7 +700,7 @@ describe('ModelsSection', () => {
     fireEvent.click(screen.getByText(en.customized))
     fireEvent.click(screen.getByText(en.addModel))
     const ids = screen.getAllByLabelText(new RegExp(en.modelId))
-    fireEvent.change(ids[2] as HTMLInputElement, { target: { value: 'deepseek-v4-flash' } })
+    fireEvent.change(ids[2] as HTMLInputElement, { target: { value: 'deepseek-flash' } })
     fireEvent.click(screen.getByText(en.apply))
 
     await screen.findByText(`Model 3: ${en.modelIdDuplicate}`)
@@ -863,7 +863,7 @@ describe('ModelsSection', () => {
 
     expect(screen.getByText(en.modelsInherited)).toBeTruthy()
     expect(screen.getAllByLabelText(new RegExp(en.modelId)).map(input => (input as HTMLInputElement).value))
-      .toEqual(base === undefined ? ['deepseek-v4-flash', 'deepseek-v4-pro'] : ['pinned-by-deployment'])
+      .toEqual(base === undefined ? ['deepseek-flash', 'deepseek-v4-pro'] : ['pinned-by-deployment'])
   })
 
   it('keeps every row\'s unreadable text, not just the last one edited', async () => {
@@ -978,12 +978,12 @@ describe('ModelsSection', () => {
     await mountDeepSeekCard()
     fireEvent.click(screen.getByText(en.customized))
     const ids = screen.getAllByLabelText<HTMLInputElement>(new RegExp(en.modelId))
-    fireEvent.change(ids[0] as HTMLInputElement, { target: { value: '  deepseek-v4-flash  ' } })
+    fireEvent.change(ids[0] as HTMLInputElement, { target: { value: '  deepseek-flash  ' } })
     fireEvent.blur(ids[0] as HTMLInputElement)
-    expect((ids[0] as HTMLInputElement).value).toBe('deepseek-v4-flash')
+    expect((ids[0] as HTMLInputElement).value).toBe('deepseek-flash')
     // A settled id needs no second trim.
     fireEvent.blur(ids[0] as HTMLInputElement)
-    expect((ids[0] as HTMLInputElement).value).toBe('deepseek-v4-flash')
+    expect((ids[0] as HTMLInputElement).value).toBe('deepseek-flash')
 
     // An id that is only whitespace is as absent as an empty one, and a padded
     // id is a duplicate of its trimmed twin.
@@ -1036,7 +1036,7 @@ describe('ModelsSection', () => {
         op: 'set',
         path: ['models'],
         value: [
-          { id: 'deepseek-v4-flash', description: 'Preserved hidden detail' },
+          { id: 'deepseek-flash', description: 'Preserved hidden detail' },
           DEFAULT_DEEPSEEK_MODELS[1],
         ],
       }],
@@ -1127,7 +1127,7 @@ describe('ModelsSection', () => {
 
   it('preserves a pi-ai model catalog source while editing its visible fields', async () => {
     const sourceModel = {
-      id: 'deepseek/deepseek-v4-flash-0731:nitro',
+      id: 'deepseek/deepseek-v4.1-flash',
       catalogModel: 'deepseek/deepseek-v4-flash',
       name: 'Dated route',
     }

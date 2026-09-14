@@ -37,7 +37,7 @@ export const TODO_SYSTEM_PROMPT = 'You are a coding agent. For multi-step work, 
 /** OpenRouter route exercised by the real-model suites. */
 export const E2E_PROVIDER = 'openrouter'
 /** Dated Nitro route exercised by the real-model suites. */
-export const E2E_MODEL = 'deepseek/deepseek-v4-flash-0731:nitro'
+export const E2E_MODEL = 'deepseek/deepseek-v4.1-flash'
 
 /** Options for {@link codingHarness}. */
 export interface CodingHarnessOptions {

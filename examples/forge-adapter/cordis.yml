@@ -15,8 +15,17 @@
         displayName: OpenRouter
         apiKeyEnv: OPENROUTER_API_KEY
         modelAliases:
-          deepseek/deepseek-v4-flash-0731:nitro:
+          deepseek/deepseek-v4.1-flash:
             catalogModel: deepseek/deepseek-v4-flash
+            name: DeepSeek V4.1 Flash
+            contextWindow: 1048576
+            maxTokens: 384000
+            input: [ text, image ]
+            reasoningEfforts:
+              off:
+              low: low
+              high: high
+              max: max
 
 # Managed lifecycle for the per-Agent Forge Intellect stdio process. No shell
 # or subprocess tool is exposed to the model by this registration.

@@ -82,7 +82,7 @@ describe('real Loader composition', () => {
       step: 1,
       message: createAssistantMessage({
         content: [{ type: 'text', text: 'composed answer' }],
-        source: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+        source: { provider: 'deepseek-official', model: 'deepseek-flash' },
       }),
     }, { surfaceOp: 'append' })
     session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })

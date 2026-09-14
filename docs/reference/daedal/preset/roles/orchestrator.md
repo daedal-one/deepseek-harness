@@ -1,7 +1,7 @@
 ---
 description: High-level orchestrator that self-plans and delegates implementation to coder/guru, verifies via reviewer. Invoke explicitly for multi-step work requiring tiered verification (not the default agent).
 mode: primary
-model: openrouter/deepseek/deepseek-v4-flash-0731-nitro
+model: openrouter/deepseek/deepseek-v4.1-flash
 permission:
   edit: deny
   bash: ask

@@ -8,9 +8,9 @@
     thinking: enabled
     reasoningEffort: max
     models:
-      - id: deepseek-v4-flash
+      - id: deepseek-flash
       - id: deepseek-v4-pro
-      - id: deepseek-v4-flash-vision-exp
+      - id: deepseek-flash
         inputModalities: [text, image]
 
 - id: sandbox-policy

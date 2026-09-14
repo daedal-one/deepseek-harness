@@ -13,7 +13,7 @@
     models:
       - id: deepseek-v4-pro
         contextWindow: 128000
-      - id: deepseek-v4-flash
+      - id: deepseek-flash
         contextWindow: 128000
 
 - id: agent-loop
@@ -21,7 +21,7 @@
     agents:
       - id: main
         provider: deepseek-official
-        model: deepseek-v4-flash
+        model: deepseek-flash
         cwd: !!js process.cwd()
 
 - id: session-persistence-jsonl

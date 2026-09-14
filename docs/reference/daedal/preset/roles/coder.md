@@ -1,7 +1,7 @@
 ---
 description: Fast, cheap implementer for well-specified tasks — single IMPLEMENT mode, structured status output, commits its own work.
 mode: subagent
-model: openrouter/deepseek/deepseek-v4-flash-0731-nitro
+model: openrouter/deepseek/deepseek-v4.1-flash
 permission:
   edit: allow
   bash: ask

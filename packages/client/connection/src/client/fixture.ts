@@ -622,8 +622,8 @@ function fixtureModelGroups(): ModelProviderGroup[] {
       name: 'DeepSeek',
       models: [
         {
-          id: 'deepseek-v4-flash',
-          name: 'DeepSeek-V4-Flash',
+          id: 'deepseek-flash',
+          name: 'DeepSeek-V4.1-Flash',
           description: 'Fast responses',
           reasoning: DEEPSEEK_REASONING,
         },
@@ -719,7 +719,7 @@ function buildAlphaLog(): SessionEvent[] {
   // Completed fixture requests retain the route capacity recorded with them.
   push({
     type: 'request/context',
-    data: { provider: 'deepseek-official', model: 'deepseek-v4-flash', contextWindow: 128_000 },
+    data: { provider: 'deepseek-official', model: 'deepseek-flash', contextWindow: 128_000 },
   })
   for (let turn = 0; turn < 60; turn++) {
     push({ type: 'turn/start', data: { turn } })
@@ -1866,7 +1866,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
   const goalActivations = new Map<SessionId, 'armed' | 'disarmed'>()
   const modelSelections = new Map<SessionId, ModelSelection>(sessions.map(session => [
     session.sessionId,
-    { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+    { provider: 'deepseek-official', model: 'deepseek-flash' },
   ]))
   const attachments = new Map<string, { attachment: ImageAttachmentRef; data: string }>([[
     String(FIXTURE_IMAGE_REF.attachmentId),
@@ -3186,7 +3186,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         sessionId: requestedId ?? sid(`fx-${nextSession++}`), updatedAt: Date.now(), running: false, blank: true, cwd,
       }
       sessions.push(created)
-      modelSelections.set(created.sessionId, { provider: 'deepseek-official', model: 'deepseek-v4-flash' })
+      modelSelections.set(created.sessionId, { provider: 'deepseek-official', model: 'deepseek-flash' })
       const emitSession = (): void => {
         emitRemote('api-session/added', [created])
       }
@@ -3361,7 +3361,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       // Capacity parallel of the host token-meter's request/context record:
       // log-only, appended inside the open turn, and deduplicated against the
       // route already recorded (the fixture never varies contextWindow).
-      const selection = modelSelections.get(id) ?? { provider: 'deepseek', model: 'deepseek-v4-flash' }
+      const selection = modelSelections.get(id) ?? { provider: 'deepseek', model: 'deepseek-flash' }
       const previousHeader = logOf(id).findLast(event => event.type === 'request/header')
       const previousSelection = previousHeader?.type === 'request/header'
         ? {
@@ -3921,7 +3921,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         case 'session/modelCatalog': return Promise.resolve({
           ok: true,
           value: {
-            default: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+            default: { provider: 'deepseek-official', model: 'deepseek-flash' },
             routableProviders: ['deepseek-official', 'openai', 'acme-gateway'],
             groups: fixtureModelGroups(),
             failures: [],

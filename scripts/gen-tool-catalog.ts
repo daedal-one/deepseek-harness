@@ -217,7 +217,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
       ctx.effect(() => () => rm(home, { recursive: true, force: true }))
       await ctx.plugin(LlmRuntime)
       await ctx.plugin(AgentRegistry)
-      await ctx.plugin(AgentModelConfig, { provider: 'openrouter', model: 'deepseek/deepseek-v4-flash' })
+      await ctx.plugin(AgentModelConfig, { provider: 'openrouter', model: 'deepseek/deepseek-v4.1-flash' })
       await ctx.plugin(LocalSubprocessRuntime)
       await ctx.plugin(LocalJobRegistry)
       await ctx.plugin(UserApproval)

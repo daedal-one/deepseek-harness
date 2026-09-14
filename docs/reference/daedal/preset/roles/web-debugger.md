@@ -1,7 +1,7 @@
 ---
 description: Frontend debugging specialist. Use for network inspection, console diagnostics, performance profiling, and debugging web applications via Chrome DevTools MCP. Invoke when diagnosing frontend issues, inspecting network requests, or profiling performance — not for general research.
 mode: subagent
-model: openrouter/deepseek/deepseek-v4-flash-0731-nitro
+model: openrouter/deepseek/deepseek-v4.1-flash
 permission:
   edit: deny
   bash: ask

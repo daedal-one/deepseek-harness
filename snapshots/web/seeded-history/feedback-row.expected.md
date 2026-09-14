@@ -69,8 +69,8 @@
 - button "Add attachment":
   - img
 - 'button "Access mode, current: Read Only"': Read Only
-- button "Select model, current DeepSeek-V4-Flash":
-  - text: DeepSeek-V4-Flash
+- button "Select model, current DeepSeek-V4.1-Flash":
+  - text: DeepSeek-V4.1-Flash
   - img
 - button "Send message" [disabled]
 - button "1 turns 2 steps · {{throughput}} tok/s":

@@ -28,7 +28,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('fs tools with-key smoke', () => 
     ctx = await fsHarness(workdir, SYSTEM)
     // agentLoop.create prepares a session with no cwd, so the provider default
     // (config.cwd = workdir) is the workspace.
-    const agent = await ctx.agentLoop.create(SessionId('fs-e2e'), { provider: 'deepseek-official', model: 'deepseek-v4-flash' })
+    const agent = await ctx.agentLoop.create(SessionId('fs-e2e'), { provider: 'deepseek-official', model: 'deepseek-flash' })
 
     agent.followup(createUserMessage({
       content: [{ type: 'text', text:
@@ -61,7 +61,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('fs tools with-key smoke', () => 
       const handle = await ctx.agents.create({
         sessionId: SessionId(`fs-e2e-cwd-${Date.now()}`),
         meta: { cwd: sessionDir },
-        agentOptions: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+        agentOptions: { provider: 'deepseek-official', model: 'deepseek-flash' },
       })
       handle.agent.followup(createUserMessage({
         content: [{ type: 'text', text:

@@ -31,7 +31,7 @@ For a custom composition, mount the service on the host and its `./tool` entry i
   name: '@deepseek-ai/dsh-forge-intellect'
 ```
 
-The default reviewer route is OpenRouter `deepseek/deepseek-v4-flash`. The existing model settings expose separate Deadal-intellect assessor and challenger targets. Changing a setting affects new plans; a saved plan retains its selected routes and limits. The check plan lists exact commands, required output markers, source scope, destination models, output-token bounds, and deadlines before execution.
+The default reviewer route is OpenRouter `deepseek/deepseek-v4.1-flash`. The existing model settings expose separate Deadal-intellect assessor and challenger targets. Changing a setting affects new plans; a saved plan retains its selected routes and limits. The check plan lists exact commands, required output markers, source scope, destination models, output-token bounds, and deadlines before execution.
 
 Plans and run records live under `$DSH_HOME/verification`, grouped by canonical repository path. Keep a custom `stateRoot` outside Git repositories: tests using temporary directories must not accidentally discover an ancestor repository. Native evidence remains beside the records. Ask to inspect a retained run after a restart, or to reassess its authenticated executions with fresh reviewers. Changed code requires a new run. A retained attestation is local; this integration does not publish Git notes.
 

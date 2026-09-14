@@ -43,7 +43,7 @@ function appendAssistant(session: Session, turn: number, step: number, text: str
     step,
     message: createAssistantMessage({
       content: [{ type: 'text', text }],
-      source: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+      source: { provider: 'deepseek-official', model: 'deepseek-flash' },
     }),
   }, { surfaceOp: 'append' })
 }

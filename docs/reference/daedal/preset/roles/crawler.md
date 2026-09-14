@@ -1,7 +1,7 @@
 ---
 description: Multi-page web extraction specialist. Use for crawling multiple pages, structured data extraction, and processing JavaScript-heavy sites via Firecrawl. Invoke when bulk content extraction or structured crawling is needed — not for single-page reads or interactive browsing.
 mode: subagent
-model: openrouter/deepseek/deepseek-v4-flash-0731-nitro
+model: openrouter/deepseek/deepseek-v4.1-flash
 permission:
   edit: deny
   bash: ask

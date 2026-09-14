@@ -14,7 +14,7 @@
           - id: deepseek-official
             name: DeepSeek
             models:
-              - id: deepseek-v4-flash
+              - id: deepseek-flash
               - id: deepseek-v4-pro
     - id: subagent-acp-diagnostic
       name: '@deepseek-ai/dsh-subagent-acp'

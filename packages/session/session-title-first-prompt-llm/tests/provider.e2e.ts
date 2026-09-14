@@ -24,7 +24,7 @@ describe.skipIf(!process.env.OPENROUTER_API_KEY)('first-prompt title provider th
         openrouter: {
           apiKeyEnv: 'OPENROUTER_API_KEY',
           modelAliases: {
-            'deepseek/deepseek-v4-flash-0731:nitro': {
+            'deepseek/deepseek-v4.1-flash': {
               catalogModel: 'deepseek/deepseek-v4-flash',
             },
           },
@@ -45,7 +45,7 @@ describe.skipIf(!process.env.OPENROUTER_API_KEY)('first-prompt title provider th
       maxOutputTokens: 64,
       timeoutMs: 60_000,
       provider: 'openrouter',
-      model: 'deepseek/deepseek-v4-flash-0731:nitro',
+      model: 'deepseek/deepseek-v4.1-flash',
     })
     const session = ctx.sessions.create(SessionId('real-title-provider'))
     session.append('turn/start', {
@@ -63,7 +63,7 @@ describe.skipIf(!process.env.OPENROUTER_API_KEY)('first-prompt title provider th
       source: {
         kind: 'provider',
         provider: 'session-title-first-prompt-llm',
-        model: { provider: 'openrouter', model: 'deepseek/deepseek-v4-flash-0731:nitro' },
+        model: { provider: 'openrouter', model: 'deepseek/deepseek-v4.1-flash' },
       },
     })
     expect(title?.title.length).toBeGreaterThan(0)

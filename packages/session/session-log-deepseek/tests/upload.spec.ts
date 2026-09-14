@@ -90,7 +90,7 @@ describe('incremental DeepSeek session-log upload', () => {
       step: 1,
       message: createAssistantMessage({
         content: [{ type: 'text', text: 'Answer' }],
-        source: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+        source: { provider: 'deepseek-official', model: 'deepseek-flash' },
       }),
       stream: [{ type: 'text-chunks', time0: 1, index: 0, dt: [], texts: ['Answer'] }],
     }, { surfaceOp: 'append' })

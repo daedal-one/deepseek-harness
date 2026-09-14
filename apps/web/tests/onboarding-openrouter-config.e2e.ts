@@ -231,7 +231,7 @@ describe.skipIf(MODE === 'record')('web e2e: first-run OpenRouter credential set
     expect(document).toContain('name: Private Preview')
     expect(document).toContain('contextWindow: 131072')
     expect(document).toContain('maxTokens: 64000')
-    expect(document).not.toMatch(/^\s*- id: deepseek\/deepseek-v4-flash-0731:nitro$/m)
+    expect(document).not.toMatch(/^\s*- id: deepseek\/deepseek-v4\.1-flash$/m)
 
     await page.keyboard.press('Escape')
     // A connected Workspace is what puts a live composer — and its model
@@ -242,7 +242,7 @@ describe.skipIf(MODE === 'record')('web e2e: first-run OpenRouter credential set
     await modelTrigger.waitFor({ timeout: 10_000 })
     await modelTrigger.click()
     await page.getByRole('menuitem', { name: /Model/ }).click()
-    expect(await page.getByText('deepseek/deepseek-v4-flash-0731:nitro', { exact: true }).count()).toBe(0)
+    expect(await page.getByText('deepseek/deepseek-v4.1-flash', { exact: true }).count()).toBe(0)
     await page.getByRole('menuitemradio', { name: 'Private Preview' }).waitFor({ timeout: 10_000 })
     expect(tripwire.warnings).toEqual([])
     expect(tripwire.pageErrors).toEqual([])

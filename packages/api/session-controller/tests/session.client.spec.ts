@@ -120,7 +120,7 @@ describe('Session open', () => {
     gate.resolve(ok({
       records: entries(page) as never[],
       hasMore: false,
-      modelSelection: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+      modelSelection: { provider: 'deepseek-official', model: 'deepseek-flash' },
     }))
     await Promise.all([opening, ...deliveries])
     const seqs = eventSeqs(session)
@@ -383,7 +383,7 @@ describe('paging', () => {
     gate.resolve(ok({
       records: entries(plainTurn(SessionSeq(0), 0, 'a', 'b')) as never[],
       hasMore: false,
-      modelSelection: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+      modelSelection: { provider: 'deepseek-official', model: 'deepseek-flash' },
     }))
     await Promise.all([first, second])
     expect(api.callsOf('session.follow')).toHaveLength(1)
@@ -858,7 +858,7 @@ describe('remaining branches', () => {
         { type: 'event', event: historyResult },
       ] as never[],
       hasMore: false,
-      modelSelection: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+      modelSelection: { provider: 'deepseek-official', model: 'deepseek-flash' },
     }))
     await session.open()
     expect(windowEntries(session).slice(-2)).toEqual([
@@ -906,7 +906,7 @@ describe('resync', () => {
     replacement.resolve(ok({
       records: entries(plainTurn(SessionSeq(10), 2, '终', '页')) as never[],
       hasMore: false,
-      modelSelection: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+      modelSelection: { provider: 'deepseek-official', model: 'deepseek-flash' },
     }))
     await Promise.all([syncing, liveDeliveries])
     await vi.waitFor(() => {

@@ -12,7 +12,7 @@
           - id: deepseek-official
             name: DeepSeek
             models:
-              - id: deepseek-v4-flash
+              - id: deepseek-flash
 
 - id: session-log-deepseek
   name: '@deepseek-ai/dsh-session-log-deepseek'

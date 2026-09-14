@@ -1,7 +1,7 @@
 ---
 description: Capability discovery and installation specialist. Use for finding agent skills, inspecting packages, and planning or applying approved Daedal capability changes. Invoke when the orchestrator needs to discover or add capabilities — not for general research or implementation work.
 mode: subagent
-model: openrouter/deepseek/deepseek-v4-flash-0731-nitro
+model: openrouter/deepseek/deepseek-v4.1-flash
 permission:
   edit: allow
   bash: ask

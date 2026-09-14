@@ -28,9 +28,9 @@ const GROUPS = [{
   name: 'DeepSeek',
   models: [
     {
-      id: 'deepseek-v4-flash',
-      name: 'DeepSeek-V4-Flash',
-      description: 'Fast, efficient, and economical; suited to focused, routine, or parallel tasks.',
+      id: 'deepseek-flash',
+      name: 'DeepSeek-V4.1-Flash',
+      description: 'Fast, efficient, and economical with native image input; suited to focused, routine, or parallel tasks.',
       reasoning: {
         efforts: [
           { id: 'off', name: 'Off' },
@@ -58,7 +58,7 @@ const GROUPS = [{
   id: 'external',
   name: 'External Provider',
   models: [{
-    id: 'deepseek-v4-flash',
+    id: 'deepseek-flash',
     name: 'External Flash',
     description: 'Provider-authored description.',
   }],
@@ -67,7 +67,7 @@ const GROUPS = [{
 /** Boot the plugin over fake faces + a stateful fake host (current moves on selectModel). */
 async function bench(locale: 'en' = 'en') {
   const ctx = new Context()
-  let defaultSelection: ModelSelection = { provider: 'deepseek-official', model: 'deepseek-v4-flash' }
+  let defaultSelection: ModelSelection = { provider: 'deepseek-official', model: 'deepseek-flash' }
   let selected = defaultSelection
   const calls = { models: 0, select: 0 }
   const projections = new Map<SessionId, SnapshotStore<ModelSelectionProjection | undefined>>()
@@ -198,11 +198,11 @@ describe('ui-model-selection dual entry', () => {
     b.mint('s1')
     const options = await b.popup().options(projection('s1'), new AbortController().signal)
     expect(options.map((o: SelectOption) => o.label)).toEqual([
-      'DeepSeek-V4-Flash', 'DeepSeek-V4-Pro', 'External Flash',
+      'DeepSeek-V4.1-Flash', 'DeepSeek-V4-Pro', 'External Flash',
     ])
     expect(options[0]).toMatchObject({
       active: true,
-      detail: 'DeepSeek · Fast, efficient, and economical; suited to focused, routine, or parallel tasks.',
+      detail: 'DeepSeek · Fast, efficient, and economical with native image input; suited to focused, routine, or parallel tasks.',
     })
     expect(options[1]?.detail)
       .toBe('DeepSeek · Stronger agentic coding, knowledge, and difficult reasoning; suited to complex or quality-critical tasks at higher cost.')
@@ -215,7 +215,7 @@ describe('ui-model-selection dual entry', () => {
     b.mint('s1')
     const options = await b.popup().options(projection('s1'), new AbortController().signal)
     expect(options[0]?.detail)
-      .toBe('DeepSeek · Fast, efficient, and economical; suited to focused, routine, or parallel tasks.')
+      .toBe('DeepSeek · Fast, efficient, and economical with native image input; suited to focused, routine, or parallel tasks.')
     expect(options[1]?.detail)
       .toBe('DeepSeek · Stronger agentic coding, knowledge, and difficult reasoning; suited to complex or quality-critical tasks at higher cost.')
   })
@@ -282,7 +282,7 @@ describe('ui-model-selection dual entry', () => {
     b.mint('s1')
     const face = b.seat().inject!(sid('s1'))
     await face.select({ provider: 'deepseek-official', model: 'deepseek-v4-pro' })
-    b.setHostCurrent({ provider: 'deepseek-official', model: 'deepseek-v4-flash' })
+    b.setHostCurrent({ provider: 'deepseek-official', model: 'deepseek-flash' })
 
     b.ctx.emit('connection/reset')
     expect(face.directory.getSnapshot()).toMatchObject({
@@ -301,15 +301,15 @@ describe('ui-model-selection dual entry', () => {
     b.mint('s1')
     const face = b.seat().inject!(sid('s1'))
     face.load()
-    expect(face.directory.getSnapshot().current?.model).toBe('deepseek-v4-flash')
+    expect(face.directory.getSnapshot().current?.model).toBe('deepseek-flash')
 
     b.remote.emit('settings/document-updated', ['llm-deepseek', 1])
     b.setProjected(sid('s1'), {
-      lastUsed: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+      lastUsed: { provider: 'deepseek-official', model: 'deepseek-flash' },
       next: { provider: 'deepseek-official', model: 'deepseek-v4-pro' },
     })
     expect(face.directory.getSnapshot()).toMatchObject({
-      current: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+      current: { provider: 'deepseek-official', model: 'deepseek-flash' },
       status: 'ready',
     })
 

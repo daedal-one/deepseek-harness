@@ -31,14 +31,14 @@ const reasoning = {
 
 function state(overrides: Partial<ModelDirectoryState> = {}): ModelDirectoryState {
   return {
-    current: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+    current: { provider: 'deepseek-official', model: 'deepseek-flash' },
     routable: true,
     groups: [{
       id: 'deepseek-official',
       name: 'DeepSeek',
       models: [{
-        id: 'deepseek-v4-flash',
-        name: 'DeepSeek-V4-Flash',
+        id: 'deepseek-flash',
+        name: 'DeepSeek-V4.1-Flash',
         description: 'Fast catalog description',
         reasoning,
       }],
@@ -69,7 +69,7 @@ describe('ModelSelect reasoning effort', () => {
     />)
 
     const trigger = screen.getByRole('button', {
-      name: 'Select model, current DeepSeek-V4-Flash, reasoning effort High',
+      name: 'Select model, current DeepSeek-V4.1-Flash, reasoning effort High',
     })
     fireEvent.click(trigger)
     fireEvent.click(screen.getByRole('menuitem', { name: /Effort/ }))
@@ -81,10 +81,10 @@ describe('ModelSelect reasoning effort', () => {
     await waitFor(() => {
       expect(select).toHaveBeenCalledWith({
         provider: 'deepseek-official',
-        model: 'deepseek-v4-flash',
+        model: 'deepseek-flash',
         reasoningEffort: 'max',
       })
-      expect(trigger.getAttribute('aria-label')).toBe('Select model, current DeepSeek-V4-Flash, reasoning effort Max')
+      expect(trigger.getAttribute('aria-label')).toBe('Select model, current DeepSeek-V4.1-Flash, reasoning effort Max')
     })
   })
 
@@ -138,7 +138,7 @@ describe('ModelSelect reasoning effort', () => {
     expect(screen.queryByRole('menuitem', { name: /Effort/ })).toBeNull()
     fireEvent.click(screen.getByRole('menuitem', { name: /Model/ }))
     expect(screen.queryByRole('menuitemradio', { name: 'removed-model' })).toBeNull()
-    expect(screen.getByRole('menuitemradio', { name: 'DeepSeek-V4-Flash' })).toBeTruthy()
+    expect(screen.getByRole('menuitemradio', { name: 'DeepSeek-V4.1-Flash' })).toBeTruthy()
     expect(screen.queryByText('Fast catalog description')).toBeNull()
   })
 
@@ -163,7 +163,7 @@ describe('ModelSelect reasoning effort', () => {
     directory.set(state())
     await waitFor(() => {
       expect(screen.getByRole('button', {
-        name: 'Select model, current DeepSeek-V4-Flash, reasoning effort High',
+        name: 'Select model, current DeepSeek-V4.1-Flash, reasoning effort High',
       })).toBeTruthy()
     })
   })
@@ -173,7 +173,7 @@ describe('ModelSelect reasoning effort', () => {
       id: 'deepseek-official',
       name: 'DeepSeek',
       models: [
-        { id: 'deepseek-v4-flash', name: 'DeepSeek-V4-Flash', reasoning },
+        { id: 'deepseek-flash', name: 'DeepSeek-V4.1-Flash', reasoning },
         { id: 'deepseek-v4-pro', name: 'DeepSeek-V4-Pro' },
       ],
     }]

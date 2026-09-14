@@ -28,7 +28,7 @@ import { newEnglishPage, saveFailureShot } from './support.ts'
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/agent-model-settings', import.meta.url))
 const PAGE_EXPECTED = join(SNAPSHOT_DIR, 'agents.expected.md')
 const MODE = webSnapshotMode()
-const NITRO_MODEL = 'deepseek/deepseek-v4-flash-0731:nitro'
+const OPENROUTER_MODEL = 'deepseek/deepseek-v4.1-flash'
 const BASE_MODEL = 'deepseek/deepseek-v4-flash'
 
 const CODEX_MODELS: readonly LlmModelInfo[] = [
@@ -136,8 +136,8 @@ describe.skipIf(MODE === 'record')('web e2e: graphical per-Agent model settings'
 
     const model = main.locator('select').nth(0)
     const reasoning = main.locator('select').nth(1)
-    expect(await model.inputValue()).toBe(NITRO_MODEL)
-    expect(await reasoning.inputValue()).toBe('xhigh')
+    expect(await model.inputValue()).toBe(OPENROUTER_MODEL)
+    expect(await reasoning.inputValue()).toBe('high')
     await model.selectOption(BASE_MODEL)
     await reasoning.selectOption('high')
     await main.getByRole('button', { name: 'Apply', exact: true }).click()
@@ -161,8 +161,8 @@ describe.skipIf(MODE === 'record')('web e2e: graphical per-Agent model settings'
 
     await main.getByRole('button', { name: 'Restore default' }).click()
     await main.getByText('Saved.', { exact: true }).waitFor({ timeout: 15_000 })
-    expect(await model.inputValue()).toBe(NITRO_MODEL)
-    expect(await reasoning.inputValue()).toBe('xhigh')
+    expect(await model.inputValue()).toBe(OPENROUTER_MODEL)
+    expect(await reasoning.inputValue()).toBe('high')
     expect(tripwire.warnings).toEqual([])
     expect(tripwire.pageErrors).toEqual([])
   }, 90_000)

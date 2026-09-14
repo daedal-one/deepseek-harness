@@ -26,7 +26,7 @@ def main() -> None:
     parser.add_argument("--provider", default="openrouter")
     parser.add_argument(
         "--model",
-        default=os.environ.get("DSH_MODEL", "deepseek/deepseek-v4-flash-0731:nitro"),
+        default=os.environ.get("DSH_MODEL", "deepseek/deepseek-v4.1-flash"),
     )
     parser.add_argument("--max-tokens", type=int)
     args = parser.parse_args()

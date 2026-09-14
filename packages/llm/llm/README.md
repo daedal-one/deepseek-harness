@@ -45,7 +45,7 @@ A stream returns token-level chunks and always ends with one terminal `finish` c
 ```text
 for await (const chunk of ctx.llm.stream({
   provider: 'deepseek-official',
-  model: 'deepseek-v4-flash',
+  model: 'deepseek-flash',
   messages: [createUserMessage({ content: [{ type: 'text', text: 'Hello' }] })],
 })) {
   // chunks: block-start, text-delta, ..., usage, finish

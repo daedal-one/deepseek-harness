@@ -63,7 +63,7 @@ async function tempDir(prefix: string): Promise<string> {
 }
 
 describe('DeepSeekHarness', () => {
-  it('defaults SDK-created agents to the OpenRouter Nitro route', async () => {
+  it('defaults SDK-created agents to the OpenRouter V4.1 Flash route', async () => {
     const dir = await tempDir('sdk-client-default-route-')
     const recordFile = join(dir, 'init.jsonl')
     const harness = createProcessDeepSeekHarness(fakeLaunch({ FAKE_RECORD_INIT: recordFile }), { cwd: dir })
@@ -74,7 +74,7 @@ describe('DeepSeekHarness', () => {
     expect(records).toEqual([{
       cwd: dir,
       provider: 'openrouter',
-      model: 'deepseek/deepseek-v4-flash-0731:nitro',
+      model: 'deepseek/deepseek-v4.1-flash',
     }])
   })
 

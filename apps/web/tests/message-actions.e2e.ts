@@ -123,7 +123,7 @@ function completedTailFixture(raw: string): string {
         message: {
           role: 'assistant',
           content: [{ type: 'text', text: 'DONE' }],
-          source: { kind: 'model', provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+          source: { kind: 'model', provider: 'deepseek-official', model: 'deepseek-flash' },
           id: '{{message:99}}',
         },
         stream: [

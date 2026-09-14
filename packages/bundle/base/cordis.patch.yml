@@ -76,8 +76,8 @@
       name: '@deepseek-ai/dsh-agent-default-model'
       config:
         provider: openrouter
-        model: deepseek/deepseek-v4-flash-0731:nitro
-        reasoningEffort: xhigh
+        model: deepseek/deepseek-v4.1-flash
+        reasoningEffort: high
 
     - id: jobs
       name: '@deepseek-ai/dsh-jobs-local'
@@ -98,7 +98,10 @@
     - id: credentials
       name: '@deepseek-ai/dsh-credentials-local'
 
-    # The shipped OpenRouter route preserves its catalog metadata for dated requests.
+    # The shipped OpenRouter route: V4.1 Flash rides a catalog entry for the
+    # retired V4 Flash (pi-ai's installed catalog predates the release), with
+    # every model fact overridden to the new model. The dated nitro route it
+    # replaces is gone; deployments pinning it keep only their own settings.
     - id: llm-pi-ai
       name: '@deepseek-ai/dsh-llm-pi-ai'
       config:
@@ -108,9 +111,17 @@
             api: openai-completions
             apiKeyEnv: OPENROUTER_API_KEY
             modelAliases:
-              deepseek/deepseek-v4-flash-0731:nitro:
+              deepseek/deepseek-v4.1-flash:
                 catalogModel: deepseek/deepseek-v4-flash
-                name: DeepSeek V4 Flash 0731 (Nitro)
+                name: DeepSeek V4.1 Flash
+                contextWindow: 1048576
+                maxTokens: 384000
+                input: [ text, image ]
+                reasoningEfforts:
+                  off:
+                  low: low
+                  high: high
+                  max: max
 
     - id: session-persistence-jsonl
       name: '@deepseek-ai/dsh-session-persistence-jsonl'

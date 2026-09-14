@@ -303,7 +303,7 @@ describe('dsh-tool-subagent', () => {
     const registerTarget = vi.fn(() => vi.fn())
     const optionsFor = vi.fn(() => ({
       provider: 'openrouter',
-      model: 'deepseek/deepseek-v4-flash-0731:nitro',
+      model: 'deepseek/deepseek-v4.1-flash',
       reasoningEffort: 'xhigh' as never,
     }))
     const ctx = await projectedContext()
@@ -355,7 +355,7 @@ describe('dsh-tool-subagent', () => {
     expect(optionsFor).toHaveBeenCalledWith('daedal-openai-reviewer', undefined)
     expect(seen?.agentOptions).toEqual({
       provider: 'openrouter',
-      model: 'deepseek/deepseek-v4-flash-0731:nitro',
+      model: 'deepseek/deepseek-v4.1-flash',
       reasoningEffort: 'xhigh',
     })
     await ctx.fiber.dispose()

@@ -1,7 +1,7 @@
 ---
 description: Read-only browser interaction specialist. Use for isolated navigation, rendered page text, accessibility snapshots, and page metadata through Agent Browser MCP. Invoke when rendered DOM state is needed and no page mutation is required.
 mode: subagent
-model: openrouter/deepseek/deepseek-v4-flash-0731-nitro
+model: openrouter/deepseek/deepseek-v4.1-flash
 permission:
   edit: deny
   bash: ask

@@ -19,7 +19,7 @@ import * as ToolSubagent from '@deepseek-ai/dsh-tool-subagent'
  * re-registers another file's tests.
  */
 export const E2E_PROVIDER = 'openrouter'
-export const E2E_MODEL = 'deepseek/deepseek-v4-flash-0731:nitro'
+export const E2E_MODEL = 'deepseek/deepseek-v4.1-flash'
 
 export async function spawnHarness(workdir: string): Promise<Context> {
   const ctx = new Context()

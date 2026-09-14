@@ -36,7 +36,7 @@
           - id: deepseek-official
             name: DeepSeek
             models:
-              - id: deepseek-v4-flash
+              - id: deepseek-flash
               - id: deepseek-v4-pro
 
 # Restrict inherited capabilities before the child assembles its first request.

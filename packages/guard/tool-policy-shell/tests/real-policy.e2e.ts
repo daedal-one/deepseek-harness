@@ -16,7 +16,7 @@ const config: Config = {
   mappings: [{ tool: 'bash', commandArgument: 'command', intentArgument: 'description' }],
   intent: { provider: 'openrouter', model: 'google/gemini-3.5-flash-lite', reasoningEffort: 'minimal' },
   primary: { provider: 'openrouter', model: 'google/gemini-3.5-flash-lite', reasoningEffort: 'minimal' },
-  secondary: { provider: 'openrouter', model: 'deepseek/deepseek-v4-flash-0731:nitro' },
+  secondary: { provider: 'openrouter', model: 'deepseek/deepseek-v4.1-flash' },
   decisionTimeoutMs: 1_500,
   intentContextTimeoutMs: 5_000,
   maxTokens: 80,
@@ -37,7 +37,7 @@ async function harness(cwd: string, decisionTimeoutMs = config.decisionTimeoutMs
       openrouter: {
         apiKeyEnv: 'OPENROUTER_API_KEY',
         modelAliases: {
-          'deepseek/deepseek-v4-flash-0731:nitro': { catalogModel: 'deepseek/deepseek-v4-flash' },
+          'deepseek/deepseek-v4.1-flash': { catalogModel: 'deepseek/deepseek-v4-flash' },
         },
         modelOverrides: {
           'google/gemini-3.5-flash-lite': {

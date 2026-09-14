@@ -136,7 +136,7 @@
         "header": {
           "config": {
             "provider": "openrouter",
-            "model": "deepseek/deepseek-v4-flash"
+            "model": "deepseek/deepseek-v4.1-flash"
           },
           "tools": [
             "cordis_define",
@@ -163,7 +163,7 @@
       "time": 0,
       "data": {
         "provider": "openrouter",
-        "model": "deepseek/deepseek-v4-flash",
+        "model": "deepseek/deepseek-v4.1-flash",
         "contextWindow": 1024000
       }
     },
@@ -201,14 +201,14 @@
           "source": {
             "kind": "model",
             "provider": "openrouter",
-            "model": "deepseek/deepseek-v4-flash",
+            "model": "deepseek/deepseek-v4.1-flash",
             "replayState": {
               "response": {
                 "kind": "pi-ai",
                 "version": 2,
                 "api": "openai-completions",
                 "provider": "openrouter",
-                "model": "deepseek/deepseek-v4-flash",
+                "model": "deepseek/deepseek-v4.1-flash",
                 "stopReason": "toolUse"
               },
               "blocks": [
@@ -286,7 +286,7 @@
                   "version": 2,
                   "api": "openai-completions",
                   "provider": "openrouter",
-                  "model": "deepseek/deepseek-v4-flash",
+                  "model": "deepseek/deepseek-v4.1-flash",
                   "stopReason": "toolUse"
                 },
                 "blocks": [
@@ -389,14 +389,14 @@
           "source": {
             "kind": "model",
             "provider": "openrouter",
-            "model": "deepseek/deepseek-v4-flash",
+            "model": "deepseek/deepseek-v4.1-flash",
             "replayState": {
               "response": {
                 "kind": "pi-ai",
                 "version": 2,
                 "api": "openai-completions",
                 "provider": "openrouter",
-                "model": "deepseek/deepseek-v4-flash",
+                "model": "deepseek/deepseek-v4.1-flash",
                 "stopReason": "toolUse"
               },
               "blocks": [
@@ -474,7 +474,7 @@
                   "version": 2,
                   "api": "openai-completions",
                   "provider": "openrouter",
-                  "model": "deepseek/deepseek-v4-flash",
+                  "model": "deepseek/deepseek-v4.1-flash",
                   "stopReason": "toolUse"
                 },
                 "blocks": [
@@ -597,7 +597,7 @@
         "header": {
           "config": {
             "provider": "openrouter",
-            "model": "deepseek/deepseek-v4-flash"
+            "model": "deepseek/deepseek-v4.1-flash"
           },
           "tools": [
             "cordis_define",
@@ -640,14 +640,14 @@
           "source": {
             "kind": "model",
             "provider": "openrouter",
-            "model": "deepseek/deepseek-v4-flash",
+            "model": "deepseek/deepseek-v4.1-flash",
             "replayState": {
               "response": {
                 "kind": "pi-ai",
                 "version": 2,
                 "api": "openai-completions",
                 "provider": "openrouter",
-                "model": "deepseek/deepseek-v4-flash",
+                "model": "deepseek/deepseek-v4.1-flash",
                 "stopReason": "toolUse"
               },
               "blocks": [
@@ -725,7 +725,7 @@
                   "version": 2,
                   "api": "openai-completions",
                   "provider": "openrouter",
-                  "model": "deepseek/deepseek-v4-flash",
+                  "model": "deepseek/deepseek-v4.1-flash",
                   "stopReason": "toolUse"
                 },
                 "blocks": [
@@ -859,14 +859,14 @@
           "source": {
             "kind": "model",
             "provider": "openrouter",
-            "model": "deepseek/deepseek-v4-flash",
+            "model": "deepseek/deepseek-v4.1-flash",
             "replayState": {
               "response": {
                 "kind": "pi-ai",
                 "version": 2,
                 "api": "openai-completions",
                 "provider": "openrouter",
-                "model": "deepseek/deepseek-v4-flash",
+                "model": "deepseek/deepseek-v4.1-flash",
                 "stopReason": "toolUse"
               },
               "blocks": [
@@ -944,7 +944,7 @@
                   "version": 2,
                   "api": "openai-completions",
                   "provider": "openrouter",
-                  "model": "deepseek/deepseek-v4-flash",
+                  "model": "deepseek/deepseek-v4.1-flash",
                   "stopReason": "toolUse"
                 },
                 "blocks": [
@@ -1055,14 +1055,14 @@
           "source": {
             "kind": "model",
             "provider": "openrouter",
-            "model": "deepseek/deepseek-v4-flash",
+            "model": "deepseek/deepseek-v4.1-flash",
             "replayState": {
               "response": {
                 "kind": "pi-ai",
                 "version": 2,
                 "api": "openai-completions",
                 "provider": "openrouter",
-                "model": "deepseek/deepseek-v4-flash",
+                "model": "deepseek/deepseek-v4.1-flash",
                 "stopReason": "toolUse"
               },
               "blocks": [
@@ -1140,7 +1140,7 @@
                   "version": 2,
                   "api": "openai-completions",
                   "provider": "openrouter",
-                  "model": "deepseek/deepseek-v4-flash",
+                  "model": "deepseek/deepseek-v4.1-flash",
                   "stopReason": "toolUse"
                 },
                 "blocks": [
@@ -1290,14 +1290,14 @@
           "source": {
             "kind": "model",
             "provider": "openrouter",
-            "model": "deepseek/deepseek-v4-flash",
+            "model": "deepseek/deepseek-v4.1-flash",
             "replayState": {
               "response": {
                 "kind": "pi-ai",
                 "version": 2,
                 "api": "openai-completions",
                 "provider": "openrouter",
-                "model": "deepseek/deepseek-v4-flash",
+                "model": "deepseek/deepseek-v4.1-flash",
                 "stopReason": "toolUse"
               },
               "blocks": [
@@ -1375,7 +1375,7 @@
                   "version": 2,
                   "api": "openai-completions",
                   "provider": "openrouter",
-                  "model": "deepseek/deepseek-v4-flash",
+                  "model": "deepseek/deepseek-v4.1-flash",
                   "stopReason": "toolUse"
                 },
                 "blocks": [
@@ -1493,7 +1493,7 @@
         "header": {
           "config": {
             "provider": "openrouter",
-            "model": "deepseek/deepseek-v4-flash"
+            "model": "deepseek/deepseek-v4.1-flash"
           },
           "tools": [
             "cordis_define",
@@ -1533,14 +1533,14 @@
           "source": {
             "kind": "model",
             "provider": "openrouter",
-            "model": "deepseek/deepseek-v4-flash",
+            "model": "deepseek/deepseek-v4.1-flash",
             "replayState": {
               "response": {
                 "kind": "pi-ai",
                 "version": 2,
                 "api": "openai-completions",
                 "provider": "openrouter",
-                "model": "deepseek/deepseek-v4-flash",
+                "model": "deepseek/deepseek-v4.1-flash",
                 "stopReason": "stop"
               },
               "blocks": [
@@ -1614,7 +1614,7 @@
                   "version": 2,
                   "api": "openai-completions",
                   "provider": "openrouter",
-                  "model": "deepseek/deepseek-v4-flash",
+                  "model": "deepseek/deepseek-v4.1-flash",
                   "stopReason": "stop"
                 },
                 "blocks": [
@@ -1918,7 +1918,7 @@
             "header": {
               "config": {
                 "provider": "openrouter",
-                "model": "deepseek/deepseek-v4-flash"
+                "model": "deepseek/deepseek-v4.1-flash"
               },
               "tools": [
                 "cordis_define",
@@ -1951,7 +1951,7 @@
           "time": 0,
           "data": {
             "provider": "openrouter",
-            "model": "deepseek/deepseek-v4-flash",
+            "model": "deepseek/deepseek-v4.1-flash",
             "contextWindow": 1024000
           }
         }
@@ -2001,14 +2001,14 @@
               "source": {
                 "kind": "model",
                 "provider": "openrouter",
-                "model": "deepseek/deepseek-v4-flash",
+                "model": "deepseek/deepseek-v4.1-flash",
                 "replayState": {
                   "response": {
                     "kind": "pi-ai",
                     "version": 2,
                     "api": "openai-completions",
                     "provider": "openrouter",
-                    "model": "deepseek/deepseek-v4-flash",
+                    "model": "deepseek/deepseek-v4.1-flash",
                     "stopReason": "toolUse"
                   },
                   "blocks": [
@@ -2086,7 +2086,7 @@
                       "version": 2,
                       "api": "openai-completions",
                       "provider": "openrouter",
-                      "model": "deepseek/deepseek-v4-flash",
+                      "model": "deepseek/deepseek-v4.1-flash",
                       "stopReason": "toolUse"
                     },
                     "blocks": [
@@ -2219,14 +2219,14 @@
               "source": {
                 "kind": "model",
                 "provider": "openrouter",
-                "model": "deepseek/deepseek-v4-flash",
+                "model": "deepseek/deepseek-v4.1-flash",
                 "replayState": {
                   "response": {
                     "kind": "pi-ai",
                     "version": 2,
                     "api": "openai-completions",
                     "provider": "openrouter",
-                    "model": "deepseek/deepseek-v4-flash",
+                    "model": "deepseek/deepseek-v4.1-flash",
                     "stopReason": "toolUse"
                   },
                   "blocks": [
@@ -2304,7 +2304,7 @@
                       "version": 2,
                       "api": "openai-completions",
                       "provider": "openrouter",
-                      "model": "deepseek/deepseek-v4-flash",
+                      "model": "deepseek/deepseek-v4.1-flash",
                       "stopReason": "toolUse"
                     },
                     "blocks": [
@@ -2463,7 +2463,7 @@
             "header": {
               "config": {
                 "provider": "openrouter",
-                "model": "deepseek/deepseek-v4-flash"
+                "model": "deepseek/deepseek-v4.1-flash"
               },
               "tools": [
                 "cordis_define",
@@ -2512,14 +2512,14 @@
               "source": {
                 "kind": "model",
                 "provider": "openrouter",
-                "model": "deepseek/deepseek-v4-flash",
+                "model": "deepseek/deepseek-v4.1-flash",
                 "replayState": {
                   "response": {
                     "kind": "pi-ai",
                     "version": 2,
                     "api": "openai-completions",
                     "provider": "openrouter",
-                    "model": "deepseek/deepseek-v4-flash",
+                    "model": "deepseek/deepseek-v4.1-flash",
                     "stopReason": "toolUse"
                   },
                   "blocks": [
@@ -2597,7 +2597,7 @@
                       "version": 2,
                       "api": "openai-completions",
                       "provider": "openrouter",
-                      "model": "deepseek/deepseek-v4-flash",
+                      "model": "deepseek/deepseek-v4.1-flash",
                       "stopReason": "toolUse"
                     },
                     "blocks": [
@@ -2773,14 +2773,14 @@
               "source": {
                 "kind": "model",
                 "provider": "openrouter",
-                "model": "deepseek/deepseek-v4-flash",
+                "model": "deepseek/deepseek-v4.1-flash",
                 "replayState": {
                   "response": {
                     "kind": "pi-ai",
                     "version": 2,
                     "api": "openai-completions",
                     "provider": "openrouter",
-                    "model": "deepseek/deepseek-v4-flash",
+                    "model": "deepseek/deepseek-v4.1-flash",
                     "stopReason": "toolUse"
                   },
                   "blocks": [
@@ -2858,7 +2858,7 @@
                       "version": 2,
                       "api": "openai-completions",
                       "provider": "openrouter",
-                      "model": "deepseek/deepseek-v4-flash",
+                      "model": "deepseek/deepseek-v4.1-flash",
                       "stopReason": "toolUse"
                     },
                     "blocks": [
@@ -3140,7 +3140,7 @@
             "header": {
               "config": {
                 "provider": "openrouter",
-                "model": "deepseek/deepseek-v4-flash"
+                "model": "deepseek/deepseek-v4.1-flash"
               },
               "tools": [
                 "cordis_define",
@@ -3174,7 +3174,7 @@
           "time": 0,
           "data": {
             "provider": "openrouter",
-            "model": "deepseek/deepseek-v4-flash",
+            "model": "deepseek/deepseek-v4.1-flash",
             "contextWindow": 1024000
           }
         }
@@ -3222,14 +3222,14 @@
               "source": {
                 "kind": "model",
                 "provider": "openrouter",
-                "model": "deepseek/deepseek-v4-flash",
+                "model": "deepseek/deepseek-v4.1-flash",
                 "replayState": {
                   "response": {
                     "kind": "pi-ai",
                     "version": 2,
                     "api": "openai-completions",
                     "provider": "openrouter",
-                    "model": "deepseek/deepseek-v4-flash",
+                    "model": "deepseek/deepseek-v4.1-flash",
                     "stopReason": "stop"
                   },
                   "blocks": [
@@ -3303,7 +3303,7 @@
                       "version": 2,
                       "api": "openai-completions",
                       "provider": "openrouter",
-                      "model": "deepseek/deepseek-v4-flash",
+                      "model": "deepseek/deepseek-v4.1-flash",
                       "stopReason": "stop"
                     },
                     "blocks": [
@@ -3470,14 +3470,14 @@
               "source": {
                 "kind": "model",
                 "provider": "openrouter",
-                "model": "deepseek/deepseek-v4-flash",
+                "model": "deepseek/deepseek-v4.1-flash",
                 "replayState": {
                   "response": {
                     "kind": "pi-ai",
                     "version": 2,
                     "api": "openai-completions",
                     "provider": "openrouter",
-                    "model": "deepseek/deepseek-v4-flash",
+                    "model": "deepseek/deepseek-v4.1-flash",
                     "stopReason": "toolUse"
                   },
                   "blocks": [
@@ -3555,7 +3555,7 @@
                       "version": 2,
                       "api": "openai-completions",
                       "provider": "openrouter",
-                      "model": "deepseek/deepseek-v4-flash",
+                      "model": "deepseek/deepseek-v4.1-flash",
                       "stopReason": "toolUse"
                     },
                     "blocks": [
@@ -3868,7 +3868,7 @@
             "header": {
               "config": {
                 "provider": "openrouter",
-                "model": "deepseek/deepseek-v4-flash"
+                "model": "deepseek/deepseek-v4.1-flash"
               },
               "tools": [
                 "cordis_define",
@@ -3902,7 +3902,7 @@
           "time": 0,
           "data": {
             "provider": "openrouter",
-            "model": "deepseek/deepseek-v4-flash",
+            "model": "deepseek/deepseek-v4.1-flash",
             "contextWindow": 1024000
           }
         }
@@ -3950,14 +3950,14 @@
               "source": {
                 "kind": "model",
                 "provider": "openrouter",
-                "model": "deepseek/deepseek-v4-flash",
+                "model": "deepseek/deepseek-v4.1-flash",
                 "replayState": {
                   "response": {
                     "kind": "pi-ai",
                     "version": 2,
                     "api": "openai-completions",
                     "provider": "openrouter",
-                    "model": "deepseek/deepseek-v4-flash",
+                    "model": "deepseek/deepseek-v4.1-flash",
                     "stopReason": "stop"
                   },
                   "blocks": [
@@ -4031,7 +4031,7 @@
                       "version": 2,
                       "api": "openai-completions",
                       "provider": "openrouter",
-                      "model": "deepseek/deepseek-v4-flash",
+                      "model": "deepseek/deepseek-v4.1-flash",
                       "stopReason": "stop"
                     },
                     "blocks": [
@@ -4229,14 +4229,14 @@
               "source": {
                 "kind": "model",
                 "provider": "openrouter",
-                "model": "deepseek/deepseek-v4-flash",
+                "model": "deepseek/deepseek-v4.1-flash",
                 "replayState": {
                   "response": {
                     "kind": "pi-ai",
                     "version": 2,
                     "api": "openai-completions",
                     "provider": "openrouter",
-                    "model": "deepseek/deepseek-v4-flash",
+                    "model": "deepseek/deepseek-v4.1-flash",
                     "stopReason": "toolUse"
                   },
                   "blocks": [
@@ -4314,7 +4314,7 @@
                       "version": 2,
                       "api": "openai-completions",
                       "provider": "openrouter",
-                      "model": "deepseek/deepseek-v4-flash",
+                      "model": "deepseek/deepseek-v4.1-flash",
                       "stopReason": "toolUse"
                     },
                     "blocks": [
@@ -4468,7 +4468,7 @@
             "header": {
               "config": {
                 "provider": "openrouter",
-                "model": "deepseek/deepseek-v4-flash"
+                "model": "deepseek/deepseek-v4.1-flash"
               },
               "tools": [
                 "cordis_define",
@@ -4514,14 +4514,14 @@
               "source": {
                 "kind": "model",
                 "provider": "openrouter",
-                "model": "deepseek/deepseek-v4-flash",
+                "model": "deepseek/deepseek-v4.1-flash",
                 "replayState": {
                   "response": {
                     "kind": "pi-ai",
                     "version": 2,
                     "api": "openai-completions",
                     "provider": "openrouter",
-                    "model": "deepseek/deepseek-v4-flash",
+                    "model": "deepseek/deepseek-v4.1-flash",
                     "stopReason": "stop"
                   },
                   "blocks": [
@@ -4595,7 +4595,7 @@
                       "version": 2,
                       "api": "openai-completions",
                       "provider": "openrouter",
-                      "model": "deepseek/deepseek-v4-flash",
+                      "model": "deepseek/deepseek-v4.1-flash",
                       "stopReason": "stop"
                     },
                     "blocks": [

@@ -9,11 +9,11 @@
 - id: agent-default-model
   config:
     provider: openrouter
-    model: deepseek/deepseek-v4-flash
+    model: deepseek/deepseek-v4.1-flash
     presets:
       deadal-intellect:
         provider: openrouter
-        model: deepseek/deepseek-v4-flash
+        model: deepseek/deepseek-v4.1-flash
         label: Deadal-intellect main agent
 - insert:
     - id: forge-intellect
