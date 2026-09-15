@@ -25,6 +25,7 @@ import type {
 import { RemoteStreamCarrierError } from './stream-client.ts'
 import type { RemoteStreamMuxClient } from './stream-client.ts'
 import { ClientRemoteEvents } from './remote-events.ts'
+import { combineRemoteCancellation, type RemoteCancellationScope } from './cancellation.ts'
 import {
   RemoteStream,
   type RemoteStreamOptions,
@@ -77,6 +78,7 @@ interface PreparedClientInvocation {
   readonly endpoint: string
   readonly args: Readonly<Record<string, unknown>>
   readonly signal: AbortSignal
+  readonly cancellation: RemoteCancellationScope | undefined
 }
 
 interface RemoteNamespaceHandle {
@@ -135,9 +137,12 @@ export const inject = ['typert', 'connection']
  * @param ctx - Client Cordis root with Typert and Connection services.
  * @param streams - physical stream carrier owned and disposed by this service.
  * @param eventId - unique identity for this service's private event registrations.
+ * @param createController - fresh platform controllers preserving abort reasons and signal helpers.
  */
-export function installRemoteClient(ctx: Context, streams: RemoteStreamMuxClient, eventId: string): void {
-  new ClientRemoteService(ctx, streams, eventId)
+export function installRemoteClient(
+  ctx: Context, streams: RemoteStreamMuxClient, eventId: string, createController: () => AbortController,
+): void {
+  new ClientRemoteService(ctx, streams, eventId, createController)
 }
 
 class ClientRemoteService extends Service implements ClientRemote {
@@ -148,7 +153,10 @@ class ClientRemoteService extends Service implements ClientRemote {
   private readonly events: ClientRemoteEvents
   private mutations = Promise.resolve()
 
-  constructor(ctx: Context, private readonly streams: RemoteStreamMuxClient, eventId: string) {
+  constructor(
+    ctx: Context, private readonly streams: RemoteStreamMuxClient, eventId: string,
+    private readonly createController: () => AbortController,
+  ) {
     super(ctx, 'remote')
     this.ownerCtx = ctx
     const connection = ctx.get('connection') as ConnectionHandle
@@ -158,6 +166,7 @@ class ClientRemoteService extends Service implements ClientRemote {
       connection,
       (endpoint, payload, signal) => this.openRemoteStream(endpoint, payload, signal),
       eventId,
+      createController,
     )
     if (connection.rpc.open === undefined) this.streams.start()
     let disposed = false
@@ -184,7 +193,7 @@ class ClientRemoteService extends Service implements ClientRemote {
   }
 
   $stream<Item>(options: RemoteStreamOptions<Item>): RemoteStream<Item> {
-    return new RemoteStream(this.connection, options)
+    return new RemoteStream(this.connection, options, this.createController)
   }
 
   get $host(): RemoteHostFacts {
@@ -327,7 +336,7 @@ class ClientRemoteService extends Service implements ClientRemote {
     if (namespace === undefined) {
       ({ namespace, installed } = await this.createNamespace(name, descriptors))
     } else {
-      installed = installMethods(namespace.service, descriptors)
+      installed = installMethods(namespace.service, descriptors, this.createController)
     }
     const handle = namespace
     return async () => {
@@ -359,7 +368,7 @@ class ClientRemoteService extends Service implements ClientRemote {
         )
         // Same synchronous window as the service registration: a dependent the
         // new service unparks runs only after the methods exist.
-        installed = installMethods(service, descriptors)
+        installed = installMethods(service, descriptors, this.createController)
       },
     })
     try {
@@ -436,9 +445,9 @@ class ClientRemoteService extends Service implements ClientRemote {
   ): Promise<RemoteResult<unknown>> {
     const endpoint = endpointOf(descriptor)
     if (!token.active) return withdrawn(endpoint)
-    const prepared = this.prepareInvocation(descriptor, projection, token, callerCtx, values, boundIdentity)
     const connection = this.ownerCtx.get('connection') as ConnectionHandle | undefined
     if (connection === undefined) throw new Error(`client api: ${endpoint} has no active Connection`)
+    const prepared = this.prepareInvocation(descriptor, projection, token, callerCtx, values, boundIdentity)
     try {
       const result = await connection.rpc.call('/api', endpoint, { args: prepared.args }, prepared.signal)
       if (!mountActive(token)) return withdrawn(endpoint)
@@ -451,6 +460,8 @@ class ClientRemoteService extends Service implements ClientRemote {
       // round-trip, so it gets the same code the Host would have produced.
       if (prepared.signal.aborted) return cancelledFailure(endpoint, error)
       return carrierFailure(endpoint, error)
+    } finally {
+      prepared.cancellation?.dispose()
     }
   }
 
@@ -465,10 +476,14 @@ class ClientRemoteService extends Service implements ClientRemote {
     const endpoint = endpointOf(descriptor)
     if (!token.active) throw new Error(withdrawn(endpoint).error.message)
     const prepared = this.prepareInvocation(descriptor, projection, token, callerCtx, values, boundIdentity)
-    const stream = this.openRemoteStream(endpoint, { args: prepared.args }, prepared.signal)
-    for await (const value of stream) {
-      if (!mountActive(token)) throw new Error(withdrawn(endpoint).error.message)
-      yield value
+    try {
+      const stream = this.openRemoteStream(endpoint, { args: prepared.args }, prepared.signal)
+      for await (const value of stream) {
+        if (!mountActive(token)) throw new Error(withdrawn(endpoint).error.message)
+        yield value
+      }
+    } finally {
+      prepared.cancellation?.dispose()
     }
   }
 
@@ -515,10 +530,10 @@ class ClientRemoteService extends Service implements ClientRemote {
       valueIndex += 1
     })
     const callerSignal = hasCallerSignal ? values[expected] as AbortSignal | undefined : undefined
-    const signal = callerSignal === undefined
-      ? token.abort.signal
-      : AbortSignal.any([token.abort.signal, callerSignal])
-    return { endpoint, args, signal }
+    const cancellation = callerSignal === undefined
+      ? undefined
+      : combineRemoteCancellation([token.abort.signal, callerSignal], this.createController)
+    return { endpoint, args, signal: cancellation?.signal ?? token.abort.signal, cancellation }
   }
 }
 
@@ -616,18 +631,20 @@ class RemoteNamespaceService extends Service {
  * group when a descriptor is refused.
  * @param service - Namespace service taking the methods.
  * @param descriptors - Descriptor group of one contribution.
+ * @param createController - controller factory for each mounted method lifetime.
  * @returns per-descriptor records for the group disposer.
  */
 function installMethods(
   service: RemoteNamespaceService,
   descriptors: readonly InvocationDescriptor[],
+  createController: () => AbortController,
 ): InstalledMethod[] {
   const installed: InstalledMethod[] = []
   try {
     for (const descriptor of descriptors) {
       const method: InstalledMethod = {
         descriptor,
-        token: { active: true, abort: new AbortController() },
+        token: { active: true, abort: createController() },
         direct: false,
         scoped: false,
       }

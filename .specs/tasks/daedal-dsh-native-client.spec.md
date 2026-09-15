@@ -13,7 +13,7 @@ blocked_by: []
 
 ## Plan
 
-Inspect the Connection client face, generated remotes, gateway streams and pure session projections. Prove their use in the Daedal DSH React Native, browser and Electron clients. Extract or expose a supported portable face only where imports, transport assumptions or package exports prevent that use. Preserve the existing Web consumer and supported dsh launch rules.
+Inspect the Connection client face, generated remotes, gateway streams and pure session projections. Prove their use in the Daedal DSH React Native, browser and Electron clients. Extract or expose a supported portable face only where imports, transport assumptions or package exports prevent that use. Preserve the existing Web consumer and supported dsh launch rules. Native transport owners supply fresh cancellation controllers; composed cancellation releases its source listeners when an operation finishes, including success, failure, stream return and contribution withdrawal.
 
 ## Acceptance
 

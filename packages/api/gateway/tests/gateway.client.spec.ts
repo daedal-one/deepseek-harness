@@ -749,8 +749,8 @@ describe('Client Typert API', () => {
     expect(combinedSignal).not.toBe(callerAbort.signal)
     const cancellation = new Error('caller cancelled')
     callerAbort.abort(cancellation)
-    expect(combinedSignal?.aborted).toBe(true)
-    expect(combinedSignal?.reason).toBe(cancellation)
+    expect(combinedSignal?.aborted).toBe(false)
+    expect(combinedSignal?.reason).toBeUndefined()
     await expect(ctx.remote.probe.create('', { objective: 'ship' })).rejects.toThrow('rejected "agentId"')
 
     call.mockResolvedValueOnce({ ok: true, value: { ref: 1 } })
@@ -2608,6 +2608,66 @@ describe('Remote stream client carrier lifecycle', () => {
 
 
 describe('Portable Client Remote service', () => {
+  it.each(['complete', 'throw', 'return', 'open-error'] as const)(
+    'releases caller cancellation listeners when a stream exits by %s', async (ending) => {
+      const open: NonNullable<ConnectionHandle['rpc']['open']> = () => {
+        if (ending === 'open-error') throw new Error('fixture stream failure')
+        return (async function* () {
+          yield 'first'
+          if (ending === 'throw') throw new Error('fixture stream failure')
+        })()
+      }
+      const { ctx, client } = await benchFiber(vi.fn(), 'in-process', open)
+      const caller = new AbortController()
+      const add = vi.spyOn(caller.signal, 'addEventListener')
+      const remove = vi.spyOn(caller.signal, 'removeEventListener')
+      const dispose = await ctx.remote.$mount({ package: '@fixture/probe', descriptors: [streamDescriptor()] })
+      const iterator = ctx.remote.probe.watch('topic', caller.signal)[Symbol.asyncIterator]()
+      try {
+        if (ending === 'open-error') await expect(iterator.next()).rejects.toThrow('fixture stream failure')
+        else {
+          await expect(iterator.next()).resolves.toMatchObject({ done: false, value: 'first' })
+          expect(remove).not.toHaveBeenCalled()
+          if (ending === 'throw') await expect(iterator.next()).rejects.toThrow('fixture stream failure')
+          else if (ending === 'return') await iterator.return?.()
+          else await expect(iterator.next()).resolves.toMatchObject({ done: true })
+        }
+        expect(remove).toHaveBeenCalledExactlyOnceWith('abort', add.mock.calls[0]?.[1])
+        expect(caller.signal.aborted).toBe(false)
+      } finally {
+        await iterator.return?.()
+        await dispose()
+        await client.dispose()
+      }
+    },
+  )
+
+  it('releases caller cancellation listeners after successful, rejected and failed calls', async () => {
+    const call = vi.fn<ConnectionHandle['rpc']['call']>()
+    const { ctx, client } = await benchFiber(call)
+    const caller = new AbortController()
+    const add = vi.spyOn(caller.signal, 'addEventListener')
+    const remove = vi.spyOn(caller.signal, 'removeEventListener')
+    const dispose = await ctx.remote.$mount({ package: '@fixture/probe', descriptors: [directDescriptor()] })
+    try {
+      for (let index = 0; index < 30; index++) {
+        if (index % 3 === 0) call.mockResolvedValueOnce({ ok: true, value: { ref: 'done' } })
+        else if (index % 3 === 1) call.mockRejectedValueOnce(new Error('connection lost'))
+        else call.mockResolvedValueOnce({ ok: false, error: { code: 'internal', message: 'rejected', details: {} } })
+        await ctx.remote.probe.create('agent-1', { objective: 'once' }, caller.signal)
+        expect(remove).toHaveBeenCalledTimes(index + 1)
+      }
+      expect(add).toHaveBeenCalledTimes(30)
+      expect(caller.signal.aborted).toBe(false)
+      for (let index = 0; index < 30; index++) {
+        expect(remove.mock.calls[index]?.[1]).toBe(add.mock.calls[index]?.[1])
+      }
+    } finally {
+      await dispose()
+      await client.dispose()
+    }
+  })
+
   it('shares generated calls, forwarded events and withdrawal with the Web service', async () => {
     const call = vi.fn<ConnectionHandle['rpc']['call']>()
       .mockResolvedValue({ ok: true, value: { ref: 'portable-goal' } })
@@ -2617,6 +2677,7 @@ describe('Portable Client Remote service', () => {
     const { ctx, client, generation } = await benchFiber(call, 'in-process', events.open, (scope) => {
       applyRemoteClient(scope, {
         baseUrl: 'https://portable.example', createSocket: unusedSocket, randomId: eventIdentity,
+        createAbortController: () => new AbortController(),
       })
     })
     const run = generation.start()

@@ -1,5 +1,6 @@
 /** Client owner for forwarded Remote Event subscriptions and deliveries. */
 
+import { combineRemoteCancellation } from './cancellation.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import type {
   ConnectionGenerationSource,
@@ -68,12 +69,14 @@ export class ClientRemoteEvents {
    * @param connection - Connection carrier used for HTTP result calls.
    * @param openStream - selected in-process or WebSocket stream opener.
    * @param eventId - unique identity for this instance's private event registrations.
+   * @param createController - platform controller factory preserving abort reasons and signal helpers.
    */
   constructor(
     private readonly ownerCtx: Context,
     private readonly connection: ConnectionHandle,
     private readonly openStream: RemoteEventStreamOpener,
     eventId: string,
+    private readonly createController: () => AbortController,
   ) {
     this.eventPrefix = `internal/api-gateway/remote-event/${eventId}/`
     this.unregisterGeneration = connection.registerGenerationSource(this.runGeneration)
@@ -126,18 +129,15 @@ export class ClientRemoteEvents {
     ready: (host: ConnectionHostInfo) => void,
   ): Promise<void> {
     let clientId: RemoteEventClientId | undefined
-    const failed = new AbortController()
-    const generationSignal = AbortSignal.any([signal, failed.signal])
+    const failed = this.createController()
+    const generation = combineRemoteCancellation([signal, failed.signal], this.createController)
+    const generationSignal = generation.signal
     const active = new Map<string, AbortController>()
     const tasks = new Set<Promise<void>>()
-    const source = this.openStream(
-      REMOTE_EVENT_STREAM_ENDPOINT,
-      REMOTE_EVENT_STREAM_PAYLOAD,
-      generationSignal,
-    )
     let streamFailed = false
     let streamError: unknown
     try {
+      const source = this.openStream(REMOTE_EVENT_STREAM_ENDPOINT, REMOTE_EVENT_STREAM_PAYLOAD, generationSignal)
       for await (const value of source) {
         if (clientId === undefined) {
           const opening = parseRemoteEventReady(value)
@@ -154,14 +154,16 @@ export class ClientRemoteEvents {
           this.deliver(frame)
           continue
         }
-        const controller = new AbortController()
+        const controller = this.createController()
         active.set(frame.eventId, controller)
-        const deliverySignal = AbortSignal.any([generationSignal, controller.signal])
+        const delivery = combineRemoteCancellation([generationSignal, controller.signal], this.createController)
+        const deliverySignal = delivery.signal
         const task = this.answer(frame, clientId, deliverySignal)
           .catch((error: unknown) => {
             if (!deliverySignal.aborted) failed.abort(error)
           })
           .finally(() => {
+            delivery.dispose()
             active.delete(frame.eventId)
             tasks.delete(task)
           })
@@ -175,6 +177,7 @@ export class ClientRemoteEvents {
         controller.abort(new Error('client api: Remote event generation ended'))
       }
       await Promise.allSettled(tasks)
+      generation.dispose()
     }
     if (failed.signal.aborted) {
       throw toError(failed.signal.reason, 'client api: Remote event result delivery failed')

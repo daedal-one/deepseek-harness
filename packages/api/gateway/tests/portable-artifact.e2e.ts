@@ -98,6 +98,7 @@ it('opens and closes streams through the published portable artifact', { retry: 
     });
     const plugin = ctx.plugin({ apply: (scope) => api.applyRemoteClient(scope, {
       baseUrl: 'https://artifact.example', randomId: () => 'artifact-events',
+      createAbortController: () => new AbortController(),
       createSocket: () => { throw new Error('direct Connection carrier must remain selected'); },
     }) });
     await plugin;

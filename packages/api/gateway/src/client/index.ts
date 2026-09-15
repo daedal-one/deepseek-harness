@@ -18,5 +18,5 @@ export type {
  * @param ctx - Client Cordis root.
  */
 export function apply(ctx: Context): void {
-  installRemoteClient(ctx, createBrowserRemoteStreamMux(), randomUUID())
+  installRemoteClient(ctx, createBrowserRemoteStreamMux(), randomUUID(), () => new AbortController())
 }

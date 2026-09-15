@@ -89,6 +89,7 @@ export class ConnectionController {
     private readonly source: ConnectionGenerationSource,
     private readonly sinks: ConnectionSinks = {},
     config: ConnectionRecoveryConfig = {},
+    private readonly createAbortController: () => AbortController = () => new AbortController(),
   ) {
     this.config = resolveConnectionConfig(config)
   }
@@ -165,7 +166,7 @@ export class ConnectionController {
     let retry = false
     while (this.running) {
       if (!this.networkAvailable && !this.immediateRetry) {
-        const retryDelay = new AbortController()
+        const retryDelay = this.createAbortController()
         this.retryDelay = retryDelay
         this.emitState('disconnected')
         await waitForAbort(retryDelay.signal)
@@ -186,7 +187,7 @@ export class ConnectionController {
         if (!this.isRunning()) return
         if (this.isRetryInterrupted(immediate)) continue
         if (!immediate) {
-          const retryDelay = new AbortController()
+          const retryDelay = this.createAbortController()
           this.retryDelay = retryDelay
           await sleep(this.backoffDelay(attempt), retryDelay.signal)
           if (this.retryDelay === retryDelay) this.retryDelay = null
@@ -199,7 +200,7 @@ export class ConnectionController {
       }
 
       const gen = ++this.generation
-      const ac = new AbortController()
+      const ac = this.createAbortController()
       this.current = ac
 
       let sourceReady = false

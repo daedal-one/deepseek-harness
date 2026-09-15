@@ -49,12 +49,18 @@ export function createRemoteStreamMux(options: RemoteStreamMuxOptions): RemoteSt
   })
 }
 
+/** Platform inputs for the complete Remote service. */
+export interface RemoteClientOptions extends RemoteStreamMuxOptions {
+  /** Creates fresh controllers with abort reasons and throwIfAborted support. */
+  readonly createAbortController: () => AbortController
+}
+
 /**
  * Install typed Remote calls, streams and forwarded events for one HTTP(S) host.
  * The owning Cordis fiber disposes the transport and registrations together.
  * @param ctx - Client Cordis root with Typert and Connection services.
  * @param options - authenticated socket adapter, host URL and identity generator.
  */
-export function applyRemoteClient(ctx: Context, options: RemoteStreamMuxOptions): void {
-  installRemoteClient(ctx, createRemoteStreamMux(options), options.randomId())
+export function applyRemoteClient(ctx: Context, options: RemoteClientOptions): void {
+  installRemoteClient(ctx, createRemoteStreamMux(options), options.randomId(), options.createAbortController)
 }

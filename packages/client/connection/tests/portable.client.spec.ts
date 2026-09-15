@@ -165,3 +165,33 @@ it('starts offline without opening a generation and withdraws its observer with 
     loop.stop()
   }
 })
+
+it('uses caller-owned controllers through replacement and loop shutdown', async () => {
+  const controllers: AbortController[] = []
+  const createAbortController = (): AbortController => {
+    const controller = new AbortController()
+    controllers.push(controller)
+    return controller
+  }
+  const host = generation('/native')
+  const connection = createConnection({
+    isLoopback: false, rpc: { call: async () => ({ ok: true, value: null }) }, createAbortController,
+  })
+  const unregister = connection.registerGenerationSource(host.source)
+  const loop = connection.start({})
+  try {
+    await vi.waitFor(() => { expect(connection.generation.getSnapshot()?.id).toBe(1) })
+    expect(host.signals[0]).toBe(controllers[0]?.signal)
+    connection.reconnect()
+    await vi.waitFor(() => { expect(connection.generation.getSnapshot()?.id).toBe(2) })
+    expect(controllers[0]?.signal.aborted).toBe(true)
+    expect(controllers[0]?.signal.reason).toBeDefined()
+    expect(host.signals[1]).toBe(controllers[1]?.signal)
+  } finally {
+    loop.stop()
+    unregister()
+    await Promise.all(host.done)
+  }
+  expect(controllers).toHaveLength(2)
+  expect(controllers.every(controller => controller.signal.aborted)).toBe(true)
+})

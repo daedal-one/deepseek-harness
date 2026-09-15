@@ -16,7 +16,8 @@
     "src/stream-protocol.ts",
     "src/client/portable.ts",
     "src/client/stream-client-browser.ts",
-    "src/client/service.ts"
+    "src/client/service.ts",
+    "src/client/cancellation.ts"
   ],
   "references": [
     {

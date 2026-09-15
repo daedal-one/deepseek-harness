@@ -92,6 +92,8 @@ export interface ConnectionOptions {
   readonly recovery?: ConnectionRecoveryConfig
   /** Availability observer; omit for carriers without network suspension. */
   readonly network?: ConnectionNetworkSource
+  /** Controller factory preserving abort reasons; defaults to the platform AbortController. */
+  readonly createAbortController?: () => AbortController
 }
 
 function watchNetwork(controller: ConnectionController, network: ConnectionNetworkSource | undefined): () => void {
@@ -109,6 +111,7 @@ function watchNetwork(controller: ConnectionController, network: ConnectionNetwo
  */
 export function createConnection(options: ConnectionOptions): ConnectionHandle {
   const recovery = resolveConnectionConfig(options.recovery)
+  const createAbortController = options.createAbortController ?? (() => new AbortController())
   let generationSource: ConnectionGenerationSource | undefined
   let owner: ConnectionOwner | undefined
   let generationId = 0
@@ -200,7 +203,7 @@ export function createConnection(options: ConnectionOptions): ConnectionHandle {
           publishState(state)
           sinks.onStateChange?.(state)
         },
-      }, { ...recovery, ...config })
+      }, { ...recovery, ...config }, createAbortController)
       const current = { token, source, controller, stopNetworkWatch: watchNetwork(controller, options.network) }
       owner = current
       controller.start()
