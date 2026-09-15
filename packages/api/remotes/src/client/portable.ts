@@ -1,5 +1,6 @@
 /** Normal ESM Client entry for portable Cordis compositions. */
 import { apply as applyClient } from './index.ts'
+import { applySessions as applySessionClient } from '@deepseek-ai/dsh-api-session-controller/client'
 import { apply as applyWorkspaceClient } from '@deepseek-ai/dsh-api-workspace-controller/client'
 export * from './index.ts'
 export { createConnection, createConnectionRpc } from '@deepseek-ai/dsh-client-connection/client/portable'
@@ -36,3 +37,19 @@ export type { IWorkspaces, WorkspaceSource, WorkspaceSnapshot, WorkspaceListPhas
  * @param ctx - Client Cordis context with the generated Workspace Remote namespace.
  */
 export const applyWorkspaces: (ctx: Parameters<typeof applyWorkspaceClient>[0]) => void = applyWorkspaceClient.bind(undefined)
+
+export { sessionInject, SessionCreateError, SessionForkError, SessionEventStream,
+  createSessionControlStream, MutableSessionEventSource, scopeOf,
+} from '@deepseek-ai/dsh-api-session-controller/client'
+export type { ISessions, SessionFace, SessionSnapshot, SessionListState, SessionBinding,
+  SessionPlatform, SessionSelection, SessionSelectionStore, SessionClientOptions,
+  SessionEventSource, SessionEventWindow, SessionEventChange, SessionEventLikeEntry,
+  BeginSubmissionInput, SubmissionHandle, PendingSubmission,
+} from '@deepseek-ai/dsh-api-session-controller/client'
+
+/**
+ * Install shared Session state and reconnecting streams for one host.
+ * @param ctx - Client Cordis context with the generated Session Remotes.
+ * @param options - platform callbacks and hydrated host-specific navigation.
+ */
+export const applySessions: typeof applySessionClient = applySessionClient.bind(undefined)

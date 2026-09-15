@@ -18,7 +18,7 @@ it('awaits the generated assembly and disposes calls and streams after async low
     import { SourceTextModule, createContext } from 'node:vm';
     const { build } = await import(process.argv[2]);
     const dir = mkdtempSync(join(tmpdir(), 'dsh-portable-async-'));
-    const context = createContext({ URL, AbortController, AbortSignal, queueMicrotask, setTimeout, clearTimeout, console });
+    const context = createContext({ URL, AbortController, AbortSignal, queueMicrotask, setTimeout, clearTimeout, console, Intl: undefined });
     const modules = new Map();
     function fileModule(file) {
       if (!modules.has(file)) modules.set(file, new SourceTextModule(readFileSync(file, 'utf8'), { context, identifier: file }));
@@ -40,6 +40,7 @@ it('awaits the generated assembly and disposes calls and streams after async low
     let assembly;
     let logical;
     let workspaces;
+    let sessions;
     try {
       const forbidden = new SourceTextModule('import fs from "node:fs"', { context });
       await assert.rejects(forbidden.link(link), /portable dependency/);
@@ -66,6 +67,13 @@ it('awaits the generated assembly and disposes calls and streams after async low
         rpc: { call: async (...args) => {
           calls.push(args);
           if (args[1] === 'session/search') return { ok: true, value: { items: [], hasMore: false } };
+          if (args[1] === 'subagents/list') return { ok: true, value: { entries: [], parentAvailable: true } };
+          if (args[1] === 'session/list') return { ok: true, value: { items: [{ sessionId: 'portable-session', updatedAt: 1, running: false, blank: false }] } };
+          if (args[1] === 'session/prompt') {
+            assert.equal(args[2].args.request.requestId, 'device-request-1');
+            assert.equal(args[2].args.request.clientTimeZone, 'Europe/Rome');
+            return { ok: true, value: { accepted: true } };
+          }
           assert.equal(args[1], 'workspace/rename');
           return { ok: true, value: { workspace: { ...workspace(args[2].args.request.workspaceId), title: args[2].args.request.title, updatedAt: '2026-01-02T00:00:00.000Z' } } };
         } },
@@ -87,10 +95,15 @@ it('awaits the generated assembly and disposes calls and streams after async low
             send: data => {
               const frame = JSON.parse(data); frames.push(frame);
               if (frame.type !== 'open') return;
-              const value = frame.endpoint === '$events'
-                ? { type: 'ready', clientId: 'portable-client', host: { home: '/portable' } }
-                : { type: 'baseline', value: { items: [workspace('alpha'), workspace('beta')], archivedSessionIds: [] } };
-              assert(['$events', 'workspace/follow'].includes(frame.endpoint));
+              let value;
+              if (frame.endpoint === '$events') value = { type: 'ready', clientId: 'portable-client', host: { home: '/portable' } };
+              else if (frame.endpoint === 'workspace/follow') value = { type: 'baseline', value: { items: [workspace('alpha'), workspace('beta')], archivedSessionIds: [] } };
+              else if (frame.endpoint === 'session/control') value = { type: 'baseline', value: { queues: {}, jobs: {}, projections: {} } };
+              else if (frame.endpoint === 'session/follow') value = {
+                type: 'snapshot', header: { version: 3, id: 'portable-session', createdAt: 0, isSeeded: false },
+                cursor: -1, records: [], hasMore: false, projections: { asOfSeq: -1, values: {} }, assistantStream: { revision: 0 },
+              };
+              else throw new Error('unexpected portable stream ' + frame.endpoint);
               queueMicrotask(() => callbacks.get('message')?.({ data: JSON.stringify({ type: 'item', streamId: frame.streamId, value }) }));
             },
           };
@@ -146,17 +159,45 @@ it('awaits the generated assembly and disposes calls and streams after async low
       const disposedSnapshot = source.getSnapshot();
       send({ type: 'remove', workspaceId: 'alpha' });
       assert.equal(source.getSnapshot(), disposedSnapshot);
+      let selected = { sessionId: 'portable-session' };
+      sessions = ctx.plugin({ apply: api.applySessions, inject: api.sessionInject }, {
+        platform: { createRequestId: () => 'device-request-1', timeZone: () => 'Europe/Rome' },
+        selection: { getSnapshot: () => selected, set: value => { selected = value; } },
+      });
+      await sessions;
+      await waitSnapshot(ctx.sessions.list, state => state.phase === 'ready');
+      assert.equal(ctx.sessions.list.getSnapshot().current, 'portable-session');
+      const binding = ctx.sessions.binding('portable-session');
+      assert(binding);
+      await waitSnapshot(binding.session, state => state.openState === 'open');
+      const pending = binding.session.beginSubmission({ mode: 'queue', text: 'Native prompt', attachments: [] });
+      assert.equal(pending.requestId, 'device-request-1');
+      assert((await binding.session.prompt([{ type: 'text', text: 'Native prompt' }], 'queue', undefined, pending.requestId)).ok);
+      const followId = frames.find(frame => frame.type === 'open' && frame.endpoint === 'session/follow').streamId;
+      callbacks.get('message')({ data: JSON.stringify({ type: 'item', streamId: followId, value: { type: 'event', event: {
+        seq: 0, time: 1, type: 'user/message', surfaceOp: 'append',
+        data: { id: 'native-message', role: 'user', content: [{ type: 'text', text: 'Native prompt' }], source: { kind: 'user', rpcId: pending.requestId } },
+      } } }) });
+      await waitSnapshot(binding.eventSource, state => state.entries.length === 1);
+      assert.equal(binding.eventSource.getSnapshot().entries[0].event.data.content[0].text, 'Native prompt');
+      await waitSnapshot(binding.session, state => state.pendingSubmissions.length === 0);
+      ctx.sessions.clear();
+      assert.equal(selected.sessionId, undefined);
+      await sessions.dispose();
+      const callsBeforeWithdrawal = calls.length;
       await assembly.dispose();
       assert.equal(ctx.typert.remotes.list().length, 0);
       assert.equal((await search({ query: 'withdrawn' })).ok, false);
-      assert.equal(calls.length, 2);
+      assert.equal(calls.length, callsBeforeWithdrawal);
+      assert.equal(calls.filter(call => call[1] === 'session/prompt').length, 1);
       await gateway.dispose();
       assert.equal(connection.generation.getSnapshot(), undefined);
       assert.equal(socket.readyState, 3);
-      assert.equal(frames.filter(frame => frame.type === 'open').length, 3);
-      assert.equal(frames.filter(frame => frame.type === 'cancel').length, 3);
+      assert.equal(frames.filter(frame => frame.type === 'open').length, 5);
+      assert.equal(frames.filter(frame => frame.type === 'cancel').length, 5);
       console.log('portable application lifecycle passed');
     } finally {
+      await sessions?.dispose();
       await workspaces?.dispose();
       await logical?.dispose();
       await assembly?.dispose();
@@ -216,7 +257,15 @@ it('typechecks the portable application without workspace source aliases or Host
         await ctx.plugin({ apply: api.applyWorkspaces, inject: api.workspaceInject });
         const workspaces: api.WorkspaceSnapshot = ctx.workspaces.list.getSnapshot();
         const renamed: api.WorkspaceView = await ctx.workspaces.rename(workspaces.items[0].workspaceId, 'Renamed');
-        void connection; void stream; void renamed;
+        let selected: api.SessionSelection = {};
+        const options: api.SessionClientOptions = {
+          platform: { createRequestId: () => 'native-id' as api.SessionRequestId, timeZone: () => 'Europe/Rome' },
+          selection: { getSnapshot: () => selected, set: value => { selected = value; } },
+        };
+        await ctx.plugin({ apply: api.applySessions, inject: api.sessionInject }, options);
+        const list: api.SessionListState = ctx.sessions.list.getSnapshot();
+        const session: api.SessionBinding | undefined = ctx.sessions.binding(list.ids[0]);
+        void connection; void stream; void renamed; void session;
       \`);
       const checked = spawnSync(process.execPath, [require.resolve('typescript/bin/tsc'), '-p', dir], { encoding: 'utf8', timeout: 45_000 });
       assert.equal(checked.error, undefined);

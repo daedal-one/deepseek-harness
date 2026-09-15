@@ -34,6 +34,7 @@ import { SessionManager } from './manager.ts'
 import type { SessionRemotes } from './remotes.ts'
 import type { SessionListPhase, SessionSearchResultItem, SubagentCatalogSnapshot } from './manager.ts'
 import type { Session } from './session.ts'
+import type { SessionClientOptions, SessionSelectionStore } from '../platform.ts'
 
 /** Session list row projected from the host list RPC plus live stream increments. */
 export interface SessionSummary {
@@ -86,12 +87,6 @@ export interface SessionListState {
   jobsBySession: Readonly<Record<SessionId, readonly JobView[]>>
   /** Current session's catalog-derived address, absent on ordinary navigation. */
   currentAddress: SubagentAddress | undefined
-}
-
-/** Persisted navigation cell: address survives refresh for correct history routing. */
-interface SessionSelection {
-  sessionId?: SessionId
-  subagentAddress?: SubagentAddress
 }
 
 /** Structured session-create failure. */
@@ -201,7 +196,7 @@ export class ClientSessions implements ISessions {
    * selection survives transient list states (reconnect re-pull) and
    * resurfaces when its session returns.
    */
-  private readonly selection: SnapshotStore<SessionSelection>
+  private readonly selection: SessionSelectionStore
 
   private readonly scopes = new Map<SessionId, ScopeRecord>()
   /** In-flight scope drops remain here after records leave `scopes`, so root disposal can await quiescence. */
@@ -219,17 +214,18 @@ export class ClientSessions implements ISessions {
   /**
    * @param ctx - client root context (scope fibers mount under it).
    * @param remote - generated Remote namespaces shared with every Session.
+   * @param options - platform inputs and hydrated navigation for this host.
    */
   constructor(
     private readonly rootCtx: Context,
     remote: SessionRemotes,
+    options: SessionClientOptions,
   ) {
-    this.selection = createSnapshotStore<SessionSelection>(
-      {},
-      { persist: { name: 'dsh.sessions.current' } })
+    this.selection = options.selection
     const restored = this.selection.getSnapshot()
     this.manager = new SessionManager(
       remote,
+      options.platform,
       restored.sessionId,
       restored.subagentAddress,
     )

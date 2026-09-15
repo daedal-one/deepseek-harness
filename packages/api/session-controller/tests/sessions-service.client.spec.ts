@@ -6,6 +6,7 @@
  * deferral — the stage follows list.current), binding identity, breadcrumb
  * projection, create.
  */
+import { createBrowserSessionClientOptions } from '../src/client/browser.ts'
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
@@ -37,7 +38,7 @@ function bench(configureRemote?: (remote: RuntimeRemotes) => RuntimeRemotes): Be
   const ctx = new Context()
   const api = new FakeApiClient()
   const remote = fakeRemote(api)
-  const svc = new ClientSessions(ctx, configureRemote?.(remote) ?? remote)
+  const svc = new ClientSessions(ctx, configureRemote?.(remote) ?? remote, createBrowserSessionClientOptions())
   return { ctx, api, svc }
 }
 

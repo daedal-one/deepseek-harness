@@ -26,6 +26,7 @@ import { Notifier } from './notifier.ts'
 import { ProjectionValueStore } from './projection-store.ts'
 import { Session } from './session.ts'
 import type { SessionRemotes } from './remotes.ts'
+import type { SessionPlatform } from '../platform.ts'
 
 function sessionSeqCursor(value: number): SessionSeqCursor {
   return value === -1 ? -1 : SessionSeq(value)
@@ -153,10 +154,12 @@ export class SessionManager {
 
   /**
    * @param remote - generated Remote namespaces the Session cluster calls.
+   * @param platform - shared request identity and device time zone callbacks.
    * @param restoredSelection - persisted real-Session selection candidate.
    */
   constructor(
     private readonly remote: SessionRemotes,
+    private readonly platform: SessionPlatform,
     restoredSelection?: SessionId,
     restoredAddress?: SubagentAddress,
   ) {
@@ -327,7 +330,7 @@ export class SessionManager {
     const parentAvailable = address === undefined
       ? undefined
       : this.catalogs.get(address.parentSessionId)?.parentAvailable
-    return new Session(sessionId, this.remote, {
+    return new Session(sessionId, this.remote, this.platform, {
       ...(address === undefined ? {} : {
         address,
         ...catalogAvailability(parentAvailable),

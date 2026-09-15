@@ -1,7 +1,6 @@
 // Sessions remain resident after creation so their open Remote sources keep running off-screen.
 
 import type { Context } from '@deepseek-ai/cordis'
-import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import type { AttachmentIdType, FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
@@ -35,7 +34,7 @@ import type { RemoteFailure, RemoteResult } from '@deepseek-ai/dsh-typert-protoc
 import type { SessionRemotes } from './remotes.ts'
 import { ProjectionValueStore } from './projection-store.ts'
 import type { ProjectionsBaseline } from './projection-store.ts'
-import { resolvedClientTimeZone } from '../time-zone.ts'
+import type { SessionPlatform } from '../platform.ts'
 import { SessionQueueMirror } from './queue-mirror.ts'
 import {
   ClientAssistantStream,
@@ -161,11 +160,13 @@ export class Session implements SessionFace {
   /**
    * @param sessionId - Host session identity (client sessions are always Host-born).
    * @param remote - generated Remote namespaces this session calls.
+   * @param platform - request identity and client time zone supplied by the host connection owner.
    * @param options - optional manager-owned state observers.
    */
   constructor(
     readonly sessionId: SessionId,
     private readonly remote: SessionRemotes,
+    private readonly platform: SessionPlatform,
     private readonly options: SessionOptions = {},
   ) {
     this.projections = options.projections ?? new ProjectionValueStore()
@@ -205,7 +206,7 @@ export class Session implements SessionFace {
    * @returns the minted identity for {@link prompt} plus the pre-prompt abandon path.
    */
   beginSubmission(input: BeginSubmissionInput): SubmissionHandle {
-    const requestId = randomUUID() as SessionRequestId
+    const requestId = this.platform.createRequestId()
     this.pendingSubmissions = [...this.pendingSubmissions, {
       requestId,
       placement: this.running
@@ -247,9 +248,9 @@ export class Session implements SessionFace {
     this.notifier.markDirty()
     let result: RemoteResult<{ accepted: true }>
     if (this.address === undefined) {
-      const clientTimeZone = resolvedClientTimeZone()
+      const clientTimeZone = this.platform.timeZone()
       result = await this.remote.session.prompt({
-        requestId: requestId ?? randomUUID() as SessionRequestId,
+        requestId: requestId ?? this.platform.createRequestId(),
         sessionId: this.sessionId,
         mode,
         content,
@@ -269,13 +270,13 @@ export class Session implements SessionFace {
       // wire type is used; this array is not filtered or reordered.
       const routedContent = content as Exclude<PromptContentPart, { readonly type: 'file' }>[]
       const routed = await this.remote.subagents.prompt({
-        requestId: randomUUID() as SessionRequestId,
+        requestId: this.platform.createRequestId(),
         parentSessionId: this.address.parentSessionId,
         childSessionId: this.address.childSessionId,
         mode: 'continuable',
         delivery: mode,
         content: routedContent,
-        clientTimeZone: resolvedClientTimeZone(),
+        clientTimeZone: this.platform.timeZone(),
       }, signal)
       result = routed.ok ? { ok: true, value: { accepted: true } } : routed
     }

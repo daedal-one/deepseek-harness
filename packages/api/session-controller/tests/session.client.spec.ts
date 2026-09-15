@@ -1,5 +1,6 @@
 /** Session object lifecycle, event-window transport, commands, and resync behavior. */
 
+import { browserSessionPlatform } from '../src/client/browser.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session/types'
 import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
@@ -19,7 +20,7 @@ function makeSession(
   api = new FakeApiClient(),
   options: SessionOptions = {},
 ): { api: FakeApiClient; session: Session } {
-  return { api, session: new Session(SID, fakeRemote(api), options) }
+  return { api, session: new Session(SID, fakeRemote(api), browserSessionPlatform, options) }
 }
 
 function follow(
@@ -394,7 +395,7 @@ describe('paging', () => {
 describe('prompt and cancel errors', () => {
   it('routes an addressed child through non-activating history, continuation prompt, and interrupt only', async () => {
     const api = new FakeApiClient()
-    const session = new Session(SID, fakeRemote(api), {
+    const session = new Session(SID, fakeRemote(api), browserSessionPlatform, {
       address: { parentSessionId: PARENT, childSessionId: SID, mode: 'continuable' },
       parentAvailable: true,
     })
@@ -450,7 +451,7 @@ describe('prompt and cancel errors', () => {
 
   it('forwards continuation image parts to the subagent prompt Remote unstripped', async () => {
     const api = new FakeApiClient()
-    const session = new Session(SID, fakeRemote(api), {
+    const session = new Session(SID, fakeRemote(api), browserSessionPlatform, {
       address: { parentSessionId: PARENT, childSessionId: SID, mode: 'continuable' },
       parentAvailable: true,
     })
@@ -478,7 +479,7 @@ describe('prompt and cancel errors', () => {
   it('lands an interrupt business failure in promptError with op=stop', async () => {
     const api = new FakeApiClient()
     api.onSubagentInterrupt = () => Promise.resolve(err(new RemoteError('subagent/unauthorized', 'nope', { childSessionId: SID })))
-    const session = new Session(SID, fakeRemote(api), {
+    const session = new Session(SID, fakeRemote(api), browserSessionPlatform, {
       address: { parentSessionId: PARENT, childSessionId: SID, mode: 'continuable' },
       parentAvailable: true,
     })
@@ -492,7 +493,7 @@ describe('prompt and cancel errors', () => {
 
   it('rejects staged files instead of dropping them from subagent continuations', async () => {
     const api = new FakeApiClient()
-    const session = new Session(SID, fakeRemote(api), {
+    const session = new Session(SID, fakeRemote(api), browserSessionPlatform, {
       address: { parentSessionId: PARENT, childSessionId: SID, mode: 'continuable' },
       parentAvailable: true,
     })
@@ -518,7 +519,7 @@ describe('prompt and cancel errors', () => {
     api.onSubagentPrompt = () => Promise.resolve(err(new RemoteError(
       'subagent/not-resumable', 'subagent cannot be resumed', { childSessionId: SID },
     )))
-    const session = new Session(SID, fakeRemote(api), {
+    const session = new Session(SID, fakeRemote(api), browserSessionPlatform, {
       address: { parentSessionId: PARENT, childSessionId: SID, mode: 'one-shot' },
     })
     await session.open()
@@ -549,7 +550,7 @@ describe('prompt and cancel errors', () => {
 
   it('delivers an image continuation to the Host without narrowing its upload parts', async () => {
     const api = new FakeApiClient()
-    const session = new Session(SID, fakeRemote(api), {
+    const session = new Session(SID, fakeRemote(api), browserSessionPlatform, {
       address: { parentSessionId: PARENT, childSessionId: SID, mode: 'continuable' },
     })
     await session.open()
