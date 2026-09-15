@@ -126,6 +126,8 @@ export interface InvocationParameterModel {
 
 /** One strictly analyzed Host method exported through Typert Gateway. */
 export interface InvocationModel {
+  /** Resolved business revision; omitted synthetic models use the initial revision. */
+  readonly semanticRevision?: number
   readonly id: string
   readonly service: string
   readonly namespace: string

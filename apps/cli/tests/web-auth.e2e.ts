@@ -163,12 +163,12 @@ function rpcValue(response: HttpResult): unknown {
 
 function expectNativeCapabilities(value: unknown): HostCapabilities {
   const facts = value as HostCapabilities
-  expect(facts.version).toBe(2)
+  expect(facts.version).toBe(3)
   expect(facts.capabilities.filter(row => ['session/list', 'session/follow', 'workspace/follow'].includes(row.endpoint)))
     .toEqual([
-      { endpoint: 'session/follow', mode: 'stream', availability: 'available', wireFingerprint: expect.stringMatching(/^typert-wire-v1:[0-9a-f]{64}$/) as unknown },
-      { endpoint: 'session/list', mode: 'unary', availability: 'available', wireFingerprint: expect.stringMatching(/^typert-wire-v1:[0-9a-f]{64}$/) as unknown },
-      { endpoint: 'workspace/follow', mode: 'stream', availability: 'available', wireFingerprint: expect.stringMatching(/^typert-wire-v1:[0-9a-f]{64}$/) as unknown },
+      { endpoint: 'session/follow', mode: 'stream', availability: 'available', semanticRevision: 1, wireFingerprint: expect.stringMatching(/^typert-wire-v1:[0-9a-f]{64}$/) as unknown },
+      { endpoint: 'session/list', mode: 'unary', availability: 'available', semanticRevision: 1, wireFingerprint: expect.stringMatching(/^typert-wire-v1:[0-9a-f]{64}$/) as unknown },
+      { endpoint: 'workspace/follow', mode: 'stream', availability: 'available', semanticRevision: 1, wireFingerprint: expect.stringMatching(/^typert-wire-v1:[0-9a-f]{64}$/) as unknown },
     ])
   const endpoints = facts.capabilities.map(row => row.endpoint)
   expect(endpoints).toEqual([...new Set(endpoints)].sort())
@@ -221,6 +221,18 @@ describe('dsh web authentication through the real CLI', () => {
       const identity = connectionIdentitySchema.parse(rpcValue(await postRpc(port, firstUrl.host, 'connection/identity', {}, cookie)))
       const capabilities = expectNativeCapabilities(rpcValue(await postRpc(port, firstUrl.host, '$capabilities', {}, cookie)))
       expect(capabilities.identity).toEqual(identity)
+      const settings = capabilities.capabilities.find(row => row.endpoint === 'settings/describe')!
+      const compatibility = { wireFingerprint: settings.wireFingerprint, semanticRevision: settings.semanticRevision, identity }
+      expect(rpcValue(await postRpc(port, firstUrl.host, 'settings/describe', { args: {}, compatibility }, cookie)))
+        .toMatchObject({ namespaces: expect.any(Array) as unknown })
+      for (const changed of [{ ...compatibility, semanticRevision: 2 },
+        { ...compatibility, wireFingerprint: `typert-wire-v1:${'a'.repeat(64)}` },
+      ]) {
+        const refused = await postRpc(port, firstUrl.host, 'settings/describe', { args: {}, compatibility: changed }, cookie)
+        expect(JSON.parse(refused.body)).toMatchObject({ result: { ok: false, error: {
+          code: 'gateway/api-incompatible', details: { endpoint: 'settings/describe' },
+        } } })
+      }
       expect(await postRpc(port, 'example.invalid', '$capabilities', {}, cookie)).toEqual({ status: 403, body: 'forbidden' })
 
       const firstExit = await stopWeb(first)
@@ -237,6 +249,26 @@ describe('dsh web authentication through the real CLI', () => {
       expect(nextIdentity.activationId).not.toBe(identity.activationId)
       const nextCapabilities = expectNativeCapabilities(rpcValue(await postRpc(secondPort, secondUrl.host, '$capabilities', {}, cookie)))
       expect(nextCapabilities.identity).toEqual(nextIdentity)
+      const stale = await postRpc(secondPort, secondUrl.host, 'settings/describe', { args: {}, compatibility }, cookie)
+      expect(JSON.parse(stale.body)).toMatchInlineSnapshot(`
+        {
+          "result": {
+            "error": {
+              "code": "gateway/api-incompatible",
+              "details": {
+                "endpoint": "settings/describe",
+              },
+              "message": "typert gateway: settings/describe: Remote request belongs to another Host activation",
+            },
+            "ok": false,
+          },
+          "rpcId": "web-auth-real-cli",
+          "type": "server-response",
+        }
+      `)
+      expect(rpcValue(await postRpc(secondPort, secondUrl.host, 'settings/describe', {
+        args: {}, compatibility: { ...compatibility, identity: nextIdentity },
+      }, cookie))).toMatchObject({ namespaces: expect.any(Array) as unknown })
 
       const credentialMode = (await stat(join(dshHome, '.credentials.yaml'))).mode & 0o777
       if (process.platform !== 'win32') expect(credentialMode).toBe(0o600)

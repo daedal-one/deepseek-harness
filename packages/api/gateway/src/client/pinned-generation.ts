@@ -1,10 +1,11 @@
 /** Lifetime of one generated native operation on its paired Host generation. */
-import type { ConnectionHandle, ConnectionHostId } from '@deepseek-ai/dsh-client-connection/client'
+import type { ConnectionHandle, ConnectionHostId, ConnectionIdentity } from '@deepseek-ai/dsh-client-connection/client'
 import { combineRemoteCancellation } from './cancellation.ts'
 
 /** Cancellation and late-result checks for one accepted generation. */
 export interface PinnedGeneration {
   readonly signal: AbortSignal
+  readonly identity: ConnectionIdentity
   /** Refuse a result from a generation that ended while the operation was active. */
   assertCurrent(): void
   /** Release the generation observer and combined cancellation listeners. */
@@ -38,6 +39,7 @@ export function bindPinnedGeneration(
   })
   return {
     signal: cancellation.signal,
+    identity: accepted.host.identity,
     assertCurrent() {
       if (connection.generation.getSnapshot() !== accepted) throw changed
     },

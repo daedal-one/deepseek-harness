@@ -21,6 +21,7 @@ interface RuntimeSchema {
 
 interface RuntimeDescriptor {
   readonly wireFingerprint: string
+  readonly semanticRevision: number
   readonly id: string
   readonly mode?: 'stream'
   readonly cancellation?: { readonly parameter: 'signal' }
@@ -50,6 +51,34 @@ afterEach(() => {
 })
 
 describe('Remote model generation', { timeout: 60_000 }, () => {
+  it('keeps authored business revisions independent of schemas on both generated faces', async () => {
+    const root = copyFixture()
+    const before = await generatedRemote(root)
+    expect(before.TYPERT_REMOTE.descriptors.map(value => value.semanticRevision)).toEqual([1, 1, 1])
+    editFile(root, 'packages/remote/src/index.ts', source => source
+      .replace('  @Remote\n', '  /** @remoteRevision 2 */\n  @Remote\n')
+      .replace("  @RemoteScope('agent')", "  /** @remoteRevision 3 */\n  @RemoteScope('agent')")
+      .replace("  @Remote({ mode: 'stream' })", "  /** @remoteRevision 4 */\n  @Remote({ mode: 'stream' })"))
+    const [artifact] = new WorkspaceTypertGenerator(root).generate()
+    const host = await loadGenerated(artifact!.js) as { TYPERT: { invocations: readonly RuntimeDescriptor[] } }
+    const client = await generatedRemote(root)
+    expect(client.TYPERT_REMOTE.descriptors.map(value => value.semanticRevision)).toEqual([2, 3, 4])
+    expect(host.TYPERT.invocations.map(value => value.semanticRevision)).toEqual([2, 3, 4])
+    expect(fingerprints(client.TYPERT_REMOTE.descriptors)).toEqual(fingerprints(before.TYPERT_REMOTE.descriptors))
+  })
+
+  it.each(['0', '-1', '1.5', '2 extra', '9007199254740992', '01', ''])('refuses invalid authored revisions %s', (revision) => {
+    const root = copyFixture()
+    editFile(root, 'packages/remote/src/index.ts', source => source.replace('  @Remote\n', `  /** @remoteRevision ${revision} */\n  @Remote\n`))
+    expect(() => analyzeRemote(root)).toThrow('@remoteRevision requires exactly one positive safe integer literal')
+  })
+
+  it('refuses duplicate business revision annotations', () => {
+    const root = copyFixture()
+    editFile(root, 'packages/remote/src/index.ts', source => source.replace('  @Remote\n', '  /**\n   * @remoteRevision 2\n   * @remoteRevision 2\n   */\n  @Remote\n'))
+    expect(() => analyzeRemote(root)).toThrow('@remoteRevision requires exactly one positive safe integer literal')
+  })
+
   it('discovers a Remote-only package and emits strict direct and Context descriptors', async () => {
     const generator = new WorkspaceTypertGenerator(fixtureRoot)
 

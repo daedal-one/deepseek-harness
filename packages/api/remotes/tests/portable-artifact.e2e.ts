@@ -58,11 +58,12 @@ it('awaits the generated assembly and disposes calls and streams after async low
       assert.equal(identity.value.hostId, '26e99520-f2d3-4874-84b5-07c5ef24775d');
       const capabilities = await api.readHostCapabilities({ call: async (channel, endpoint, payload) => {
         assert.equal(channel, '/api'); assert.equal(endpoint, '$capabilities'); assert.equal(Object.keys(payload).length, 0);
-        return { ok: true, value: { version: 2, identity: identity.value,
-          capabilities: [{ endpoint: 'session/follow', mode: 'stream', availability: 'available', wireFingerprint: 'typert-wire-v1:' + 'a'.repeat(64) }] } };
+        return { ok: true, value: { version: 3, identity: identity.value,
+          capabilities: [{ endpoint: 'session/follow', mode: 'stream', availability: 'available', semanticRevision: 1, wireFingerprint: 'typert-wire-v1:' + 'a'.repeat(64) }] } };
       } }, identity.value);
       assert.equal(capabilities.ok, true);
       assert.equal(capabilities.value.capabilities[0].endpoint, 'session/follow');
+      assert.equal(capabilities.value.capabilities[0].semanticRevision, 1);
       assert.equal(capabilities.value.capabilities[0].wireFingerprint, 'typert-wire-v1:' + 'a'.repeat(64));
       const { Context } = await load(fileURLToPath(import.meta.resolve('@deepseek-ai/cordis', pathToFileURL(process.argv[1]))));
       ctx = new Context();
@@ -79,6 +80,9 @@ it('awaits the generated assembly and disposes calls and streams after async low
       const connection = api.createConnection({ isLoopback: false,
         rpc: { call: async (...args) => {
           calls.push(args);
+          assert.equal(args[2].compatibility.semanticRevision, 1);
+          assert.match(args[2].compatibility.wireFingerprint, /^typert-wire-v1:[0-9a-f]{64}$/);
+          assert.equal(args[2].compatibility.identity.activationId, identity.value.activationId);
           if (args[1] === 'session/search') return { ok: true, value: { items: [], hasMore: false } };
           if (args[1] === 'subagents/list') return { ok: true, value: { entries: [], parentAvailable: true } };
           if (args[1] === 'session/list') return { ok: true, value: { items: [{ sessionId: 'portable-session', updatedAt: 1, running: false, blank: false }] } };

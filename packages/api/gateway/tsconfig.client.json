@@ -20,7 +20,8 @@
     "src/client/service.ts",
     "src/client/cancellation.ts",
     "src/capabilities-protocol.ts",
-    "src/client/host-capabilities.ts"
+    "src/client/host-capabilities.ts",
+    "src/compatibility-protocol.ts"
   ],
   "references": [
     {

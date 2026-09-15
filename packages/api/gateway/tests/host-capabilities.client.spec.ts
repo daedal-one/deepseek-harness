@@ -8,8 +8,8 @@ const identity = connectionIdentitySchema.parse({
   version: 1, hostId: '26e99520-f2d3-4874-84b5-07c5ef24775d', activationId: 'f5292bdb-ebda-41ba-b473-6c587a3c1d02',
 })
 const wireFingerprint = `typert-wire-v1:${'a'.repeat(64)}`
-const capability = { wireFingerprint, endpoint: 'session/follow', mode: 'stream', availability: 'available' }
-const snapshot = { version: 2, identity, capabilities: [capability] }
+const capability = { wireFingerprint, semanticRevision: 1, endpoint: 'session/follow', mode: 'stream', availability: 'available' }
+const snapshot = { version: 3, identity, capabilities: [capability] }
 const rpc = (value: unknown): ClientConnectionRpc => ({ call: () => Promise.resolve({ ok: true, value }) })
 
 describe('portable Host capability discovery', () => {
@@ -26,9 +26,10 @@ describe('portable Host capability discovery', () => {
   })
 
   it.each([
-    null, [], {}, { ...snapshot, version: 1 }, { ...snapshot, version: 3 }, { ...snapshot, secret: 'unexpected' },
+    null, [], {}, { ...snapshot, version: 1 }, { ...snapshot, version: 2 }, { ...snapshot, version: 4 }, { ...snapshot, secret: 'unexpected' },
     { ...snapshot, identity: { ...identity, hostId: 'bad' } },
     ...[
+      ...[null, '1', 0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1].map(semanticRevision => [{ ...capability, semanticRevision }]),
       [{ ...capability, endpoint: 'a/b/c' }],
       ...[null, 1, '', 'typert-wire-v0:' + 'a'.repeat(64), 'typert-wire-v1:' + 'A'.repeat(64), 'typert-wire-v1:short'].map(wireFingerprint => [{ ...capability, wireFingerprint }]), [{ ...capability, mode: 'unknown' }],
       [{ ...capability, availability: 'unknown' }], [{ ...capability, reason: 'service' }],

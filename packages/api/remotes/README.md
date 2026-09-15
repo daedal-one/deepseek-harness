@@ -75,7 +75,7 @@ No direct effect; mounted Host capabilities own any model-visible behavior they 
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Generated Client methods are fixed by explicit build-time value imports. The portable facade exports `readHostCapabilities()` for advisory, identity-bound discovery of current strict Host endpoints; it does not mount new Client methods or establish domain schema compatibility. The capability envelope is version 2 and retains each endpoint's optional generated wire fingerprint; fingerprint equality does not replace operation-time compatibility or authorization checks.
+- Generated Client methods are fixed by explicit build-time value imports. The portable facade exports `readHostCapabilities()` for advisory, identity-bound discovery of current strict Host endpoints; it does not mount new Client methods or establish domain schema compatibility. The capability envelope is version 3 and retains optional wire fingerprints and business revisions. Generated calls use the Gateway's [operation compatibility checks](../gateway/README.md#operation-compatibility); capability reads remain advisory and grant no authorization.
 - Additional capabilities require an explicit `/remote` value import and mount in this assembly.
 - Ordinary forwarded events are not replayed; state that requires reliable recovery needs an owner-provided query, cursor, or opening baseline.
 

@@ -8,6 +8,7 @@
 import { randomUUID } from 'node:crypto'
 import { Context, Service, symbols } from '@deepseek-ai/cordis'
 import type { ConnectionIdentity } from '@deepseek-ai/dsh-client-connection/types'
+import { remoteCompatibilitySchema } from './compatibility-protocol.ts'
 import type { ConnectionRpcHandler } from '@deepseek-ai/dsh-client-connection'
 import { HOST_CAPABILITIES_ENDPOINT, hostCapabilitiesRequestSchema, type HostCapability } from './capabilities-protocol.ts'
 import { Deque } from '@deepseek-ai/dsh-deque'
@@ -270,14 +271,11 @@ export class TypertGatewayService extends Service implements TypertGateway {
    * @returns sorted advisory facts; Context receivers remain unknown until invocation.
    */
   private capabilities(): readonly HostCapability[] {
-    return this.ctx.typert.local.list().filter(descriptor => (
-      descriptor.result.mode === 'strict'
-      && descriptor.parameters.every(parameter => parameter.codec.mode === 'strict')
-      && (descriptor.invocation.kind === 'direct' || descriptor.invocation.codec.mode === 'strict')
-    )).map((descriptor): HostCapability => {
+    return this.ctx.typert.local.list().filter(hasStrictCodecs).map((descriptor): HostCapability => {
       const endpoint = endpointOf(descriptor.namespace, descriptor.method)
       const base = { endpoint, mode: descriptor.mode ?? 'unary',
         ...descriptor.wireFingerprint === undefined ? {} : { wireFingerprint: descriptor.wireFingerprint },
+        ...descriptor.semanticRevision === undefined ? {} : { semanticRevision: descriptor.semanticRevision },
       } as const
       const unavailable = (reason: Extract<HostCapability, { availability: 'unavailable' }>['reason']): HostCapability => ({
         ...base, availability: 'unavailable', reason,
@@ -350,6 +348,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
    */
   async invoke(request: InvokeRemoteRequest): Promise<unknown> {
     const prepared = await this.prepareInvocation(request)
+    this.assertCompatibility(request, prepared.descriptor, prepared.endpoint)
     if (prepared.descriptor.mode === 'stream') {
       throw new TypertGatewayError(
         'gateway/signature-invalid',
@@ -373,6 +372,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
    */
   async stream(request: InvokeRemoteRequest): Promise<AsyncIterable<unknown>> {
     const prepared = await this.prepareInvocation(request)
+    this.assertCompatibility(request, prepared.descriptor, prepared.endpoint)
     if (prepared.descriptor.mode !== 'stream') {
       throw new TypertGatewayError(
         'gateway/signature-invalid',
@@ -414,7 +414,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
         if (!hostCapabilitiesRequestSchema.safeParse(payload).success) {
           throw new TypertGatewayError('gateway/arguments-invalid', endpoint, 'Host capabilities require an empty request')
         }
-        return { ok: true, value: { version: 2, identity, capabilities: this.capabilities() } }
+        return { ok: true, value: { version: 3, identity, capabilities: this.capabilities() } }
       } catch (error) {
         return rpcFailure(error)
       }
@@ -662,6 +662,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
   private async prepareInvocation(request: InvokeRemoteRequest): Promise<PreparedInvocation> {
     const endpoint = endpointOf(request.namespace, request.method)
     const descriptor = this.resolveDescriptor(request.namespace, request.method, endpoint)
+    this.assertCompatibility(request, descriptor, endpoint)
     assertExactArguments(request.args, descriptor, endpoint)
     const receiverContext = await this.resolveReceiverContext(descriptor, request.args, endpoint)
     const receiver = receiverContext.get(descriptor.service) as unknown
@@ -686,6 +687,22 @@ export class TypertGatewayService extends Service implements TypertGateway {
       )
     }
     return { endpoint, descriptor, receiver, args, method: method as (...args: never[]) => unknown }
+  }
+
+  private assertCompatibility(request: InvokeRemoteRequest, descriptor: InvocationDescriptor, endpoint: string): void {
+    const expected = request.compatibility
+    if (expected === undefined) return
+    if (!hasStrictCodecs(descriptor) || this.ctx.typert.local.get(endpoint) !== descriptor
+      || descriptor.wireFingerprint !== expected.wireFingerprint
+      || descriptor.semanticRevision !== expected.semanticRevision) {
+      throw new TypertGatewayError('gateway/api-incompatible', endpoint, 'Remote schema or business revision does not match the Client')
+    }
+    if (expected.identity !== undefined) {
+      const identity = this.ctx.get('connection')?.identity
+      if (identity?.hostId !== expected.identity.hostId || identity.activationId !== expected.identity.activationId) {
+        throw new TypertGatewayError('gateway/api-incompatible', endpoint, 'Remote request belongs to another Host activation')
+      }
+    }
   }
 
   private resolveDescriptor(namespace: string, method: string, endpoint: string): InvocationDescriptor {
@@ -998,6 +1015,12 @@ function parseRemoteEventResultPayload(payload: unknown): ReturnType<typeof pars
   return parseRemoteEventResult(payload.args)
 }
 
+function hasStrictCodecs(descriptor: InvocationDescriptor): boolean {
+  return descriptor.result.mode === 'strict'
+    && descriptor.parameters.every(parameter => parameter.codec.mode === 'strict')
+    && (descriptor.invocation.kind === 'direct' || descriptor.invocation.codec.mode === 'strict')
+}
+
 function remoteRequest(endpoint: string, payload: unknown, signal: AbortSignal): InvokeRemoteRequest {
   const segments = endpoint.split('/')
   if (segments.length !== 2 || segments[0] === '' || segments[1] === '') {
@@ -1006,13 +1029,18 @@ function remoteRequest(endpoint: string, payload: unknown, signal: AbortSignal):
   const [namespace, method] = segments as [string, string]
   if (!isObject(payload)
     || !isPlainObject(payload)
-    || Reflect.ownKeys(payload).length !== 1
+    || Reflect.ownKeys(payload).some(key => key !== 'args' && key !== 'compatibility')
     || !Object.hasOwn(payload, 'args')
     || !isObject(payload.args)
     || !isPlainObject(payload.args)) {
-    throw new Error('Remote payload must contain exactly one plain-object args field')
+    throw new Error('Remote payload must contain plain-object args field and optional compatibility expectations')
   }
-  return { namespace, method, args: payload.args, signal }
+  if (!Object.hasOwn(payload, 'compatibility')) return { namespace, method, args: payload.args, signal }
+  const parsed = remoteCompatibilitySchema.safeParse(payload.compatibility)
+  if (!parsed.success) {
+    throw new TypertGatewayError('gateway/api-incompatible', endpoint, 'Invalid Remote compatibility expectations')
+  }
+  return { namespace, method, args: payload.args, signal, compatibility: parsed.data }
 }
 
 function isIterable(value: unknown): value is Iterable<unknown> | AsyncIterable<unknown> {

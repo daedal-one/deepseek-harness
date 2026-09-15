@@ -64,7 +64,7 @@ The plugin is an incremental scanner mirroring the client-modules node half: eve
 
 ### Manifest validation
 
-`validateTypertManifest()` is the module/file boundary: the manifest crosses from a build artifact into the typed registry, so every field is checked. The manifest must name the package that exports it, carry face `host`, hold zod v4 schema instances, and keep well-formed service, event, object, member, type, and documentation records; invocation descriptors must use strict codecs. An optional wire fingerprint must be a versioned SHA-256 checksum; omission retains unverified legacy or manually registered metadata. Every failure names the package and the defect.
+`validateTypertManifest()` is the module/file boundary: the manifest crosses from a build artifact into the typed registry, so every field is checked. The manifest must name the package that exports it, carry face `host`, hold zod v4 schema instances, and keep well-formed service, event, object, member, type, and documentation records; invocation descriptors must use strict codecs. An optional wire fingerprint must be a versioned SHA-256 checksum, and an optional semantic revision must be a positive safe integer; omission retains unverified legacy or manually registered metadata. Every failure names the package and the defect.
 
 ### Caching and ownership
 

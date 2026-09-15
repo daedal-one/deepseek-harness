@@ -25,6 +25,7 @@ import type {
 import { RemoteStreamCarrierError } from './stream-client.ts'
 import type { RemoteStreamMuxClient } from './stream-client.ts'
 import { ClientRemoteEvents } from './remote-events.ts'
+import type { RemoteCompatibility } from '../compatibility-protocol.ts'
 import { bindPinnedGeneration, type PinnedGeneration } from './pinned-generation.ts'
 import { combineRemoteCancellation, type RemoteCancellationScope } from './cancellation.ts'
 import {
@@ -444,6 +445,26 @@ class ClientRemoteService extends Service implements ClientRemote {
     return this.invoke(descriptor, projection, token, callerCtx, values, boundIdentity)
   }
 
+  private operationPayload(
+    descriptor: InvocationDescriptor,
+    args: Readonly<Record<string, unknown>>,
+    pinned: PinnedGeneration | undefined,
+  ): { readonly args: Readonly<Record<string, unknown>>; readonly compatibility?: RemoteCompatibility } {
+    if (descriptor.wireFingerprint === undefined || descriptor.semanticRevision === undefined) {
+      if (pinned !== undefined) {
+        throw new RemoteError('gateway/api-incompatible', 'client api: native operations require schema and business revision evidence', {
+          endpoint: endpointOf(descriptor),
+        })
+      }
+      return { args }
+    }
+    return { args, compatibility: {
+      wireFingerprint: descriptor.wireFingerprint,
+      semanticRevision: descriptor.semanticRevision,
+      ...pinned === undefined ? {} : { identity: pinned.identity },
+    } }
+  }
+
   private async invoke(
     descriptor: InvocationDescriptor,
     projection: ScopedProjection | undefined,
@@ -460,7 +481,8 @@ class ClientRemoteService extends Service implements ClientRemote {
     let pinned: PinnedGeneration | undefined
     try {
       pinned = bindPinnedGeneration(connection, this.expectedHostId, prepared.signal, this.createController)
-      const result = await connection.rpc.call('/api', endpoint, { args: prepared.args }, pinned?.signal ?? prepared.signal)
+      const payload = this.operationPayload(descriptor, prepared.args, pinned)
+      const result = await connection.rpc.call('/api', endpoint, payload, pinned?.signal ?? prepared.signal)
       pinned?.assertCurrent()
       if (!mountActive(token)) return withdrawn(endpoint)
       if (!result.ok) return { ok: false, error: rebuiltFailure(result.error) }
@@ -471,6 +493,7 @@ class ClientRemoteService extends Service implements ClientRemote {
       // cancellation even when the local throw wins the race against the wire
       // round-trip, so it gets the same code the Host would have produced.
       if (prepared.signal.aborted) return cancelledFailure(endpoint, error)
+      if (isRemoteFailure(error)) return { ok: false, error }
       return carrierFailure(endpoint, pinned?.signal.aborted === true ? pinned.signal.reason : error)
     } finally {
       pinned?.dispose()
@@ -492,7 +515,8 @@ class ClientRemoteService extends Service implements ClientRemote {
     let pinned: PinnedGeneration | undefined
     try {
       pinned = bindPinnedGeneration(this.connection, this.expectedHostId, prepared.signal, this.createController)
-      const stream = this.openRemoteStream(endpoint, { args: prepared.args }, pinned?.signal ?? prepared.signal)
+      const payload = this.operationPayload(descriptor, prepared.args, pinned)
+      const stream = this.openRemoteStream(endpoint, payload, pinned?.signal ?? prepared.signal)
       for await (const value of stream) {
         pinned?.assertCurrent()
         if (!mountActive(token)) throw new Error(withdrawn(endpoint).error.message)

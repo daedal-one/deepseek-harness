@@ -2627,6 +2627,10 @@ describe('Remote stream client carrier lifecycle', () => {
 
 
 
+function compatible(descriptor: InvocationDescriptor): InvocationDescriptor {
+  return { ...descriptor, wireFingerprint: `typert-wire-v1:${'a'.repeat(64)}`, semanticRevision: 1 }
+}
+
 describe('Portable Client Remote service', () => {
   it.each(['complete', 'throw', 'return', 'open-error'] as const)(
     'releases caller cancellation listeners when a stream exits by %s', async (ending) => {
@@ -2641,7 +2645,7 @@ describe('Portable Client Remote service', () => {
       const caller = new AbortController()
       const add = vi.spyOn(caller.signal, 'addEventListener')
       const remove = vi.spyOn(caller.signal, 'removeEventListener')
-      const dispose = await ctx.remote.$mount({ package: '@fixture/probe', descriptors: [streamDescriptor()] })
+      const dispose = await ctx.remote.$mount({ package: '@fixture/probe', descriptors: [compatible(streamDescriptor())] })
       const iterator = ctx.remote.probe.watch('topic', caller.signal)[Symbol.asyncIterator]()
       try {
         if (ending === 'open-error') await expect(iterator.next()).rejects.toThrow('fixture stream failure')
@@ -2668,7 +2672,7 @@ describe('Portable Client Remote service', () => {
     const caller = new AbortController()
     const add = vi.spyOn(caller.signal, 'addEventListener')
     const remove = vi.spyOn(caller.signal, 'removeEventListener')
-    const dispose = await ctx.remote.$mount({ package: '@fixture/probe', descriptors: [directDescriptor()] })
+    const dispose = await ctx.remote.$mount({ package: '@fixture/probe', descriptors: [compatible(directDescriptor())] })
     try {
       for (let index = 0; index < 30; index++) {
         if (index % 3 === 0) call.mockResolvedValueOnce({ ok: true, value: { ref: 'done' } })
@@ -2709,7 +2713,7 @@ describe('Portable Client Remote service', () => {
       events.emit({ type: 'emit', event: 'fixture/changed', args: ['portable'] })
       await vi.waitFor(() => { expect(seen).toEqual(['portable']) })
       const assembly = ctx.plugin(Object.assign(
-        (scope: Context) => scope.remote.$mount({ package: '@fixture/probe', descriptors: [directDescriptor()] }),
+        (scope: Context) => scope.remote.$mount({ package: '@fixture/probe', descriptors: [compatible(directDescriptor())] }),
         { inject: ['remote'] },
       ))
       await assembly
@@ -2718,6 +2722,7 @@ describe('Portable Client Remote service', () => {
         .resolves.toEqual({ ok: true, value: { ref: 'portable-goal' } })
       expect(call).toHaveBeenCalledExactlyOnceWith('/api', 'probe/create', {
         args: { agentId: 'agent-1', request: { objective: 'native call' } },
+        compatibility: { wireFingerprint: `typert-wire-v1:${'a'.repeat(64)}`, semanticRevision: 1, identity: HOST_IDENTITY },
       }, expect.any(AbortSignal))
       await assembly.dispose()
       await expect(retained('agent-1', { objective: 'withdrawn' })).resolves.toMatchObject({ ok: false })
@@ -2847,6 +2852,28 @@ describe('paired native Host generations', () => {
     })
   }
 
+  it('refuses native operations without complete generated evidence before sending', async () => {
+    const call = vi.fn<ConnectionHandle['rpc']['call']>()
+    const events = new RemoteEventCarrier()
+    const { ctx, client, generation } = await benchFiber(call, 'in-process', events.open, installNative)
+    try {
+      const run = generation.start()
+      await run.ready
+      for (const evidence of [{}, { wireFingerprint: `typert-wire-v1:${'a'.repeat(64)}` }, { semanticRevision: 1 }]) {
+        const unmount = await ctx.remote.$mount({ package: '@fixture/missing', descriptors: [
+          { ...directDescriptor(), ...evidence }, { ...streamDescriptor(), ...evidence },
+        ] })
+        try {
+          await expect(ctx.remote.probe.create('agent-1', { objective: 'refused' })).resolves.toMatchObject({
+            ok: false, error: { code: 'gateway/api-incompatible' },
+          })
+          await expect(ctx.remote.probe.watch('refused')[Symbol.asyncIterator]().next()).rejects.toMatchObject({ code: 'gateway/api-incompatible' })
+          expect(call).not.toHaveBeenCalled()
+        } finally { await unmount() }
+      }
+    } finally { await client.dispose() }
+  })
+
   const ready = { type: 'ready', protocolVersion: 1, clientId: 'paired-client', host: { home: '/paired', identity: HOST_IDENTITY } }
 
   it.each([
@@ -2864,7 +2891,7 @@ describe('paired native Host generations', () => {
       yield { type: 'emit', event: 'fixture/changed', args: ['untrusted'] }
     })()
     const { ctx, client, generation } = await benchFiber(call, 'in-process', open, installNative)
-    const unmount = await ctx.remote.$mount({ package: '@fixture/paired', descriptors: [directDescriptor(), streamDescriptor()] })
+    const unmount = await ctx.remote.$mount({ package: '@fixture/paired', descriptors: [compatible(directDescriptor()), compatible(streamDescriptor())] })
     const seen = vi.fn()
     ctx.remote.$on('fixture/changed', seen)
     try {
@@ -2888,7 +2915,7 @@ describe('paired native Host generations', () => {
     const call = vi.fn<ConnectionHandle['rpc']['call']>(() => pending.promise)
     const events = new RemoteEventCarrier()
     const { ctx, client, generation } = await benchFiber(call, 'in-process', events.open, installNative)
-    const unmount = await ctx.remote.$mount({ package: '@fixture/paired', descriptors: [directDescriptor()] })
+    const unmount = await ctx.remote.$mount({ package: '@fixture/paired', descriptors: [compatible(directDescriptor())] })
     try {
       const run = generation.start()
       await run.ready
@@ -2940,7 +2967,7 @@ describe('paired native Host generations', () => {
       })()
     }
     const { ctx, client, generation } = await benchFiber(vi.fn(), 'in-process', open, installNative)
-    const unmount = await ctx.remote.$mount({ package: '@fixture/paired-stream', descriptors: [streamDescriptor()] })
+    const unmount = await ctx.remote.$mount({ package: '@fixture/paired-stream', descriptors: [compatible(streamDescriptor())] })
     try {
       const run = generation.start()
       await run.ready

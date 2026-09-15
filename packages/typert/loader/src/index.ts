@@ -256,6 +256,10 @@ function requireInvocation(pkgName: string, value: unknown): void {
       throw new Error(`typert-loader: ${pkgName} invocation "${id}" wireFingerprint must be a versioned SHA-256 checksum`)
     }
   }
+  if (invocation.semanticRevision !== undefined
+    && (!Number.isSafeInteger(invocation.semanticRevision) || (invocation.semanticRevision as number) < 1)) {
+    throw new Error(`typert-loader: ${pkgName} invocation "${id}" semanticRevision must be a positive safe integer`)
+  }
   if (invocation.sourceLocation !== undefined) {
     const location = requireObject(pkgName, invocation.sourceLocation, `invocation "${id}" sourceLocation`)
     requireString(pkgName, location, 'file', `invocation "${id}" sourceLocation`)

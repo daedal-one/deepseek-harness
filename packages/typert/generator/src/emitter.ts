@@ -276,6 +276,7 @@ export class FaceModelEmitter {
     const lines = [
       '{',
       `  wireFingerprint: ${quote(this.wireFingerprint(invocation))},`,
+      `  semanticRevision: ${invocation.semanticRevision ?? 1},`,
       `  id: ${quote(invocation.id)},`,
       `  service: ${quote(invocation.service)},`,
       `  namespace: ${quote(invocation.namespace)},`,

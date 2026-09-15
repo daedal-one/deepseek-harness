@@ -108,6 +108,7 @@ it('opens and closes streams through the published portable artifact', { retry: 
     const unmount = await ctx.remote.$mount({
       package: '@fixture/portable-artifact',
       descriptors: [{
+        wireFingerprint: 'typert-wire-v1:' + 'a'.repeat(64), semanticRevision: 1,
         id: '@fixture/portable-artifact#probe/read', service: 'probe', namespace: 'probe', method: 'read',
         invocation: { kind: 'direct' }, parameters: [],
         result: { mode: 'strict', typeSymbol: '@fixture#Number', schema: z.number() },
@@ -117,6 +118,9 @@ it('opens and closes streams through the published portable artifact', { retry: 
     assert.equal((await retained()).value, 42);
     assert.equal(calls[0][0], '/api');
     assert.equal(calls[0][1], 'probe/read');
+    assert.equal(JSON.stringify(calls[0][2].compatibility), JSON.stringify({
+      wireFingerprint: 'typert-wire-v1:' + 'a'.repeat(64), semanticRevision: 1, identity,
+    }));
     await unmount();
     assert.equal((await retained()).ok, false);
     assert.equal(calls.length, 1);
