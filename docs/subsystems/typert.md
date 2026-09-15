@@ -178,9 +178,6 @@ type TypertGatewayErrorCode =
 ```ts type-equiv
 /** Host dispatcher consumed by Connection adapters. */
 interface TypertGateway {
-  /** @returns strict Host endpoint prerequisites; a snapshot grants no authority or schema compatibility. */
-  capabilities(): readonly HostCapability[]
-
   /** Carrier adapter shared by WebSocket and in-process transports. */
   readonly wireStream: TypertGatewayWireStream
   /**
@@ -323,12 +320,6 @@ Resolve strict generated definitions or conservative SRC markers against current
  * @returns disposer removing this source and cancelling its active streams.
  */
 registerRemoteEvents( source: TypertRemoteEventSource, host: RemoteEventHostInfo, ): () => Promise<void>
-
-/**
- * Inspect strict dispatch prerequisites without resolving identities or invoking methods.
- * @returns sorted advisory facts; Context receivers remain unknown until invocation.
- */
-capabilities(): readonly HostCapability[]
 
 /**
  * Invoke one live Remote method through strict generated reflection or SRC markers.

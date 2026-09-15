@@ -19,6 +19,7 @@ import {
 import TypertRegistry, { type TypertContribution } from '@deepseek-ai/dsh-typert-registry'
 import TypertGatewayService, { TypertGatewayError } from '@deepseek-ai/dsh-api-gateway'
 import { connectionIdentitySchema } from '@deepseek-ai/dsh-client-connection/identity'
+import type { HostCapability } from '../src/capabilities-protocol.ts'
 import { provideBrowserCredentials } from './browser-credentials.ts'
 
 interface FixtureAgent {
@@ -410,7 +411,7 @@ describe('TypertGatewayService', () => {
         invocation: { ...contextual.invocation, codec: { mode: 'src-json' as const } } }
       const remove = registerStrict(ctx, [renameDescriptor(), strictOnlyDescriptor(), createDescriptor(),
         passthroughDescriptor(), sourceOnlyParameter, sourceOnlyContext])
-      expect(ctx.typertGateway.capabilities()).toMatchInlineSnapshot(`
+      expect(rawGatewayEventHarness(ctx).capabilities()).toMatchInlineSnapshot(`
         [
           {
             "availability": "available",
@@ -433,7 +434,7 @@ describe('TypertGatewayService', () => {
       expect(resolve).not.toHaveBeenCalled()
       expect(service.calls).toEqual([])
       await remove()
-      expect(ctx.typertGateway.capabilities()).toEqual([])
+      expect(rawGatewayEventHarness(ctx).capabilities()).toEqual([])
     } finally { await ctx.fiber.dispose() }
   })
 
@@ -441,7 +442,7 @@ describe('TypertGatewayService', () => {
     const { ctx } = await setup()
     try {
       registerStrict(ctx, [createDescriptor(), renameDescriptor()])
-      const read = () => ctx.typertGateway.capabilities()
+      const read = () => rawGatewayEventHarness(ctx).capabilities()
       expect(read()).toEqual([
         { endpoint: 'goals/create', mode: 'unary', availability: 'unavailable', reason: 'lookup' },
         { endpoint: 'goals/rename', mode: 'unary', availability: 'unavailable', reason: 'context' },
@@ -464,7 +465,7 @@ describe('TypertGatewayService', () => {
       registerStrict(ctx, [createDescriptor(), renameDescriptor()])
       ctx.typert.lookups.register('gatewayFixture', { ...agentLookup({ id: 'agent-1' }), ...mismatch })
       ctx.typert.contexts.registerHost('gatewayFixture', { ...contextProvider(ctx), ...mismatch })
-      expect(ctx.typertGateway.capabilities()).toEqual([
+      expect(rawGatewayEventHarness(ctx).capabilities()).toEqual([
         { endpoint: 'goals/create', mode: 'unary', availability: 'unavailable', reason: 'lookup' },
         { endpoint: 'goals/rename', mode: 'unary', availability: 'unavailable', reason: 'context' },
       ])
@@ -476,22 +477,22 @@ describe('TypertGatewayService', () => {
     try {
       const descriptor = strictOnlyDescriptor()
       registerStrict(ctx, [{ ...descriptor, id: '@fixture#goals/watch', method: 'watch', implementation: 'strictOnly', mode: 'stream' }])
-      expect(ctx.typertGateway.capabilities()).toEqual([{ endpoint: 'goals/watch', mode: 'stream', availability: 'available' }])
+      expect(rawGatewayEventHarness(ctx).capabilities()).toEqual([{ endpoint: 'goals/watch', mode: 'stream', availability: 'available' }])
       Object.defineProperty(service, 'strictOnly', { configurable: true, value: 42 })
-      expect(ctx.typertGateway.capabilities()[0]).toMatchObject({ availability: 'unavailable', reason: 'method' })
+      expect(rawGatewayEventHarness(ctx).capabilities()[0]).toMatchObject({ availability: 'unavailable', reason: 'method' })
       Reflect.deleteProperty(service, 'strictOnly')
       const binding = service.typertRemote
       for (const value of [undefined, {}]) {
         Object.defineProperty(service, 'typertRemote', { configurable: true, value })
-        expect(ctx.typertGateway.capabilities()[0]).toMatchObject({ availability: 'unavailable', reason: 'binding' })
+        expect(rawGatewayEventHarness(ctx).capabilities()[0]).toMatchObject({ availability: 'unavailable', reason: 'binding' })
       }
       const failure = new Error('broken binding getter')
       Object.defineProperty(service, 'typertRemote', { configurable: true, get: () => { throw failure } })
-      expect(() => ctx.typertGateway.capabilities()).toThrow(failure)
+      expect(() => rawGatewayEventHarness(ctx).capabilities()).toThrow(failure)
       Object.defineProperty(service, 'typertRemote', { configurable: true, value: binding })
-      expect(ctx.typertGateway.capabilities()[0]?.availability).toBe('available')
+      expect(rawGatewayEventHarness(ctx).capabilities()[0]?.availability).toBe('available')
       await serviceFiber.dispose()
-      expect(ctx.typertGateway.capabilities()[0]).toMatchObject({ availability: 'unavailable', reason: 'service' })
+      expect(rawGatewayEventHarness(ctx).capabilities()[0]).toMatchObject({ availability: 'unavailable', reason: 'service' })
     } finally { await ctx.fiber.dispose() }
   })
 
@@ -1444,6 +1445,7 @@ function rawConnection(ctx: Context): FakeConnectionService {
 }
 
 interface GatewayEventHarness {
+  capabilities(): readonly HostCapability[]
   openRemoteEvents(payload: unknown, signal: AbortSignal): AsyncGenerator
 }
 

@@ -8,7 +8,7 @@ A Client can compile methods whose Host services are absent, withdrawn or scoped
 
 ## Decision
 
-Gateway reports registered, fully strict Host Remote endpoints through an authenticated capability query. Direct availability checks current dispatch prerequisites. Context methods report that a receiver Context is required when their adapter matches; discovery never resolves that Context or guesses whether its service exists. Lookup declarations are checked without invoking their resolvers. SRC inference and incomplete strict definitions are excluded.
+Gateway reports registered, fully strict Host Remote endpoints through an authenticated capability query. Direct availability checks current dispatch prerequisites. Context methods report that a receiver Context is required when their adapter matches; discovery never resolves that Context or guesses whether its service exists. Lookup declarations are checked without invoking their resolvers. SRC inference and incomplete strict definitions are excluded. Snapshot assembly stays private to Gateway; the authenticated query is the public discovery operation.
 
 The response is an advisory snapshot, bound to Connection's Host and activation identities. Clients validate the whole envelope and its unique sorted endpoints, and callers cancel reads with the admitted generation. A successful read neither grants authority nor promises that a later call will succeed. Actual dispatch continues to resolve current services, apply policy and validate arguments. Metadata version describes the response fields; it cannot establish domain schema compatibility.
 

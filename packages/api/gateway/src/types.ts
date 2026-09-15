@@ -3,7 +3,7 @@
  * @module @deepseek-ai/dsh-api-gateway/types
  */
 
-import type { HostCapability } from './capabilities-protocol.ts'
+export type { HostCapabilities, HostCapability } from './capabilities-protocol.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import type { RemoteEventHostInfo } from './stream-protocol.ts'
 
@@ -122,9 +122,6 @@ export type TypertGatewayErrorCode =
 
 /** Host dispatcher consumed by Connection adapters. */
 export interface TypertGateway {
-  /** @returns strict Host endpoint prerequisites; a snapshot grants no authority or schema compatibility. */
-  capabilities(): readonly HostCapability[]
-
   /** Carrier adapter shared by WebSocket and in-process transports. */
   readonly wireStream: TypertGatewayWireStream
 

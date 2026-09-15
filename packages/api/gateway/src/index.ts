@@ -269,7 +269,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
    * Inspect strict dispatch prerequisites without resolving identities or invoking methods.
    * @returns sorted advisory facts; Context receivers remain unknown until invocation.
    */
-  capabilities(): readonly HostCapability[] {
+  private capabilities(): readonly HostCapability[] {
     return this.ctx.typert.local.list().filter(descriptor => (
       descriptor.result.mode === 'strict'
       && descriptor.parameters.every(parameter => parameter.codec.mode === 'strict')

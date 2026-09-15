@@ -2953,12 +2953,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'disposer removing this source and cancelling its active streams.',
       },
       {
-        signature: 'capabilities(): readonly HostCapability[]',
-        description: 'Inspect strict dispatch prerequisites without resolving identities or invoking methods.',
-        parameters: [],
-        returns: 'sorted advisory facts; Context receivers remain unknown until invocation.',
-      },
-      {
         signature: 'async invoke(request: InvokeRemoteRequest): Promise<unknown>',
         description: 'Invoke one live Remote method through strict generated reflection or SRC markers.',
         parameters: [{ name: 'request', description: 'decoded endpoint and exact named wire arguments.' }],
@@ -4617,10 +4611,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'GrantRecord',
     declaration: 'export interface GrantRecord {\n    readonly kind: \'grant\';\n    readonly payload: unknown;\n}',
-  },
-  {
-    name: 'HostCapability',
-    declaration: 'export type HostCapability = {\n    readonly endpoint: string;\n    readonly mode: \'unary\' | \'stream\';\n} & ({\n    readonly availability: \'available\';\n} | {\n    readonly availability: \'context-required\';\n} | {\n    readonly availability: \'unavailable\';\n    readonly reason: \'service\' | \'binding\' | \'method\' | \'lookup\' | \'context\';\n});',
   },
   {
     name: 'ImageAttachmentLimits',

@@ -21,6 +21,8 @@ Bind Host identity to the authenticated Gateway event stream before publishing a
 
 Expose an authenticated Gateway capability snapshot from current Host descriptors and dispatch prerequisites. Advertise only fully strict descriptors, never Client-compiled selection or SRC inference. Distinguish direct availability, a required receiver Context and missing dispatch prerequisites without invoking resolvers or business methods. The snapshot contains endpoint names, unary/stream modes and fixed reason codes, excludes local paths and provider credentials, and is bound to the current Host and activation. A portable reader validates the entire versioned response, refuses another Host or activation, forwards caller cancellation and never retries. Capability metadata is advisory and does not establish domain schema compatibility, authorization or successful resolution of a particular Session. Calls continue to enforce live Host checks.
 
+Keep capability assembly private to the Gateway query rather than adding a general service operation. Qualify identity and capability responses through the public dsh Web profile and its real Loader composition, using isolated Harness homes and OS-assigned loopback ports. Verify authorization, strict generated endpoints, durable Host identity and a new activation across restart, retaining the portable fixture and physical-device distinction.
+
 ## Acceptance
 
 Real iPhone QR pairing and host discovery succeed without address entry. Expired or replayed enrollment, revoked devices, mismatched host identity and unauthorized discovery fail explicitly. Candidate probes never receive another host credential and never imply enrollment.
