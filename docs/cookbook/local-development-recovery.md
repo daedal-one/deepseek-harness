@@ -30,6 +30,8 @@ Marking clones the recorded commit into a separate repository, installs its lock
 
 When development breaks, open `/_dev` at the same public address and choose **Use last good**. Switching stops the current process tree, waits for it to exit, and starts the retained version against the same Harness home and working repository. Reopen the Harness to load its matching frontend and reconnect streams. **Use current** builds and selects the working checkout again. Supervisor restarts retain the last explicit selection. Backend failures never select another version automatically.
 
+After updating the installed supervisor, reopen `/_dev` before submitting a recovery action so the browser loads the current page and its response headers.
+
 `GET /_dev/status` returns the selected version, process state, last-good commit, and current operation. `POST /_dev/use-good`, `POST /_dev/use-current`, and `POST /_dev/mark-good` perform the page's actions; marking requires the form field `edited=yes`. These routes accept the recovery cookie or `Authorization: Bearer <recovery-token>` and check Host and browser Origin. Operations are exclusive, except that **Use last good** can interrupt a pending build or retention operation when a good build exists. Accepted actions redirect to the recovery page; status reports their eventual result.
 
 ## Limits and troubleshooting

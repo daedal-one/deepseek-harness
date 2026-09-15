@@ -14,6 +14,8 @@ Last-good selection is an operator assertion after an actual code edit. A clean 
 
 One backend process tree owns the shared Harness home at a time. Switching interrupts active work, closes old upgraded streams, awaits process exit, and starts the requested backend. The public address and recovery process survive backend build and boot failures. Recovery control requests require a private capability plus accepted Host and Origin; application requests preserve their original authority, cookies, status, and streaming bodies.
 
+Recovery pages use `Referrer-Policy: same-origin` so HTML form submissions retain the origin required by the access check. The [Fetch standard](https://fetch.spec.whatwg.org/#append-a-request-origin-header) sets a form navigation's Origin to `null` under `no-referrer`. Token-bearing authentication redirects retain `no-referrer`; cross-origin and opaque-origin requests remain rejected. The [browser regression](../../../../apps/web/tests/local-recovery.e2e.ts) submits every recovery form through an isolated listener with recorded control actions.
+
 ## Alternatives considered
 
 **Stable and candidate release channels with separate data generations.** This provides stronger migration rollback, but adds deployment and data-management machinery beyond a local developer's explicit rescue action.

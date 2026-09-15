@@ -22,8 +22,9 @@ function equalToken(value: string | undefined, expected: string): boolean {
 }
 
 function send(res: ServerResponse, status: number, content: string, type = 'text/html'): void {
+  // HTML form navigations need their Origin header for the recovery access check.
   res.writeHead(status, { 'Content-Type': `${type}; charset=utf-8`, 'Cache-Control': 'no-store',
-    'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff',
+    'Referrer-Policy': 'same-origin', 'X-Content-Type-Options': 'nosniff',
     'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'" })
   res.end(content)
 }
