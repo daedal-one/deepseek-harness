@@ -24,7 +24,7 @@ import type { ClientRemote } from '../src/client/index.ts'
 import { apply, inject, RemoteStream } from '../src/client/index.ts'
 import { RemoteStreamCarrierError } from '../src/client/stream-client.ts'
 import { createBrowserRemoteStreamMux } from '../src/client/stream-client-browser.ts'
-import { createRemoteStreamMux, type RemoteStreamSocket } from '../src/client/portable.ts'
+import { applyRemoteClient, createRemoteStreamMux, type RemoteStreamSocket } from '../src/client/portable.ts'
 
 type FixtureApprovalOutcome = 'allowed' | 'unavailable'
 const fixtureContextTag = Symbol('fixture-context-tag')
@@ -303,6 +303,7 @@ async function benchFiber(
   call: ConnectionHandle['rpc']['call'],
   carrier: 'in-process' | 'web' = 'in-process',
   open: NonNullable<ConnectionHandle['rpc']['open']> = () => unexpectedInProcessStream(),
+  install: typeof apply = apply,
 ): Promise<{
   readonly ctx: Context
   readonly client: Fiber
@@ -321,7 +322,7 @@ async function benchFiber(
     registerGenerationSource: generation.register,
     start,
   } as unknown as ConnectionHandle)
-  const client = ctx.plugin({ inject, apply })
+  const client = ctx.plugin({ inject, apply: install })
   await client
   return { ctx, client, generation, start }
 }
@@ -2604,6 +2605,49 @@ describe('Remote stream client carrier lifecycle', () => {
   })
 })
 
+
+
+describe('Portable Client Remote service', () => {
+  it('shares generated calls, forwarded events and withdrawal with the Web service', async () => {
+    const call = vi.fn<ConnectionHandle['rpc']['call']>()
+      .mockResolvedValue({ ok: true, value: { ref: 'portable-goal' } })
+    const events = new RemoteEventCarrier()
+    const unusedSocket = vi.fn(() => { throw new Error('in-process streams must retain their carrier') })
+    const eventIdentity = vi.fn(() => 'portable-events')
+    const { ctx, client, generation } = await benchFiber(call, 'in-process', events.open, (scope) => {
+      applyRemoteClient(scope, {
+        baseUrl: 'https://portable.example', createSocket: unusedSocket, randomId: eventIdentity,
+      })
+    })
+    const run = generation.start()
+    try {
+      await run.ready
+      const seen: string[] = []
+      ctx.remote.$on('fixture/changed', (name) => { seen.push(name) })
+      events.emit({ type: 'emit', event: 'fixture/changed', args: ['portable'] })
+      await vi.waitFor(() => { expect(seen).toEqual(['portable']) })
+      const assembly = ctx.plugin(Object.assign(
+        (scope: Context) => scope.remote.$mount({ package: '@fixture/probe', descriptors: [directDescriptor()] }),
+        { inject: ['remote'] },
+      ))
+      await assembly
+      const retained = ctx.remote.probe.create
+      await expect(retained('agent-1', { objective: 'native call' }))
+        .resolves.toEqual({ ok: true, value: { ref: 'portable-goal' } })
+      expect(call).toHaveBeenCalledExactlyOnceWith('/api', 'probe/create', {
+        args: { agentId: 'agent-1', request: { objective: 'native call' } },
+      }, expect.any(AbortSignal))
+      await assembly.dispose()
+      await expect(retained('agent-1', { objective: 'withdrawn' })).resolves.toMatchObject({ ok: false })
+      expect(call).toHaveBeenCalledTimes(1)
+      expect(unusedSocket).not.toHaveBeenCalled()
+      expect(eventIdentity).toHaveBeenCalledOnce()
+    } finally {
+      await client.dispose()
+      await run.done
+    }
+  })
+})
 
 describe('Portable Remote stream transport', () => {
   it.each(['file:///tmp/host', 'wss://host.example', 'invalid', 'https://user:secret@host.example'])(

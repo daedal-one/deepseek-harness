@@ -26,6 +26,7 @@ The Daedal DSH fork consumes this supported DSH client face. The current Web cli
 - [Portable Gateway stream factory](spec:src:packages/api/gateway/src/client/portable.ts)
 - [Connection client](spec:src:packages/client/connection/src/client/connection.ts)
 - [Remote client](spec:src:packages/api/remotes/src/client/index.ts)
+- [Shared Gateway Remote service](spec:src:packages/api/gateway/src/client/service.ts)
 - [Gateway stream client](spec:src:packages/api/gateway/src/client/stream-client.ts)
 
 ## Verification

@@ -13,7 +13,7 @@ Two-sided Typert RPC endpoint for Host and Client Cordis environments. The Host 
 
 - [Host service: `TypertGatewayService` (ctx key: `typertGateway`)](#host-service-typertgatewayservice-ctx-key-typertgateway)
 - [Client service: `ClientRemote` (ctx key: `remote`)](#client-service-clientremote-ctx-key-remote)
-- [Portable stream carrier](#portable-stream-carrier)
+- [Portable Client](#portable-client)
 - [Model Experience](#model-experience)
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 - [Dev Note](#dev-note)
@@ -54,11 +54,13 @@ Every unary call resolves to `RemoteResult<T>` — `{ ok: true, value }` or `{ o
 
 Generated declaration merges provide the TypeScript API through the shared `TypertClientRemote` contract. The Client entry contains no Host Service or Host Cordis interface merge, and method lookup and invocation use ordinary objects and functions rather than a JavaScript Proxy.
 
-## Portable stream carrier
+## Portable Client
 
 `@deepseek-ai/dsh-api-gateway/client/portable` exports `createRemoteStreamMux({ baseUrl, createSocket, randomId })` as normal ESM. The caller supplies an HTTP(S) host URL, authenticated socket adapter and a fresh correlation identity per logical stream. The factory fixes the `/api/remote.mux` route and rejects unsupported schemes or URL credentials before opening a socket. Connection owns calls to `start()` and `reconnect()`; the carrier does not retry or replay logical streams. `close()` permanently stops only this instance. The Web plugin supplies page defaults to the same implementation.
 
-`open(endpoint, payload, signal)` accepts the platform's abort state and event listeners without requiring `throwIfAborted()`. A supplied reason is retained; signals without a reason property reject with an `AbortError`. The adapter's lifecycle events must begin after socket construction returns. This entry exposes the physical carrier, not generated business Remotes, host authentication or session projections; see the [portable client decision](../../../.agents/notes/implemented/architecture/2026-09-15-portable-client-connections.md).
+`open(endpoint, payload, signal)` accepts the platform's abort state and event listeners without requiring `throwIfAborted()`. A supplied reason is retained; signals without a reason property reject with an `AbortError`. The adapter's lifecycle events must begin after socket construction returns. The entry also exports `applyRemoteClient(ctx, options)`, the `inject` service requirements, and Gateway's stream, journal and snapshot supervisors. Mount it in a Cordis fiber with Typert and Connection services; `ctx.remote` then uses the same generated contribution validation, invocation and event forwarding as the Web plugin. Disposal withdraws the fiber's registrations and stops its transport. Authentication and business contribution selection remain caller-owned.
+
+The complete Client service requires standard `AbortController` reasons, `AbortSignal.any()` and `throwIfAborted()`. React Native 0.81's bundled signal implementation lacks these APIs; native callers must supply a compatible runtime before activating the service. The physical carrier alone accepts its smaller signal subset. See the [portable client decision](../../../.agents/notes/implemented/architecture/2026-09-15-portable-client-connections.md).
 
 <a id="model-experience"></a>
 ## Model Experience

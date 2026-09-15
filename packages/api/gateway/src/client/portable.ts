@@ -1,8 +1,17 @@
 /** Normal ESM entry for per-host Gateway stream transports. */
+import type { Context } from '@deepseek-ai/cordis'
+import { installRemoteClient } from './service.ts'
 import { REMOTE_STREAM_MUX_PATH } from '../stream-protocol.ts'
 import { RemoteStreamMuxClient, type RemoteStreamSocket } from './stream-client.ts'
 
-export { RemoteStreamCarrierError } from './stream-client.ts'
+export {
+  inject, isRemoteFailure, RemoteStreamCarrierError, RemoteJournalStream, RemoteStream, RemoteSnapshotStream,
+} from './service.ts'
+export type {
+  ClientRemote, RemoteHostFacts, TypertGatewayFaultDetails,
+  RemoteJournalChange, RemoteJournalFrame, RemoteJournalStreamOptions, RemoteStreamFactory,
+  RemoteStreamItem, RemoteStreamOptions, RemoteSnapshotStreamOptions,
+} from './service.ts'
 export type { RemoteStreamSignal, RemoteStreamSocket } from './stream-client.ts'
 
 /** Explicit host and platform inputs for a multiplexed Remote stream carrier. */
@@ -38,4 +47,14 @@ export function createRemoteStreamMux(options: RemoteStreamMuxOptions): RemoteSt
     createSocket: () => options.createSocket(url.href),
     randomId: () => options.randomId(),
   })
+}
+
+/**
+ * Install typed Remote calls, streams and forwarded events for one HTTP(S) host.
+ * The owning Cordis fiber disposes the transport and registrations together.
+ * @param ctx - Client Cordis root with Typert and Connection services.
+ * @param options - authenticated socket adapter, host URL and identity generator.
+ */
+export function applyRemoteClient(ctx: Context, options: RemoteStreamMuxOptions): void {
+  installRemoteClient(ctx, createRemoteStreamMux(options), options.randomId())
 }

@@ -10,7 +10,6 @@ import type {
   TypertClientEventListener,
   TypertRemoteEvent,
 } from '@deepseek-ai/dsh-typert-protocol'
-import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import {
   REMOTE_EVENT_RESULT_ENDPOINT,
   REMOTE_EVENT_STREAM_ENDPOINT,
@@ -60,7 +59,7 @@ const REMOTE_EVENT_NEXT = Symbol('api-gateway.remote-event.next')
 
 /** Own Cordis registrations, generation pumping, waterfall dispatch, and HTTP replies. */
 export class ClientRemoteEvents {
-  private readonly eventPrefix = `internal/api-gateway/remote-event/${randomUUID()}/`
+  private readonly eventPrefix: string
   private readonly unregisterGeneration: () => void
   private activeGeneration: Promise<void> | undefined
 
@@ -68,12 +67,15 @@ export class ClientRemoteEvents {
    * @param ownerCtx - Client Gateway root used for Agent Context resolution.
    * @param connection - Connection carrier used for HTTP result calls.
    * @param openStream - selected in-process or WebSocket stream opener.
+   * @param eventId - unique identity for this instance's private event registrations.
    */
   constructor(
     private readonly ownerCtx: Context,
     private readonly connection: ConnectionHandle,
     private readonly openStream: RemoteEventStreamOpener,
+    eventId: string,
   ) {
+    this.eventPrefix = `internal/api-gateway/remote-event/${eventId}/`
     this.unregisterGeneration = connection.registerGenerationSource(this.runGeneration)
   }
 

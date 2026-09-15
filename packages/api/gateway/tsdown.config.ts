@@ -10,6 +10,9 @@ export default clientBundle('@deepseek-ai/dsh-api-gateway', ['lib/types/index.js
     fixedExtension: false,
     dts: false,
     clean: false,
-    deps: { alwaysBundle: [/@deepseek-ai\/(dsh-deque|dsh-typert-protocol|cordis|cosmokit)/] },
+    deps: {
+      alwaysBundle: [/@deepseek-ai\/(dsh-deque|dsh-typert-protocol|cosmokit)/],
+      neverBundle: ['@deepseek-ai/cordis'],
+    },
   }],
 })
