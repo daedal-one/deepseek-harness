@@ -511,6 +511,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ComposedProps<K extends keyof SlotMap & string, EntryKey extends EntryKeyOf<K>, S extends keyof SlotMap & string, H, I extends object, M = never, N = undefined> = PropsRuntime<K, EntryKey> & PropsRenderSlots<S> & PropsStore<H> & InjectFace<I> & MatchedShare<SlotMap[K], M> & PropsLocale<N>;',
   },
   {
+    name: 'ConnectionActivationId',
+    declaration: 'export type ConnectionActivationId = Branded<\'connection-activation-id\'>;',
+  },
+  {
     name: 'ConnectionGeneration',
     declaration: 'export interface ConnectionGeneration {\n    readonly id: number;\n    readonly host: ConnectionHostInfo;\n}',
   },
@@ -527,8 +531,16 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ConnectionHandle {\n    readonly isLoopback: boolean;\n    readonly generation: ConnectionGenerationState;\n    readonly state: ConnectionStateSource;\n    readonly rpc: ClientConnectionRpc;\n    reconnect(): void;\n    registerGenerationSource(source: ConnectionGenerationSource): () => void;\n    start(sinks: ConnectionSinks, config?: ConnectionRecoveryConfig): ConnectionLoop;\n}',
   },
   {
+    name: 'ConnectionHostId',
+    declaration: 'export type ConnectionHostId = Branded<\'connection-host-id\'>;',
+  },
+  {
     name: 'ConnectionHostInfo',
-    declaration: 'export interface ConnectionHostInfo {\n    readonly home: string;\n}',
+    declaration: 'export interface ConnectionHostInfo {\n    readonly identity?: ConnectionIdentity;\n    readonly home: string;\n}',
+  },
+  {
+    name: 'ConnectionIdentity',
+    declaration: 'export interface ConnectionIdentity {\n    readonly version: 1;\n    readonly hostId: ConnectionHostId;\n    readonly activationId: ConnectionActivationId;\n}',
   },
   {
     name: 'ConnectionLoop',
@@ -728,7 +740,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RemoteHostFacts',
-    declaration: 'export interface RemoteHostFacts {\n    readonly home: string | undefined;\n    readonly isLoopback: boolean;\n}',
+    declaration: 'export interface RemoteHostFacts {\n    readonly identity: ConnectionIdentity | undefined;\n    readonly home: string | undefined;\n    readonly isLoopback: boolean;\n}',
   },
   {
     name: 'RemoteStream',

@@ -1088,7 +1088,7 @@ describe('TypertGatewayService', () => {
         if (signal.aborted) resolve()
         else signal.addEventListener('abort', () => { resolve() }, { once: true })
       })
-    })(), { home: '/home/fixture' })
+    })(), { home: '/home/fixture', identity: { version: 1, hostId: '26e99520-f2d3-4874-84b5-07c5ef24775d', activationId: 'f5292bdb-ebda-41ba-b473-6c587a3c1d02' } as import('@deepseek-ai/dsh-client-connection/types').ConnectionIdentity })
     const carrier = new AbortController()
     const events = rawGatewayEventHarness(ctx).openRemoteEvents({ args: {} }, carrier.signal)
     const opening = await events.next()

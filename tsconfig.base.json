@@ -179,6 +179,8 @@
       "@deepseek-ai/dsh-client-ui-session/client": ["./packages/client/ui-session/src/client"],
       "@deepseek-ai/dsh-client-connection/client/portable": ["./packages/client/connection/src/client/portable.ts"],
       "@deepseek-ai/dsh-client-connection": ["./packages/client/connection/src"],
+      "@deepseek-ai/dsh-client-connection/identity": ["./packages/client/connection/src/host-identity-protocol.ts"],
+      "@deepseek-ai/dsh-client-connection/types": ["./packages/client/connection/src/types.ts"],
       "@deepseek-ai/dsh-client-file-upload": ["./packages/client/file-upload/src"],
       "@deepseek-ai/dsh-client-file-upload/client": ["./packages/client/file-upload/src/client/index.ts"],
       "@deepseek-ai/dsh-api-remotes": ["./packages/api/remotes/src"],

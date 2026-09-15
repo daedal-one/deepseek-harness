@@ -15,3 +15,4 @@ export type { ClientConnectionRpc, ConnectionRpcFailure, ConnectionRpcResult } f
 
 export { readHostIdentity } from './host-identity.ts'
 export type { ConnectionIdentity, ConnectionHostId, ConnectionActivationId } from '../host-identity-protocol.ts'
+export { connectionIdentitySchema } from '../host-identity-protocol.ts'

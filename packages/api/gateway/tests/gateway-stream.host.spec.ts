@@ -43,7 +43,7 @@ vi.mock('node:crypto', async (importOriginal) => {
 
 const randomUuid = vi.mocked(randomUUID)
 const browserCookies = new WeakMap<Context, string>()
-const REMOTE_HOST = { home: '/home/fixture' } as const
+const REMOTE_HOST = { home: '/home/fixture', identity: { version: 1, hostId: '26e99520-f2d3-4874-84b5-07c5ef24775d', activationId: 'f5292bdb-ebda-41ba-b473-6c587a3c1d02' } as import('@deepseek-ai/dsh-client-connection/types').ConnectionIdentity } as const
 type AgentWireId = TypertContextWire<TypertContextMap['agent']>
 const agentId = (value: string): AgentWireId => value as AgentWireId
 
@@ -599,6 +599,30 @@ describe('Typert Remote streams', () => {
     await firstRejected
     await secondRejected
     await unregister()
+  })
+
+  it('publishes the authenticated HTTP identity on the same Host event stream', async () => {
+    const { ctx } = await setup(true)
+    const source = new RemoteEventSourceProbe()
+    const unregister = ctx.typertGateway.registerRemoteEvents(source.source, { home: '/paired', identity: ctx.connection.identity })
+    const client = await openEventClient(ctx, 'identity-generation')
+    try {
+      const response = await fetch(`http://127.0.0.1:${String(ctx.webServer.port)}/api/connection/identity`, {
+        method: 'POST', headers: { 'content-type': 'application/json', cookie: browserCookie(ctx) },
+        body: JSON.stringify({ type: 'client-request', rpcId: 'identity', method: 'connection/identity', payload: {} }),
+      })
+      expect(response.status).toBe(200)
+      const identity = await response.json() as { result: { value: unknown } }
+      expect(client.frames[0]).toMatchObject({ type: 'item', value: {
+        type: 'ready', protocolVersion: 1, host: { home: '/paired', identity: identity.result.value },
+      } })
+      expect(identity.result.value).toEqual(ctx.connection.identity)
+    } finally {
+      const closed = once(client.socket, 'close')
+      client.socket.close()
+      await closed
+      await unregister()
+    }
   })
 
   it('retries a colliding Remote event Client id before opening the second generation', async () => {

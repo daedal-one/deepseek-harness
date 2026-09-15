@@ -118,6 +118,7 @@ export async function apply(ctx: Context, config?: ConnectionConfig): Promise<vo
     ctx,
     trustedHosts,
     await BrowserAuth.create(ctx.root, ctx.credentials, cookieMaxAgeDays),
+    identity,
   )
   connection.rpc.handleRoute(CONNECTION_IDENTITY_ENDPOINT, (_endpoint, payload) => {
     if (!connectionIdentityRequestSchema.safeParse(payload).success) {
@@ -152,3 +153,5 @@ export async function apply(ctx: Context, config?: ConnectionConfig): Promise<vo
     assertImageBodyCapacity(attachmentCtx, maxRequestBodyBytes)
   })
 }
+
+export type { ConnectionIdentity, ConnectionHostId, ConnectionActivationId } from './host-identity-protocol.ts'

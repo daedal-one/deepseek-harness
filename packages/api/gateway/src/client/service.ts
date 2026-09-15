@@ -9,7 +9,7 @@ import { RemoteError, remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
 export type { TypertGatewayFaultDetails } from '../remote-error-codes.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import type {
-  ConnectionHandle,
+  ConnectionHandle, ConnectionHostId, ConnectionIdentity,
 } from '@deepseek-ai/dsh-client-connection/client'
 import type {
   InvocationDescriptor,
@@ -25,6 +25,7 @@ import type {
 import { RemoteStreamCarrierError } from './stream-client.ts'
 import type { RemoteStreamMuxClient } from './stream-client.ts'
 import { ClientRemoteEvents } from './remote-events.ts'
+import { bindPinnedGeneration, type PinnedGeneration } from './pinned-generation.ts'
 import { combineRemoteCancellation, type RemoteCancellationScope } from './cancellation.ts'
 import {
   RemoteStream,
@@ -116,6 +117,8 @@ export interface ClientRemote extends TypertClientRemote {
 
 /** The fixed Host facts exposed on `ctx.remote.$host`. */
 export interface RemoteHostFacts {
+  /** Identity validated on the active Gateway stream, undefined while disconnected. */
+  readonly identity: ConnectionIdentity | undefined
   /** Host home directory from the ready frame, undefined before it. */
   readonly home: string | undefined
   /** Whether the carrier connects to the local Host. */
@@ -138,11 +141,13 @@ export const inject = ['typert', 'connection']
  * @param streams - physical stream carrier owned and disposed by this service.
  * @param eventId - unique identity for this service's private event registrations.
  * @param createController - fresh platform controllers preserving abort reasons and signal helpers.
+ * @param expectedHostId - paired Host required before native operation dispatch.
  */
 export function installRemoteClient(
   ctx: Context, streams: RemoteStreamMuxClient, eventId: string, createController: () => AbortController,
+  expectedHostId?: ConnectionHostId,
 ): void {
-  new ClientRemoteService(ctx, streams, eventId, createController)
+  new ClientRemoteService(ctx, streams, eventId, createController, expectedHostId)
 }
 
 class ClientRemoteService extends Service implements ClientRemote {
@@ -156,6 +161,7 @@ class ClientRemoteService extends Service implements ClientRemote {
   constructor(
     ctx: Context, private readonly streams: RemoteStreamMuxClient, eventId: string,
     private readonly createController: () => AbortController,
+    private readonly expectedHostId?: ConnectionHostId,
   ) {
     super(ctx, 'remote')
     this.ownerCtx = ctx
@@ -167,6 +173,7 @@ class ClientRemoteService extends Service implements ClientRemote {
       (endpoint, payload, signal) => this.openRemoteStream(endpoint, payload, signal),
       eventId,
       createController,
+      expectedHostId,
     )
     if (connection.rpc.open === undefined) this.streams.start()
     let disposed = false
@@ -200,9 +207,11 @@ class ClientRemoteService extends Service implements ClientRemote {
     // Identity-stable: readers (useSyncExternalStore snapshots, memo inputs)
     // compare by reference, so a fresh object is minted only when the fact
     // itself changed. isLoopback is fixed for the page lifetime.
-    const home = this.connection.generation.getSnapshot()?.host.home
-    if (this.hostFacts === undefined || this.hostFacts.home !== home) {
-      this.hostFacts = { home, isLoopback: this.connection.isLoopback }
+    const host = this.connection.generation.getSnapshot()?.host
+    const home = host?.home
+    const identity = host?.identity
+    if (this.hostFacts === undefined || this.hostFacts.home !== home || this.hostFacts.identity !== identity) {
+      this.hostFacts = { home, identity, isLoopback: this.connection.isLoopback }
     }
     return this.hostFacts
   }
@@ -448,8 +457,11 @@ class ClientRemoteService extends Service implements ClientRemote {
     const connection = this.ownerCtx.get('connection') as ConnectionHandle | undefined
     if (connection === undefined) throw new Error(`client api: ${endpoint} has no active Connection`)
     const prepared = this.prepareInvocation(descriptor, projection, token, callerCtx, values, boundIdentity)
+    let pinned: PinnedGeneration | undefined
     try {
-      const result = await connection.rpc.call('/api', endpoint, { args: prepared.args }, prepared.signal)
+      pinned = bindPinnedGeneration(connection, this.expectedHostId, prepared.signal, this.createController)
+      const result = await connection.rpc.call('/api', endpoint, { args: prepared.args }, pinned?.signal ?? prepared.signal)
+      pinned?.assertCurrent()
       if (!mountActive(token)) return withdrawn(endpoint)
       if (!result.ok) return { ok: false, error: rebuiltFailure(result.error) }
       return { ok: true, value: result.value }
@@ -459,8 +471,9 @@ class ClientRemoteService extends Service implements ClientRemote {
       // cancellation even when the local throw wins the race against the wire
       // round-trip, so it gets the same code the Host would have produced.
       if (prepared.signal.aborted) return cancelledFailure(endpoint, error)
-      return carrierFailure(endpoint, error)
+      return carrierFailure(endpoint, pinned?.signal.aborted === true ? pinned.signal.reason : error)
     } finally {
+      pinned?.dispose()
       prepared.cancellation?.dispose()
     }
   }
@@ -476,13 +489,21 @@ class ClientRemoteService extends Service implements ClientRemote {
     const endpoint = endpointOf(descriptor)
     if (!token.active) throw new Error(withdrawn(endpoint).error.message)
     const prepared = this.prepareInvocation(descriptor, projection, token, callerCtx, values, boundIdentity)
+    let pinned: PinnedGeneration | undefined
     try {
-      const stream = this.openRemoteStream(endpoint, { args: prepared.args }, prepared.signal)
+      pinned = bindPinnedGeneration(this.connection, this.expectedHostId, prepared.signal, this.createController)
+      const stream = this.openRemoteStream(endpoint, { args: prepared.args }, pinned?.signal ?? prepared.signal)
       for await (const value of stream) {
+        pinned?.assertCurrent()
         if (!mountActive(token)) throw new Error(withdrawn(endpoint).error.message)
         yield value
       }
+      pinned?.assertCurrent()
+    } catch (error) {
+      if (pinned?.signal.aborted === true && !prepared.signal.aborted) throw pinned.signal.reason
+      throw error
     } finally {
+      pinned?.dispose()
       prepared.cancellation?.dispose()
     }
   }

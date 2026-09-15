@@ -1,6 +1,7 @@
 /** Client owner for forwarded Remote Event subscriptions and deliveries. */
 
 import { combineRemoteCancellation } from './cancellation.ts'
+import { connectionIdentitySchema, type ConnectionHostId, type ConnectionIdentity } from '@deepseek-ai/dsh-client-connection/identity'
 import type { Context } from '@deepseek-ai/cordis'
 import type {
   ConnectionGenerationSource,
@@ -15,6 +16,7 @@ import {
   REMOTE_EVENT_RESULT_ENDPOINT,
   REMOTE_EVENT_STREAM_ENDPOINT,
   REMOTE_EVENT_STREAM_PAYLOAD,
+  REMOTE_EVENT_STREAM_READY,
   isRemoteEventAgentId,
   isRemoteEventClientId,
   isRemoteEventId,
@@ -70,6 +72,7 @@ export class ClientRemoteEvents {
    * @param openStream - selected in-process or WebSocket stream opener.
    * @param eventId - unique identity for this instance's private event registrations.
    * @param createController - platform controller factory preserving abort reasons and signal helpers.
+   * @param expectedHostId - paired Host required by native consumers; browser origins retain their existing authorization.
    */
   constructor(
     private readonly ownerCtx: Context,
@@ -77,6 +80,7 @@ export class ClientRemoteEvents {
     private readonly openStream: RemoteEventStreamOpener,
     eventId: string,
     private readonly createController: () => AbortController,
+    private readonly expectedHostId?: ConnectionHostId,
   ) {
     this.eventPrefix = `internal/api-gateway/remote-event/${eventId}/`
     this.unregisterGeneration = connection.registerGenerationSource(this.runGeneration)
@@ -141,6 +145,9 @@ export class ClientRemoteEvents {
       for await (const value of source) {
         if (clientId === undefined) {
           const opening = parseRemoteEventReady(value)
+          if (this.expectedHostId !== undefined && opening.host.identity.hostId !== this.expectedHostId) {
+            throw new Error('client api: the event stream does not belong to the paired Host')
+          }
           clientId = opening.clientId
           ready(opening.host)
           continue
@@ -264,18 +271,21 @@ export class ClientRemoteEvents {
 /** Validate and return one generation's Client identity and Host facts. */
 function parseRemoteEventReady(value: unknown): {
   readonly clientId: RemoteEventClientId
-  readonly host: ConnectionHostInfo
+  readonly host: ConnectionHostInfo & { readonly identity: ConnectionIdentity }
 } {
   if (!isRemoteEventRecord(value)
-    || !hasExactRemoteEventKeys(value, ['type', 'clientId', 'host'])
+    || !hasExactRemoteEventKeys(value, ['type', 'protocolVersion', 'clientId', 'host'])
     || value.type !== 'ready'
+    || value.protocolVersion !== REMOTE_EVENT_STREAM_READY.protocolVersion
     || !isRemoteEventClientId(value.clientId)
     || !isRemoteEventRecord(value.host)
-    || !hasExactRemoteEventKeys(value.host, ['home'])
+    || !hasExactRemoteEventKeys(value.host, ['home', 'identity'])
     || typeof value.host.home !== 'string') {
     throw new TypeError('client api: forwarded Remote event stream did not begin with ready')
   }
-  return { clientId: value.clientId, host: { home: value.host.home } }
+  const identity = connectionIdentitySchema.safeParse(value.host.identity)
+  if (!identity.success) throw new TypeError('client api: forwarded Remote event stream has invalid Host identity')
+  return { clientId: value.clientId, host: { home: value.host.home, identity: identity.data } }
 }
 
 /** Validate one untrusted value from the Gateway-internal forwarded-event stream. */

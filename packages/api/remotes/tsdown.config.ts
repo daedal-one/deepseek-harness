@@ -24,7 +24,7 @@ export default clientBundle('@deepseek-ai/dsh-api-remotes', ['lib/types/index.js
       '@deepseek-ai/dsh-typert-registry/client/portable': fileURLToPath(new URL('../../typert/registry/lib/types/client/portable.js', import.meta.url)),
     },
     deps: {
-      alwaysBundle: [/^@deepseek-ai\/dsh-[a-z0-9-]+\/(?:remote|client\/portable)$/, /^@deepseek-ai\/(?:dsh-brand|dsh-util-values|dsh-client-store|dsh-session|dsh-util-workspace-path|dsh-deque|dsh-typert-protocol|schemastery|cosmokit)(?:\/|$)/],
+      alwaysBundle: [/^@deepseek-ai\/dsh-[a-z0-9-]+\/(?:remote|client\/portable)$/, /^@deepseek-ai\/(?:dsh-client-connection|dsh-brand|dsh-util-values|dsh-client-store|dsh-session|dsh-util-workspace-path|dsh-deque|dsh-typert-protocol|schemastery|cosmokit)(?:\/|$)/],
       neverBundle: ['@deepseek-ai/cordis', 'zod'],
     },
   }, {

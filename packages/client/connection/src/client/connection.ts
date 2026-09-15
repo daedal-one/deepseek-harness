@@ -1,10 +1,13 @@
 /** Connection generation readiness, cancellation, and continuous recovery. */
+import type { ConnectionIdentity } from '../host-identity-protocol.ts'
 import { resolveConnectionConfig, type ConnectionRecoveryConfig } from '../recovery-config.ts'
 
 export type { ConnectionRecoveryConfig } from '../recovery-config.ts'
 
 /** Stable Host facts delivered by one established Remote event generation. */
 export interface ConnectionHostInfo {
+  /** Validated identity on Gateway generations; synthetic sources may omit it. */
+  readonly identity?: ConnectionIdentity
   /** Host account home used only to abbreviate displayed filesystem paths. */
   readonly home: string
 }

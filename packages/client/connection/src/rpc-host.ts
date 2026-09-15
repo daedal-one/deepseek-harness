@@ -11,6 +11,7 @@ import { clientRequestSchema } from './rpc-schema.ts'
 import { bridge } from './http-bridge.ts'
 import { isTrustedApiRequest } from './api-request-trust.ts'
 import { API_PATH } from './api-path.ts'
+import type { ConnectionIdentity } from './host-identity-protocol.ts'
 import type { BrowserAuth } from './browser-auth.ts'
 import type {
   ConnectionIndexRequest,
@@ -66,11 +67,13 @@ export class HostConnectionService extends Service implements HostConnectionHand
    * @param ctx - owning Connection plugin context.
    * @param trustedHosts - deployment authorities accepted by the Host/Origin fence.
    * @param browserAuth - process token and persistent browser-session owner.
+   * @param identity - persisted Host identity and owning root activation.
    */
   constructor(
     ctx: Context,
     private readonly trustedHosts: readonly string[],
     private readonly browserAuth: BrowserAuth,
+    readonly identity: ConnectionIdentity,
   ) {
     super(ctx, 'connection')
   }

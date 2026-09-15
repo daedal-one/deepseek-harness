@@ -89,7 +89,7 @@ it('awaits the generated assembly and disposes calls and streams after async low
       let socket;
       let id = 0;
       gateway = ctx.plugin({ inject: ['typert', 'connection'], apply(scope) { api.applyRemoteClient(scope, {
-        baseUrl: 'https://portable.example', randomId: () => 'portable-' + (++id),
+        baseUrl: 'https://portable.example', randomId: () => 'portable-' + (++id), expectedHostId: identity.value.hostId,
         createAbortController: () => new AbortController(),
         createSocket: () => {
           socket = {
@@ -101,7 +101,7 @@ it('awaits the generated assembly and disposes calls and streams after async low
               const frame = JSON.parse(data); frames.push(frame);
               if (frame.type !== 'open') return;
               let value;
-              if (frame.endpoint === '$events') value = { type: 'ready', clientId: 'portable-client', host: { home: '/portable' } };
+              if (frame.endpoint === '$events') value = { type: 'ready', protocolVersion: 1, clientId: 'portable-client', host: { home: '/portable', identity: identity.value } };
               else if (frame.endpoint === 'workspace/follow') value = { type: 'baseline', value: { items: [workspace('alpha'), workspace('beta')], archivedSessionIds: [] } };
               else if (frame.endpoint === 'session/control') value = { type: 'baseline', value: { queues: {}, jobs: {}, projections: {} } };
               else if (frame.endpoint === 'session/follow') value = {
@@ -252,7 +252,9 @@ it('typechecks the portable application without workspace source aliases or Host
         const ctx = new Context();
         await ctx.plugin({ apply: api.applyRegistry, inject: api.registryInject });
         const connection = api.createConnection({ isLoopback: false, rpc: { call: async () => ({ ok: true, value: null }) } });
-        api.applyRemoteClient(ctx, { baseUrl: 'https://portable.example', randomId: () => 'id', createSocket: () => { throw new Error('offline'); }, createAbortController: () => new AbortController() });
+        const identity = await api.readHostIdentity(connection.rpc);
+        if (!identity.ok) throw new Error('Host identity unavailable');
+        api.applyRemoteClient(ctx, { expectedHostId: identity.value.hostId, baseUrl: 'https://portable.example', randomId: () => 'id', createSocket: () => { throw new Error('offline'); }, createAbortController: () => new AbortController() });
         await ctx.plugin(api);
         const response = await ctx.remote.session.search({ query: 'native' });
         if (response.ok) { const more: boolean = response.value.hasMore; void more; }

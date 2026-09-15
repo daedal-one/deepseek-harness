@@ -5238,7 +5238,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RemoteEventHostInfo',
-    declaration: 'export interface RemoteEventHostInfo {\n    readonly home: string;\n}',
+    declaration: 'export interface RemoteEventHostInfo {\n    readonly identity: ConnectionIdentity;\n    readonly home: string;\n}',
   },
   {
     name: 'ReplayEnvelope',

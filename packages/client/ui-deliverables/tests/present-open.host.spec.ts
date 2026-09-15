@@ -47,7 +47,7 @@ async function fixture() {
   ctx.provide('sessionQuery', { readEvent } as never)
   const opener = vi.fn(async (_request: { path: string; action?: 'reveal' }, _signal: AbortSignal) => ({ opened: true as const }))
   ctx.provide('sessionController', { resolveAgent, openWorkspacePath: opener, workspaceDesktop: () => ({ name: 'desktop', available: true, fileManager: 'finder' }) } as never)
-  const connection = new HostConnectionService(ctx, [], {} as BrowserAuth)
+  const connection = new HostConnectionService(ctx, [], {} as BrowserAuth, { version: 1, hostId: '26e99520-f2d3-4874-84b5-07c5ef24775d', activationId: 'f5292bdb-ebda-41ba-b473-6c587a3c1d02' } as HostConnectionService['identity'])
   const fiber = ctx.plugin({ inject: ['connection', 'sessionQuery', 'sessionController', 'workspaceFiles', 'fs', 'sandboxPolicy'], apply: registerPresentOpen })
   await fiber
   const handler = connection.createSharedFetchHandler('/api')

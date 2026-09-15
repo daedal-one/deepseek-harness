@@ -17,6 +17,8 @@ Add DSH-owned host identity, explicit capabilities, single-use enrollment and re
 
 Persist a random Host identity through the existing credential provider, independently of browser signing secrets, hostnames and network addresses. A new application root gets a distinct activation identity; reloading Connection within that root preserves it. Expose the identity through the authenticated, carrier-neutral Connection RPC with shared Client validation. Failed or malformed persistence must prevent a new identity from being published. Identity is a correlation fact, never proof of authorization or a complete API/capability handshake.
 
+Bind Host identity to the authenticated Gateway event stream before publishing a native connection generation. The portable Remote installer requires the paired Host id, refuses a missing or different identity and an unsupported Gateway opening protocol, and keeps generated domain calls and streams unavailable until that Host is ready. Lost generations cancel active native operations and refuse late results without replaying mutations. New activations of the same paired Host may reconnect. Browser and private DesktopHost carriers retain their existing authorization. Gateway opening protocol version is separate from Session data and domain API compatibility.
+
 ## Acceptance
 
 Real iPhone QR pairing and host discovery succeed without address entry. Expired or replayed enrollment, revoked devices, mismatched host identity and unauthorized discovery fail explicitly. Candidate probes never receive another host credential and never imply enrollment.

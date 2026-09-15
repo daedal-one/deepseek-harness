@@ -22,10 +22,11 @@ The Daedal DSH fork consumes this supported DSH client face. The current Web cli
 
 ## Host identity
 
-The Connection identity response distinguishes one durable credential-store Host identity from one application-root activation. Network addresses and display names are not identities. Reading the response requires the carrier's existing authorization; a response alone grants no access. Its envelope version describes only identity fields, not the DSH API or Session compatibility contract. A native connection must later bind the authenticated identity and compatibility negotiation to its actual stream generation before accepting Session state.
+The Connection identity response distinguishes one durable credential-store Host identity from one application-root activation. Network addresses and display names are not identities. Reading the response requires the carrier's existing authorization; a response alone grants no access. Its envelope version describes only identity fields, not the DSH API or Session compatibility contract. The native Remote installer requires a paired Host id and validates the identity on its actual authenticated stream before accepting a connection generation. Generated native calls and streams require that matching generation; losing it cancels active operations and rejects late results without replay. A new activation of the same Host can reconnect. The Gateway opening protocol is versioned independently from identity fields, Session data and domain API compatibility; the latter two remain separately negotiated requirements.
 
 ## Sources
 
+- [Pinned native generation lifetime](spec:src:packages/api/gateway/src/client/pinned-generation.ts)
 - [Durable Host identity](spec:src:packages/client/connection/src/host-identity.ts)
 - [Shared identity envelope](spec:src:packages/client/connection/src/host-identity-protocol.ts)
 - [Portable authenticated identity read](spec:src:packages/client/connection/src/client/host-identity.ts)

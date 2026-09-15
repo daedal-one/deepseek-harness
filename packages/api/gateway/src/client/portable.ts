@@ -1,5 +1,6 @@
 /** Normal ESM entry for per-host Gateway stream transports. */
 import type { Context } from '@deepseek-ai/cordis'
+import type { ConnectionHostId } from '@deepseek-ai/dsh-client-connection/client'
 import { installRemoteClient } from './service.ts'
 import { REMOTE_STREAM_MUX_PATH } from '../stream-protocol.ts'
 import { RemoteStreamMuxClient, type RemoteStreamSocket } from './stream-client.ts'
@@ -51,6 +52,8 @@ export function createRemoteStreamMux(options: RemoteStreamMuxOptions): RemoteSt
 
 /** Platform inputs for the complete Remote service. */
 export interface RemoteClientOptions extends RemoteStreamMuxOptions {
+  /** Paired Host identity required before accepting generations or dispatching domain operations. */
+  readonly expectedHostId: ConnectionHostId
   /** Creates fresh controllers with abort reasons and throwIfAborted support. */
   readonly createAbortController: () => AbortController
 }
@@ -62,5 +65,5 @@ export interface RemoteClientOptions extends RemoteStreamMuxOptions {
  * @param options - authenticated socket adapter, host URL and identity generator.
  */
 export function applyRemoteClient(ctx: Context, options: RemoteClientOptions): void {
-  installRemoteClient(ctx, createRemoteStreamMux(options), options.randomId(), options.createAbortController)
+  installRemoteClient(ctx, createRemoteStreamMux(options), options.randomId(), options.createAbortController, options.expectedHostId)
 }
