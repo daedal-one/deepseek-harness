@@ -101,7 +101,7 @@ function browserSourcePath(source: string, sourcemapPath: string): string {
  * @param libEntry - node-half entries, spelled at the call site so the
  * package-invariants gate can see `lib/types/invariant.js` in each package's
  * own tsdown.config.ts (a preset-side glob hides it from the mechanical check).
- * @param options - phase placement, lib overrides, and companion Node configs.
+ * @param options - phase placement, lib overrides, and face-owned companion configs.
  * @returns ENV-selected tsdown config for the current build face.
  */
 export function clientBundle(
@@ -113,13 +113,13 @@ export function clientBundle(
   return ({ env }) => {
     const face = buildFace(env?.DSH_BUILD_FACE)
     const clientEntry = face === undefined ? 'src/client/index.ts' : 'lib/types/client/index.js'
-    const client = clientConfig(id, clientEntry)
+    const client = [clientConfig(id, clientEntry), ...(options.clientCompanions ?? [])]
     const node = [lib, ...(options.companions ?? [])]
     if (face === 'host') return options.hostPhase === true ? node : [SKIP_WORKSPACE_BUILD]
     if (face === 'client') {
-      return options.hostPhase === true ? [client] : [...node, client]
+      return options.hostPhase === true ? client : [...node, ...client]
     }
-    return [...node, client]
+    return [...node, ...client]
   }
 }
 
@@ -200,6 +200,8 @@ interface ClientBundleOptions {
   readonly hostPhase?: boolean
   /** Additional Node-side configs emitted alongside the package library. */
   readonly companions?: readonly UserConfig[]
+  /** Additional Client entries emitted after Client TypeScript output exists. */
+  readonly clientCompanions?: readonly UserConfig[]
   /** Overrides for the package's primary Node-side library config. */
   readonly lib?: UserConfig
 }

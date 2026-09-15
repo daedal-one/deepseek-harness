@@ -12,6 +12,7 @@ Two-sided BFF for Host Remote capabilities selected by this application. The Hos
 ## Table of Contents
 
 - [Use this package](#use-this-package)
+- [Portable Client](#portable-client)
 - [Forwarded Host events](#forwarded-host-events)
 - [Build boundary](#build-boundary)
 - [Model Experience](#model-experience)
@@ -30,6 +31,14 @@ The Client assembly mounts Commands, credentials, settings, Goal, dynamic Cordis
 This facade is also the front door for the wire type vocabulary a Client package names. It re-exports, type-only, the Remote failure vocabulary (`RemoteResult`, `RemoteFailure`, `RemoteErrorCode`, `RemoteErrorDetailsMap`), the Host facts (`RemoteHostFacts`), and each selected domain's client-safe payload types, so a Client feature package imports one specifier instead of reaching into `dsh-typert-protocol`, the Gateway, or an owner's Host entry. Two kinds of package deliberately skip this door: the api-layer packages this assembly itself selects — importing it back would close a dependency cycle — and their tests, which take the failure vocabulary from `dsh-typert-protocol` directly. A UI package's tests instead take the `RemoteError` constructor from [`dsh-client-test-runtime`](../../test-support/client-runtime/README.md).
 
 This package owns no physical transport or Host service discovery. It projects the application selection into generated Remote contributions and an independent Host event source per Client; API Gateway owns endpoints, carriers, cancellation, and reconnection. Its Client face can be reused by Web or a future TUI that provides the same React-free `ctx.remote` contract.
+
+## Portable Client
+
+`@deepseek-ai/dsh-api-remotes/client/portable` is the portable application facade. It exports the shared Connection factories, Gateway installers and stream models, generated API types, and the Client registry installer (`applyRegistry` and `registryInject`). Applications compose these exports with one Cordis root per host. Its bundled declarations retain one identity for the selected Client types and do not require the Host implementation packages in the application typecheck.
+
+`@deepseek-ai/dsh-api-remotes/client/portable` exports the same `inject`, `apply` and Client type vocabulary as the Web assembly through normal ESM. Mount it after the portable Typert registry and Gateway service. Cordis invokes its bound callback as a function after native async transforms and waits for every namespace to mount before reporting readiness. Its generated `/remote` contributions are bundled from the existing owner artifacts; Zod stays a declared runtime dependency shared by the composition. The entry has no browser loader or Host implementation dependency.
+
+The namespace selection is a compiled application selection, not proof that a connected Host provides every method. The Host remains authoritative for configured capabilities and permission. Unloading the assembly withdraws its generated namespaces; a retained method cannot send another request after withdrawal. This entry supplies no Session model, device enrollment or capability handshake.
 
 -----
 
@@ -51,7 +60,7 @@ This package's root `tsconfig.json` is only a solution that references `tsconfig
 
 That exception is not just a `files` entry. The root `tsconfig.base.json` maps `@deepseek-ai/dsh-api-remotes/types` to `src/types.ts` — the source plane, like every other workspace subpath and unlike the generated `/remote` artifacts, which have no `paths` entry and resolve through `exports` to built output. Both faces therefore admit the same allowlist and type projection into their own programs and emit byte-identical `remote-events` and `types` outputs into `lib/types`; the `.tsbuildinfo` files stay independent. No gate enforces the faces' source-file disjointness — `scripts/project-reference-faces.ts` only checks that a reference into a split project names the matching face — so this paragraph records why the double listing is intentional.
 
-The package-local `clientBundle(..., { hostPhase: true })` makes Host tsdown bundle the Host entry and the later Client tsdown bundle only the browser entry. Ordinary Client plugins remain single Client projects and produce both their Node loader entry and browser bundle during Client tsdown; split only when the two source sets require different compiler faces.
+The package-local `clientBundle(..., { hostPhase: true })` makes Host tsdown bundle the Host entry and the later Client tsdown bundle the browser entry plus its portable Client companion. Client companions run only after Client TypeScript output exists; they cannot be emitted during the earlier Host phase. Ordinary Client plugins remain single Client projects and produce both their Node loader entry and browser bundle during Client tsdown; split only when the two source sets require different compiler faces.
 
 <a id="model-experience"></a>
 ## Model Experience

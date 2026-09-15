@@ -13,7 +13,7 @@ blocked_by: []
 
 ## Plan
 
-Inspect the Connection client face, generated remotes, gateway streams and pure session projections. Prove their use in the Daedal DSH React Native, browser and Electron clients. Extract or expose a supported portable face only where imports, transport assumptions or package exports prevent that use. Preserve the existing Web consumer and supported dsh launch rules. Native transport owners supply fresh cancellation controllers; composed cancellation releases its source listeners when an operation finishes, including success, failure, stream return and contribution withdrawal.
+Inspect the Connection client face, generated remotes, gateway streams and pure session projections. Prove their use in the Daedal DSH React Native, browser and Electron clients. Extract or expose a supported portable face only where imports, transport assumptions or package exports prevent that use. Preserve the existing Web consumer and supported dsh launch rules. Native transport owners supply fresh cancellation controllers; composed cancellation releases its source listeners when an operation finishes, including success, failure, stream return and contribution withdrawal. Publish the existing generated Remote selection and Client registry through ordinary ESM, retaining Client declarations and shared registry/schema identity. The portable application facade exposes its shared Connection and Gateway building blocks with one declaration bundle so separately installed consumers do not duplicate nominal Client types or depend on Host development dependencies.
 
 ## Acceptance
 

@@ -1,7 +1,42 @@
+import { fileURLToPath } from 'node:url'
 import { clientBundle } from '../../client/tsdown.client.ts'
 
-export default clientBundle(
-  '@deepseek-ai/dsh-api-remotes',
-  ['lib/types/index.js'],
-  { hostPhase: true },
-)
+const shared = ['@deepseek-ai/cordis', '@deepseek-ai/dsh-brand', '@deepseek-ai/dsh-typert-protocol', 'zod']
+
+export default clientBundle('@deepseek-ai/dsh-api-remotes', ['lib/types/index.js'], {
+  hostPhase: true,
+  clientCompanions: [{
+    entry: { portable: 'lib/types/client/portable.js' },
+    outDir: 'lib',
+    format: ['esm'],
+    platform: 'neutral',
+    target: 'es2022',
+    fixedExtension: false,
+    dts: false,
+    clean: false,
+    alias: {
+      '@deepseek-ai/dsh-client-connection/client/portable': fileURLToPath(new URL('../../client/connection/lib/types/client/portable.js', import.meta.url)),
+      '@deepseek-ai/dsh-api-gateway/client/portable': fileURLToPath(new URL('../gateway/lib/types/client/portable.js', import.meta.url)),
+      '@deepseek-ai/dsh-typert-registry/client/portable': fileURLToPath(new URL('../../typert/registry/lib/types/client/portable.js', import.meta.url)),
+    },
+    deps: {
+      alwaysBundle: [/^@deepseek-ai\/dsh-[a-z0-9-]+\/(?:remote|client\/portable)$/, /^@deepseek-ai\/(?:dsh-deque|dsh-typert-protocol|schemastery|cosmokit)(?:\/|$)/],
+      neverBundle: ['@deepseek-ai/cordis', 'zod'],
+    },
+  }, {
+    entry: { portable: 'lib/types/client/portable.d.ts' },
+    outDir: 'lib/client',
+    format: ['esm'],
+    platform: 'neutral',
+    fixedExtension: false,
+    clean: false,
+    // Artifact resolution must not redirect declarations through source tsconfig paths.
+    tsconfig: false,
+    inputOptions: { tsconfig: false },
+    dts: { dtsInput: true, emitDtsOnly: true, tsconfig: false, sideEffects: true },
+    deps: {
+      alwaysBundle: id => id.startsWith('@deepseek-ai/') && !shared.some(name => id === name || id.startsWith(`${name}/`)),
+      neverBundle: shared,
+    },
+  }],
+})

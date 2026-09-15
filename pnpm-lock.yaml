@@ -928,15 +928,24 @@ importers:
 
   packages/api/remotes:
     dependencies:
+      '@deepseek-ai/dsh-brand':
+        specifier: workspace:^
+        version: link:../../util/brand
       '@deepseek-ai/dsh-deque':
         specifier: workspace:^
         version: link:../../util/deque
       '@deepseek-ai/dsh-session':
         specifier: workspace:^
         version: link:../../core/session
+      '@deepseek-ai/dsh-typert-protocol':
+        specifier: workspace:^
+        version: link:../../typert/protocol
       '@deepseek-ai/dsh-util-values':
         specifier: workspace:^
         version: link:../../util/values
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:^
@@ -1010,18 +1019,15 @@ importers:
       '@deepseek-ai/dsh-subagent':
         specifier: workspace:^
         version: link:../../subagent/subagent
-      '@deepseek-ai/dsh-typert-protocol':
+      '@deepseek-ai/dsh-typert-registry':
         specifier: workspace:^
-        version: link:../../typert/protocol
+        version: link:../../typert/registry
       '@deepseek-ai/dsh-user-approval':
         specifier: workspace:^
         version: link:../../interaction/user-approval
       '@deepseek-ai/dsh-user-questions':
         specifier: workspace:^
         version: link:../../interaction/user-questions
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
 
   packages/api/session-controller:
     dependencies:
