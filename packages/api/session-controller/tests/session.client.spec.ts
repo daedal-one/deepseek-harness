@@ -77,6 +77,28 @@ describe('Session open', () => {
     expect(api.callsOf('session.history')).toEqual([])
   })
 
+  it.each(['opening', 'live'] as const)('keeps a required-event %s failure visible without changing the accepted window', async (path) => {
+    const { api, session } = makeSession()
+    // The fixture supplies decoded transport records from a newer Host build.
+    const unknown = { type: 'extension/required', seq: SessionSeq(0), time: 0, data: {} } as unknown as SessionEvent
+    try {
+      if (path === 'opening') api.onHistory = () => histResponse([unknown])
+      await session.open()
+      const before = windowEntries(session)
+      if (path === 'live') {
+        const seq = SessionSeq((before.at(-1)?.event.seq ?? -1) + 1)
+        await follow(api, { ...unknown, seq })
+      }
+      await vi.waitFor(() => { expect(session.getSnapshot().openState).toBe('error') })
+      expect(session.getSnapshot().openError?.message).toContain('unknown to this client')
+      expect(windowEntries(session)).toBe(before)
+      if (path === 'opening') expect(before).toEqual([])
+      expect(api.callsOf('session.follow')).toHaveLength(1)
+    } finally {
+      await session.dispose()
+    }
+  })
+
   it('lands an error result in openState=error with the Remote failure kept', async () => {
     const { api, session } = makeSession()
     api.onHistory = () => Promise.resolve(err(new RemoteError('session/not-found', 'gone', { sessionId: SID })))

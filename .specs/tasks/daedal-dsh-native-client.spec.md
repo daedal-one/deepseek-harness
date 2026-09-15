@@ -19,6 +19,8 @@ Reuse the existing Workspace model and follow controller in the portable assembl
 
 Reuse the existing Session service, manager, event windows, pending submissions, queues and projection stores. Portable callers supply request identities, a current client time zone and an already hydrated, host-specific selection store. Keep the browser composition on its existing preference key and browser identity source. Native Session state must not read browser persistence or crypto globals, require the browser upload service, or share navigation across hosts.
 
+Require the current logical Session header format before accepting an opening snapshot. Validate the Session event vocabulary at every Client journal boundary, independently of which Host build accepted the persisted log. Unknown required event types must refuse snapshots, live entries and history pages before publication. Unknown records explicitly marked ignorable retain their original payload and metadata. Use the same generated known-event set as persistence and retain it in portable artifacts.
+
 ## Acceptance
 
 A native iPhone build and browser/Electron consumers attach to an existing session, stream, prompt and resolve an interaction through native DSH semantics. Shared source and artifact checks reject Node/DOM imports on native paths. Focused lifecycle tests cover cancellation, disposal, disconnect after acceptance and reconnect; recorded-session output remains faithful.

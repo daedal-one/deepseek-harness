@@ -52,7 +52,7 @@ function snapshot(
   records: readonly SessionHistoryRecord[],
   hasMore = false,
   assistantStream: SessionAssistantStreamBaseline = { revision: 0 },
-): SessionFollowFrame {
+): Extract<SessionFollowFrame, { readonly type: 'snapshot' }> {
   return {
     type: 'snapshot',
     header: {
@@ -144,6 +144,8 @@ function surfaceEvent(type = 'user/message'): SessionWireEvent {
 }
 
 const invalidWireEvents: [string, unknown][] = [
+  ['unknown required event', { type: 'extension/required', seq: 10, time: 10, data: { retained: true } }],
+  ['retired required event', { type: 'tool/code-dispatch', seq: 10, time: 10, data: {} }],
   ['null event', null],
   ['array event', []],
   ['extra envelope key', { ...surfaceEvent(), obsolete: true }],
@@ -234,6 +236,41 @@ describe.each(['snapshot', 'live', 'page'] as const)('Session %s wire acceptance
 })
 
 describe('Session Client stream adapters', () => {
+  it.each([0, 2, 4, undefined, null, '3'])('refuses unsupported opening Session format %s before publication', async (version) => {
+    const opening = snapshot(10, [entry(10)])
+    // Header metadata comes from the decoded wire, whose producer may be another version.
+    const incompatible = { ...opening, header: { ...opening.header, version } } as unknown as SessionFollowFrame
+    const remote = new ScriptedSessionRemote([{ frames: [incompatible], hold: true }], [])
+    const publish = vi.fn()
+    const stream = new SessionEventStream(sessionClient(remote), ADDRESS, { publish, failed: vi.fn() })
+    try {
+      await expect(stream.open({})).rejects.toThrow('unsupported Session format')
+      expect(publish).not.toHaveBeenCalled()
+      expect(remote.followRequests).toHaveLength(1)
+    } finally {
+      await stream.dispose()
+    }
+  })
+
+  it('reports required-event incompatibility before publishing the recorded journal', async () => {
+    const remote = new ScriptedSessionRemote([{
+      frames: [snapshot(10, [{ type: 'event', event: {
+        type: 'extension/required', seq: 10, time: 10, data: { retained: true },
+      } }])], hold: true,
+    }], [])
+    const publish = vi.fn()
+    const stream = new SessionEventStream(sessionClient(remote), ADDRESS, { publish, failed: vi.fn() })
+    try {
+      await expect(stream.open({})).rejects.toThrowErrorMatchingInlineSnapshot(
+        '[RemoteError: session wire event type "extension/required" is unknown to this client and is not marked ignorable]',
+      )
+      expect(publish).not.toHaveBeenCalled()
+      expect(remote.followRequests).toHaveLength(1)
+    } finally {
+      await stream.dispose()
+    }
+  })
+
   it('preserves current envelopes and payloads without normalization across every journal path', async () => {
     const events: SessionWireEvent[] = [
       surfaceEvent(),
