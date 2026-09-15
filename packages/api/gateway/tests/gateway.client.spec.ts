@@ -25,7 +25,7 @@ import type { ClientRemote } from '../src/client/index.ts'
 import { apply, inject, RemoteStream } from '../src/client/index.ts'
 import { RemoteStreamCarrierError } from '../src/client/stream-client.ts'
 import { createBrowserRemoteStreamMux } from '../src/client/stream-client-browser.ts'
-import { applyRemoteClient, createRemoteStreamMux, type RemoteStreamSocket } from '../src/client/portable.ts'
+import { applyRemoteClient, createRemoteStreamMux, type RemoteStreamSocket, type RemoteCapabilityRequirement } from '../src/client/portable.ts'
 
 const HOST_IDENTITY = connectionIdentitySchema.parse({ version: 1, hostId: '26e99520-f2d3-4874-84b5-07c5ef24775d', activationId: 'f5292bdb-ebda-41ba-b473-6c587a3c1d02' })
 
@@ -2631,6 +2631,21 @@ function compatible(descriptor: InvocationDescriptor): InvocationDescriptor {
   return { ...descriptor, wireFingerprint: `typert-wire-v1:${'a'.repeat(64)}`, semanticRevision: 1 }
 }
 
+const nativeRequirements: readonly RemoteCapabilityRequirement[] = [
+  { endpoint: 'probe/create', mode: 'unary', wireFingerprint: `typert-wire-v1:${'a'.repeat(64)}`, semanticRevision: 1 },
+  { endpoint: 'probe/watch', mode: 'stream', wireFingerprint: `typert-wire-v1:${'a'.repeat(64)}`, semanticRevision: 1 },
+]
+
+function nativeCapabilities(identity = HOST_IDENTITY) {
+  return { version: 3, identity, capabilities: nativeRequirements.map(requirement => ({ ...requirement, availability: 'available' })) }
+}
+
+function nativeCall(call: ConnectionHandle['rpc']['call'], identity = () => HOST_IDENTITY): ConnectionHandle['rpc']['call'] {
+  return (channel, endpoint, payload, signal) => endpoint === '$capabilities'
+    ? Promise.resolve({ ok: true, value: nativeCapabilities(identity()) })
+    : call(channel, endpoint, payload, signal)
+}
+
 describe('Portable Client Remote service', () => {
   it.each(['complete', 'throw', 'return', 'open-error'] as const)(
     'releases caller cancellation listeners when a stream exits by %s', async (ending) => {
@@ -2698,10 +2713,10 @@ describe('Portable Client Remote service', () => {
     const events = new RemoteEventCarrier()
     const unusedSocket = vi.fn(() => { throw new Error('in-process streams must retain their carrier') })
     const eventIdentity = vi.fn(() => 'portable-events')
-    const { ctx, client, generation } = await benchFiber(call, 'in-process', events.open, (scope) => {
+    const { ctx, client, generation } = await benchFiber(nativeCall(call), 'in-process', events.open, (scope) => {
       applyRemoteClient(scope, {
         baseUrl: 'https://portable.example', createSocket: unusedSocket, randomId: eventIdentity,
-        expectedHostId: HOST_IDENTITY.hostId,
+        expectedHostId: HOST_IDENTITY.hostId, requiredCapabilities: nativeRequirements,
         createAbortController: () => new AbortController(),
       })
     })
@@ -2846,7 +2861,7 @@ async function withFakeWebSocket(
 describe('paired native Host generations', () => {
   function installNative(scope: Context): void {
     applyRemoteClient(scope, {
-      baseUrl: 'https://paired.example', expectedHostId: HOST_IDENTITY.hostId,
+      baseUrl: 'https://paired.example', expectedHostId: HOST_IDENTITY.hostId, requiredCapabilities: nativeRequirements,
       createSocket: () => { throw new Error('fixture uses the explicit Connection carrier') },
       randomId: () => 'paired-native', createAbortController: () => new AbortController(),
     })
@@ -2855,7 +2870,7 @@ describe('paired native Host generations', () => {
   it('refuses native operations without complete generated evidence before sending', async () => {
     const call = vi.fn<ConnectionHandle['rpc']['call']>()
     const events = new RemoteEventCarrier()
-    const { ctx, client, generation } = await benchFiber(call, 'in-process', events.open, installNative)
+    const { ctx, client, generation } = await benchFiber(nativeCall(call, () => events.identity), 'in-process', events.open, installNative)
     try {
       const run = generation.start()
       await run.ready
@@ -2914,7 +2929,7 @@ describe('paired native Host generations', () => {
     const pending = Promise.withResolvers<Awaited<ReturnType<ConnectionHandle['rpc']['call']>>>()
     const call = vi.fn<ConnectionHandle['rpc']['call']>(() => pending.promise)
     const events = new RemoteEventCarrier()
-    const { ctx, client, generation } = await benchFiber(call, 'in-process', events.open, installNative)
+    const { ctx, client, generation } = await benchFiber(nativeCall(call, () => events.identity), 'in-process', events.open, installNative)
     const unmount = await ctx.remote.$mount({ package: '@fixture/paired', descriptors: [compatible(directDescriptor())] })
     try {
       const run = generation.start()
@@ -2966,7 +2981,7 @@ describe('paired native Host generations', () => {
         } finally { returned = true }
       })()
     }
-    const { ctx, client, generation } = await benchFiber(vi.fn(), 'in-process', open, installNative)
+    const { ctx, client, generation } = await benchFiber(nativeCall(vi.fn()), 'in-process', open, installNative)
     const unmount = await ctx.remote.$mount({ package: '@fixture/paired-stream', descriptors: [compatible(streamDescriptor())] })
     try {
       const run = generation.start()
@@ -2986,5 +3001,144 @@ describe('paired native Host generations', () => {
       await unmount()
       await client.dispose()
     }
+  })
+})
+
+
+describe('native capability admission', () => {
+  const install = (requirements: readonly RemoteCapabilityRequirement[] = nativeRequirements) => (scope: Context): void => {
+    applyRemoteClient(scope, {
+      baseUrl: 'https://paired.example', expectedHostId: HOST_IDENTITY.hostId, requiredCapabilities: requirements,
+      createSocket: () => { throw new Error('fixture uses the explicit Connection carrier') },
+      randomId: () => 'admission', createAbortController: () => new AbortController(),
+    })
+  }
+
+  it('holds readiness, operations and forwarded events until required capabilities match', async () => {
+    const response = Promise.withResolvers<Awaited<ReturnType<ConnectionHandle['rpc']['call']>>>()
+    const call = vi.fn<ConnectionHandle['rpc']['call']>(() => response.promise)
+    const events = new RemoteEventCarrier()
+    const requirements = nativeRequirements.map(requirement => ({ ...requirement }))
+    const { ctx, client, generation } = await benchFiber(call, 'in-process', events.open, install(requirements))
+    const unmount = await ctx.remote.$mount({ package: '@fixture/admission', descriptors: [compatible(directDescriptor())] })
+    const seen = vi.fn()
+    ctx.remote.$on('fixture/changed', seen)
+    const run = generation.start()
+    try {
+      await vi.waitFor(() => { expect(call).toHaveBeenCalledOnce() })
+      const signal = call.mock.calls[0]![3]!
+      expect(call).toHaveBeenCalledWith('/api', '$capabilities', {}, signal)
+      events.emit({ type: 'emit', event: 'fixture/changed', args: ['after-admission'] })
+      expect(generation.state.getSnapshot()).toBeUndefined()
+      expect(ctx.remote.$host.capabilities).toBeUndefined()
+      expect(seen).not.toHaveBeenCalled()
+      await expect(ctx.remote.probe.create('agent-1', { objective: 'premature' })).resolves.toMatchObject({ ok: false })
+      expect(call).toHaveBeenCalledOnce()
+      // The composition captures requirements before any asynchronous admission.
+      requirements[0]!.semanticRevision = 99
+      requirements.splice(1)
+      const snapshot = nativeCapabilities()
+      response.resolve({ ok: true, value: { ...snapshot, capabilities: [
+        { endpoint: 'optional/read', mode: 'unary', availability: 'unavailable', reason: 'service' },
+        { ...snapshot.capabilities[0], availability: 'context-required' }, snapshot.capabilities[1],
+      ] } })
+      await run.ready
+      await vi.waitFor(() => { expect(seen).toHaveBeenCalledExactlyOnceWith('after-admission') })
+      const facts = ctx.remote.$host
+      expect(facts.capabilities?.capabilities[0]).toMatchObject({ availability: 'unavailable' })
+      expect(ctx.remote.$host).toBe(facts)
+      run.abort()
+      expect(ctx.remote.$host.capabilities).toBeUndefined()
+      await run.done
+      expect(events.activeConnections).toBe(0)
+      expect(signal.aborted).toBe(true)
+      expect(ctx.remote.$host.identity).toBeUndefined()
+    } finally { run.abort(); await run.done; await unmount(); await client.dispose() }
+  })
+
+  it.each([
+    { reason: 'missing', capabilities: [] },
+    { reason: 'mode', capabilities: [{ ...nativeRequirements[0], mode: 'stream', availability: 'available' }] },
+    { reason: 'schema', capabilities: [{ ...nativeRequirements[0], wireFingerprint: `typert-wire-v1:${'b'.repeat(64)}`, availability: 'available' }] },
+    { reason: 'semantics', capabilities: [{ ...nativeRequirements[0], semanticRevision: 2, availability: 'available' }] },
+    { reason: 'unverified schema', capabilities: [{ ...nativeRequirements[0], wireFingerprint: undefined, availability: 'available' }] },
+    { reason: 'unverified semantics', capabilities: [{ ...nativeRequirements[0], semanticRevision: undefined, availability: 'available' }] },
+    { reason: 'unavailable', capabilities: [{ ...nativeRequirements[0], availability: 'unavailable', reason: 'lookup' }] },
+  ])('refuses $reason before readiness or event delivery', async ({ capabilities }) => {
+    const call = vi.fn<ConnectionHandle['rpc']['call']>().mockResolvedValue({ ok: true, value: { ...nativeCapabilities(), capabilities } })
+    const events = new RemoteEventCarrier()
+    const { ctx, client, generation } = await benchFiber(call, 'in-process', events.open, install([nativeRequirements[0]!]))
+    const seen = vi.fn()
+    ctx.remote.$on('fixture/changed', seen)
+    const run = generation.start()
+    try {
+      const refused = expect(run.done).rejects.toMatchObject({ code: 'gateway/api-incompatible', details: { endpoint: 'probe/create' } })
+      await refused
+      expect(generation.state.getSnapshot()).toBeUndefined()
+      expect(ctx.remote.$host.capabilities).toBeUndefined()
+      expect(events.activeConnections).toBe(0)
+      expect(seen).not.toHaveBeenCalled()
+      expect(call).toHaveBeenCalledOnce()
+    } finally { await client.dispose() }
+  })
+
+  it.each([
+    { ok: false, error: { code: 'unauthorized', message: 'authorization expired', details: {} } },
+    { ok: true, value: { ...nativeCapabilities(), identity: { ...HOST_IDENTITY, activationId: '00293014-2e9f-47ef-bc87-98fe20ebceae' } } },
+    { ok: true, value: { ...nativeCapabilities(), version: 4 } },
+  ] as const)('refuses rejected, stale or malformed metadata %#', async (response) => {
+    const call = vi.fn<ConnectionHandle['rpc']['call']>().mockResolvedValue(response)
+    const events = new RemoteEventCarrier()
+    const { ctx, client, generation } = await benchFiber(call, 'in-process', events.open, install())
+    try {
+      await expect(generation.start().done).rejects.toMatchObject({ isDSHRemoteError: true })
+      expect(ctx.remote.$host.capabilities).toBeUndefined()
+      expect(events.activeConnections).toBe(0)
+      expect(call).toHaveBeenCalledOnce()
+    } finally { await client.dispose() }
+  })
+
+  it.each(['resolve', 'reject'] as const)('disposes pending admission and ignores a late %s', async (settlement) => {
+    const response = Promise.withResolvers<Awaited<ReturnType<ConnectionHandle['rpc']['call']>>>()
+    const call = vi.fn<ConnectionHandle['rpc']['call']>(() => response.promise)
+    const events = new RemoteEventCarrier()
+    const { ctx, client, generation } = await benchFiber(call, 'in-process', events.open, install())
+    const run = generation.start()
+    const remote = ctx.remote
+    const publish = vi.fn()
+    const stop = generation.state.subscribe(() => { if (generation.state.getSnapshot()) publish() })
+    try {
+      await vi.waitFor(() => { expect(call).toHaveBeenCalledOnce() })
+      const signal = call.mock.calls[0]![3]!
+      await client.dispose()
+      await run.done
+      expect(signal.aborted).toBe(true)
+      expect(events.activeConnections).toBe(0)
+      if (settlement === 'resolve') response.resolve({ ok: true, value: nativeCapabilities() })
+      else response.reject(new Error('late carrier rejection'))
+      await response.promise.catch(() => undefined)
+      expect(publish).not.toHaveBeenCalled()
+      expect(remote.$host.capabilities).toBeUndefined()
+    } finally { stop(); run.abort(); await run.done; await client.dispose() }
+  })
+
+  it('rechecks every activation and accepts an explicit metadata-only selection', async () => {
+    const events = new RemoteEventCarrier()
+    const call = vi.fn<ConnectionHandle['rpc']['call']>(() => Promise.resolve({ ok: true, value: { version: 3, identity: events.identity, capabilities: [] } }))
+    const { ctx, client, generation } = await benchFiber(call, 'in-process', events.open, install([]))
+    try {
+      const first = generation.start()
+      await first.ready
+      const old = ctx.remote.$host.capabilities
+      first.abort(); await first.done
+      expect(ctx.remote.$host.capabilities).toBeUndefined()
+      events.identity = connectionIdentitySchema.parse({ ...HOST_IDENTITY, activationId: '00293014-2e9f-47ef-bc87-98fe20ebceae' })
+      const second = generation.start()
+      await second.ready
+      expect(call).toHaveBeenCalledTimes(2)
+      expect(ctx.remote.$host.capabilities?.identity).toEqual(events.identity)
+      expect(ctx.remote.$host.capabilities).not.toBe(old)
+      second.abort(); await second.done
+    } finally { await client.dispose() }
   })
 })

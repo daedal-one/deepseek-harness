@@ -1,7 +1,9 @@
 /** Client owner for forwarded Remote Event subscriptions and deliveries. */
 
+import { admitHostCapabilities, type RemoteClientAdmission } from './host-capabilities.ts'
+import type { HostCapabilities } from '../capabilities-protocol.ts'
 import { combineRemoteCancellation } from './cancellation.ts'
-import { connectionIdentitySchema, type ConnectionHostId, type ConnectionIdentity } from '@deepseek-ai/dsh-client-connection/identity'
+import { connectionIdentitySchema, type ConnectionIdentity } from '@deepseek-ai/dsh-client-connection/identity'
 import type { Context } from '@deepseek-ai/cordis'
 import type {
   ConnectionGenerationSource,
@@ -65,6 +67,7 @@ export class ClientRemoteEvents {
   private readonly eventPrefix: string
   private readonly unregisterGeneration: () => void
   private activeGeneration: Promise<void> | undefined
+  private admitted: { readonly host: ConnectionHostInfo; readonly capabilities: HostCapabilities; readonly signal: AbortSignal } | undefined
 
   /**
    * @param ownerCtx - Client Gateway root used for Agent Context resolution.
@@ -72,7 +75,7 @@ export class ClientRemoteEvents {
    * @param openStream - selected in-process or WebSocket stream opener.
    * @param eventId - unique identity for this instance's private event registrations.
    * @param createController - platform controller factory preserving abort reasons and signal helpers.
-   * @param expectedHostId - paired Host required by native consumers; browser origins retain their existing authorization.
+   * @param admission - paired Host and required capabilities for native consumers.
    */
   constructor(
     private readonly ownerCtx: Context,
@@ -80,10 +83,21 @@ export class ClientRemoteEvents {
     private readonly openStream: RemoteEventStreamOpener,
     eventId: string,
     private readonly createController: () => AbortController,
-    private readonly expectedHostId?: ConnectionHostId,
+    private readonly admission?: RemoteClientAdmission,
   ) {
     this.eventPrefix = `internal/api-gateway/remote-event/${eventId}/`
     this.unregisterGeneration = connection.registerGenerationSource(this.runGeneration)
+  }
+
+  /**
+   * Read only the capability snapshot belonging to the active Connection generation.
+   * @param host - the current Connection generation's Host object.
+   * @returns admitted metadata, absent before readiness or after generation loss.
+   */
+  capabilities(host: ConnectionHostInfo | undefined): HostCapabilities | undefined {
+    const admitted = this.admitted
+    return admitted !== undefined && admitted.host === host && !admitted.signal.aborted
+      ? admitted.capabilities : undefined
   }
 
   /**
@@ -145,8 +159,15 @@ export class ClientRemoteEvents {
       for await (const value of source) {
         if (clientId === undefined) {
           const opening = parseRemoteEventReady(value)
-          if (this.expectedHostId !== undefined && opening.host.identity.hostId !== this.expectedHostId) {
+          if (this.admission !== undefined && opening.host.identity.hostId !== this.admission.expectedHostId) {
             throw new Error('client api: the event stream does not belong to the paired Host')
+          }
+          if (this.admission !== undefined) {
+            const capabilities = await abortable(admitHostCapabilities(
+              this.connection.rpc, opening.host.identity, this.admission.requiredCapabilities, generationSignal,
+            ), generationSignal)
+            generationSignal.throwIfAborted()
+            this.admitted = { host: opening.host, capabilities, signal: generationSignal }
           }
           clientId = opening.clientId
           ready(opening.host)
@@ -180,6 +201,7 @@ export class ClientRemoteEvents {
       streamFailed = true
       streamError = error
     } finally {
+      if (this.admitted?.signal === generationSignal) this.admitted = undefined
       for (const controller of active.values()) {
         controller.abort(new Error('client api: Remote event generation ended'))
       }

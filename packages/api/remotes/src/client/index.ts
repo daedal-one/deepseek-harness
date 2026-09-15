@@ -17,6 +17,8 @@ import subagentsRemote from '@deepseek-ai/dsh-subagent/remote'
 import sessionRemote from '@deepseek-ai/dsh-api-session-controller/remote'
 import workspaceRemote from '@deepseek-ai/dsh-api-workspace-controller/remote'
 import workspaceFilesRemote from '@deepseek-ai/dsh-api-workspace-files/remote'
+import type { TypertRemoteMap } from '@deepseek-ai/dsh-typert-protocol'
+import type { RemoteCapabilityRequirement } from '@deepseek-ai/dsh-api-gateway/client'
 import type { ClientRemote } from '@deepseek-ai/dsh-api-gateway/client'
 
 export type { ClientRemote } from '@deepseek-ai/dsh-api-gateway/client'
@@ -142,6 +144,31 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
+const contributions = [
+  agentModelsRemote, agentPresetsRemote, commandsRemote, settingsControllerRemote, goalsRemote, llmRemote, dynamicRemote,
+  pluginInventoryRemote, messageFeedbackRemote, sessionFeedbackRemote, fileUploadsRemote, sessionReferencesRemote,
+  subagentsRemote, sessionRemote, workspaceRemote, workspaceFilesRemote,
+]
+
+/**
+ * Select admission requirements from the exact generated descriptors this assembly mounts.
+ * @param endpoints - required endpoints; duplicates collapse and an empty selection admits metadata only.
+ * @returns requirements sorted by endpoint, ready before any Client plugin mounts.
+ * @throws when an endpoint is absent from this assembly or lacks generated compatibility evidence.
+ */
+export function selectRemoteCapabilities(endpoints: readonly (keyof TypertRemoteMap)[]): readonly RemoteCapabilityRequirement[] {
+  const descriptors = new Map(contributions.flatMap(contribution => contribution.descriptors)
+    .map(descriptor => [`${descriptor.namespace}/${descriptor.method}`, descriptor]))
+  return [...new Set(endpoints)].sort().map((endpoint) => {
+    const descriptor = descriptors.get(endpoint)
+    if (descriptor?.wireFingerprint === undefined || descriptor.semanticRevision === undefined) {
+      throw new Error(`Client Remote ${endpoint} lacks generated compatibility evidence`)
+    }
+    return { endpoint, mode: descriptor.mode === 'stream' ? 'stream' : 'unary',
+      wireFingerprint: descriptor.wireFingerprint, semanticRevision: descriptor.semanticRevision }
+  })
+}
+
 /** Required service: the typed Client Remote contribution mount. */
 export const inject = ['remote']
 
@@ -153,11 +180,7 @@ export const inject = ['remote']
 export async function apply(ctx: Context): Promise<() => Promise<void>> {
   const disposers: Array<() => Promise<void>> = []
   try {
-    for (const contribution of [
-      agentModelsRemote, agentPresetsRemote, commandsRemote, settingsControllerRemote, goalsRemote, llmRemote, dynamicRemote,
-      pluginInventoryRemote, messageFeedbackRemote, sessionFeedbackRemote, fileUploadsRemote, sessionReferencesRemote,
-      subagentsRemote, sessionRemote, workspaceRemote, workspaceFilesRemote,
-    ]) {
+    for (const contribution of contributions) {
       disposers.push(await ctx.remote.$mount(contribution))
     }
   } catch (error) {

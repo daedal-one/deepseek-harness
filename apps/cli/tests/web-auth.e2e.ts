@@ -1,7 +1,7 @@
 /** Real Web-profile authentication and native metadata against isolated Harness homes. */
 
 import type { ChildProcess } from 'node:child_process'
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { stat } from 'node:fs/promises'
 import { request as httpRequest } from 'node:http'
 import { createRequire } from 'node:module'
@@ -175,6 +175,75 @@ function expectNativeCapabilities(value: unknown): HostCapabilities {
   return facts
 }
 
+/** Exercise the built Client facade on the authenticated HTTP and WebSocket carriers. */
+function verifyNativeAdmission(origin: string, cookie: string, hostId: string, activationId: string): void {
+  const require = createRequire(join(REPO_ROOT, 'packages/api/remotes/package.json'))
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', `
+    import assert from 'node:assert/strict';
+    const api = await import(process.argv[1]);
+    const { Context } = await import(process.argv[2]);
+    const { default: WebSocket } = await import(process.argv[3]);
+    const [baseUrl, cookie, expectedHostId, activationId] = process.argv.slice(4);
+    const requiredCapabilities = api.selectRemoteCapabilities(['settings/describe', 'session/list', 'session/follow', 'workspace/follow']);
+    let metadataReads = 0;
+    const rpc = api.createConnectionRpc({ baseUrl, randomId: () => crypto.randomUUID(),
+      fetch: (input, init) => {
+        if (input.pathname.endsWith('/$capabilities')) metadataReads++;
+        return fetch(input, { ...init, headers: { ...init.headers, Cookie: cookie, Origin: baseUrl } });
+      },
+    });
+    const connection = api.createConnection({ isLoopback: false, rpc });
+    const ctx = new Context();
+    await ctx.plugin({ inject: api.registryInject, apply: api.applyRegistry });
+    ctx.provide('connection', connection);
+    let gateway;
+    let assembly;
+    try {
+      gateway = ctx.plugin({ inject: ['typert', 'connection'], apply(scope) {
+        api.applyRemoteClient(scope, { baseUrl, expectedHostId, requiredCapabilities,
+          randomId: () => crypto.randomUUID(), createAbortController: () => new AbortController(),
+          createSocket: url => new WebSocket(url, { headers: { Cookie: cookie, Origin: baseUrl } }),
+        });
+      } });
+      await gateway;
+      if (!connection.generation.getSnapshot()) await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => { stop(); reject(new Error('native admission did not become ready')); }, 15000);
+        const stop = connection.generation.subscribe(() => {
+          if (connection.generation.getSnapshot()) { clearTimeout(timer); stop(); resolve(); }
+        });
+      });
+      assert.equal(metadataReads, 1);
+      assert.equal(ctx.remote.$host.identity.hostId, expectedHostId);
+      assert.equal(ctx.remote.$host.capabilities.identity.activationId, activationId);
+      for (const requirement of requiredCapabilities) {
+        const accepted = ctx.remote.$host.capabilities.capabilities.find(row => row.endpoint === requirement.endpoint);
+        assert.equal(accepted.wireFingerprint, requirement.wireFingerprint);
+        assert.equal(accepted.semanticRevision, requirement.semanticRevision);
+      }
+      assembly = ctx.plugin(api);
+      await assembly;
+      const settings = await ctx.remote.settings.describe();
+      assert.equal(settings.ok, true);
+      assert.ok(Array.isArray(settings.value.namespaces));
+      const remote = ctx.remote;
+      await assembly.dispose(); assembly = undefined;
+      await gateway.dispose(); gateway = undefined;
+      assert.equal(connection.generation.getSnapshot(), undefined);
+      assert.equal(remote.$host.capabilities, undefined);
+      process.stdout.write('native admission and generated settings call passed');
+    } finally {
+      await assembly?.dispose();
+      await gateway?.dispose();
+    }
+  `, ...['@deepseek-ai/dsh-api-remotes/client/portable', '@deepseek-ai/cordis'].map(name => pathToFileURL(require.resolve(name)).href),
+  pathToFileURL(createRequire(join(REPO_ROOT, 'apps/cli/package.json')).resolve('ws')).href,
+  origin, cookie, hostId, activationId], { encoding: 'utf8', timeout: 30_000 })
+  expect(result.error, result.stderr).toBeUndefined()
+  expect(result.signal, result.stderr).toBeNull()
+  expect(result.status, result.stderr).toBe(0)
+  expect(result.stdout).toBe('native admission and generated settings call passed')
+}
+
 describe('dsh web authentication through the real CLI', () => {
   it('authorizes native metadata and retains Host identity and browser access across restart', { timeout: 180_000, retry: 0 }, async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-web-auth-real-cli-'))
@@ -221,6 +290,7 @@ describe('dsh web authentication through the real CLI', () => {
       const identity = connectionIdentitySchema.parse(rpcValue(await postRpc(port, firstUrl.host, 'connection/identity', {}, cookie)))
       const capabilities = expectNativeCapabilities(rpcValue(await postRpc(port, firstUrl.host, '$capabilities', {}, cookie)))
       expect(capabilities.identity).toEqual(identity)
+      verifyNativeAdmission(firstUrl.origin, cookie, identity.hostId, identity.activationId)
       const settings = capabilities.capabilities.find(row => row.endpoint === 'settings/describe')!
       const compatibility = { wireFingerprint: settings.wireFingerprint, semanticRevision: settings.semanticRevision, identity }
       expect(rpcValue(await postRpc(port, firstUrl.host, 'settings/describe', { args: {}, compatibility }, cookie)))
@@ -249,6 +319,7 @@ describe('dsh web authentication through the real CLI', () => {
       expect(nextIdentity.activationId).not.toBe(identity.activationId)
       const nextCapabilities = expectNativeCapabilities(rpcValue(await postRpc(secondPort, secondUrl.host, '$capabilities', {}, cookie)))
       expect(nextCapabilities.identity).toEqual(nextIdentity)
+      verifyNativeAdmission(secondUrl.origin, cookie, nextIdentity.hostId, nextIdentity.activationId)
       const stale = await postRpc(secondPort, secondUrl.host, 'settings/describe', { args: {}, compatibility }, cookie)
       expect(JSON.parse(stale.body)).toMatchInlineSnapshot(`
         {

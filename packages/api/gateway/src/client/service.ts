@@ -9,7 +9,7 @@ import { RemoteError, remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
 export type { TypertGatewayFaultDetails } from '../remote-error-codes.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import type {
-  ConnectionHandle, ConnectionHostId, ConnectionIdentity,
+  ConnectionHandle, ConnectionIdentity,
 } from '@deepseek-ai/dsh-client-connection/client'
 import type {
   InvocationDescriptor,
@@ -24,6 +24,8 @@ import type {
 } from '@deepseek-ai/dsh-typert-protocol'
 import { RemoteStreamCarrierError } from './stream-client.ts'
 import type { RemoteStreamMuxClient } from './stream-client.ts'
+import type { RemoteClientAdmission } from './host-capabilities.ts'
+import type { HostCapabilities } from '../capabilities-protocol.ts'
 import { ClientRemoteEvents } from './remote-events.ts'
 import type { RemoteCompatibility } from '../compatibility-protocol.ts'
 import { bindPinnedGeneration, type PinnedGeneration } from './pinned-generation.ts'
@@ -109,17 +111,18 @@ export interface ClientRemote extends TypertClientRemote {
    */
   $stream<Item>(options: RemoteStreamOptions<Item>): RemoteStream<Item>
   /**
-   * Fixed Host facts as plain reads: no store, no subscription, no generation
-   * counter. `home` stays undefined until the first ready frame and reflects
-   * the latest one afterwards.
+   * Active Host facts as plain reads. Subscribe to Connection generation changes
+   * to observe readiness and loss; disconnected facts remain undefined.
    */
   readonly $host: RemoteHostFacts
 }
 
-/** The fixed Host facts exposed on `ctx.remote.$host`. */
+/** The active Host facts exposed on `ctx.remote.$host`. */
 export interface RemoteHostFacts {
   /** Identity validated on the active Gateway stream, undefined while disconnected. */
   readonly identity: ConnectionIdentity | undefined
+  /** Capability metadata admitted for the active native generation, otherwise undefined. */
+  readonly capabilities: HostCapabilities | undefined
   /** Host home directory from the ready frame, undefined before it. */
   readonly home: string | undefined
   /** Whether the carrier connects to the local Host. */
@@ -142,13 +145,13 @@ export const inject = ['typert', 'connection']
  * @param streams - physical stream carrier owned and disposed by this service.
  * @param eventId - unique identity for this service's private event registrations.
  * @param createController - fresh platform controllers preserving abort reasons and signal helpers.
- * @param expectedHostId - paired Host required before native operation dispatch.
+ * @param admission - paired Host and Client-required endpoints checked before native readiness.
  */
 export function installRemoteClient(
   ctx: Context, streams: RemoteStreamMuxClient, eventId: string, createController: () => AbortController,
-  expectedHostId?: ConnectionHostId,
+  admission?: RemoteClientAdmission,
 ): void {
-  new ClientRemoteService(ctx, streams, eventId, createController, expectedHostId)
+  new ClientRemoteService(ctx, streams, eventId, createController, admission)
 }
 
 class ClientRemoteService extends Service implements ClientRemote {
@@ -162,7 +165,7 @@ class ClientRemoteService extends Service implements ClientRemote {
   constructor(
     ctx: Context, private readonly streams: RemoteStreamMuxClient, eventId: string,
     private readonly createController: () => AbortController,
-    private readonly expectedHostId?: ConnectionHostId,
+    private readonly admission?: RemoteClientAdmission,
   ) {
     super(ctx, 'remote')
     this.ownerCtx = ctx
@@ -174,7 +177,7 @@ class ClientRemoteService extends Service implements ClientRemote {
       (endpoint, payload, signal) => this.openRemoteStream(endpoint, payload, signal),
       eventId,
       createController,
-      expectedHostId,
+      admission,
     )
     if (connection.rpc.open === undefined) this.streams.start()
     let disposed = false
@@ -211,8 +214,10 @@ class ClientRemoteService extends Service implements ClientRemote {
     const host = this.connection.generation.getSnapshot()?.host
     const home = host?.home
     const identity = host?.identity
-    if (this.hostFacts === undefined || this.hostFacts.home !== home || this.hostFacts.identity !== identity) {
-      this.hostFacts = { home, identity, isLoopback: this.connection.isLoopback }
+    const capabilities = this.events.capabilities(host)
+    if (this.hostFacts === undefined || this.hostFacts.home !== home || this.hostFacts.identity !== identity
+      || this.hostFacts.capabilities !== capabilities) {
+      this.hostFacts = { home, identity, capabilities, isLoopback: this.connection.isLoopback }
     }
     return this.hostFacts
   }
@@ -480,7 +485,7 @@ class ClientRemoteService extends Service implements ClientRemote {
     const prepared = this.prepareInvocation(descriptor, projection, token, callerCtx, values, boundIdentity)
     let pinned: PinnedGeneration | undefined
     try {
-      pinned = bindPinnedGeneration(connection, this.expectedHostId, prepared.signal, this.createController)
+      pinned = bindPinnedGeneration(connection, this.admission?.expectedHostId, prepared.signal, this.createController)
       const payload = this.operationPayload(descriptor, prepared.args, pinned)
       const result = await connection.rpc.call('/api', endpoint, payload, pinned?.signal ?? prepared.signal)
       pinned?.assertCurrent()
@@ -514,7 +519,7 @@ class ClientRemoteService extends Service implements ClientRemote {
     const prepared = this.prepareInvocation(descriptor, projection, token, callerCtx, values, boundIdentity)
     let pinned: PinnedGeneration | undefined
     try {
-      pinned = bindPinnedGeneration(this.connection, this.expectedHostId, prepared.signal, this.createController)
+      pinned = bindPinnedGeneration(this.connection, this.admission?.expectedHostId, prepared.signal, this.createController)
       const payload = this.operationPayload(descriptor, prepared.args, pinned)
       const stream = this.openRemoteStream(endpoint, payload, pinned?.signal ?? prepared.signal)
       for await (const value of stream) {

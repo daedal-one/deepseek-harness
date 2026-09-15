@@ -587,6 +587,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type HooksSources = Record<string, HostObservable<unknown>>;',
   },
   {
+    name: 'HostCapabilities',
+    declaration: 'export interface HostCapabilities {\n    readonly version: 3;\n    readonly identity: ConnectionIdentity;\n    readonly capabilities: readonly HostCapability[];\n}',
+  },
+  {
+    name: 'HostCapability',
+    declaration: 'export type HostCapability = {\n    readonly endpoint: string;\n    readonly mode: \'unary\' | \'stream\';\n    readonly wireFingerprint?: string | undefined;\n    readonly semanticRevision?: number | undefined;\n} & ({\n    readonly availability: \'available\';\n} | {\n    readonly availability: \'context-required\';\n} | {\n    readonly availability: \'unavailable\';\n    readonly reason: \'service\' | \'binding\' | \'method\' | \'lookup\' | \'context\';\n});',
+  },
+  {
     name: 'HostObservable',
     declaration: 'export type HostObservable<T> = ObservableSnapshot<T>;',
   },
@@ -740,7 +748,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RemoteHostFacts',
-    declaration: 'export interface RemoteHostFacts {\n    readonly identity: ConnectionIdentity | undefined;\n    readonly home: string | undefined;\n    readonly isLoopback: boolean;\n}',
+    declaration: 'export interface RemoteHostFacts {\n    readonly identity: ConnectionIdentity | undefined;\n    readonly capabilities: HostCapabilities | undefined;\n    readonly home: string | undefined;\n    readonly isLoopback: boolean;\n}',
   },
   {
     name: 'RemoteStream',

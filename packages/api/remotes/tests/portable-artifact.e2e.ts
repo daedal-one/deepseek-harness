@@ -68,6 +68,11 @@ it('awaits the generated assembly and disposes calls and streams after async low
       const { Context } = await load(fileURLToPath(import.meta.resolve('@deepseek-ai/cordis', pathToFileURL(process.argv[1]))));
       ctx = new Context();
       await ctx.plugin({ apply: api.applyRegistry, inject: api.registryInject });
+      const requiredCapabilities = api.selectRemoteCapabilities(['workspace/follow', 'workspace/rename', 'session/list', 'session/control', 'session/follow', 'session/prompt', 'session/search', 'subagents/list']);
+      assert.equal(requiredCapabilities.length, 8);
+      assert.equal(api.selectRemoteCapabilities(['session/follow', 'session/follow']).length, 1);
+      assert.equal(api.selectRemoteCapabilities([]).length, 0);
+      assert.throws(() => api.selectRemoteCapabilities(['absent/method']), /lacks generated compatibility evidence/);
       const calls = [];
       const workspace = id => ({ workspaceId: id, title: id, path: '/work/' + id, sessionIds: [],
         createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' });
@@ -79,6 +84,8 @@ it('awaits the generated assembly and disposes calls and streams after async low
       };
       const connection = api.createConnection({ isLoopback: false,
         rpc: { call: async (...args) => {
+          if (args[1] === '$capabilities') return { ok: true, value: { version: 3, identity: identity.value,
+            capabilities: requiredCapabilities.map(requirement => ({ ...requirement, availability: 'available' })) } };
           calls.push(args);
           assert.equal(args[2].compatibility.semanticRevision, 1);
           assert.match(args[2].compatibility.wireFingerprint, /^typert-wire-v1:[0-9a-f]{64}$/);
@@ -101,7 +108,7 @@ it('awaits the generated assembly and disposes calls and streams after async low
       let socket;
       let id = 0;
       gateway = ctx.plugin({ inject: ['typert', 'connection'], apply(scope) { api.applyRemoteClient(scope, {
-        baseUrl: 'https://portable.example', randomId: () => 'portable-' + (++id), expectedHostId: identity.value.hostId,
+        baseUrl: 'https://portable.example', randomId: () => 'portable-' + (++id), expectedHostId: identity.value.hostId, requiredCapabilities,
         createAbortController: () => new AbortController(),
         createSocket: () => {
           socket = {
@@ -134,6 +141,7 @@ it('awaits the generated assembly and disposes calls and streams after async low
           if (connection.generation.getSnapshot()) { stop(); resolve(); }
         });
       });
+      assert.equal(ctx.remote.$host.capabilities.capabilities.length, requiredCapabilities.length);
       assembly = ctx.plugin(api);
       await assembly;
       assert.equal(typeof ctx.remote.workspaceFiles.read, 'function');
@@ -267,7 +275,7 @@ it('typechecks the portable application without workspace source aliases or Host
         const connection = api.createConnection({ isLoopback: false, rpc: { call: async () => ({ ok: true, value: null }) } });
         const identity = await api.readHostIdentity(connection.rpc);
         if (!identity.ok) throw new Error('Host identity unavailable');
-        api.applyRemoteClient(ctx, { expectedHostId: identity.value.hostId, baseUrl: 'https://portable.example', randomId: () => 'id', createSocket: () => { throw new Error('offline'); }, createAbortController: () => new AbortController() });
+        api.applyRemoteClient(ctx, { requiredCapabilities: api.selectRemoteCapabilities(['session/follow']), expectedHostId: identity.value.hostId, baseUrl: 'https://portable.example', randomId: () => 'id', createSocket: () => { throw new Error('offline'); }, createAbortController: () => new AbortController() });
         await ctx.plugin(api);
         const response = await ctx.remote.session.search({ query: 'native' });
         if (response.ok) { const more: boolean = response.value.hasMore; void more; }

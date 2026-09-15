@@ -13,7 +13,8 @@ export {
   RemoteSnapshotStream, RemoteStreamCarrierError,
 } from '@deepseek-ai/dsh-api-gateway/client/portable'
 export type {
-  HostCapabilities, HostCapability, RemoteClientOptions, RemoteStreamMuxOptions, RemoteStreamSocket, RemoteStreamSignal,
+  HostCapabilities, HostCapability, RemoteCapabilityRequirement, RemoteClientAdmission, RemoteClientOptions,
+  RemoteStreamMuxOptions, RemoteStreamSocket, RemoteStreamSignal,
   RemoteStreamOptions, RemoteStreamItem, RemoteSnapshotStreamOptions,
   RemoteJournalChange, RemoteJournalFrame, RemoteJournalStreamOptions, RemoteStreamFactory,
 } from '@deepseek-ai/dsh-api-gateway/client/portable'

@@ -5,6 +5,7 @@ import { installRemoteClient } from './service.ts'
 import { createBrowserRemoteStreamMux } from './stream-client-browser.ts'
 
 export { readHostCapabilities } from './host-capabilities.ts'
+export type { RemoteCapabilityRequirement, RemoteClientAdmission } from './host-capabilities.ts'
 export type { HostCapabilities, HostCapability } from '../capabilities-protocol.ts'
 
 export {
