@@ -4,7 +4,7 @@ type: task
 status: accepted
 summary: Preserve the browser origin when submitting authenticated recovery forms.
 owners: [carlo]
-progress: in-progress
+progress: done
 addresses:
   - REQ:web/local-recovery#c-access
   - REQ:web/local-recovery#c-evidence
