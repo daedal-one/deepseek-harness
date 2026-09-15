@@ -1,6 +1,6 @@
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { Context, Service, symbols } from '@deepseek-ai/cordis'
 import { z } from 'zod'
 import { apply as applyConnection, inject as connectionInject } from '@deepseek-ai/dsh-client-connection'
@@ -18,6 +18,7 @@ import {
 } from '@deepseek-ai/dsh-typert-protocol'
 import TypertRegistry, { type TypertContribution } from '@deepseek-ai/dsh-typert-registry'
 import TypertGatewayService, { TypertGatewayError } from '@deepseek-ai/dsh-api-gateway'
+import { connectionIdentitySchema } from '@deepseek-ai/dsh-client-connection/identity'
 import { provideBrowserCredentials } from './browser-credentials.ts'
 
 interface FixtureAgent {
@@ -109,6 +110,9 @@ type FakeRpcResult =
 type FakeRpcHandler = (endpoint: string, payload: unknown, signal: AbortSignal) => Promise<FakeRpcResult>
 
 class FakeConnectionService extends Service {
+  readonly identity = connectionIdentitySchema.parse({
+    version: 1, hostId: '26e99520-f2d3-4874-84b5-07c5ef24775d', activationId: 'f5292bdb-ebda-41ba-b473-6c587a3c1d02',
+  })
   channel: string | undefined
   matches: ((endpoint: string) => boolean) | undefined
   handler: FakeRpcHandler | undefined
@@ -391,6 +395,126 @@ class InheritedMethodBase extends Service {
 class InheritedMethodService extends InheritedMethodBase {}
 
 describe('TypertGatewayService', () => {
+  it('discovers only fully strict live Host definitions without invoking methods or resolvers', async () => {
+    const { ctx, service } = await setup()
+    try {
+      const lookup = vi.fn(() => { throw new Error('discovery must not resolve agents') })
+      ctx.typert.lookups.register('gatewayFixture', { ...agentLookup({ id: 'agent-1' }), resolve: lookup })
+      const resolve = vi.fn(() => { throw new Error('discovery must not resolve contexts') })
+      ctx.typert.contexts.registerHost('gatewayFixture', { ...contextProvider(ctx), resolve })
+      const sourceOnlyParameter = { ...strictOnlyDescriptor(), id: '@fixture#goals/loose', method: 'loose',
+        parameters: [{ ...strictOnlyDescriptor().parameters[0]!, codec: { mode: 'src-json' as const } }] }
+      const contextual = renameDescriptor()
+      if (contextual.invocation.kind !== 'context') throw new Error('fixture requires Context invocation')
+      const sourceOnlyContext = { ...contextual, id: '@fixture#goals/looseContext', method: 'looseContext',
+        invocation: { ...contextual.invocation, codec: { mode: 'src-json' as const } } }
+      const remove = registerStrict(ctx, [renameDescriptor(), strictOnlyDescriptor(), createDescriptor(),
+        passthroughDescriptor(), sourceOnlyParameter, sourceOnlyContext])
+      expect(ctx.typertGateway.capabilities()).toMatchInlineSnapshot(`
+        [
+          {
+            "availability": "available",
+            "endpoint": "goals/create",
+            "mode": "unary",
+          },
+          {
+            "availability": "context-required",
+            "endpoint": "goals/rename",
+            "mode": "unary",
+          },
+          {
+            "availability": "available",
+            "endpoint": "goals/strictOnly",
+            "mode": "unary",
+          },
+        ]
+      `)
+      expect(lookup).not.toHaveBeenCalled()
+      expect(resolve).not.toHaveBeenCalled()
+      expect(service.calls).toEqual([])
+      await remove()
+      expect(ctx.typertGateway.capabilities()).toEqual([])
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('rechecks lookup and Context declarations without treating support as authorization', async () => {
+    const { ctx } = await setup()
+    try {
+      registerStrict(ctx, [createDescriptor(), renameDescriptor()])
+      const read = () => ctx.typertGateway.capabilities()
+      expect(read()).toEqual([
+        { endpoint: 'goals/create', mode: 'unary', availability: 'unavailable', reason: 'lookup' },
+        { endpoint: 'goals/rename', mode: 'unary', availability: 'unavailable', reason: 'context' },
+      ])
+      const denied = new RemoteError('session/agent-busy', 'not authorized for this session', { reason: 'policy' })
+      const removeLookup = ctx.typert.lookups.register('gatewayFixture', { ...agentLookup({ id: 'agent-1' }), resolve: () => { throw denied } })
+      ctx.typert.contexts.registerHost('gatewayFixture', contextProvider(ctx))
+      expect(read().map(value => value.availability)).toEqual(['available', 'context-required'])
+      await expect(ctx.typertGateway.invoke({ namespace: 'goals', method: 'create', args: {
+        agentId: 'agent-1', request: { title: 'x' },
+      } })).rejects.toBe(denied)
+      await removeLookup()
+      expect(read()[0]).toMatchObject({ availability: 'unavailable', reason: 'lookup' })
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it.each([{ wire: 'wrongId' }, { wireTypeSymbol: '@wrong#Id' }])('refuses mismatched provider declarations %j', async (mismatch) => {
+    const { ctx } = await setup()
+    try {
+      registerStrict(ctx, [createDescriptor(), renameDescriptor()])
+      ctx.typert.lookups.register('gatewayFixture', { ...agentLookup({ id: 'agent-1' }), ...mismatch })
+      ctx.typert.contexts.registerHost('gatewayFixture', { ...contextProvider(ctx), ...mismatch })
+      expect(ctx.typertGateway.capabilities()).toEqual([
+        { endpoint: 'goals/create', mode: 'unary', availability: 'unavailable', reason: 'lookup' },
+        { endpoint: 'goals/rename', mode: 'unary', availability: 'unavailable', reason: 'context' },
+      ])
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('rechecks direct receivers and exported implementation names without caching availability', async () => {
+    const { ctx, service, serviceFiber } = await setup()
+    try {
+      const descriptor = strictOnlyDescriptor()
+      registerStrict(ctx, [{ ...descriptor, id: '@fixture#goals/watch', method: 'watch', implementation: 'strictOnly', mode: 'stream' }])
+      expect(ctx.typertGateway.capabilities()).toEqual([{ endpoint: 'goals/watch', mode: 'stream', availability: 'available' }])
+      Object.defineProperty(service, 'strictOnly', { configurable: true, value: 42 })
+      expect(ctx.typertGateway.capabilities()[0]).toMatchObject({ availability: 'unavailable', reason: 'method' })
+      Reflect.deleteProperty(service, 'strictOnly')
+      const binding = service.typertRemote
+      for (const value of [undefined, {}]) {
+        Object.defineProperty(service, 'typertRemote', { configurable: true, value })
+        expect(ctx.typertGateway.capabilities()[0]).toMatchObject({ availability: 'unavailable', reason: 'binding' })
+      }
+      const failure = new Error('broken binding getter')
+      Object.defineProperty(service, 'typertRemote', { configurable: true, get: () => { throw failure } })
+      expect(() => ctx.typertGateway.capabilities()).toThrow(failure)
+      Object.defineProperty(service, 'typertRemote', { configurable: true, value: binding })
+      expect(ctx.typertGateway.capabilities()[0]?.availability).toBe('available')
+      await serviceFiber.dispose()
+      expect(ctx.typertGateway.capabilities()[0]).toMatchObject({ availability: 'unavailable', reason: 'service' })
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('requires an empty capability request and returns the current Connection identity', async () => {
+    const ctx = await setupGateway()
+    try {
+      await ctx.plugin(FakeConnectionService)
+      const connection = rawConnection(ctx)
+      const call = connection.handler!
+      expect(connection.matches?.('$capabilities')).toBe(true)
+      const signal = new AbortController().signal
+      expect(await call('$capabilities', {}, signal)).toEqual({ ok: true, value: {
+        version: 1, identity: connection.identity, capabilities: [],
+      } })
+      for (const payload of [null, [], { args: {} }, { sessionId: 'secret' }]) {
+        expect(await call('$capabilities', payload, signal)).toMatchObject({ ok: false, error: { code: 'gateway/arguments-invalid' } })
+      }
+      const cancelled = new AbortController()
+      cancelled.abort(new Error('lost carrier'))
+      expect(await call('$capabilities', {}, cancelled.signal)).toMatchObject({ ok: false, error: { code: 'gateway/cancelled' } })
+    } finally { await ctx.fiber.dispose() }
+  })
+
   it('invokes a strict direct method with schema decoding and a live lookup', async () => {
     const { ctx, service } = await setup()
     const agent = { id: 'agent-1' }
@@ -1192,6 +1316,20 @@ describe('TypertGatewayService', () => {
     const cookie = browserCookie(ctx.connection, server.origin)
 
     try {
+      const capabilityRequest = {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ type: 'client-request', rpcId: 'capabilities', method: '$capabilities', payload: {} }),
+      }
+      const denied = await fetch(`${server.origin}/api/$capabilities`, capabilityRequest)
+      expect(denied.status).toBe(401)
+      const discovered = await fetch(`${server.origin}/api/$capabilities`, {
+        ...capabilityRequest, headers: { ...capabilityRequest.headers, cookie },
+      })
+      expect(discovered.status).toBe(200)
+      await expect(discovered.json()).resolves.toEqual({ type: 'server-response', rpcId: 'capabilities', result: {
+        ok: true, value: { version: 1, identity: ctx.connection.identity,
+          capabilities: [{ endpoint: 'goals/create', mode: 'unary', availability: 'available' }] },
+      } })
       const response = await fetch(`${server.origin}/api/goals/create`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', cookie },

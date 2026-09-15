@@ -75,7 +75,7 @@ No direct effect; mounted Host capabilities own any model-visible behavior they 
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- The capability set is fixed by explicit build-time value imports; the Client does not discover the Host's active Services or Remote definitions at runtime.
+- Generated Client methods are fixed by explicit build-time value imports. The portable facade exports `readHostCapabilities()` for advisory, identity-bound discovery of current strict Host endpoints; it does not mount new Client methods or establish domain schema compatibility.
 - Additional capabilities require an explicit `/remote` value import and mount in this assembly.
 - Ordinary forwarded events are not replayed; state that requires reliable recovery needs an owner-provided query, cursor, or opening baseline.
 

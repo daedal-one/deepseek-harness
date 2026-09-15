@@ -9,11 +9,11 @@ export type {
   ConnectionIdentity, ConnectionHostId, ConnectionActivationId,
 } from '@deepseek-ai/dsh-client-connection/client/portable'
 export {
-  applyRemoteClient, createRemoteStreamMux, isRemoteFailure, RemoteStream, RemoteJournalStream,
+  readHostCapabilities, applyRemoteClient, createRemoteStreamMux, isRemoteFailure, RemoteStream, RemoteJournalStream,
   RemoteSnapshotStream, RemoteStreamCarrierError,
 } from '@deepseek-ai/dsh-api-gateway/client/portable'
 export type {
-  RemoteClientOptions, RemoteStreamMuxOptions, RemoteStreamSocket, RemoteStreamSignal,
+  HostCapabilities, HostCapability, RemoteClientOptions, RemoteStreamMuxOptions, RemoteStreamSocket, RemoteStreamSignal,
   RemoteStreamOptions, RemoteStreamItem, RemoteSnapshotStreamOptions,
   RemoteJournalChange, RemoteJournalFrame, RemoteJournalStreamOptions, RemoteStreamFactory,
 } from '@deepseek-ai/dsh-api-gateway/client/portable'

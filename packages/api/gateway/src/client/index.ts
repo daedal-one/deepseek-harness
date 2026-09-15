@@ -4,6 +4,9 @@ import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import { installRemoteClient } from './service.ts'
 import { createBrowserRemoteStreamMux } from './stream-client-browser.ts'
 
+export { readHostCapabilities } from './host-capabilities.ts'
+export type { HostCapabilities, HostCapability } from '../capabilities-protocol.ts'
+
 export {
   inject, isRemoteFailure, RemoteStreamCarrierError, RemoteJournalStream, RemoteStream, RemoteSnapshotStream,
 } from './service.ts'

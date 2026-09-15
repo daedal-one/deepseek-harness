@@ -28,8 +28,14 @@ The Connection identity response distinguishes one durable credential-store Host
 
 An opening snapshot must carry the logical Session format supported by the Client; older, newer or absent format versions are refused before publication. Each Client uses its own generated Session event vocabulary when reading snapshots, live events and history pages. It refuses unknown required event types before publication without retrying or advancing the accepted journal window. An explicit ignorable marker permits opaque event retention; an API or Session format version alone does not establish support for a newly added required event.
 
+## Host capabilities
+
+The authenticated `$capabilities` query reports a sorted snapshot of fully strict Host Remote endpoints and their dispatch prerequisites. Direct methods distinguish available from unavailable service, binding, method or lookup support. Context methods report context-required only when the Host Context declaration matches; receiver availability remains unknown until a concrete Context resolves. Discovery must not resolve objects or Contexts or invoke business methods. The response contains only protocol metadata, Host identity and endpoint capability facts. Its version describes the metadata envelope, not domain API schemas. Clients validate the response and match both the expected Host and activation; they own cancellation across generation changes. Reading capabilities does not grant permissions or guarantee a later call.
+
 ## Sources
 
+- [Portable Host capability read](spec:src:packages/api/gateway/src/client/host-capabilities.ts)
+- [Capability wire validation](spec:src:packages/api/gateway/src/capabilities-protocol.ts)
 - [Client Session wire acceptance](spec:src:packages/api/session-controller/src/client/session-wire-event.ts)
 - [Pinned native generation lifetime](spec:src:packages/api/gateway/src/client/pinned-generation.ts)
 - [Durable Host identity](spec:src:packages/client/connection/src/host-identity.ts)

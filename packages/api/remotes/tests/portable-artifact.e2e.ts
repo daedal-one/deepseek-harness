@@ -56,6 +56,13 @@ it('awaits the generated assembly and disposes calls and streams after async low
         return { ok: true, value: { version: 1, hostId: '26e99520-f2d3-4874-84b5-07c5ef24775d', activationId: 'f5292bdb-ebda-41ba-b473-6c587a3c1d02' } };
       } });
       assert.equal(identity.value.hostId, '26e99520-f2d3-4874-84b5-07c5ef24775d');
+      const capabilities = await api.readHostCapabilities({ call: async (channel, endpoint, payload) => {
+        assert.equal(channel, '/api'); assert.equal(endpoint, '$capabilities'); assert.equal(Object.keys(payload).length, 0);
+        return { ok: true, value: { version: 1, identity: identity.value,
+          capabilities: [{ endpoint: 'session/follow', mode: 'stream', availability: 'available' }] } };
+      } }, identity.value);
+      assert.equal(capabilities.ok, true);
+      assert.equal(capabilities.value.capabilities[0].endpoint, 'session/follow');
       const { Context } = await load(fileURLToPath(import.meta.resolve('@deepseek-ai/cordis', pathToFileURL(process.argv[1]))));
       ctx = new Context();
       await ctx.plugin({ apply: api.applyRegistry, inject: api.registryInject });

@@ -7,7 +7,9 @@
 
 import { randomUUID } from 'node:crypto'
 import { Context, Service, symbols } from '@deepseek-ai/cordis'
+import type { ConnectionIdentity } from '@deepseek-ai/dsh-client-connection/types'
 import type { ConnectionRpcHandler } from '@deepseek-ai/dsh-client-connection'
+import { HOST_CAPABILITIES_ENDPOINT, hostCapabilitiesRequestSchema, type HostCapability } from './capabilities-protocol.ts'
 import { Deque } from '@deepseek-ai/dsh-deque'
 import type { WebUpgradeRoute } from '@deepseek-ai/dsh-host-webserver'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
@@ -199,7 +201,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
       connectionCtx.connection.rpc.intercept(
         '/api',
         endpoint => this.claimsEndpoint(endpoint),
-        (endpoint, payload, signal) => this.dispatchRpc(endpoint, payload, signal),
+        (endpoint, payload, signal) => this.dispatchRpc(endpoint, payload, signal, connectionCtx.connection.identity),
       )
     })
     ctx.inject(['connection', 'webServer'], (webCtx) => {
@@ -263,7 +265,56 @@ export class TypertGatewayService extends Service implements TypertGateway {
     }
   }
 
+  /**
+   * Inspect strict dispatch prerequisites without resolving identities or invoking methods.
+   * @returns sorted advisory facts; Context receivers remain unknown until invocation.
+   */
+  capabilities(): readonly HostCapability[] {
+    return this.ctx.typert.local.list().filter(descriptor => (
+      descriptor.result.mode === 'strict'
+      && descriptor.parameters.every(parameter => parameter.codec.mode === 'strict')
+      && (descriptor.invocation.kind === 'direct' || descriptor.invocation.codec.mode === 'strict')
+    )).map((descriptor): HostCapability => {
+      const endpoint = endpointOf(descriptor.namespace, descriptor.method)
+      const base = { endpoint, mode: descriptor.mode ?? 'unary' } as const
+      const unavailable = (reason: Extract<HostCapability, { availability: 'unavailable' }>['reason']): HostCapability => ({
+        ...base, availability: 'unavailable', reason,
+      })
+      for (const parameter of descriptor.parameters) {
+        if (parameter.source !== 'lookup') continue
+        // Registry validation requires a key on every lookup parameter.
+        const provider = this.ctx.typert.lookups.get(parameter.lookup as string)
+        if (provider === undefined || provider.wire !== parameter.wire
+          || (parameter.codec.mode === 'strict' && provider.wireTypeSymbol !== parameter.codec.typeSymbol)) {
+          return unavailable('lookup')
+        }
+      }
+      if (descriptor.invocation.kind === 'context') {
+        const invocation = descriptor.invocation
+        const provider = this.ctx.typert.contexts.getHost(invocation.context)
+        if (provider === undefined || provider.wire !== invocation.wire
+          || (invocation.codec.mode === 'strict' && provider.wireTypeSymbol !== invocation.codec.typeSymbol)) {
+          return unavailable('context')
+        }
+        return { ...base, availability: 'context-required' }
+      }
+      const receiver = this.ctx.get(descriptor.service) as unknown
+      if (!isObject(receiver)) return unavailable('service')
+      try {
+        validateBinding(receiver, descriptor.service, descriptor.namespace, endpoint)
+      } catch (error) {
+        if (!(error instanceof TypertGatewayError)) throw error
+        return unavailable('binding')
+      }
+      if (typeof Reflect.get(receiver, descriptor.implementation ?? descriptor.method) !== 'function') {
+        return unavailable('method')
+      }
+      return { ...base, availability: 'available' }
+    }).sort((left, right) => left.endpoint < right.endpoint ? -1 : 1)
+  }
+
   private claimsEndpoint(endpoint: string): boolean {
+    if (endpoint === HOST_CAPABILITIES_ENDPOINT) return true
     if (endpoint === REMOTE_EVENT_RESULT_ENDPOINT) return true
     const segments = endpoint.split('/')
     if (segments.length !== 2 || segments[0] === '' || segments[1] === '') return false
@@ -353,7 +404,19 @@ export class TypertGatewayService extends Service implements TypertGateway {
     endpoint: string,
     payload: unknown,
     signal: AbortSignal,
+    identity: ConnectionIdentity,
   ): Promise<ConnectionRpcResult> {
+    if (endpoint === HOST_CAPABILITIES_ENDPOINT) {
+      try {
+        if (signal.aborted) throw remoteCancelled(endpoint, signal.reason)
+        if (!hostCapabilitiesRequestSchema.safeParse(payload).success) {
+          throw new TypertGatewayError('gateway/arguments-invalid', endpoint, 'Host capabilities require an empty request')
+        }
+        return { ok: true, value: { version: 1, identity, capabilities: this.capabilities() } }
+      } catch (error) {
+        return rpcFailure(error)
+      }
+    }
     if (endpoint === REMOTE_EVENT_RESULT_ENDPOINT) {
       try {
         const result = parseRemoteEventResultPayload(payload)
