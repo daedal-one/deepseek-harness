@@ -11,11 +11,13 @@
     "src/client/connection.ts",
     "src/client/fixture.ts",
     "src/client/handle.ts",
+    "src/client/host-identity.ts",
     "src/client/index.ts",
     "src/client/portable.ts",
     "src/client/random-uuid.ts",
     "src/client/rpc-caller.ts",
     "src/client/rpc.ts",
+    "src/host-identity-protocol.ts",
     "src/loopback-hostname.ts",
     "src/recovery-config.ts",
     "src/rpc.ts"

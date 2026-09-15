@@ -127,3 +127,6 @@ export function apply(ctx: Context): void {
     ...network === undefined ? {} : { network },
   }))
 }
+
+export { readHostIdentity } from './host-identity.ts'
+export type { ConnectionIdentity, ConnectionHostId, ConnectionActivationId } from '../host-identity-protocol.ts'

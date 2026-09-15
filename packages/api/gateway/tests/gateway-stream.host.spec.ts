@@ -603,6 +603,7 @@ describe('Typert Remote streams', () => {
 
   it('retries a colliding Remote event Client id before opening the second generation', async () => {
     const { ctx } = await setup(true)
+    randomUuid.mockClear()
     const source = new RemoteEventSourceProbe()
     const unregister = ctx.typertGateway.registerRemoteEvents(source.source, REMOTE_HOST)
     const firstId = '00000000-0000-4000-8000-000000000011' as ReturnType<typeof randomUUID>
@@ -731,6 +732,7 @@ describe('Typert Remote streams', () => {
 
   it('delivers a pending waterfall to the first Client that connects', async () => {
     const { ctx } = await setup(true)
+    randomUuid.mockClear()
     const source = new RemoteEventSourceProbe()
     const unregister = ctx.typertGateway.registerRemoteEvents(source.source, REMOTE_HOST)
     const agent = ctx.extend()

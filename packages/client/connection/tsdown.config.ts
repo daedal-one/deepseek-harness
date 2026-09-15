@@ -10,6 +10,6 @@ export default clientBundle('@deepseek-ai/dsh-client-connection', ['lib/types/in
     fixedExtension: false,
     dts: false,
     clean: false,
-    deps: { alwaysBundle: [/@deepseek-ai\/(schemastery|cosmokit)/] },
+    deps: { alwaysBundle: [/@deepseek-ai\/(schemastery|cosmokit)/, /^zod(?:\/|$)/] },
   }],
 })

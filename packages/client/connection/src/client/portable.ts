@@ -12,3 +12,6 @@ export type {
 } from './connection.ts'
 export { RpcId, transportError } from '../rpc.ts'
 export type { ClientConnectionRpc, ConnectionRpcFailure, ConnectionRpcResult } from '../rpc.ts'
+
+export { readHostIdentity } from './host-identity.ts'
+export type { ConnectionIdentity, ConnectionHostId, ConnectionActivationId } from '../host-identity-protocol.ts'

@@ -1,5 +1,5 @@
 /** Node half: registers the /api prefix route bridging to the api gateway. */
-import { EventEmitter } from 'node:events'
+import { EventEmitter, once } from 'node:events'
 import { createServer, request as httpRequest } from 'node:http'
 import { Readable } from 'node:stream'
 import { Context } from '@deepseek-ai/cordis'
@@ -10,6 +10,7 @@ import type { AttachmentStore } from '@deepseek-ai/dsh-attachment'
 import type { IndexInjection, WebServer, WebRoute, WebUpgradeRoute } from '@deepseek-ai/dsh-host-webserver'
 import { API_PATH, RpcId, apply, inject, type ClientRequest, type ConnectionConfig, type HostConnectionHandle } from '../src/index.ts'
 import { DEFAULT_MAX_REQUEST_BODY_BYTES } from '../src/http-bridge.ts'
+import { connectionIdentitySchema } from '../src/host-identity-protocol.ts'
 import { provideBrowserCredentials } from './browser-credentials.ts'
 
 /** Structural webServer fake recording both route registries. */
@@ -562,4 +563,64 @@ describe('connection node half over a real HTTP server', () => {
       await dispose()
     }
   })
+})
+
+it('protects Host identity on real HTTP and withdraws the shared route on disposal', async () => {
+  const { routes, connection, dispose } = await mounted()
+  const route = routes.find(candidate => candidate.kind === 'prefix' && candidate.path === API_PATH)!
+  const failures: unknown[] = []
+  const server = createServer((request, response) => {
+    void Promise.resolve(route.handler(request, response)).catch((error: unknown) => {
+      failures.push(error)
+      response.writeHead(500)
+      response.end()
+    })
+  })
+  try {
+    server.listen(0, '127.0.0.1')
+    await once(server, 'listening')
+    const address = server.address() as AddressInfo
+    const authority = `127.0.0.1:${String(address.port)}`
+    const cookie = browserCookie(connection, authority)
+    const url = `http://${authority}/api/connection/identity`
+    const envelope = (payload: unknown) => JSON.stringify({
+      type: 'client-request', rpcId: 'identity-test', method: 'connection/identity', payload,
+    })
+    const request = (headers: Record<string, string>, payload: unknown = {}) => fetch(url, {
+      method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: envelope(payload),
+    })
+    expect((await request({})).status).toBe(401)
+    expect((await request({ cookie, origin: 'https://other.example' })).status).toBe(403)
+    const spoofedStatus = await new Promise<number>((resolve, reject) => {
+      const spoofed = httpRequest(url, { method: 'POST', headers: { host: 'other.example', cookie } }, (reply) => {
+        reply.resume()
+        reply.on('end', () => { resolve(reply.statusCode ?? 0) })
+      })
+      spoofed.on('error', reject)
+      spoofed.end(envelope({}))
+    })
+    expect(spoofedStatus).toBe(403)
+    const response = await request({ cookie })
+    expect(response.status).toBe(200)
+    const body = await response.json() as { result: { value: unknown } }
+    expect(body).toMatchObject({ type: 'server-response', rpcId: 'identity-test', result: { ok: true } })
+    expect(connectionIdentitySchema.safeParse(body.result.value).success).toBe(true)
+    const invalid = await request({ cookie }, { extra: true })
+    expect(await invalid.json()).toMatchObject({ result: { ok: false, error: { code: 'connection/invalid-request' } } })
+    const shared = connection.createSharedFetchHandler('/api')
+    const trustedRequest = () => new Request(url, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: envelope({}),
+    })
+    expect(await (await shared.fetch(trustedRequest())).json()).toEqual(body)
+    await dispose()
+    expect((await shared.fetch(trustedRequest())).status).toBe(404)
+    expect(failures).toEqual([])
+  } finally {
+    server.closeAllConnections()
+    await new Promise<void>((resolve, reject) => server.close((error) => {
+      if (error === undefined) resolve()
+      else reject(error)
+    }))
+    await dispose()
+  }
 })

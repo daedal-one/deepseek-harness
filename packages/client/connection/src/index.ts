@@ -9,6 +9,8 @@ import { API_PATH } from './api-path.ts'
 import { bridge, DEFAULT_MAX_REQUEST_BODY_BYTES } from './http-bridge.ts'
 import { assertTrustedAuthority } from './api-request-trust.ts'
 import { BrowserAuth } from './browser-auth.ts'
+import { createHostIdentity } from './host-identity.ts'
+import { CONNECTION_IDENTITY_ENDPOINT, connectionIdentityRequestSchema } from './host-identity-protocol.ts'
 import { HostConnectionService } from './rpc-host.ts'
 import { ConnectionRecoveryConfigSchema, resolveConnectionConfig, type ConnectionRecoveryConfig } from './recovery-config.ts'
 
@@ -111,11 +113,20 @@ export async function apply(ctx: Context, config?: ConnectionConfig): Promise<vo
   // silently authorizing its hostname prefix at request time.
   for (const entry of trustedHosts) assertTrustedAuthority(entry)
   assertImageBodyCapacity(ctx, maxRequestBodyBytes)
+  const identity = await createHostIdentity(ctx.root, ctx.credentials)
   const connection = new HostConnectionService(
     ctx,
     trustedHosts,
     await BrowserAuth.create(ctx.root, ctx.credentials, cookieMaxAgeDays),
   )
+  connection.rpc.handleRoute(CONNECTION_IDENTITY_ENDPOINT, (_endpoint, payload) => {
+    if (!connectionIdentityRequestSchema.safeParse(payload).success) {
+      return Promise.resolve({ ok: false, error: {
+        code: 'connection/invalid-request', message: 'Host identity reads require an empty object', details: {},
+      } })
+    }
+    return Promise.resolve({ ok: true, value: identity })
+  })
   ctx.inject(['webServer'], (webCtx) => {
     assertImageBodyCapacity(webCtx, maxRequestBodyBytes)
     webCtx.on('webserver/index-inject', (table) => {

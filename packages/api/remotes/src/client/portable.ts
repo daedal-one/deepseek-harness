@@ -3,9 +3,10 @@ import { apply as applyClient } from './index.ts'
 import { applySessions as applySessionClient } from '@deepseek-ai/dsh-api-session-controller/client'
 import { apply as applyWorkspaceClient } from '@deepseek-ai/dsh-api-workspace-controller/client'
 export * from './index.ts'
-export { createConnection, createConnectionRpc } from '@deepseek-ai/dsh-client-connection/client/portable'
+export { createConnection, createConnectionRpc, readHostIdentity } from '@deepseek-ai/dsh-client-connection/client/portable'
 export type {
   ConnectionOptions, ConnectionRpcOptions, ConnectionNetworkSource, RpcFetch, RpcStreamOpen,
+  ConnectionIdentity, ConnectionHostId, ConnectionActivationId,
 } from '@deepseek-ai/dsh-client-connection/client/portable'
 export {
   applyRemoteClient, createRemoteStreamMux, isRemoteFailure, RemoteStream, RemoteJournalStream,

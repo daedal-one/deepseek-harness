@@ -23,16 +23,19 @@ it('loads the published ESM companion in a restricted JavaScript context', { ret
     const rpc = api.createConnectionRpc({
       baseUrl: 'https://host.example', randomId: () => api.RpcId('test'),
       fetch: async (url, init) => {
-        assert.equal(url.href, 'https://host.example/api/sessions/list');
+        assert.ok(['https://host.example/api/sessions/list', 'https://host.example/api/connection/identity'].includes(url.href));
         assert.equal(JSON.parse(init.body).rpcId, 'test');
         return { ok: true, json: async () => ({
-          type: 'server-response', rpcId: 'test', result: { ok: true, value: 42 },
+          type: 'server-response', rpcId: 'test', result: { ok: true, value: url.pathname.endsWith('/identity') ? {
+            version: 1, hostId: '26e99520-f2d3-4874-84b5-07c5ef24775d', activationId: 'f5292bdb-ebda-41ba-b473-6c587a3c1d02',
+          } : 42 },
         }) };
       },
     });
     const connection = api.createConnection({ rpc, isLoopback: false });
     assert.equal(connection.isLoopback, false);
     assert.equal((await connection.rpc.call('/api', 'sessions/list', {})).value, 42);
+    assert.equal((await api.readHostIdentity(connection.rpc)).value.hostId, '26e99520-f2d3-4874-84b5-07c5ef24775d');
     console.log('portable artifact passed');
   `, artifact], { encoding: 'utf8', timeout: 30_000 })
   expect(result.error).toBeUndefined()

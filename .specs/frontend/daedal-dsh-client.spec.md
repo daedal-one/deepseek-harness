@@ -20,8 +20,15 @@ An accepted command whose response is lost MUST remain an uncertain outcome unti
 
 The Daedal DSH fork consumes this supported DSH client face. The current Web client remains a consumer during migration. Package extraction is chosen from executable native import evidence rather than copied schemas or a broad polyfill layer. Missing operations are added to their owning DSH service and Remote controllers.
 
+## Host identity
+
+The Connection identity response distinguishes one durable credential-store Host identity from one application-root activation. Network addresses and display names are not identities. Reading the response requires the carrier's existing authorization; a response alone grants no access. Its envelope version describes only identity fields, not the DSH API or Session compatibility contract. A native connection must later bind the authenticated identity and compatibility negotiation to its actual stream generation before accepting Session state.
+
 ## Sources
 
+- [Durable Host identity](spec:src:packages/client/connection/src/host-identity.ts)
+- [Shared identity envelope](spec:src:packages/client/connection/src/host-identity-protocol.ts)
+- [Portable authenticated identity read](spec:src:packages/client/connection/src/client/host-identity.ts)
 - [Portable Connection factory](spec:src:packages/client/connection/src/client/portable.ts)
 - [Portable Gateway stream factory](spec:src:packages/api/gateway/src/client/portable.ts)
 - [Connection client](spec:src:packages/client/connection/src/client/connection.ts)

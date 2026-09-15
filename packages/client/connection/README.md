@@ -14,6 +14,7 @@ The package carries browser-to-Host Remote calls, exact Fetch responses, and con
 - [Use this package](#use-this-package)
 - [Portable client](#portable-client)
 - [Browser authentication and request trust](#browser-authentication-and-request-trust)
+- [Host identity](#host-identity)
 - [Connection generation](#connection-generation)
 - [Model Experience](#model-experience)
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
@@ -45,6 +46,13 @@ Every Host RPC method and WebSocket stream requires one browser session; there i
 The cookie signing secret is the owner-scoped `client-connection/browser-session` grant record in `ctx.credentials`. The local provider persists it in `$DSH_HOME/.credentials.yaml`; `BrowserAuth` loads or creates the record during Connection activation and retains the secret in memory, so request authentication is synchronous. Deleting or replacing the record takes effect on the next Connection activation. Cookies carry an absolute issue/expiry interval, defaulting to 30 days through `cookieMaxAgeDays`, and bind the normalized hostname plus port in both their deterministic name and signed payload. They are host-only, `Path=/`, `HttpOnly`, and `SameSite=Strict`; they deliberately omit `Secure` because the shipped server uses loopback HTTP.
 
 Before authentication, every request still passes `src/api-request-trust.ts`. Its `Host` must be loopback or match a `trustedHosts` entry: exact on `host:port`, any port on port-less entries, both sides WHATWG-normalized. An attached `Origin` must equal that Host and `sec-fetch-site: cross-site` is refused. Malformed configured authorities fail plugin load. These checks defend DNS rebinding and cross-site browser requests; they never establish identity. A failed Host/Origin check returns 403, while a trusted but unauthenticated request returns 401. `dsh web --host 0.0.0.0` remains unsupported. Decision records: [browser request trust](../../../.agents/notes/implemented/architecture/2026-07-28-api-browser-trust-boundary.md) and [browser token authentication](../../../.agents/notes/implemented/architecture/2026-08-24-browser-token-authentication.md).
+
+<a id="host-identity"></a>
+## Host identity
+
+Authenticated carriers read `connection/identity` through `/api` with an empty object. The portable and Web Client entries expose `readHostIdentity(rpc, signal)` with shared response validation. The response contains only `{ version: 1, hostId, activationId }`: a durable random UUID for the credential store and a random UUID for the current application root. `version` describes this envelope, not API or Session compatibility. Identity does not grant permissions or bind a separate stream to this response.
+
+Connection atomically creates the versioned `client-connection/host-identity` grant through the credential provider before publishing its service. Malformed records and persistence failures prevent activation. Reloading Connection within one root preserves both ids and rejects a deleted or replaced Host record; a new root sharing the store retains `hostId` and gets a new `activationId`. Copying the credential store copies Host identity. Addresses, display names, browser signing secrets and telemetry identifiers are independent. The [Host identity decision](../../../.agents/notes/implemented/architecture/2026-09-15-host-connection-identity.md) records these ownership limits.
 
 <a id="connection-generation"></a>
 ## Connection generation
@@ -86,4 +94,4 @@ None.
 
 </details>
 
-**Runtime invariant:** No companion is published. Browser-session verification reads the credential record asynchronously at the request that authorizes work, while the credentials companion owns record commit-event lifetime. Stream/reconnect sequencing and rpcId round-trip discipline are exercised directly by behavior specs, and route register/dispose symmetry is audited by the webserver companion.
+**Runtime invariant:** No companion is published. Connection loads its browser signing secret and Host identity during activation; the credentials companion owns record commit-event lifetime. Stream/reconnect sequencing and rpcId round-trip discipline are exercised directly by behavior specs, and route register/dispose symmetry is audited by the webserver companion.
