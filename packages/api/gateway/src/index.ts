@@ -276,7 +276,9 @@ export class TypertGatewayService extends Service implements TypertGateway {
       && (descriptor.invocation.kind === 'direct' || descriptor.invocation.codec.mode === 'strict')
     )).map((descriptor): HostCapability => {
       const endpoint = endpointOf(descriptor.namespace, descriptor.method)
-      const base = { endpoint, mode: descriptor.mode ?? 'unary' } as const
+      const base = { endpoint, mode: descriptor.mode ?? 'unary',
+        ...descriptor.wireFingerprint === undefined ? {} : { wireFingerprint: descriptor.wireFingerprint },
+      } as const
       const unavailable = (reason: Extract<HostCapability, { availability: 'unavailable' }>['reason']): HostCapability => ({
         ...base, availability: 'unavailable', reason,
       })
@@ -412,7 +414,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
         if (!hostCapabilitiesRequestSchema.safeParse(payload).success) {
           throw new TypertGatewayError('gateway/arguments-invalid', endpoint, 'Host capabilities require an empty request')
         }
-        return { ok: true, value: { version: 1, identity, capabilities: this.capabilities() } }
+        return { ok: true, value: { version: 2, identity, capabilities: this.capabilities() } }
       } catch (error) {
         return rpcFailure(error)
       }

@@ -163,12 +163,12 @@ function rpcValue(response: HttpResult): unknown {
 
 function expectNativeCapabilities(value: unknown): HostCapabilities {
   const facts = value as HostCapabilities
-  expect(facts.version).toBe(1)
+  expect(facts.version).toBe(2)
   expect(facts.capabilities.filter(row => ['session/list', 'session/follow', 'workspace/follow'].includes(row.endpoint)))
     .toEqual([
-      { endpoint: 'session/follow', mode: 'stream', availability: 'available' },
-      { endpoint: 'session/list', mode: 'unary', availability: 'available' },
-      { endpoint: 'workspace/follow', mode: 'stream', availability: 'available' },
+      { endpoint: 'session/follow', mode: 'stream', availability: 'available', wireFingerprint: expect.stringMatching(/^typert-wire-v1:[0-9a-f]{64}$/) as unknown },
+      { endpoint: 'session/list', mode: 'unary', availability: 'available', wireFingerprint: expect.stringMatching(/^typert-wire-v1:[0-9a-f]{64}$/) as unknown },
+      { endpoint: 'workspace/follow', mode: 'stream', availability: 'available', wireFingerprint: expect.stringMatching(/^typert-wire-v1:[0-9a-f]{64}$/) as unknown },
     ])
   const endpoints = facts.capabilities.map(row => row.endpoint)
   expect(endpoints).toEqual([...new Set(endpoints)].sort())

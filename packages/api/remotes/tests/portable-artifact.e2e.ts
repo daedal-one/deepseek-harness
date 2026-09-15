@@ -58,11 +58,12 @@ it('awaits the generated assembly and disposes calls and streams after async low
       assert.equal(identity.value.hostId, '26e99520-f2d3-4874-84b5-07c5ef24775d');
       const capabilities = await api.readHostCapabilities({ call: async (channel, endpoint, payload) => {
         assert.equal(channel, '/api'); assert.equal(endpoint, '$capabilities'); assert.equal(Object.keys(payload).length, 0);
-        return { ok: true, value: { version: 1, identity: identity.value,
-          capabilities: [{ endpoint: 'session/follow', mode: 'stream', availability: 'available' }] } };
+        return { ok: true, value: { version: 2, identity: identity.value,
+          capabilities: [{ endpoint: 'session/follow', mode: 'stream', availability: 'available', wireFingerprint: 'typert-wire-v1:' + 'a'.repeat(64) }] } };
       } }, identity.value);
       assert.equal(capabilities.ok, true);
       assert.equal(capabilities.value.capabilities[0].endpoint, 'session/follow');
+      assert.equal(capabilities.value.capabilities[0].wireFingerprint, 'typert-wire-v1:' + 'a'.repeat(64));
       const { Context } = await load(fileURLToPath(import.meta.resolve('@deepseek-ai/cordis', pathToFileURL(process.argv[1]))));
       ctx = new Context();
       await ctx.plugin({ apply: api.applyRegistry, inject: api.registryInject });
@@ -132,6 +133,7 @@ it('awaits the generated assembly and disposes calls and streams after async low
       assembly = ctx.plugin(api);
       await assembly;
       assert.equal(typeof ctx.remote.workspaceFiles.read, 'function');
+      assert.ok(ctx.typert.remotes.list().every(descriptor => /^typert-wire-v1:[0-9a-f]{64}$/.test(descriptor.wireFingerprint)));
       const search = ctx.remote.session.search;
       await assert.rejects(async () => search({ query: 12 }));
       assert.equal(calls.length, 0);

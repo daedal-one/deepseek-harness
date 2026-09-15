@@ -83,6 +83,10 @@ Host and client are independent TypeScript programs. Direct project references e
 
 `FaceModelEmitter` emits executable JavaScript containing supported Zod schemas and the `TYPERT` contribution, plus a declaration file whose schemas are typed `z.ZodType<SourceType>` through the package's public export; unsupported Zod projections fail. The Host face with Remote methods additionally emits `typert.remote-client.*` projections of Host Remote contracts for the Client. `WorkspaceTypertGenerator` validates each contributor's `package.json`: `./typert` and `./client/typert` (and `./remote` when Remote methods exist) must point at the exact generated files, and the `files` list must include them.
 
+### Wire fingerprints
+
+Each generated Remote descriptor carries `wireFingerprint`, formatted as `typert-wire-v1:<sha256>`. Host and Client artifacts use the same endpoint-local projection. The checksum includes resolved Context, argument and result schemas, transitive references, argument order and wire names, lookup/Context selection, absence and cancellation. The canonical projection reuses schema emission, allocates declaration names by first use and excludes paths, source symbol spelling, documentation and unrelated endpoints. Exact matches establish conservative generated-schema equivalence; declaration structure, property/union ordering and readonly parsing effects remain significant. They do not establish business semantics, authorization or supported Session events. A canonical algorithm change requires a new fingerprint version.
+
 ### Catalog projection
 
 The root export includes the model-driven extraction, completeness checks, and deterministic text renderers used by this repository's Cordis catalogs. They accept a `CordisCatalogPolicy`; repository-owned type links, foundation and exemption classifications, and inherited Cordis entries stay in `scripts/gen-cordis-catalog.ts` and are passed in explicitly, so this package contains projection mechanics, not a hidden copy of the repository's documentation taxonomy.

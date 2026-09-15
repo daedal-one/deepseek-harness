@@ -629,6 +629,13 @@ describe('validateTypertManifest', () => {
       ...base,
       invocations: [{ ...scoped, scope: { context: 'other', wire: 'agentId' } }],
     })).toThrow('must select its only lookup parameter')
+    for (const wireFingerprint of [1, '', 'typert-wire-v0:' + 'a'.repeat(64), 'typert-wire-v1:bad']) {
+      expect(() => validateTypertManifest('pkg', { ...base, invocations: [{ ...descriptor, wireFingerprint }] }))
+        .toThrow('wireFingerprint')
+    }
+    expect(() => validateTypertManifest('pkg', {
+      ...base, invocations: [{ ...descriptor, wireFingerprint: `typert-wire-v1:${'a'.repeat(64)}` }],
+    })).not.toThrow()
     expect(() => validateTypertManifest('pkg', {
       ...base,
       invocations: [{ ...descriptor, sourceLocation: { file: 'src/index.ts', line: 0, column: 1 } }],

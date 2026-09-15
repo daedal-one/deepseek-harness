@@ -476,8 +476,9 @@ describe('TypertGatewayService', () => {
     const { ctx, service, serviceFiber } = await setup()
     try {
       const descriptor = strictOnlyDescriptor()
-      registerStrict(ctx, [{ ...descriptor, id: '@fixture#goals/watch', method: 'watch', implementation: 'strictOnly', mode: 'stream' }])
-      expect(rawGatewayEventHarness(ctx).capabilities()).toEqual([{ endpoint: 'goals/watch', mode: 'stream', availability: 'available' }])
+      const wireFingerprint = `typert-wire-v1:${'a'.repeat(64)}`
+      registerStrict(ctx, [{ ...descriptor, wireFingerprint, id: '@fixture#goals/watch', method: 'watch', implementation: 'strictOnly', mode: 'stream' }])
+      expect(rawGatewayEventHarness(ctx).capabilities()).toEqual([{ endpoint: 'goals/watch', mode: 'stream', availability: 'available', wireFingerprint }])
       Object.defineProperty(service, 'strictOnly', { configurable: true, value: 42 })
       expect(rawGatewayEventHarness(ctx).capabilities()[0]).toMatchObject({ availability: 'unavailable', reason: 'method' })
       Reflect.deleteProperty(service, 'strictOnly')
@@ -505,7 +506,7 @@ describe('TypertGatewayService', () => {
       expect(connection.matches?.('$capabilities')).toBe(true)
       const signal = new AbortController().signal
       expect(await call('$capabilities', {}, signal)).toEqual({ ok: true, value: {
-        version: 1, identity: connection.identity, capabilities: [],
+        version: 2, identity: connection.identity, capabilities: [],
       } })
       for (const payload of [null, [], { args: {} }, { sessionId: 'secret' }]) {
         expect(await call('$capabilities', payload, signal)).toMatchObject({ ok: false, error: { code: 'gateway/arguments-invalid' } })
@@ -1328,7 +1329,7 @@ describe('TypertGatewayService', () => {
       })
       expect(discovered.status).toBe(200)
       await expect(discovered.json()).resolves.toEqual({ type: 'server-response', rpcId: 'capabilities', result: {
-        ok: true, value: { version: 1, identity: ctx.connection.identity,
+        ok: true, value: { version: 2, identity: ctx.connection.identity,
           capabilities: [{ endpoint: 'goals/create', mode: 'unary', availability: 'available' }] },
       } })
       const response = await fetch(`${server.origin}/api/goals/create`, {

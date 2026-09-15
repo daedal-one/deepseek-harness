@@ -109,6 +109,8 @@ interface InvocationDescriptor {
   }
   /** Codec for the unary result or each yielded stream item. */
   readonly result: TypertCodec
+  /** Versioned checksum of generated wire schemas and invocation fields; absent means unverified. */
+  readonly wireFingerprint?: string
   /** Source declaration used only for diagnostics. */
   readonly sourceLocation?: InvocationSourceLocation
 }

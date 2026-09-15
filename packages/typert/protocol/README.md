@@ -77,7 +77,7 @@ This section explains how the declarations stay compiler-independent and where e
 
 ### Design concept
 
-The package keeps strict reflection in the compiler: decorator initializers retain minimal markers in a versioned descriptor on the Service prototype. The descriptor uses a stable string property name, so another installed copy of the protocol package can read the same markers. Full parameter, result, lookup, and schema reflection is the Typert build pipeline's job, delivered through `InvocationDescriptor`.
+The package keeps strict reflection in the compiler: decorator initializers retain minimal markers in a versioned descriptor on the Service prototype. The descriptor uses a stable string property name, so another installed copy of the protocol package can read the same markers. Full parameter, result, lookup, and schema reflection is the Typert build pipeline's job, delivered through `InvocationDescriptor`. Its optional `wireFingerprint` carries versioned generated-schema evidence; absence means unverified compatibility. The [generator](../generator/README.md#wire-fingerprints) owns checksum construction. Equality alone establishes neither business semantics nor authorization.
 
 ### Remote markers
 

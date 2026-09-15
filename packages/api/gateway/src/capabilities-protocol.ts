@@ -12,11 +12,14 @@ export const hostCapabilitiesRequestSchema = z.object({}).strict()
 const endpoint = {
   endpoint: z.string().regex(/^[^/]+\/[^/]+$/),
   mode: z.enum(['unary', 'stream']),
+  wireFingerprint: z.string().regex(/^typert-wire-v[1-9][0-9]*:[0-9a-f]{64}$/).optional(),
 }
 /** One strict endpoint's current prerequisites; availability grants no authority. */
 export type HostCapability = {
   readonly endpoint: string
   readonly mode: 'unary' | 'stream'
+  /** Generated schema evidence; absence does not establish compatibility. */
+  readonly wireFingerprint?: string | undefined
 } & (
   | { readonly availability: 'available' }
   | { readonly availability: 'context-required' }
@@ -33,7 +36,7 @@ const capability: z.ZodType<HostCapability> = z.discriminatedUnion('availability
 
 /** Exact versioned response with unique endpoints in code-point order. */
 export const hostCapabilitiesSchema: z.ZodType<HostCapabilities> = z.object({
-  version: z.literal(1),
+  version: z.literal(2),
   identity: connectionIdentitySchema,
   capabilities: z.array(capability).refine(values => values.every((value, index) => {
     const next = values[index + 1]
@@ -43,7 +46,7 @@ export const hostCapabilitiesSchema: z.ZodType<HostCapabilities> = z.object({
 
 /** Snapshot for one Host activation; version describes metadata, not domain schemas. */
 export interface HostCapabilities {
-  readonly version: 1
+  readonly version: 2
   readonly identity: ConnectionIdentity
   readonly capabilities: readonly HostCapability[]
 }

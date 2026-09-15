@@ -21,6 +21,8 @@ Reuse the existing Session service, manager, event windows, pending submissions,
 
 Require the current logical Session header format before accepting an opening snapshot. Validate the Session event vocabulary at every Client journal boundary, independently of which Host build accepted the persisted log. Unknown required event types must refuse snapshots, live entries and history pages before publication. Unknown records explicitly marked ignorable retain their original payload and metadata. Use the same generated known-event set as persistence and retain it in portable artifacts.
 
+Generate per-endpoint wire fingerprints from the same resolved codec projection used by Host and Client artifacts. Cover Context identity, ordered argument wire names, lookup keys, absence, cancellation and result items, including transitive and recursive type references. Isolate each endpoint from unrelated declarations and methods, erase source paths, symbol spelling and prose, and version the canonical fingerprint algorithm. Publish the fingerprint in authenticated capability metadata; absence denotes unverified schema compatibility. Exact fingerprint equality is conservative schema evidence, not proof of business semantics, permission or Session event support. Keep Client admission and per-operation enforcement as explicit remaining work before native acceptance.
+
 ## Acceptance
 
 A native iPhone build and browser/Electron consumers attach to an existing session, stream, prompt and resolve an interaction through native DSH semantics. Shared source and artifact checks reject Node/DOM imports on native paths. Focused lifecycle tests cover cancellation, disposal, disconnect after acceptance and reconnect; recorded-session output remains faithful.

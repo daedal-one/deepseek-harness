@@ -32,8 +32,13 @@ An opening snapshot must carry the logical Session format supported by the Clien
 
 The authenticated `$capabilities` query reports a sorted snapshot of fully strict Host Remote endpoints and their dispatch prerequisites. Direct methods distinguish available from unavailable service, binding, method or lookup support. Context methods report context-required only when the Host Context declaration matches; receiver availability remains unknown until a concrete Context resolves. Discovery must not resolve objects or Contexts or invoke business methods. The response contains only protocol metadata, Host identity and endpoint capability facts. Its version describes the metadata envelope, not domain API schemas. Clients validate the response and match both the expected Host and activation; they own cancellation across generation changes. Reading capabilities does not grant permissions or guarantee a later call.
 
+## Domain schema evidence
+
+Generated Host and Client descriptors carry the same versioned per-endpoint wire fingerprint. It hashes the endpoint's resolved codec projection and invocation fields, including referenced type definitions, rather than type-symbol names or the whole package. Source location, declaration spelling, documentation and unrelated endpoints do not affect it. Changes to accepted wire arguments, lookup or Context selection, cancellation and result codecs change it. The authenticated capability response preserves this optional fingerprint; absence means no schema evidence. Exact matches establish only conservative generated-schema equivalence. Business semantics require an explicit version policy, and negotiated admission plus operation-time checks remain required before native release. Host availability, authorization, Session format and required event vocabulary remain separate checks.
+
 ## Sources
 
+- [Generated wire fingerprints](spec:src:packages/typert/generator/src/emitter.ts)
 - [Portable Host capability read](spec:src:packages/api/gateway/src/client/host-capabilities.ts)
 - [Capability wire validation](spec:src:packages/api/gateway/src/capabilities-protocol.ts)
 - [Client Session wire acceptance](spec:src:packages/api/session-controller/src/client/session-wire-event.ts)
