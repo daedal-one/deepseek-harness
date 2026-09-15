@@ -706,6 +706,38 @@ export class LocalCredentialProvider extends CredentialProvider {
     })
   }
 
+  override async migrateReference(
+    ref: CredentialRef,
+    key: CredentialKey,
+    convert: (value: string) => CredentialRecord,
+  ): Promise<boolean> {
+    if (this.isClosed()) throw new Error('credentials-local is disposed: cannot migrate a reference')
+    return this.enqueue(async () => {
+      if (this.isClosed()) throw new Error('credentials-local was disposed before migration')
+      await mkdir(dirname(this.spec.filename), { recursive: true, mode: 0o700 })
+      return withFileLock(this.spec.filename, async () => {
+        await this.reconcileFromDisk()
+        const legacy = this.values.get(ref)
+        if (legacy === undefined) return false
+        const current = this.records.get(key)
+        const next = current ?? convert(legacy)
+        if (next.kind === 'grant') assertJsonValue(`record "${key}" payload`, next.payload, new Set())
+        else assertStorableApiKey(key, next)
+        const document = mutableDocument(this.text)
+        if (current === undefined) document.setIn(['records', key], next)
+        deleteSectionEntry(document, 'refs', ref)
+        const text = document.toString()
+        await writeFileAtomic(this.spec.filename, text, { mode: 0o600, dirMode: 0o700 })
+        this.text = text
+        this.values.delete(ref)
+        this.records.set(key, next)
+        this.notifyUpdated(ref)
+        if (current === undefined) this.notifyRecordUpdated(key)
+        return true
+      }, { waitMs: DOCUMENT_LOCK_WAIT_MS })
+    })
+  }
+
   override async deleteRecord(key: CredentialKey): Promise<void> {
     if (this.isClosed()) throw new Error(`credentials-local is disposed: cannot delete "${key}"`)
     await this.enqueue(async () => {

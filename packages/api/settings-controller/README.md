@@ -6,7 +6,7 @@ kind: "package-reference"
 
 ## Summary
 
-`@deepseek-ai/dsh-api-settings-controller` exposes generated `ctx.remote.settings` and `ctx.remote.credentials` namespaces for browser configuration surfaces. It returns redacted settings and credential metadata, supports settings and credential writes without returning secret values, and opens provider-owned settings or Agent preset locations on the Host desktop. When a provider is absent, the namespace remains registered and returns an actionable configuration error.
+`@deepseek-ai/dsh-api-settings-controller` exposes generated `ctx.remote.settings`, `ctx.remote.credentials`, and `ctx.remote.authorization` namespaces for browser configuration surfaces. It returns redacted settings and credential metadata, supports settings and credential writes without returning secret values, and opens provider-owned settings or Agent preset locations on the Host desktop. When a provider is absent, the namespace remains registered and returns an actionable configuration error.
 
 ## Table of Contents
 
@@ -21,9 +21,11 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this package as a Loader entry in a profile that serves browser configuration. The entry registers both namespaces independently of their providers so a missing provider produces a named configuration error at invocation. Its generated descriptors enter the strict Typert registry, while the settings and credential Definitions remain plain Cordis Services with no wire obligations of their own.
+Mount this package as a Loader entry in a profile that serves browser configuration. The entry registers its namespaces independently of their providers so a missing provider produces a named configuration error at invocation. Its generated descriptors enter the strict Typert registry, while the settings and credential Definitions remain plain Cordis Services with no wire obligations of their own.
 
 `describe(refs)` answers one map keyed by the requested names, so a settings page describing every reference its rows carry settles those rows together. It accepts at most 64 names per call, reports an invalid name or empty write value as `bad-request`, and copies each answer field by field — a provider returning more than `CredentialInfo` declares cannot widen what crosses. Valid `set(ref, value)` and `unset(ref)` calls report a provider refusal as `credential-rejected`, carrying the provider's message with only the reference in its details. Secret values cross in this direction only: no method here returns one.
+
+`authorization.list()` returns registered account methods and credential presence. `authorization.signIn(key, method)` streams provider notices and questions until authorization succeeds, fails, or is cancelled; `answer` submits a write-only response. Closing the stream cancels its attempt. `signOut` cancels matching authorization before deleting its credential record. The profile must mount `dsh-authorization` and a credential provider to offer account methods.
 
 `settings.describe()` returns deployment facts and every namespace under `redactSecrets: true`. `settings.update`, `settings.replace`, and `settings.mutate` expose the settings service's three write operations and return the namespace's new redacted view; stale writes use `settings-conflict` and other provider refusals use `settings-rejected`.
 
@@ -36,6 +38,7 @@ Mount this package as a Loader entry in a profile that serves browser configurat
 
 | Field | Default | Meaning |
 |---|---|---|
+| `authorizationTimeoutMs` | `900000` | Maximum account sign-in duration in milliseconds |
 | `nativeOpen` | platform-detected | Whether Agent preset directories can be handed to a native desktop opener |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-api-settings-controller) is the exhaustive source for accepted fields and their JSDoc.
@@ -55,6 +58,7 @@ No direct effect; reading or writing these configuration values does not alter m
 
 <a id="known-limitations-and-deferred-work"></a>
 
+- Account sign-in cannot resume after a browser reload or Host restart.
 - The batch bound is fixed at 64 references and is not a deployment-configurable field.
 
 <a id="dev-note"></a>

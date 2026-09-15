@@ -4,7 +4,7 @@
 // lost between processes.
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { credentialKey, credentialKeyScope, credentialRef, parseCredentialKey } from '@deepseek-ai/dsh-credentials'
@@ -345,5 +345,49 @@ describe('record mutation', () => {
     await expect(credentials.modifyRecord(CODEX, () => Promise.resolve({ kind: 'grant', payload: 1 })))
       .rejects.toThrow(/disposed/)
     await expect(credentials.deleteRecord(CODEX)).rejects.toThrow(/disposed/)
+  })
+})
+
+
+describe('reference-to-record migration', () => {
+  const ref = credentialRef('DSH_PI_AI_OPENAI_CODEX_AUTH')
+  const record: CredentialRecord = { kind: 'grant', payload: { refresh: 'saved' } }
+
+  it('moves the saved reference once across two store instances and keeps the document private', async () => {
+    const file = join(await tempDir(), '.credentials.yaml')
+    const a = await boot({ path: file, watch: false })
+    await a.credentials.set(ref, 'legacy')
+    const b = await boot({ path: file, watch: false })
+    const results = await Promise.all([
+      a.credentials.migrateReference(ref, CODEX, () => record),
+      b.credentials.migrateReference(ref, CODEX, () => record),
+    ])
+    expect(results.sort()).toEqual([false, true])
+    expect(await b.credentials.readRecord(CODEX)).toEqual(record)
+    const text = await readFile(file, 'utf8')
+    expect(text).not.toContain('DSH_PI_AI_OPENAI_CODEX_AUTH')
+    expect((await stat(file)).mode & 0o777).toBe(0o600)
+    await b.credentials.deleteRecord(CODEX)
+    expect(await a.credentials.migrateReference(ref, CODEX, () => record)).toBe(false)
+    expect(await a.credentials.readRecord(CODEX)).toBeUndefined()
+  })
+
+  it('keeps a newer record without converting the obsolete reference', async () => {
+    const ctx = await boot({ path: join(await tempDir(), '.credentials.yaml'), watch: false })
+    await ctx.credentials.set(ref, 'invalid old JSON')
+    await put(ctx, CODEX, record)
+    expect(await ctx.credentials.migrateReference(ref, CODEX, () => { throw new Error('must not convert') })).toBe(true)
+    expect(await ctx.credentials.readRecord(CODEX)).toEqual(record)
+    expect((await ctx.credentials.describe(ref)).configured).toBe(false)
+  })
+
+  it('leaves both stores unchanged when conversion fails', async () => {
+    const file = join(await tempDir(), '.credentials.yaml')
+    const ctx = await boot({ path: file, watch: false })
+    await ctx.credentials.set(ref, 'incomplete')
+    const before = await readFile(file, 'utf8')
+    await expect(ctx.credentials.migrateReference(ref, CODEX, () => { throw new Error('invalid grant') })).rejects.toThrow('invalid grant')
+    expect(await readFile(file, 'utf8')).toBe(before)
+    expect(await ctx.credentials.readRecord(CODEX)).toBeUndefined()
   })
 })

@@ -630,6 +630,40 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'authorizationController',
+    summary: 'Redacted account operations for the Models page.',
+    description: 'Redacted account operations for the Models page.',
+    methods: [
+      {
+        signature: '@Remote async list(): Promise<ProviderAccount[]>',
+        description: 'List accounts available to this settings surface.',
+        parameters: [],
+        returns: 'registered account methods and stored presence, without secret values.',
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *signIn(key: string, method: string, signal: AbortSignal): AsyncIterable<ProviderAccountUpdate>',
+        description: 'Stream one sign-in; closing the stream cancels it and discards its prompts.',
+        parameters: [{ name: 'key', description: 'credential record address offered by list.' }, { name: 'method', description: 'method offered by that account.' }, { name: 'signal', description: 'browser stream lifetime.' }],
+        returns: 'progress, interactive questions, and one terminal outcome.',
+      },
+      {
+        signature: '@Remote answer(id: AccountAttemptId, promptId: AccountPromptId, value: string): void',
+        description: 'Answer the current question; the answer is never returned or logged.',
+        parameters: [{ name: 'id', description: 'attempt id from the progress stream.' }, { name: 'promptId', description: 'current question id.' }, { name: 'value', description: 'typed text or selected option.' }],
+      },
+      {
+        signature: '@Remote cancel(id: AccountAttemptId): void',
+        description: 'Cancel a running attempt.',
+        parameters: [{ name: 'id', description: 'attempt id from the progress stream.' }],
+      },
+      {
+        signature: '@Remote async signOut(key: string): Promise<void>',
+        description: 'Cancel account sign-in before removing its stored credential.',
+        parameters: [{ name: 'key', description: 'credential record address offered by list.' }],
+      },
+    ],
+  },
+  {
     key: 'clientModules',
     summary: 'The web plugin table service: incremental `dsh.client` scan + wire composition + bundle route + index injection rows.',
     description: 'The web plugin table service: incremental `dsh.client` scan + wire composition + bundle route + index injection rows. Construction runs the activation scan synchronously — a malformed declaration or missing bundle among the already-loaded entries aggregates into one loud throw (FAILED fiber; the boot activation audit reports it).',
@@ -820,6 +854,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: 'abstract deleteRecord(key: CredentialKey): Promise<void>',
         description: 'Remove one record; removing an absent record is a no-op.',
         parameters: [{ name: 'key', description: 'the record to remove.' }],
+      },
+      {
+        signature: 'abstract migrateReference( ref: CredentialRef, key: CredentialKey, convert: (value: string) => CredentialRecord, ): Promise<boolean>',
+        description: 'Move a provider-managed legacy reference into a record in one transaction. An existing record wins without conversion; either way the legacy reference is removed in the same commit. Ambient environment values are not migrated. A conversion failure leaves both entries unchanged.',
+        parameters: [{ name: 'ref', description: 'legacy reference in the provider-managed store.' }, { name: 'key', description: 'destination record.' }, { name: 'convert', description: 'synchronous owner validation and conversion of the legacy value.' }],
+        returns: 'true when a legacy reference was removed, false when it was absent.',
       },
     ],
   },
@@ -3761,6 +3801,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
 /** Shapes of every exported type the Service and Event signatures reference (transitively), sorted by name. */
 export const TYPE_API: readonly TypeApiEntry[] = [
   {
+    name: 'AccountAttemptId',
+    declaration: 'export type AccountAttemptId = Branded<\'AccountAttemptId\'>;',
+  },
+  {
+    name: 'AccountPromptId',
+    declaration: 'export type AccountPromptId = Branded<\'AccountPromptId\'>;',
+  },
+  {
     name: 'AdapterRegistrationHandle',
     declaration: 'export interface AdapterRegistrationHandle {\n    (): void;\n    replace(providers: string[]): void;\n}',
   },
@@ -5127,6 +5175,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'PromptSectionOrderName',
     declaration: 'export type PromptSectionOrderName = keyof typeof SECTION_ORDERS;',
+  },
+  {
+    name: 'ProviderAccount',
+    declaration: 'export interface ProviderAccount {\n    readonly key: CredentialKey;\n    readonly label: string;\n    readonly methods: readonly {\n        readonly id: string;\n        readonly label: string;\n    }[];\n    readonly configured: boolean;\n    readonly inFlight: boolean;\n}',
+  },
+  {
+    name: 'ProviderAccountPrompt',
+    declaration: 'export interface ProviderAccountPrompt {\n    readonly id: AccountPromptId;\n    readonly kind: \'text\' | \'secret\' | \'select\';\n    readonly message: string;\n    readonly placeholder?: string;\n    readonly options?: readonly {\n        readonly id: string;\n        readonly label: string;\n        readonly description?: string;\n    }[];\n}',
+  },
+  {
+    name: 'ProviderAccountUpdate',
+    declaration: 'export interface ProviderAccountUpdate {\n    readonly id: AccountAttemptId;\n    readonly status: \'pending\' | \'authorized\' | \'cancelled\' | \'failed\';\n    readonly message?: string;\n    readonly url?: string | undefined;\n    readonly code?: string;\n    readonly prompt?: ProviderAccountPrompt | undefined;\n}',
   },
   {
     name: 'ProviderRequestId',

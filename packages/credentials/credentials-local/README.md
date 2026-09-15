@@ -64,6 +64,8 @@ await ctx.credentials.unset(ref)                // remove
 
 A key you save is usable by the next request that names it, and `describe` reports whether it is set, where it comes from, and whether you can write to it — never the value itself. Records persist in the same file, addressed by `<owner>/<id>` and managed with the seam's record operations (`readRecord`, `describeRecord`, `listRecords`, `modifyRecord`, `deleteRecord`).
 
+`migrateReference` re-reads the document under the same writer lock used by record modification, stores the converted record only when absent, and removes the legacy reference in one atomic private-file write. A conversion failure preserves the original document.
+
 ### Where keys come from
 
 Keys are resolved in one fixed order — the first place that has a value wins:

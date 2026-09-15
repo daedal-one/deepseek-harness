@@ -143,7 +143,17 @@ export function registerPiAiFlows(ctx: Context, auth: PiAiAuthInjection): void {
         // A collection of its own, holding only the provider being signed
         // into: login is not serving requests, and the credential it produces
         // lands in the shared store either way.
-        const models = createModels(auth)
+        const models = createModels({
+          ...auth,
+          credentials: {
+            ...auth.credentials,
+            modify: (id, mutate) => auth.credentials.modify(id, async (current) => {
+              if (aborted(session.signal)) return undefined
+              const next = await mutate(current)
+              return aborted(session.signal) ? undefined : next
+            }),
+          },
+        })
         models.setProvider(provider)
         // Total over the two ids declared above, and the seam only ever hands
         // back one a flow declared.
@@ -159,3 +169,6 @@ export function registerPiAiFlows(ctx: Context, auth: PiAiAuthInjection): void {
     })
   }
 }
+
+/** Read cancellation after an awaited credential update. */
+function aborted(signal: AbortSignal): boolean { return signal.aborted }

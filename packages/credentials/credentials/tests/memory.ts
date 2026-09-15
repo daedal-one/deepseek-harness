@@ -89,4 +89,16 @@ export class MemoryCredentials extends CredentialProvider {
     }
     return Promise.resolve()
   }
+
+  override async migrateReference(ref: CredentialRef, key: CredentialKey, convert: (value: string) => CredentialRecord): Promise<boolean> {
+    const legacy = this.store.get(ref)
+    if (legacy === undefined) return false
+    const current = this.records.get(key)
+    const next = current ?? convert(legacy)
+    this.records.set(key, next)
+    this.store.delete(ref)
+    this.notifyUpdated(ref)
+    if (current === undefined) this.notifyRecordUpdated(key)
+    return true
+  }
 }

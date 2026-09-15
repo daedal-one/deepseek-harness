@@ -63,7 +63,7 @@ import type {} from '@deepseek-ai/dsh-fs'
 import type {} from '@deepseek-ai/dsh-settings'
 import { deepEqualJson } from '@deepseek-ai/dsh-util-values'
 import { PiAiAdapter } from './adapter.ts'
-import { authContextFrom, credentialStoreFrom } from './auth.ts'
+import { authContextFrom, credentialStoreFrom, migrateLegacyCredentials } from './auth.ts'
 import { catalogProviderIds } from './catalog.ts'
 import { assertServiceable, Config, resolveProfiles } from './config.ts'
 import type { ResolvedPiAiProviderProfile } from './config.ts'
@@ -160,7 +160,9 @@ function directoryEntries(
 }
 
 /** Register one generic pi-ai adapter for all configured provider routes. */
-export function apply(ctx: Context, config: Config): void {
+export async function apply(ctx: Context, config: Config): Promise<void> {
+  ctx.inject(['credentials'], migrateLegacyCredentials)
+  await migrateLegacyCredentials(ctx)
   const openRouterBaseURL = launchEnvironmentOf(ctx).get(OPENROUTER_BASE_URL_ENV)?.value
   let current: () => Config = () => config
   let lastRaw: Config | undefined

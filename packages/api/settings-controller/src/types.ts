@@ -7,6 +7,14 @@
  * @module @deepseek-ai/dsh-api-settings-controller/types
  */
 
+import type { Branded } from '@deepseek-ai/dsh-brand'
+import type { CredentialKey } from '@deepseek-ai/dsh-credentials/types'
+
+/** Identity of one browser account sign-in. */
+export type AccountAttemptId = Branded<'AccountAttemptId'>
+/** Identity of one question within an account sign-in. */
+export type AccountPromptId = Branded<'AccountPromptId'>
+
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface RemoteErrorDetailsMap {
     /**
@@ -37,3 +45,31 @@ export interface SettingsDocumentOpenValue {
 export type AgentPresetDirectoryOpenValue =
   | { readonly opened: true }
   | { readonly opened: false; readonly path: string }
+
+/** One provider account, with credential presence but no credential values. */
+export interface ProviderAccount {
+  readonly key: CredentialKey
+  readonly label: string
+  readonly methods: readonly { readonly id: string; readonly label: string }[]
+  readonly configured: boolean
+  readonly inFlight: boolean
+}
+
+/** One question presented during provider sign-in. Answers are write-only. */
+export interface ProviderAccountPrompt {
+  readonly id: AccountPromptId
+  readonly kind: 'text' | 'secret' | 'select'
+  readonly message: string
+  readonly placeholder?: string
+  readonly options?: readonly { readonly id: string; readonly label: string; readonly description?: string }[]
+}
+
+/** Redacted sign-in progress carried by a cancellable Remote stream. */
+export interface ProviderAccountUpdate {
+  readonly id: AccountAttemptId
+  readonly status: 'pending' | 'authorized' | 'cancelled' | 'failed'
+  readonly message?: string
+  readonly url?: string | undefined
+  readonly code?: string
+  readonly prompt?: ProviderAccountPrompt | undefined
+}

@@ -41,6 +41,8 @@ Load the local store package with a document path:
 
 The local store README owns the full configuration surface; the generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-credentials-local) is the exhaustive field list.
 
+A credential owner can recover a legacy provider-managed reference with `migrateReference(ref, key, convert)`. The provider converts and removes that reference in one transaction; an existing record wins without conversion. A failed conversion leaves the document unchanged, and ambient environment values are never migrated.
+
 ### Storing, checking, and removing keys
 
 ```ts

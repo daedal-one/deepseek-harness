@@ -210,6 +210,18 @@ abstract modifyRecord( key: CredentialKey, mutate: (current: CredentialRecord | 
  * @param key - the record to remove.
  */
 abstract deleteRecord(key: CredentialKey): Promise<void>
+
+/**
+ * Move a provider-managed legacy reference into a record in one transaction.
+ * An existing record wins without conversion; either way the legacy reference
+ * is removed in the same commit. Ambient environment values are not migrated.
+ * A conversion failure leaves both entries unchanged.
+ * @param ref - legacy reference in the provider-managed store.
+ * @param key - destination record.
+ * @param convert - synchronous owner validation and conversion of the legacy value.
+ * @returns true when a legacy reference was removed, false when it was absent.
+ */
+abstract migrateReference( ref: CredentialRef, key: CredentialKey, convert: (value: string) => CredentialRecord, ): Promise<boolean>
 ```
 
 Source: [`packages/credentials/credentials/src/index.ts`](../../packages/credentials/credentials/src/index.ts)

@@ -21,7 +21,7 @@
     - img
     - text: Close
   - heading "Models" [level=2]
-  - paragraph: Enter your API keys to use models from the following providers.
+  - paragraph: Sign in to an account or enter an API key to use these providers.
   - list:
     - listitem:
       - text: OpenRouter API key missing

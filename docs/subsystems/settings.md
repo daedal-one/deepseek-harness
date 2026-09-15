@@ -171,6 +171,51 @@ type SettingsUpdateSource = 'update' | 'provider'
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxauthorizationcontroller--authorizationcontroller"></a>
+
+### `ctx.authorizationController` — `AuthorizationController`
+
+Redacted account operations for the Models page.
+
+```ts cordis-catalog
+/**
+ * List accounts available to this settings surface.
+ * @returns registered account methods and stored presence, without secret values.
+ */
+@Remote async list(): Promise<ProviderAccount[]>
+
+/**
+ * Stream one sign-in; closing the stream cancels it and discards its prompts.
+ * @param key - credential record address offered by list.
+ * @param method - method offered by that account.
+ * @param signal - browser stream lifetime.
+ * @returns progress, interactive questions, and one terminal outcome.
+ */
+@Remote({ mode: 'stream' }) async *signIn(key: string, method: string, signal: AbortSignal): AsyncIterable<ProviderAccountUpdate>
+
+/**
+ * Answer the current question; the answer is never returned or logged.
+ * @param id - attempt id from the progress stream.
+ * @param promptId - current question id.
+ * @param value - typed text or selected option.
+ */
+@Remote answer(id: AccountAttemptId, promptId: AccountPromptId, value: string): void
+
+/**
+ * Cancel a running attempt.
+ * @param id - attempt id from the progress stream.
+ */
+@Remote cancel(id: AccountAttemptId): void
+
+/**
+ * Cancel account sign-in before removing its stored credential.
+ * @param key - credential record address offered by list.
+ */
+@Remote async signOut(key: string): Promise<void>
+```
+
+Source: [`packages/api/settings-controller/src/authorization.ts`](../../packages/api/settings-controller/src/authorization.ts)
+
 <a id="ctxsettings--settingsprovider-abstract-seam"></a>
 
 ### `ctx.settings` — `SettingsProvider` (abstract seam)

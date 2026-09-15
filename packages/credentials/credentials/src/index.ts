@@ -256,6 +256,22 @@ export abstract class CredentialProvider extends Service {
   abstract deleteRecord(key: CredentialKey): Promise<void>
 
   /**
+   * Move a provider-managed legacy reference into a record in one transaction.
+   * An existing record wins without conversion; either way the legacy reference
+   * is removed in the same commit. Ambient environment values are not migrated.
+   * A conversion failure leaves both entries unchanged.
+   * @param ref - legacy reference in the provider-managed store.
+   * @param key - destination record.
+   * @param convert - synchronous owner validation and conversion of the legacy value.
+   * @returns true when a legacy reference was removed, false when it was absent.
+   */
+  abstract migrateReference(
+    ref: CredentialRef,
+    key: CredentialKey,
+    convert: (value: string) => CredentialRecord,
+  ): Promise<boolean>
+
+  /**
    * Fan `credentials/reference-updated` out with contained listener failures: every
    * listener runs, and a sync throw or async rejection is logged without
    * changing the committed operation's outcome — except `INVARIANT`-coded

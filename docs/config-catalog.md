@@ -246,6 +246,8 @@ Source: [`packages/api/session-controller/src/index.ts:74`](../packages/api/sess
 export interface Config {
   /** Override platform desktop-opener detection. */
   readonly nativeOpen?: boolean
+  /** Maximum duration of a browser account sign-in. */
+  readonly authorizationTimeoutMs?: number
 }
 ```
 

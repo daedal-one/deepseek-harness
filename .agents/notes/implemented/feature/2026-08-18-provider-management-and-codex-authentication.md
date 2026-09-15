@@ -10,17 +10,15 @@ OpenAI exposes two distinct authentication products. The public OpenAI API uses 
 
 ## Decision
 
-`LlmRuntime` owns a provider-neutral authentication registry beside adapter and configurable-provider registration. An adapter registers one `LlmProviderAuthenticator` per provider and method. The runtime exposes account status, starts login as a bounded background operation, carries provider-issued device authorization metadata, supports cancellation, and drains matching login before logout or registration disposal. It retains at most 64 terminal operation snapshots and never carries account credentials.
+`ctx.authorization` owns provider-neutral sign-in lifecycles. Each pi-ai provider registers its installed methods under a scoped credential key. The settings controller exposes redacted account metadata and a cancellable Remote stream carrying notices, prompts, and terminal outcomes. Prompt and attempt ids are branded; answers are write-only. The Web profile mounts the authorization service beside its settings controller.
 
-The configurable-provider directory carries authentication method names. Account state is a separate Host query: `llm.providers` remains safe for ordinary model selection, while `llm.providerAuthState`, login, operation status, cancellation, and logout are loopback-only configuration-plane methods. The wire returns booleans, device codes, verification URLs, and diagnostics; tokens never enter a client response.
-
-`dsh-llm-pi-ai` uses the installed pi-ai provider definitions as the provider source. OpenAI API-key access is the `openai` route. OpenAI Codex is the `openai-codex` route using pi-ai's native `openai-codex-responses` implementation and its device-code OAuth implementation. The Models page offers both routes, shows the API-key editor only where an API-key method exists, and gives Codex explicit sign-in, cancellation, status, and sign-out controls.
+The local Models page presents browser and device-code instructions, select/text/secret prompts, cancellation, stored-account state, and sign-out. An OAuth-only provider hides the API-key field. The native pi-ai provider owns the OAuth protocol and Codex Responses transport.
 
 ### Credential ownership and lifecycle
 
-`HarnessPiCredentialStore` serializes pi-ai credential records into provider-specific internal references held by `ctx.credentials`. The settings document contains neither OAuth records nor references that a user must manage. Provider requests and pi-ai's refresh path read the same store, so a refreshed credential reaches the next request without rebuilding configuration.
+pi-ai reads and refreshes records at `llm-pi-ai/<provider>` through `credentialStoreFrom`. The local credential provider serializes record modification under its cross-process writer lock. Sign-out cancels authorization before deleting the record, and the pi-ai login writer checks cancellation inside its credential transaction to prevent a detached late flow from restoring it.
 
-`CredentialProvider.modify` is the shared atomic read-modify-write operation. A provider holds its storage transaction across the asynchronous update callback; `undefined` preserves the current value and `unset` remains the explicit deletion operation. The local provider performs the operation under its cross-process writer lock after re-reading the durable document. Concurrent token refreshes therefore serialize against each other, and logout waits for pending login before deleting the record so a late success cannot restore it.
+Legacy `DSH_PI_AI_<PROVIDER>_AUTH` references migrate when the credential service becomes available and before authentication reads it. `migrateReference` converts the provider-managed reference and removes it in the same atomic write; an existing record takes precedence without conversion. Invalid legacy data remains intact with a diagnostic that excludes credential contents. Removing the reference prevents a later startup from restoring a signed-out account.
 
 ### Layered provider profiles
 
@@ -32,7 +30,7 @@ A non-empty user `models` list is the complete model-catalog choice for its rout
 
 **Store OAuth tokens in settings or expose them through the Models client.** Rejected because settings are syncable and remotely describable, and browser clients do not need credential values. The credential service already owns secret persistence and invalidation.
 
-**Return account state from `llm.providers`.** Rejected because provider and model discovery is intentionally available to trusted LAN clients, while stored-account state is credential reconnaissance. A separate loopback-only query preserves the ordinary catalog wire.
+**Return account state from `llm.providers`.** Rejected because provider and model discovery is intentionally available to trusted LAN clients, while account state belongs to configuration. A separate configuration query keeps account state out of ordinary catalog reads.
 
 **Use independent credential reads and writes during refresh.** Rejected because two refreshes can derive replacements from the same stale token, and logout can race a late login completion. Atomic modification plus lifecycle draining makes the durable result deterministic.
 
@@ -42,6 +40,4 @@ A non-empty user `models` list is the complete model-catalog choice for its rout
 
 OpenRouter, OpenAI, OpenAI Codex, and other manageable installed pi-ai providers remain visible before activation and can be added or removed from the Models page. OpenAI Codex requests use the stored account through the native transport, including token refresh, without putting credentials into settings or the wire.
 
-Interactive OAuth support is intentionally limited to OpenAI Codex until another provider's pi-ai prompt types have matching product controls. The provider-neutral runtime can host those implementations without another lifecycle or wire redesign.
-
-Provider-management coverage includes layered catalog resolution, concurrent durable modification, login cancellation and disposal, Host serialization and loopback fencing, Models controls, and a native Codex request against a local Responses endpoint that verifies the authorization and account headers.
+Account controls render the installed provider's authorization vocabulary. Sign-in state is process-local and a browser reload requires a fresh attempt. Credential values remain Host-owned; only authorization URLs, device codes, questions, and credential presence reach the browser.

@@ -7,16 +7,16 @@ import AuthorizationService from '@deepseek-ai/dsh-authorization'
 import type { AuthorizationInteraction, AuthorizationNotice, AuthorizationPrompt } from '@deepseek-ai/dsh-authorization'
 import LocalCredentialProvider from '@deepseek-ai/dsh-credentials-local'
 import type { CredentialKey } from '@deepseek-ai/dsh-credentials'
-import type { AuthEvent, AuthInteraction, AuthPrompt, AuthType, Credential } from '@earendil-works/pi-ai'
+import type { AuthEvent, AuthInteraction, AuthPrompt, AuthType, Credential, CredentialStore } from '@earendil-works/pi-ai'
 
-const login = vi.hoisted(() => vi.fn())
+const { login, collections } = vi.hoisted(() => ({ login: vi.fn(), collections: vi.fn() }))
 
 // The whole of what this module does with pi-ai is run one provider's login
 // against a collection built with the harness store, so the collection is the
 // boundary worth observing; a real login would open a browser.
 vi.mock('@earendil-works/pi-ai', async importOriginal => ({
   ...await importOriginal<typeof import('@earendil-works/pi-ai')>(),
-  createModels: () => ({ setProvider: () => {}, login }),
+  createModels: (options: { credentials: CredentialStore }) => { collections(options); return { setProvider: () => {}, login } },
 }))
 
 const { credentialStoreFrom, authContextFrom, recordKeyFor } = await import('../src/auth.ts')
@@ -77,6 +77,7 @@ async function attempt(
 
 afterEach(async () => {
   login.mockReset()
+  collections.mockReset()
   await Promise.all(dirs.splice(0).map(dir => rm(dir, { recursive: true, force: true })))
 })
 
@@ -195,4 +196,28 @@ describe('pi-ai login flows', () => {
     })).resolves.toEqual({ status: 'cancelled' })
     expect(seen?.aborted).toBe(true)
   })
+})
+
+
+it('discards a late pi-ai credential commit after cancellation and logout', async () => {
+  const ctx = await harness()
+  const entered = Promise.withResolvers<undefined>()
+  const finish = Promise.withResolvers<undefined>()
+  const wrote = Promise.withResolvers<undefined>()
+  login.mockImplementation(async () => {
+    const store = (collections.mock.lastCall![0] as { credentials: CredentialStore }).credentials
+    entered.resolve(undefined)
+    await finish.promise
+    await store.modify('openai-codex', async () => ({ type: 'oauth', access: 'late', refresh: 'late', expires: 1 }))
+    wrote.resolve(undefined)
+  })
+  const controller = new AbortController()
+  const pending = ctx.authorization.begin({ key: CODEX, interaction: surface(), signal: controller.signal })
+  await entered.promise
+  controller.abort()
+  expect(await pending).toEqual({ status: 'cancelled' })
+  await ctx.credentials.deleteRecord(CODEX)
+  finish.resolve(undefined)
+  await wrote.promise
+  expect(await ctx.credentials.readRecord(CODEX)).toBeUndefined()
 })

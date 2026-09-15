@@ -7,7 +7,7 @@
 
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {
-  CredentialInfo, LlmDiscoveredModel, LlmModelDiscoveryRequest,
+  AccountAttemptId, AccountPromptId, ProviderAccount, ProviderAccountUpdate, CredentialInfo, LlmDiscoveredModel, LlmModelDiscoveryRequest,
   SettingsNamespaceView, SettingsPathOpView,
 } from '@deepseek-ai/dsh-api-remotes/client'
 
@@ -32,6 +32,29 @@ export type ModelDiscoveryOutcome =
 
 /** The Host operations the Models page and its cards invoke. */
 export interface ModelsOperations {
+  /** @returns available account methods and credential presence. */
+  listAccounts(): Promise<readonly ProviderAccount[]>
+  /**
+   * Run one cancellable sign-in and deliver redacted progress.
+   * @param key - record address from the account directory.
+   * @param method - account method id.
+   * @param signal - editor lifetime or cancellation.
+   * @param update - progress callback.
+   * @returns after sign-in settles.
+   */
+  signIn(key: string, method: string, signal: AbortSignal, update: (value: ProviderAccountUpdate) => void): Promise<void>
+  /**
+   * @param id - running attempt.
+   * @param prompt - current question.
+   * @param value - write-only answer.
+   * @returns after the host accepts the answer.
+   */
+  answerAccount(id: AccountAttemptId, prompt: AccountPromptId, value: string): Promise<void>
+  /**
+   * @param key - account record to remove.
+   * @returns after cancellation and credential removal.
+   */
+  signOut(key: string): Promise<void>
   /**
    * Read one credential reference's state.
    * @param ref - credential reference name.
@@ -81,6 +104,22 @@ export interface ModelsOperations {
  */
 export function createModelsOperations(ctx: ClientContext): ModelsOperations {
   return {
+    listAccounts: async () => {
+      const response = await ctx.remote.authorization.list()
+      if (!response.ok) throw response.error
+      return response.value
+    },
+    signIn: async (key, method, signal, update) => {
+      for await (const value of ctx.remote.authorization.signIn(key, method, signal)) update(value)
+    },
+    answerAccount: async (id, prompt, value) => {
+      const response = await ctx.remote.authorization.answer(id, prompt, value)
+      if (!response.ok) throw response.error
+    },
+    signOut: async (key) => {
+      const response = await ctx.remote.authorization.signOut(key)
+      if (!response.ok) throw response.error
+    },
     describeCredential: async (ref) => {
       const response = await ctx.remote.credentials.describe([ref])
       return response.ok ? response.value[ref] : undefined

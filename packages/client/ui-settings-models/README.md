@@ -7,7 +7,7 @@ kind: "package-reference"
 
 ## Summary
 
-`dsh-client-ui-settings-models` is the Models settings page of the dsh web client: users configure API keys (stored write-only under the profile's credential reference), edit each provider's model list, and hand-declare custom pi-ai routes, with provider rows and one editor card at a time. The page joins the provider directory, the settings document, and the credential descriptions into one shared snapshot, so a row's state stays consistent across all three. It also walks first-run users through two ordered dialogs — a versioned internal-testing notice and the conditional OpenRouter credential step.
+`dsh-client-ui-settings-models` is the Models settings page of the dsh web client: users sign into provider accounts, configure API keys (stored write-only under the profile's credential reference), edit each provider's model list, and hand-declare custom pi-ai routes, with provider rows and one editor card at a time. The page joins the provider directory, the settings document, and the credential descriptions into one shared snapshot, so a row's state stays consistent across all three. It also walks first-run users through two ordered dialogs — a versioned internal-testing notice and the conditional OpenRouter credential step.
 
 ## Table of Contents
 
@@ -29,9 +29,13 @@ A provider with a stored catalog error remains visible with its diagnostic and e
 
 The Agents page edits the main Agent and named roles through the deployment-owned model catalog. Saved choices apply to the next request, and changing a session preset selects that preset's defaults.
 
+### Provider accounts
+
+Installed pi-ai providers offer the account methods registered by the Host authorization service. Choose a sign-in method, follow its browser or device-code instructions, and answer any account questions in the card. The card reports credential presence and offers sign-out; closing it cancels an active sign-in. OAuth-only providers such as OpenAI Codex hide the API-key input. Account credentials stay in the Host credential store.
+
 ### API keys
 
-The primary field on an editor card is a single **API key** input — the page never asks for an environment-variable name. A typed key stores write-only through `credentials.set` under the profile's reference, deriving `<ROUTE>_API_KEY` when the profile has none, and the pi-ai profile records that derivation as `apiKeyEnv`, so `settings.yaml` never carries a key value. Leaving a new pi-ai provider's key blank saves a reference-free profile and preserves provider-native authentication (for example the Bedrock credential chain or Vertex ADC). A row labels API-key state as configured or missing only when the credential service confirms that state. A successful Apply emits a local accessible status message without echoing secret material.
+For providers accepting API keys, the primary field is a single **API key** input — the page never asks for an environment-variable name. A typed key stores write-only through `credentials.set` under the profile's reference, deriving `<ROUTE>_API_KEY` when the profile has none, and the pi-ai profile records that derivation as `apiKeyEnv`, so `settings.yaml` never carries a key value. Leaving a new pi-ai provider's key blank saves a reference-free profile and preserves provider-native authentication (for example the Bedrock credential chain or Vertex ADC). A row labels API-key state as configured or missing only when the credential service confirms that state. A successful Apply emits a local accessible status message without echoing secret material.
 
 ### Editing a provider
 

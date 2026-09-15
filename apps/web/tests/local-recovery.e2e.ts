@@ -35,7 +35,7 @@ it('submits each authenticated recovery form with its own origin', async () => {
         ['Use last good', 'use-good', 'good'],
         ['Use current', 'use-current', 'current'],
         ['Mark current good', 'mark-good', 'mark'],
-      ]) {
+      ] as const) {
         if (action === 'mark') await page.getByRole('checkbox').check()
         const submitted = page.waitForResponse(response => response.request().method() === 'POST'
           && new URL(response.url()).pathname === `/_dev/${route}`)

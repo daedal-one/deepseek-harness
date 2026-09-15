@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import LocalCredentialProvider from '@deepseek-ai/dsh-credentials-local'
 import { credentialKey, credentialRef } from '@deepseek-ai/dsh-credentials'
-import { authContextFrom, credentialStoreFrom, recordKeyFor } from '../src/auth.ts'
+import { authContextFrom, credentialStoreFrom, migrateLegacyCredentials, recordKeyFor } from '../src/auth.ts'
 
 const CODEX = recordKeyFor('openai-codex')
 
@@ -209,5 +209,27 @@ describe('pi-ai ambient auth context', () => {
     await expect(context.fileExists('~/missing')).resolves.toBe(false)
     await expect(context.fileExists(join(dir, 'creds'))).resolves.toBe(true)
     await expect(context.fileExists('~')).resolves.toBe(true)
+  })
+})
+
+
+describe('saved Codex account recovery', () => {
+  it('preserves refresh and account fields when migrating an expired OAuth grant', async () => {
+    const ctx = await stored()
+    const ref = credentialRef('DSH_PI_AI_OPENAI_CODEX_AUTH')
+    const saved = { type: 'oauth', access: 'expired-access', refresh: 'valid-refresh', expires: 1, accountId: 'account' }
+    await ctx.credentials.set(ref, JSON.stringify(saved))
+    await migrateLegacyCredentials(ctx)
+    expect(await credentialStoreFrom(ctx).read('openai-codex')).toEqual(saved)
+    expect((await ctx.credentials.describe(ref)).configured).toBe(false)
+  })
+
+  it('refuses incomplete legacy grants without exposing or deleting their contents', async () => {
+    const ctx = await stored()
+    const ref = credentialRef('DSH_PI_AI_OPENAI_CODEX_AUTH')
+    const saved = JSON.stringify({ type: 'oauth', access: 'private-access' })
+    await ctx.credentials.set(ref, saved)
+    await expect(migrateLegacyCredentials(ctx)).rejects.toThrow('legacy OAuth credential is incomplete')
+    expect((await ctx.credentials.resolve(ref))?.value).toBe(saved)
   })
 })

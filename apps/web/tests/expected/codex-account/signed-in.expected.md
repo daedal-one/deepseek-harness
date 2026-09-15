@@ -1,0 +1,45 @@
+- dialog "Settings":
+  - navigation:
+    - text: Settings
+    - button "General":
+      - img
+      - text: General
+    - button "Models":
+      - img
+      - text: Models
+    - button "Plugins":
+      - img
+      - text: Plugins
+    - button "Agent presets":
+      - img
+      - text: Agent presets
+    - button "Agents":
+      - img
+      - text: Agents
+  - button "Open configuration file"
+  - button "Close":
+    - img
+    - text: Close
+  - heading "Models" [level=2]
+  - paragraph: Sign in to an account or enter an API key to use these providers.
+  - list:
+    - listitem:
+      - text: openai-codex
+      - button "Edit openai-codex": Edit
+      - button "Delete openai-codex": Delete
+      - text: openai-codex Account
+      - status: Signed in
+      - button "OpenAI (ChatGPT Plus/Pro)"
+      - button "Sign out"
+      - group: Customized settings
+      - button "Cancel"
+      - button "Apply"
+    - listitem:
+      - text: OpenRouter API key missing
+      - button "Edit OpenRouter (openrouter)": Edit
+  - button "Add provider":
+    - img
+    - text: Add provider
+  - button "Add a custom provider":
+    - img
+    - text: Add a custom provider

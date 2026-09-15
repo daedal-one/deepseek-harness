@@ -38,6 +38,8 @@
     "apps/web/tests/plugin-config.e2e.ts",
     "apps/web/tests/settings-chrome.e2e.ts",
     "apps/web/tests/models-settings.e2e.ts",
+    "apps/web/tests/codex-account.e2e.ts",
+    "apps/web/tests/local-recovery.e2e.ts",
     "apps/web/tests/models-settings-recovery.e2e.ts",
     "apps/web/tests/onboarding-openrouter-config.e2e.ts",
     "apps/web/tests/onboarding-usable-provider.e2e.ts",

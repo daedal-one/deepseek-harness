@@ -24,6 +24,8 @@
   "exclude": [
     "tests/poor-connection.e2e.ts",
     "tests/client-plugin-load-recovery.e2e.ts",
+    "tests/local-recovery.e2e.ts",
+    "tests/codex-account.e2e.ts",
     "tests/scaffold.ts",
     "tests/scaffold-generation.spec.ts",
     "tests/scaffold-hermetic.e2e.ts",

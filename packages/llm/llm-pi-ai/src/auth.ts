@@ -19,6 +19,7 @@ import {
 import type { CredentialKey, CredentialProvider, CredentialRecord } from '@deepseek-ai/dsh-credentials'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
 import { LlmError } from '@deepseek-ai/dsh-llm'
+import { catalogProviderIds } from './catalog.ts'
 
 /**
  * The record scope every credential this adapter family stores is written
@@ -35,6 +36,56 @@ export const RECORD_SCOPE = 'llm-pi-ai'
  */
 export function recordKeyFor(providerId: string): CredentialKey {
   return credentialKey(RECORD_SCOPE, providerId)
+}
+
+/**
+ * Convert the legacy JSON account value without including it in diagnostics.
+ * @param raw - provider-managed legacy value.
+ * @returns the current credential record, preserving OAuth extension fields.
+ */
+function legacyRecord(raw: string): CredentialRecord {
+  let value: unknown
+  try { value = JSON.parse(raw) } catch {
+    throw new LlmError('The legacy account credential is not valid JSON; sign in again.', 'INVALID_CREDENTIAL')
+  }
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new LlmError('The legacy account credential is not an object; sign in again.', 'INVALID_CREDENTIAL')
+  }
+  const fields = value as Record<string, unknown>
+  if (fields.type !== 'oauth' || typeof fields.access !== 'string' || fields.access.length === 0
+    || typeof fields.refresh !== 'string' || fields.refresh.length === 0
+    || typeof fields.expires !== 'number' || !Number.isFinite(fields.expires)) {
+    throw new LlmError('The legacy OAuth credential is incomplete; sign in again.', 'INVALID_CREDENTIAL')
+  }
+  return { kind: 'grant', payload: value }
+}
+
+/**
+ * Recover provider-managed OAuth references written by the pre-rebase adapter.
+ * Existing records win and removal of the reference shares their transaction.
+ * @param ctx - context carrying the optional credential store.
+ * @returns once every installed provider's legacy reference has been considered.
+ */
+export async function migrateLegacyCredentials(ctx: Context): Promise<void> {
+  const credentials = ctx.get('credentials')
+  if (credentials === undefined) return
+  let migration = legacyMigrations.get(credentials)
+  if (migration === undefined) {
+    migration = migrateProviderReferences(credentials)
+    legacyMigrations.set(credentials, migration)
+  }
+  await migration
+}
+
+const legacyMigrations = new WeakMap<CredentialProvider, Promise<void>>()
+
+async function migrateProviderReferences(credentials: CredentialProvider): Promise<void> {
+  for (const provider of catalogProviderIds()) {
+    if (!isCredentialKeySegment(provider)) continue
+    const ref = credentialRef(`DSH_PI_AI_${provider.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}_AUTH`)
+    if (!(await credentials.describe(ref)).configured) continue
+    await credentials.migrateReference(ref, recordKeyFor(provider), legacyRecord)
+  }
 }
 
 /**
@@ -141,12 +192,14 @@ function writableStore(ctx: Context): CredentialProvider {
 export function credentialStoreFrom(ctx: Context): CredentialStore {
   return {
     async read(providerId) {
+      await migrateLegacyCredentials(ctx)
       const credentials = ctx.get('credentials')
       if (credentials === undefined) return undefined
       if (!isCredentialKeySegment(providerId)) return undefined
       return toPiCredential(await credentials.readRecord(recordKeyFor(providerId)))
     },
     async list(): Promise<readonly CredentialInfo[]> {
+      await migrateLegacyCredentials(ctx)
       const stored = await ctx.get('credentials')?.listRecords() ?? []
       const mine: CredentialInfo[] = []
       for (const entry of stored) {
@@ -161,6 +214,7 @@ export function credentialStoreFrom(ctx: Context): CredentialStore {
       return mine
     },
     async modify(providerId, mutate) {
+      await migrateLegacyCredentials(ctx)
       if (!isCredentialKeySegment(providerId)) {
         throw new LlmError(
           `llm-pi-ai: provider id "${providerId}" cannot address a stored credential record (a record id is a`
@@ -179,6 +233,7 @@ export function credentialStoreFrom(ctx: Context): CredentialStore {
     // store contract is promise-returning, and a synchronous throw would
     // escape the `ModelsError` wrapper every other storage failure gets.
     async delete(providerId) {
+      await migrateLegacyCredentials(ctx)
       if (!isCredentialKeySegment(providerId)) return
       await writableStore(ctx).deleteRecord(recordKeyFor(providerId))
     },

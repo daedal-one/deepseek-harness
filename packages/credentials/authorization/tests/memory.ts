@@ -67,4 +67,8 @@ export class MemoryCredentials extends CredentialProvider {
     if (this.records.delete(key)) this.ctx.emit('credentials/record-updated', key)
     return Promise.resolve()
   }
+
+  override migrateReference(_ref: CredentialRef, _key: CredentialKey, _convert: (value: string) => CredentialRecord): Promise<boolean> {
+    return Promise.resolve(false)
+  }
 }

@@ -66,7 +66,7 @@ export function refreshIfLoaded(controller: ModelsSettingsStore): void {
  * constrained; registration depends on each slot through `slots.inject()`.
  */
 export const inject = [
-  'slots', 'locale', 'remote', 'remote.credentials', 'remote.llm', 'remote.settings',
+  'slots', 'locale', 'remote', 'remote.authorization', 'remote.credentials', 'remote.llm', 'remote.settings',
   'settingsScope', 'settingsSchema', 'remote.agentModels',
 ]
 
@@ -147,6 +147,7 @@ export function apply(ctx: ClientContext): void {
     const disposers = [
       ctx.remote.$on('settings/document-updated', () => { refreshModels() }),
       ctx.remote.$on('credentials/reference-updated', refreshModels),
+      ctx.remote.$on('credentials/record-updated', refreshModels),
       ctx.remote.$on('llm/adapters-updated', refreshModels),
       ctx.remote.$on('agent-models/directory-updated', () => {
         agentDirectory.set(agentDirectory.getSnapshot() + 1)
