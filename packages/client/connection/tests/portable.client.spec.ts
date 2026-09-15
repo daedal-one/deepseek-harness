@@ -7,7 +7,7 @@ import {
   type ConnectionGenerationSource,
   type ConnectionNetworkSource,
   type RpcFetch,
-} from '@deepseek-ai/dsh-client-connection/portable'
+} from '@deepseek-ai/dsh-client-connection/client/portable'
 
 afterEach(() => {
   vi.unstubAllGlobals()

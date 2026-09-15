@@ -2,6 +2,7 @@ import { once } from 'node:events'
 import { createServer, type Server } from 'node:http'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import WebSocket from 'ws'
+import { createRemoteStreamMux } from '@deepseek-ai/dsh-api-gateway/client/portable'
 import {
   RemoteStreamMuxServer,
   type RemoteStreamFailureMapper,
@@ -25,6 +26,36 @@ afterEach(async () => {
 })
 
 describe('Remote stream mux server carrier lifecycle', () => {
+  it('delivers and cancels a portable client stream over a real loopback socket', async () => {
+    const received = vi.fn()
+    let returned!: () => void
+    const didReturn = new Promise<void>((resolve) => { returned = resolve })
+    const entry = await startMux(async function *(endpoint, payload, signal) {
+      received(endpoint, payload)
+      yield 'native:ready'
+      yield* cleanlyCancelled(signal, returned)
+    })
+    const carrier = createRemoteStreamMux({
+      baseUrl: entry.url.replace('ws:', 'http:'),
+      randomId: () => 'portable-wire-stream',
+      createSocket: url => new globalThis.WebSocket(url),
+    })
+    carrier.start()
+    try {
+      const controller = new AbortController()
+      const stream = carrier.open('fixture/follow', { label: 'native' }, controller.signal)
+      await expect(stream.next()).resolves.toEqual({ done: false, value: 'native:ready' })
+      expect(received).toHaveBeenCalledExactlyOnceWith('fixture/follow', { label: 'native' })
+      const stopped = expect(stream.next()).rejects.toThrow('stop native stream')
+      controller.abort(new Error('stop native stream'))
+      await stopped
+      await didReturn
+      expect(acceptedSocket(entry.mux).readyState).toBe(WebSocket.OPEN)
+    } finally {
+      await carrier.close()
+    }
+  })
+
   it('sends WebSocket Ping control frames without application messages', async () => {
     const entry = await startMux(async (_endpoint, _payload, signal) => waitForAbort(signal), 20)
     const client = await connect(entry.url)

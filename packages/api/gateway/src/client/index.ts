@@ -22,10 +22,8 @@ import type {
   TypertRemoteContribution,
   TypertRemoteEvent,
 } from '@deepseek-ai/dsh-typert-protocol'
-import {
-  RemoteStreamCarrierError,
-  RemoteStreamMuxClient,
-} from './stream-client.ts'
+import { RemoteStreamCarrierError } from './stream-client.ts'
+import { createBrowserRemoteStreamMux } from './stream-client-browser.ts'
 import { ClientRemoteEvents } from './remote-events.ts'
 import {
   RemoteStream,
@@ -145,7 +143,7 @@ class ClientRemoteService extends Service implements ClientRemote {
   private readonly connection: ConnectionHandle
   private readonly namespaces = new Map<string, RemoteNamespaceHandle>()
   private hostFacts: RemoteHostFacts | undefined
-  private readonly streams = new RemoteStreamMuxClient()
+  private readonly streams = createBrowserRemoteStreamMux()
   private readonly events: ClientRemoteEvents
   private mutations = Promise.resolve()
 

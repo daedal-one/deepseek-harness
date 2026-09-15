@@ -13,7 +13,9 @@
     "src/client/snapshot-stream.ts",
     "src/client/stream-client.ts",
     "src/remote-error-codes.ts",
-    "src/stream-protocol.ts"
+    "src/stream-protocol.ts",
+    "src/client/portable.ts",
+    "src/client/stream-client-browser.ts"
   ],
   "references": [
     {

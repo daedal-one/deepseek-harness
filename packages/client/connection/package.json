@@ -24,7 +24,7 @@
     },
     "./src/*": "./src/*",
     "./package.json": "./package.json",
-    "./portable": {
+    "./client/portable": {
       "types": "./lib/types/client/portable.d.ts",
       "default": "./lib/portable.js"
     }

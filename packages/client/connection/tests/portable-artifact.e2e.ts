@@ -5,7 +5,7 @@ import { expect, it } from 'vitest'
 
 it('loads the published ESM companion in a restricted JavaScript context', { retry: 0 }, () => {
   const artifact = createRequire(new URL('../package.json', import.meta.url))
-    .resolve('@deepseek-ai/dsh-client-connection/portable')
+    .resolve('@deepseek-ai/dsh-client-connection/client/portable')
   const result = spawnSync(process.execPath, ['--experimental-vm-modules', '--input-type=module', '-e', `
     import { readFileSync } from 'node:fs';
     import { SourceTextModule, createContext } from 'node:vm';
