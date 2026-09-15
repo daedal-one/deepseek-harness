@@ -27,6 +27,8 @@ Host business services annotate callable methods with Typert Remote decorators. 
 
 The Connection owns request correlation, the `/api` carrier, trust checks, exact Fetch routes, and connection generations. API Gateway owns Remote dispatch, cancellation, logical streams, and selected Host event forwarding. Controller operations belong on generated Remote methods or explicit Remote streams; feature-owned downloads register exact Fetch routes. The [API Gateway reference](../api-gateway.md) defines generation and invocation, while the [Connection README](../../packages/client/connection/README.md) defines the physical carrier and trust policy.
 
+The [portable Connection entry](../../packages/client/connection/README.md#portable-client) shares connection ownership with the Web plugin. Its callers supply transport, network availability and local-Host hints per instance; the Web adapter supplies these from the page. The ordinary ESM entry does not require the Web module loader.
+
 The internal `$events` logical stream is the Connection generation source. Its opening `ready` frame carries the Host home used for path display and establishes the generation after Host listeners are attached, before any controller begins a baseline read. `ctx.remote.$on()` delivers allowlisted ordinary events to the root Client Context and scoped waterfall events to the resolved Session Context; a waterfall listener returns a result, calls `next()`, or rejects.
 
 ## Client models

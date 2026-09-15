@@ -4,7 +4,7 @@ type: task
 status: accepted
 summary: "Expose the portable DSH client."
 owners: [carlo]
-progress: pending
+progress: in-progress
 addresses: ["REQ:frontend/daedal-dsh#c-native-client", "IFC:frontend/daedal-dsh-client"]
 blocked_by: []
 ---

@@ -515,7 +515,7 @@ describe('connection client apply', () => {
     )
     expect(handle.isLoopback).toBe(true)
     expect(() => open('/rpc', 'session/follow', {}, abort.signal))
-      .toThrow('worker-local streams require the /api channel')
+      .toThrow('direct streams require the /api channel')
     expect(() => open('/api/path', 'session/follow', {}, abort.signal))
       .toThrow('invalid RPC target')
   })

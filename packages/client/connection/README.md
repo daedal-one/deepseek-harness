@@ -12,6 +12,7 @@ The package carries browser-to-Host Remote calls, exact Fetch responses, and con
 ## Table of Contents
 
 - [Use this package](#use-this-package)
+- [Portable client](#portable-client)
 - [Browser authentication and request trust](#browser-authentication-and-request-trust)
 - [Connection generation](#connection-generation)
 - [Model Experience](#model-experience)
@@ -24,6 +25,15 @@ The package carries browser-to-Host Remote calls, exact Fetch responses, and con
 ## Use this package
 
 The browser uses HTTP POST for Remote unary calls. API Gateway owns the `/api/remote.mux` WebSocket and its logical streams; shell-owned compositions provide equivalent Remote streams through `connection.rpc.open` without opening a WebSocket. The Host half always provides the carrier-neutral RPC and exact `GET`/`HEAD`/`POST` route registries. When a Web carrier is present it also owns the sole `/api` route, Fetch bridge, browser authentication, and Host/Origin checks; a shell-owned carrier dispatches the shared Fetch handler directly. Each exact route declares buffered or streaming request-body handling before the bridge reads any bytes. Typert Gateway claims generated Remote endpoints, feature packages register non-JSON responses such as Session-log downloads and raw file uploads, and unclaimed requests return 404. Plugins register exact JSON RPC endpoints through `ctx.connection.rpc.handleRoute`; Connection owns envelope validation and response encoding across Web and shell-owned carriers. Loopback hostname classification remains package-internal to the browser-facing Client state. Browser raw-body transfer is provided by [`dsh-client-file-upload`](../file-upload/README.md).
+
+-----
+
+<a id="portable-client"></a>
+## Portable client
+
+The `@deepseek-ai/dsh-client-connection/portable` entry provides `createConnection` and `createConnectionRpc` as ordinary ESM without the Web module loader. Each connection receives an explicit RPC transport, local-Host hint, recovery configuration and optional network observer. Native callers supply their Host authority, authenticated Fetch and stream adapters, and correlation-id generator. The portable entry does not read page, fetch or crypto globals. The Web plugin supplies those inputs from its browser environment and uses the same connection implementation.
+
+Each instance owns its generation, retry state and subscriptions. Stopping its loop or withdrawing its generation source removes its network observer and cancels that instance's generation. Unary calls are sent once: a lost response rejects without resubmitting the operation. The transport owner must reconcile an uncertain command result before retrying it. The local-Host hint does not establish identity or grant permissions. Device authentication and the generated domain Remote client remain separate from this transport entry.
 
 -----
 
