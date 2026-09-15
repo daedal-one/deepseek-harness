@@ -15,12 +15,14 @@ export default clientBundle('@deepseek-ai/dsh-api-remotes', ['lib/types/index.js
     dts: false,
     clean: false,
     alias: {
+      '@deepseek-ai/dsh-api-workspace-controller/client': fileURLToPath(new URL('../workspace-controller/lib/types/client/index.js', import.meta.url)),
+      '@deepseek-ai/dsh-api-gateway/client': fileURLToPath(new URL('../gateway/lib/types/client/portable.js', import.meta.url)),
       '@deepseek-ai/dsh-client-connection/client/portable': fileURLToPath(new URL('../../client/connection/lib/types/client/portable.js', import.meta.url)),
       '@deepseek-ai/dsh-api-gateway/client/portable': fileURLToPath(new URL('../gateway/lib/types/client/portable.js', import.meta.url)),
       '@deepseek-ai/dsh-typert-registry/client/portable': fileURLToPath(new URL('../../typert/registry/lib/types/client/portable.js', import.meta.url)),
     },
     deps: {
-      alwaysBundle: [/^@deepseek-ai\/dsh-[a-z0-9-]+\/(?:remote|client\/portable)$/, /^@deepseek-ai\/(?:dsh-deque|dsh-typert-protocol|schemastery|cosmokit)(?:\/|$)/],
+      alwaysBundle: [/^@deepseek-ai\/dsh-[a-z0-9-]+\/(?:remote|client\/portable)$/, /^@deepseek-ai\/(?:dsh-client-store|dsh-deque|dsh-typert-protocol|schemastery|cosmokit)(?:\/|$)/],
       neverBundle: ['@deepseek-ai/cordis', 'zod'],
     },
   }, {

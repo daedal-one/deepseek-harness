@@ -39,6 +39,7 @@ it('awaits the generated assembly and disposes calls and streams after async low
     let gateway;
     let assembly;
     let logical;
+    let workspaces;
     try {
       const forbidden = new SourceTextModule('import fs from "node:fs"', { context });
       await assert.rejects(forbidden.link(link), /portable dependency/);
@@ -53,8 +54,21 @@ it('awaits the generated assembly and disposes calls and streams after async low
       ctx = new Context();
       await ctx.plugin({ apply: api.applyRegistry, inject: api.registryInject });
       const calls = [];
+      const workspace = id => ({ workspaceId: id, title: id, path: '/work/' + id, sessionIds: [],
+        createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' });
+      const waitSnapshot = (source, accepted) => {
+        if (accepted(source.getSnapshot())) return Promise.resolve();
+        return new Promise(resolve => {
+          const stop = source.subscribe(() => { if (accepted(source.getSnapshot())) { stop(); resolve(); } });
+        });
+      };
       const connection = api.createConnection({ isLoopback: false,
-        rpc: { call: async (...args) => { calls.push(args); return { ok: true, value: { items: [], hasMore: false } }; } },
+        rpc: { call: async (...args) => {
+          calls.push(args);
+          if (args[1] === 'session/search') return { ok: true, value: { items: [], hasMore: false } };
+          assert.equal(args[1], 'workspace/rename');
+          return { ok: true, value: { workspace: { ...workspace(args[2].args.request.workspaceId), title: args[2].args.request.title, updatedAt: '2026-01-02T00:00:00.000Z' } } };
+        } },
       });
       ctx.provide('connection', connection);
       const frames = [];
@@ -75,7 +89,7 @@ it('awaits the generated assembly and disposes calls and streams after async low
               if (frame.type !== 'open') return;
               const value = frame.endpoint === '$events'
                 ? { type: 'ready', clientId: 'portable-client', host: { home: '/portable' } }
-                : { type: 'baseline', value: { items: [], archivedSessionIds: [] } };
+                : { type: 'baseline', value: { items: [workspace('alpha'), workspace('beta')], archivedSessionIds: [] } };
               assert(['$events', 'workspace/follow'].includes(frame.endpoint));
               queueMicrotask(() => callbacks.get('message')?.({ data: JSON.stringify({ type: 'item', streamId: frame.streamId, value }) }));
             },
@@ -109,17 +123,41 @@ it('awaits the generated assembly and disposes calls and streams after async low
       await logical.dispose();
       assert((await next).done);
       assert(first.value.signal.aborted);
+      workspaces = ctx.plugin({ apply: api.applyWorkspaces, inject: api.workspaceInject });
+      await workspaces;
+      const source = ctx.workspaces.list;
+      await waitSnapshot(source, value => value.phase === 'ready');
+      assert.equal(source.getSnapshot().items.length, 2);
+      const independent = new api.ClientWorkspaceModel(ctx.remote.workspace);
+      const renamed = await ctx.workspaces.rename('alpha', 'Renamed');
+      assert.equal(renamed.title, 'Renamed');
+      assert.equal(source.getSnapshot().items[0].title, 'Renamed');
+      const streamId = frames.filter(frame => frame.type === 'open' && frame.endpoint === 'workspace/follow').at(-1).streamId;
+      const send = value => callbacks.get('message')({ data: JSON.stringify({ type: 'item', streamId, value }) });
+      send({ type: 'upsert', workspace: workspace('alpha') });
+      send({ type: 'order', workspaceIds: ['beta', 'alpha'] });
+      await waitSnapshot(source, value => value.items[0].workspaceId === 'beta');
+      assert.equal(source.getSnapshot().items[1].title, 'Renamed');
+      send({ type: 'archived', archivedSessionIds: ['archived-session'] });
+      await waitSnapshot(source, value => value.archivedSessionIds.length === 1);
+      assert.equal(source.getSnapshot().archivedSessionIds[0], 'archived-session');
+      assert.equal(independent.getSnapshot().items.length, 0);
+      await workspaces.dispose();
+      const disposedSnapshot = source.getSnapshot();
+      send({ type: 'remove', workspaceId: 'alpha' });
+      assert.equal(source.getSnapshot(), disposedSnapshot);
       await assembly.dispose();
       assert.equal(ctx.typert.remotes.list().length, 0);
       assert.equal((await search({ query: 'withdrawn' })).ok, false);
-      assert.equal(calls.length, 1);
+      assert.equal(calls.length, 2);
       await gateway.dispose();
       assert.equal(connection.generation.getSnapshot(), undefined);
       assert.equal(socket.readyState, 3);
-      assert.equal(frames.filter(frame => frame.type === 'open').length, 2);
-      assert.equal(frames.filter(frame => frame.type === 'cancel').length, 2);
+      assert.equal(frames.filter(frame => frame.type === 'open').length, 3);
+      assert.equal(frames.filter(frame => frame.type === 'cancel').length, 3);
       console.log('portable application lifecycle passed');
     } finally {
+      await workspaces?.dispose();
       await logical?.dispose();
       await assembly?.dispose();
       await gateway?.dispose();
@@ -175,7 +213,10 @@ it('typechecks the portable application without workspace source aliases or Host
         // @ts-expect-error generated search requires a string query
         await ctx.remote.session.search({ query: 12 });
         const stream: api.RemoteStream<api.WorkspaceFollowFrame> = ctx.remote.$stream({ name: 'workspaces', open: signal => ctx.remote.workspace.follow(signal), ended: () => new Error('ended') });
-        void connection; void stream;
+        await ctx.plugin({ apply: api.applyWorkspaces, inject: api.workspaceInject });
+        const workspaces: api.WorkspaceSnapshot = ctx.workspaces.list.getSnapshot();
+        const renamed: api.WorkspaceView = await ctx.workspaces.rename(workspaces.items[0].workspaceId, 'Renamed');
+        void connection; void stream; void renamed;
       \`);
       const checked = spawnSync(process.execPath, [require.resolve('typescript/bin/tsc'), '-p', dir], { encoding: 'utf8', timeout: 45_000 });
       assert.equal(checked.error, undefined);
