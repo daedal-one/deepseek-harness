@@ -1,5 +1,6 @@
 /** Lifetime of one generated native operation on its paired Host generation. */
 import type { ConnectionHandle, ConnectionHostId, ConnectionIdentity } from '@deepseek-ai/dsh-client-connection/client'
+import { RemoteStreamCarrierError } from './stream-client.ts'
 import { combineRemoteCancellation } from './cancellation.ts'
 
 /** Cancellation and late-result checks for one accepted generation. */
@@ -28,12 +29,15 @@ export function bindPinnedGeneration(
 ): PinnedGeneration | undefined {
   if (expectedHostId === undefined) return undefined
   const accepted = connection.generation.getSnapshot()
-  if (accepted?.host.identity?.hostId !== expectedHostId) {
+  if (accepted === undefined) {
+    throw new RemoteStreamCarrierError('client api: the paired Host has no ready connection generation')
+  }
+  if (accepted.host.identity?.hostId !== expectedHostId) {
     throw new Error('client api: the paired Host has no ready connection generation')
   }
   const lifetime = createController()
   const cancellation = combineRemoteCancellation([signal, lifetime.signal], createController)
-  const changed = new Error('client api: the Host connection generation ended; operation outcome may be uncertain')
+  const changed = new RemoteStreamCarrierError('client api: the Host connection generation ended; operation outcome may be uncertain')
   const stop = connection.generation.subscribe(() => {
     if (connection.generation.getSnapshot() !== accepted) lifetime.abort(changed)
   })

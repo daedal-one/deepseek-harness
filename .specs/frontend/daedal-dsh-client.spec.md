@@ -20,6 +20,8 @@ An accepted command whose response is lost MUST remain an uncertain outcome unti
 
 The Daedal DSH fork consumes this supported DSH client face. The current Web client remains a consumer during migration. Package extraction is chosen from executable native import evidence rather than copied schemas or a broad polyfill layer. Missing operations are added to their owning DSH service and Remote controllers.
 
+Supervised native read streams opened before the first admitted generation must wait for admission. Losing an admitted generation must remain a recoverable carrier failure for those streams so their existing baseline/cursor logic can reopen. A present generation belonging to a different Host remains a terminal refusal. Unary commands retain their single-send behavior and uncertain outcomes; classifying a connection loss must never replay a command.
+
 ## Installable Client distribution
 
 Produce a DSH-owned portable Client distribution from the existing generated facade runtime and bundled declarations. Its manifest includes only the shared portable runtime and nominal type dependencies; installing it must not fetch Host implementations. Keep Cordis, Brand and Typert identities shared with the consumer. Do not copy wire schemas or maintain a second implementation in the frontend. A clean committed source revision, a fresh build and checksums identify every supplied archive, including unpublished shared dependencies. The frontend pins those archives and its lockfile. Qualification must include a real clean package-manager install, strict declaration consumption, runtime imports and the actual mobile bundler; unpacked archives alone do not establish installability.

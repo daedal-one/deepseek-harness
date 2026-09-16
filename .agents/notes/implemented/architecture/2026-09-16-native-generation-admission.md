@@ -23,3 +23,5 @@ Gateway validates the paired event-stream opening, then reads capabilities for t
 ## Consequences
 
 The native UI composition owns its required feature selection. Admission does not grant permissions, prove concrete Context availability or replace Session format and event-vocabulary checks. Live [operation compatibility](2026-09-16-remote-operation-compatibility.md) remains authoritative after admission. The existing Web composition retains its origin-authorized generation path during migration.
+
+Cold native startup can mount read projections before the first Host generation exists. Absence and loss therefore use the supervised stream carrier-failure classification; a plain terminal error would permanently stop those projections before admission. A present generation with a different Host still refuses terminally. This classification does not retry unary commands.

@@ -42,13 +42,13 @@ The Gateway capability query lists the currently registered, fully strict Host R
 
 The authenticated `$capabilities` Connection RPC accepts `{}` and returns `{ version: 3, identity, capabilities }`. Unavailable rows contain a fixed `service`, `binding`, `method`, `lookup` or `context` reason. Rows preserve optional generated `wireFingerprint` and authored `semanticRevision` fields; absence means compatibility is unverified. Clients reject older metadata envelopes. The response omits local paths, provider credentials and runtime object identities. Metadata version is independent of domain API schemas; this snapshot is not an API compatibility proof. See the [capability discovery decision](../../../.agents/notes/implemented/architecture/2026-09-15-host-capability-discovery.md).
 
-<a id="client-service-clientremote-ctx-key-remote"></a>
 ## Operation compatibility
 
 Generated Client calls carry `compatibility: { wireFingerprint, semanticRevision }` beside their named `args`. Native calls require both fields before sending and add the pinned Connection `identity`, including its activation. The Host validates the wire envelope and compares it against the current strict descriptor and optional identity before Context or lookup resolution. It rechecks descriptor identity and expectations after asynchronous preparation, immediately before invoking the retained method. A withdrawn or replaced descriptor refuses the request even when the replacement has equal metadata. Unary and stream refusals use `gateway/api-incompatible` and never enter the business method or retry the operation. An already accepted operation retains its original method; subsequent calls select the live descriptor.
 
 Callers omitting expectations retain unnegotiated Web and source dispatch. Expectations are compatibility checks, not authorization. Native generation admission and its required capability selection remain separate from this operation check. Business revisions follow the [generator policy](../../typert/generator/README.md#business-revisions). See the [dispatch decision](../../../.agents/notes/implemented/architecture/2026-09-16-remote-operation-compatibility.md).
 
+<a id="client-service-clientremote-ctx-key-remote"></a>
 ## Client service: `ClientRemote` (ctx key: `remote`)
 
 `ctx.remote.$mount()` validates and registers a generated Host-for-Client contribution, then installs concrete direct and scoped methods for the calling Cordis fiber. Each namespace is a traced `remote.<namespace>` child Service and unloads after its last method is withdrawn. Duplicate endpoints, namespace collisions, and descriptors without strict generated codecs fail before methods become callable.
@@ -68,6 +68,8 @@ Every unary call resolves to `RemoteResult<T>` — `{ ok: true, value }` or `{ o
 Generated declaration merges provide the TypeScript API through the shared `TypertClientRemote` contract. The Client entry contains no Host Service or Host Cordis interface merge, and method lookup and invocation use ordinary objects and functions rather than a JavaScript Proxy.
 
 ## Portable Client
+
+Supervised native read streams wait when the paired Host has no admitted generation and reopen through their existing baseline or cursor policy after generation loss. A different admitted Host remains a terminal refusal. Unary operations remain single-send and retain uncertain outcomes after a lost response.
 
 The event stream opens with `protocolVersion: 1` and the Connection-owned Host identity. This version describes the Gateway opening fields; it does not negotiate Session or domain API compatibility. `ctx.remote.$host.identity` exposes the validated active identity and becomes undefined after generation loss.
 
