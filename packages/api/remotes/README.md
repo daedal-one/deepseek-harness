@@ -13,6 +13,7 @@ Two-sided BFF for Host Remote capabilities selected by this application. The Hos
 
 - [Use this package](#use-this-package)
 - [Portable Client](#portable-client)
+- [Installable Client distribution](#installable-client-distribution)
 - [Forwarded Host events](#forwarded-host-events)
 - [Build boundary](#build-boundary)
 - [Model Experience](#model-experience)
@@ -43,6 +44,12 @@ The namespace selection is a compiled application selection, not proof that a co
 `selectRemoteCapabilities(endpoints)` derives a sorted, deduplicated admission requirement list from the same generated contributions that `apply` mounts. It runs before plugin installation and throws when a selected endpoint lacks a descriptor or schema/business evidence. Pass it as `requiredCapabilities` to `applyRemoteClient`; select the endpoints essential to the composition, while optional feature availability comes from `ctx.remote.$host.capabilities`. An explicit empty selection supports metadata-only compositions. The [Gateway admission rules](../gateway/README.md#portable-client) own readiness, activation checks and cancellation.
 
 -----
+
+## Installable Client distribution
+
+`pnpm run pack:portable-client --out /absolute/new/directory` produces `@deepseek-ai/dsh-api-remotes-client` and five shared dependency archives from a clean committed checkout. The command clears repository build outputs and rebuilds both compiler faces before packing. Run it in a dedicated build checkout; the destination must be new and outside that checkout. Failed builds remove their owned output directory. The completed `manifest.json` records the source revision and SHA-256 of each archive.
+
+Install all six archives as direct file dependencies, retain the package-manager lockfile, and import the portable facade from `@deepseek-ai/dsh-api-remotes-client`. Registry dependencies remain Zod and Standard Schema. The distribution retains shared Cordis, Brand, Typert and value identities and carries no Host implementation dependency. Its JavaScript and declarations are the existing portable outputs without a second source implementation. The full Remotes package still declares its Host dependencies for its other entry points.
 
 <a id="forwarded-host-events"></a>
 ## Forwarded Host events
