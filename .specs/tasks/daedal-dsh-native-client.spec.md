@@ -41,6 +41,10 @@ Export the existing Connection-owned Host id and device-grant validators togethe
 
 Portable unary fetch adapters require only HTTP success, status and JSON decoding. Expose that narrow response type so native adapters can retain cancellation ownership through complete body decoding without emulating a browser Response. Existing browser fetch implementations remain structurally compatible.
 
+## Observable Session reads
+
+The shared Session-list projection must retain the owning manager's read activity and structured failure alongside arrival phase. A settled read promise does not imply a successful result. Initial failure remains pending arrival with a visible error; refresh and continuation failures retain existing rows, preserve the next cursor, and expose retry state. Native and browser consumers use this same feed without issuing duplicate reads or deriving success from promise settlement.
+
 ## Acceptance
 
 A native iPhone build and browser/Electron consumers attach to an existing session, stream, prompt and resolve an interaction through native DSH semantics. Shared source and artifact checks reject Node/DOM imports on native paths. Focused lifecycle tests cover cancellation, disposal, disconnect after acceptance and reconnect; recorded-session output remains faithful.

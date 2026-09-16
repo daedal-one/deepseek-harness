@@ -10,6 +10,8 @@ import { createBrowserSessionClientOptions } from '../src/client/browser.ts'
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { SessionListCursor } from '../src/types.ts'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { LlmAttemptId } from '@deepseek-ai/dsh-llm'
 import { RemoteStreamCarrierError } from '@deepseek-ai/dsh-api-gateway/client'
@@ -70,6 +72,53 @@ async function feedList(b: Bench, rows: FeedRow[]): Promise<void> {
 }
 
 describe('list store projection', () => {
+  it('publishes a pending first read and its structured failure without claiming an empty baseline', async () => {
+    const b = bench()
+    const response = deferred<Awaited<ReturnType<typeof b.api.onList>>>()
+    b.api.onList = () => response.promise
+    const pending = b.svc.refresh()
+    await Promise.resolve()
+    expect(b.svc.list.getSnapshot()).toMatchObject({ phase: 'pending', state: 'loading', error: null })
+    const failure = new RemoteError('gateway/internal', 'list unavailable', {})
+    response.resolve(err(failure))
+    await pending
+    expect(b.svc.list.getSnapshot()).toMatchObject({ phase: 'pending', state: 'error', error: failure, ids: [] })
+    b.api.onList = () => Promise.resolve(ok({ items: [] }))
+    await b.svc.refresh()
+    expect(b.svc.list.getSnapshot()).toMatchObject({ phase: 'ready', state: 'idle', error: null, ids: [] })
+  })
+
+  it('retains established rows when a refresh returns a business failure', async () => {
+    const b = bench()
+    await feedList(b, [{ id: 'retained' }])
+    const failure = new RemoteError('gateway/internal', 'refresh unavailable', {})
+    b.api.onList = () => Promise.resolve(err(failure))
+    await b.svc.refresh()
+    expect(b.svc.list.getSnapshot()).toMatchObject({ phase: 'ready', state: 'error', error: failure, ids: ['retained'] })
+  })
+
+  it('exposes continuation failure and preserves the cursor for explicit retry', async () => {
+    const b = bench()
+    const cursor = brandString<SessionListCursor>('next-page')
+    b.api.onList = () => Promise.resolve(ok({ items: [], hasMore: true, nextCursor: cursor }))
+    await b.svc.refresh()
+    const response = deferred<Awaited<ReturnType<typeof b.api.onList>>>()
+    b.api.onList = () => response.promise
+    const pending = b.svc.loadMore()
+    await Promise.resolve()
+    expect(b.svc.list.getSnapshot()).toMatchObject({ loadingMore: true, error: null, hasMore: true })
+    const failure = new RemoteError('gateway/internal', 'page unavailable', {})
+    response.resolve(err(failure))
+    await pending
+    expect(b.svc.list.getSnapshot()).toMatchObject({ phase: 'ready', loadingMore: false, error: failure, hasMore: true })
+    b.api.onList = (payload) => {
+      expect(payload).toEqual({ cursor })
+      return Promise.resolve(ok({ items: [], hasMore: false }))
+    }
+    await b.svc.loadMore()
+    expect(b.svc.list.getSnapshot()).toMatchObject({ loadingMore: false, error: null, hasMore: false })
+  })
+
   it('projects durable titles separately from cwd/id display fallbacks and parent links', async () => {
     const b = bench()
     b.svc.handleControlFrame({

@@ -56,7 +56,7 @@ function sessionState(
     ids: summaries.map(item => item.id),
     byId: Object.fromEntries(summaries.map(item => [item.id, item])),
     current,
-    phase,
+    state: 'idle', error: null, phase,
     subagentsByParent: {},
     jobsBySession: {},
     currentAddress: undefined,

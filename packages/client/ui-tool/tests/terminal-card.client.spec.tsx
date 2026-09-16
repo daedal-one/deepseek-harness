@@ -407,7 +407,7 @@ describe('BashRow terminal card', () => {
     ids: [SID],
     byId: { [SID]: { id: SID, displayTitle: 'r', running: false, blank: false, updatedAt: 0 } },
     current: undefined,
-    phase: 'ready',
+    state: 'idle', error: null, phase: 'ready',
     subagentsByParent: {}, jobsBySession: {},
     currentAddress: undefined,
   })

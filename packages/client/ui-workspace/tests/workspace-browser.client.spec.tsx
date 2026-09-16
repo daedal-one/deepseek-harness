@@ -43,7 +43,7 @@ const sessionState = (items: readonly SessionSummary[], overrides: Partial<Sessi
   ids: items.map(item => item.id),
   byId: Object.fromEntries(items.map(item => [item.id, item])),
   current: undefined,
-  phase: 'ready',
+  state: 'idle', error: null, phase: 'ready',
   subagentsByParent: {}, jobsBySession: {},
   currentAddress: undefined,
   ...overrides,

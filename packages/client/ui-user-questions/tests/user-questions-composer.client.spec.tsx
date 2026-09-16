@@ -51,7 +51,7 @@ const sessionList = {
   ids: [SID],
   byId: { [SID]: { id: SID, displayTitle: 'Session', running: false, blank: false, updatedAt: 0 } },
   current: SID,
-  phase: 'ready' as const,
+  state: 'idle' as const, error: null, phase: 'ready' as const,
   subagentsByParent: {},
   jobsBySession: {},
   currentAddress: undefined,

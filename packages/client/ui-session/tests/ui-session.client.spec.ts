@@ -38,7 +38,7 @@ function createSessionsBench(_ctx: Context): SessionsBench {
     ids: [],
     byId: {},
     current: undefined,
-    phase: 'ready',
+    state: 'idle', error: null, phase: 'ready',
     subagentsByParent: {},
     jobsBySession: {},
     currentAddress: undefined,

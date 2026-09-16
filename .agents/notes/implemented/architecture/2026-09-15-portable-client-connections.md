@@ -29,3 +29,5 @@ Browser and portable callers share one recovery implementation and RPC envelope 
 Focused tests cover concurrent Host isolation, offline suspension, observer disposal, stream cancellation and a lost mutation response without retries. A built-artifact check evaluates the ESM companion without Node imports or a browser and rejects both forbidden cases as negative controls. These checks do not establish physical iPhone compatibility or device authorization.
 
 The [Client distribution decision](2026-09-16-portable-client-distribution.md) owns standalone package installation and artifact provenance; this note retains transport and runtime ownership.
+
+Session-list consumers receive the manager's read activity and structured failure with the projected rows. Arrival stays monotone after a successful baseline; a failed refresh or continuation retains rows and exposes its error. Promise settlement alone cannot establish read success, and frontend copies or duplicate probes would disagree with the domain's own recovery state.

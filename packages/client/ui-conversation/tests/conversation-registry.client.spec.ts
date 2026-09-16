@@ -74,7 +74,7 @@ function fakeSessions(ctx: Context): { sessions: ISessions; binding: SessionBind
     ids: [],
     byId: {},
     current: undefined,
-    phase: 'ready',
+    state: 'idle', error: null, phase: 'ready',
     subagentsByParent: {},
     jobsBySession: {},
     currentAddress: undefined,

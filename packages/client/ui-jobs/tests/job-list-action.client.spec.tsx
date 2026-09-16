@@ -40,7 +40,7 @@ function props(jobs: readonly JobView[] | undefined): JobListActionProps {
     ids: [SESSION],
     byId: {},
     current: SESSION,
-    phase: 'ready',
+    state: 'idle', error: null, phase: 'ready',
     subagentsByParent: {},
     jobsBySession: jobs === undefined ? {} : { [SESSION]: jobs },
     currentAddress: undefined,
