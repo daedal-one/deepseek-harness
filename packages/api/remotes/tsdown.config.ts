@@ -16,6 +16,7 @@ export default clientBundle('@deepseek-ai/dsh-api-remotes', ['lib/types/index.js
     clean: false,
     define: { 'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV ?? 'production') },
     alias: {
+      '@deepseek-ai/dsh-client-store': fileURLToPath(new URL('../../client/store/lib/types/index.js', import.meta.url)),
       '@deepseek-ai/dsh-api-session-controller/client': fileURLToPath(new URL('../session-controller/lib/types/client/index.js', import.meta.url)),
       '@deepseek-ai/dsh-api-workspace-controller/client': fileURLToPath(new URL('../workspace-controller/lib/types/client/index.js', import.meta.url)),
       '@deepseek-ai/dsh-api-gateway/client': fileURLToPath(new URL('../gateway/lib/types/client/portable.js', import.meta.url)),
@@ -24,7 +25,7 @@ export default clientBundle('@deepseek-ai/dsh-api-remotes', ['lib/types/index.js
       '@deepseek-ai/dsh-typert-registry/client/portable': fileURLToPath(new URL('../../typert/registry/lib/types/client/portable.js', import.meta.url)),
     },
     deps: {
-      alwaysBundle: [/^@deepseek-ai\/dsh-[a-z0-9-]+\/(?:remote|client\/portable)$/, /^@deepseek-ai\/(?:dsh-client-connection|dsh-brand|dsh-util-values|dsh-client-store|dsh-session|dsh-util-workspace-path|dsh-deque|dsh-typert-protocol|schemastery|cosmokit)(?:\/|$)/],
+      alwaysBundle: [/^(?:zustand|immer)(?:\/|$)/, /^@deepseek-ai\/dsh-[a-z0-9-]+\/(?:remote|client\/portable)$/, /^@deepseek-ai\/(?:dsh-client-connection|dsh-brand|dsh-util-values|dsh-client-store|dsh-session|dsh-util-workspace-path|dsh-deque|dsh-typert-protocol|schemastery|cosmokit)(?:\/|$)/],
       neverBundle: ['@deepseek-ai/cordis', 'zod'],
     },
   }, {

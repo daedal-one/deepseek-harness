@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync,
 import { tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { parseArgs } from 'node:util'
+import ts from 'typescript'
 import { pnpmInvocation } from '../pnpm-invocation.ts'
 import { capture, isEntry, runConcurrent } from './process.ts'
 
@@ -32,6 +33,25 @@ function packageManifest(root: string, directory: string): { name: string; versi
   return { name, version, license, ...(zod === undefined ? {} : { zod }) }
 }
 
+function assertPortableImports(runtime: string): void {
+  const source = ts.createSourceFile('portable.js', runtime, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS)
+  const allowed = new Set(['@deepseek-ai/cordis', 'zod'])
+  function visit(node: ts.Node): void {
+    if (ts.isImportDeclaration(node) || (ts.isExportDeclaration(node) && node.moduleSpecifier !== undefined)) {
+      const target = node.moduleSpecifier
+      if (target === undefined || !ts.isStringLiteral(target) || !allowed.has(target.text)) {
+        throw new Error(`portable client: unsupported runtime import ${target?.getText(source) ?? '<absent>'}`)
+      }
+    }
+    if (ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword
+      || (ts.isIdentifier(node.expression) && node.expression.text === 'require'))) {
+      throw new Error('portable client: runtime imports must be static ESM dependencies')
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(source)
+}
+
 /**
  * Stage the existing portable runtime and declarations as a standalone Client package.
  * The caller owns build freshness and source provenance; this function performs no build.
@@ -54,6 +74,7 @@ export function stagePortableClient(root: string, destination: string, sourceCom
   const cordis = packageManifest(root, supportDirectories[0])
   const identity = { name: '@deepseek-ai/dsh-api-remotes-client', version: source.version }
   const runtime = readFileSync(join(root, 'packages/api/remotes/lib/portable.js'))
+  assertPortableImports(runtime.toString('utf8'))
   const declarations = readFileSync(join(root, 'packages/api/remotes/lib/client/portable.d.ts'))
   const license = readFileSync(join(root, 'LICENSE'))
   mkdirSync(destination)

@@ -73,6 +73,18 @@ describe('portable Client package', () => {
     expect(existsSync(destination)).toBe(false)
   })
 
+  it.each([
+    "import { createSnapshotStore } from '@deepseek-ai/dsh-client-store';",
+    "export { value } from './missing-chunk.js';",
+    "const load = () => import('node:fs');",
+    "const load = () => require('node:fs');",
+  ])('refuses an unpacked runtime dependency before publishing: %s', (runtime) => {
+    const { root, destination } = fixture()
+    writeFileSync(join(root, 'packages/api/remotes/lib/portable.js'), runtime)
+    expect(() => stagePortableClient(root, destination, revision)).toThrow(/runtime import/u)
+    expect(existsSync(destination)).toBe(false)
+  })
+
   it('requires a full source identity before staging', () => {
     const { root, destination } = fixture()
     expect(() => stagePortableClient(root, destination, 'main')).toThrow('full source commit')
