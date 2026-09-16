@@ -45,6 +45,8 @@ Expose loading, empty, unavailable, owner-required, failed read, capacity and un
 
 Qualify the controller's cancellation, late-result, expiry, malformed-response and unknown-outcome behavior, the real settings composition and localized render states, and a real isolated Web profile with browser-created QR data, device admission and revocation. Keep synthetic UI snapshots, browser execution, Simulator and physical-camera acceptance distinct.
 
+Keep a committed keyless assembled-browser scenario for owner-created enrollment, visible QR presentation, single-use public claim, authenticated device admission, cancelled and confirmed revocation, and refused admission after revocation. Its expected UI output contains only bounded public metadata, with scenario-owned Host and device identities normalized. Read enrollment and bearer material only in memory; QR decoding and physical-camera acceptance remain separate evidence. Scenario teardown waits for pending startup before releasing its browser and Host, including failed or timed-out setup. Existing Web request interception must assert the generated compatibility expectations and settle its route without unhandled callback assertions.
+
 ## Acceptance
 
 Real iPhone QR pairing and host discovery succeed without address entry. Expired or replayed enrollment, revoked devices, mismatched host identity and unauthorized discovery fail explicitly. Candidate probes never receive another host credential and never imply enrollment.

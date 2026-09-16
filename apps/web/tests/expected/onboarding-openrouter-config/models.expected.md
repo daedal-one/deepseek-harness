@@ -16,6 +16,9 @@
     - button "Agents":
       - img
       - text: Agents
+    - button "Devices":
+      - img
+      - text: Devices
   - button "Open configuration file"
   - button "Close":
     - img
