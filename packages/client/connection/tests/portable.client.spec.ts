@@ -78,6 +78,15 @@ it('uses separate authorities and correlation sources without ambient fetch or c
   ])
 })
 
+it('accepts a JSON-only native response without a browser Response constructor', async () => {
+  vi.stubGlobal('Response', undefined)
+  const caller = rpc('native.example', async () => ({
+    ok: true, status: 200,
+    json: async () => ({ type: 'server-response', rpcId: 'native.example-1', result: { ok: true, value: 42 } }),
+  }))
+  expect(await caller.call('/api', 'session/list', {})).toEqual({ ok: true, value: 42 })
+})
+
 it('leaves a lost mutation response rejected without resending the command', async () => {
   const failure = new Error('response lost after acceptance')
   const fetch = vi.fn<RpcFetch>().mockRejectedValue(failure)

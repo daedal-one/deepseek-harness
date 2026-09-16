@@ -3,7 +3,7 @@ import { RpcId, type ClientConnectionRpc } from '../rpc.ts'
 import { randomUuid } from './random-uuid.ts'
 import { createConnectionRpc, type RpcFetch, type RpcStreamOpen } from './rpc-caller.ts'
 
-export type { RpcFetch, RpcStreamOpen } from './rpc-caller.ts'
+export type { RpcFetch, RpcFetchResponse, RpcStreamOpen } from './rpc-caller.ts'
 
 const INTERNAL_BASE = 'http://dsh.internal'
 

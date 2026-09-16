@@ -51,6 +51,10 @@ it('awaits the generated assembly and disposes calls and streams after async low
         platform: 'neutral', target: 'es2015', fixedExtension: false, dts: false, clean: false,
         deps: { neverBundle: ['@deepseek-ai/cordis', 'zod'] } });
       const api = await load(join(dir, 'portable.js'));
+      assert.equal(api.connectionHostIdSchema.safeParse('26e99520-f2d3-4874-84b5-07c5ef24775d').success, true);
+      assert.equal(api.connectionDeviceEnrollmentSchema.safeParse({}).success, false);
+      assert.equal(api.connectionDeviceGrantSchema.safeParse({}).success, false);
+      assert.equal(api.DEVICE_ACCESS_PATHS.claim, '/api/connection/devices/claim');
       const identity = await api.readHostIdentity({ call: async (channel, endpoint, payload) => {
         assert.equal(channel, '/api'); assert.equal(endpoint, 'connection/identity'); assert.equal(Object.keys(payload).length, 0);
         return { ok: true, value: { version: 1, hostId: '26e99520-f2d3-4874-84b5-07c5ef24775d', activationId: 'f5292bdb-ebda-41ba-b473-6c587a3c1d02' } };

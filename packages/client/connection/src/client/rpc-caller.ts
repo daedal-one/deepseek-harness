@@ -9,8 +9,16 @@ import type { ClientConnectionRpc, ConnectionRpcResult } from '../rpc.ts'
 const CHANNEL_PATTERN = /^\/[A-Za-z0-9._~-]+$/
 const ENDPOINT_SEGMENT_PATTERN = /^[A-Za-z0-9_$.-]+$/
 
-/** Transport this caller posts through; same signature as the global `fetch`. */
-export type RpcFetch = (input: URL, init: RequestInit) => Promise<Response>
+/** HTTP and JSON facts consumed by Connection; browser Response objects satisfy this interface. */
+export interface RpcFetchResponse {
+  readonly ok: boolean
+  readonly status: number
+  /** @returns decoded, still-unvalidated response body. */
+  json(): Promise<unknown>
+}
+
+/** Platform transport retaining cancellation ownership until response JSON decoding settles. */
+export type RpcFetch = (input: URL, init: RequestInit) => Promise<RpcFetchResponse>
 
 /** Transport-owned opener for decoded Gateway Remote streams. */
 export type RpcStreamOpen = (

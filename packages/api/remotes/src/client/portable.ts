@@ -5,11 +5,12 @@ import { apply as applyWorkspaceClient } from '@deepseek-ai/dsh-api-workspace-co
 export * from './index.ts'
 export {
   createConnection, createConnectionRpc, readHostIdentity, claimDeviceEnrollment,
+  connectionHostIdSchema, connectionDeviceGrantSchema, connectionDeviceEnrollmentSchema, DEVICE_ACCESS_PATHS,
 } from '@deepseek-ai/dsh-client-connection/client/portable'
 export type {
   DeviceEnrollmentClaimOptions, ConnectionDeviceId, ConnectionDeviceCredential, ConnectionDeviceInfo,
   ConnectionDeviceEnrollment, ConnectionDeviceGrant, ConnectionOptions, ConnectionRpcOptions,
-  ConnectionNetworkSource, RpcFetch, RpcStreamOpen,
+  ConnectionNetworkSource, RpcFetch, RpcFetchResponse, RpcStreamOpen,
   ConnectionIdentity, ConnectionHostId, ConnectionActivationId,
 } from '@deepseek-ai/dsh-client-connection/client/portable'
 export {

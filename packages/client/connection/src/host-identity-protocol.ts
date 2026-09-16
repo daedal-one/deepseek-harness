@@ -17,10 +17,13 @@ export interface ConnectionIdentity {
 
 const uuid = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
 
+/** Validate a persisted or transferred Host reference without inventing an activation. */
+export const connectionHostIdSchema = uuid.transform(id => id as ConnectionHostId)
+
 /** Durable owner payload; signing secrets have a separate credential record. */
 export const storedHostIdentitySchema = z.object({
   version: z.literal(1),
-  hostId: uuid.transform(id => id as ConnectionHostId),
+  hostId: connectionHostIdSchema,
 }).strict()
 
 /** Exact identity response accepted at the Client wire boundary. */

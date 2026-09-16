@@ -35,6 +35,12 @@ Supervised native read streams opened before the first admitted generation must 
 
 Produce a DSH-owned portable Client distribution from the existing generated facade runtime and bundled declarations. Its manifest includes only the shared portable runtime and nominal type dependencies; installing it must not fetch Host implementations. Keep Cordis, Brand and Typert identities shared with the consumer. Do not copy wire schemas or maintain a second implementation in the frontend. A clean committed source revision, a fresh build and checksums identify every supplied archive, including unpublished shared dependencies. The frontend pins those archives and its lockfile. Qualification must include a real clean package-manager install, strict declaration consumption, runtime imports and the actual mobile bundler; unpacked archives alone do not establish installability.
 
+## Native credential consumption
+
+Export the existing Connection-owned Host id and device-grant validators together with a strict enrollment-envelope validator for application QR and protected-storage readers. A stored value or QR remains untrusted until those shared parsers accept it; malformed data must not create a transport. Keep grant/device identity consistency and version refusal in DSH rather than copying their schemas into the frontend.
+
+Portable unary fetch adapters require only HTTP success, status and JSON decoding. Expose that narrow response type so native adapters can retain cancellation ownership through complete body decoding without emulating a browser Response. Existing browser fetch implementations remain structurally compatible.
+
 ## Acceptance
 
 A native iPhone build and browser/Electron consumers attach to an existing session, stream, prompt and resolve an interaction through native DSH semantics. Shared source and artifact checks reject Node/DOM imports on native paths. Focused lifecycle tests cover cancellation, disposal, disconnect after acceptance and reconnect; recorded-session output remains faithful.

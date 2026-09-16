@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { claimDeviceEnrollment } from '../src/client/device-access.ts'
 import { connectionIdentitySchema } from '../src/host-identity-protocol.ts'
+import { connectionHostIdSchema, connectionDeviceGrantSchema, connectionDeviceEnrollmentSchema } from '../src/client/portable.ts'
 import type { RpcFetch } from '../src/client/rpc-caller.ts'
 
 const identity = connectionIdentitySchema.parse({ version: 1, hostId: '26e99520-f2d3-4874-84b5-07c5ef24775d', activationId: 'f5292bdb-ebda-41ba-b473-6c587a3c1d02' })
@@ -12,7 +13,7 @@ const options = (fetch: RpcFetch, signal = new AbortController().signal) => ({ .
 
 describe('portable device enrollment', () => {
   it('claims once with cookies omitted and redirects refused', async () => {
-    const fetch = vi.fn<RpcFetch>().mockResolvedValue(Response.json({ ok: true, value }))
+    const fetch = vi.fn<RpcFetch>().mockResolvedValue({ ok: true, status: 200, json: async () => ({ ok: true, value }) })
     expect(await claimDeviceEnrollment(options(fetch))).toEqual({ ok: true, value })
     expect(fetch).toHaveBeenCalledOnce()
     const [url, init] = fetch.mock.calls[0]!
@@ -54,5 +55,28 @@ describe('portable device enrollment', () => {
     const fetch = vi.fn<RpcFetch>()
     await expect(claimDeviceEnrollment({ ...options(fetch), baseUrl })).rejects.toThrow('HTTP(S) origin')
     expect(fetch).not.toHaveBeenCalled()
+  })
+})
+
+describe('shared native device parsers', () => {
+  const enrollment = { version: 1, hostId: identity.hostId, challenge: input.challenge, expiresAt: 1 }
+
+  it('accepts transferred identities and grants through the portable owner', () => {
+    expect(connectionHostIdSchema.parse(identity.hostId)).toBe(identity.hostId)
+    expect(connectionDeviceEnrollmentSchema.parse(enrollment)).toEqual(enrollment)
+    expect(connectionDeviceGrantSchema.parse(value)).toEqual(value)
+  })
+
+  it.each([
+    { ...enrollment, version: 2 }, { ...enrollment, hostId: 'invalid' },
+    { ...enrollment, challenge: 'invalid' }, { ...enrollment, expiresAt: -1 },
+    { ...enrollment, expiresAt: Number.MAX_SAFE_INTEGER + 1 },
+    { ...enrollment, credential: value.credential },
+  ])('refuses malformed or extended enrollment metadata %#', (candidate) => {
+    expect(connectionDeviceEnrollmentSchema.safeParse(candidate).success).toBe(false)
+  })
+
+  it('refuses a stored credential belonging to another device', () => {
+    expect(connectionDeviceGrantSchema.safeParse({ ...value, device: { ...value.device, deviceId: identity.hostId } }).success).toBe(false)
   })
 })

@@ -51,6 +51,13 @@ export interface ConnectionDeviceEnrollment {
   readonly challenge: string
   readonly expiresAt: number
 }
+/** Validate owner-issued enrollment metadata before application QR consumption. */
+export const connectionDeviceEnrollmentSchema: z.ZodType<ConnectionDeviceEnrollment> = z.object({
+  version: z.literal(1),
+  hostId: storedHostIdentitySchema.shape.hostId,
+  challenge: enrollmentChallengeSchema,
+  expiresAt: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+}).strict()
 /** Successful claim, persisted before its secret is returned. */
 export interface ConnectionDeviceGrant {
   readonly version: 1
