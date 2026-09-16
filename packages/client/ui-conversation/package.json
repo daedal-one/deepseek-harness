@@ -23,7 +23,11 @@
       "default": "./lib/client.js"
     },
     "./src/*": "./src/*",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./client/portable": {
+      "types": "./lib/types/client/portable.d.ts",
+      "default": "./lib/portable.js"
+    }
   },
   "dsh": {
     "client": {
@@ -98,6 +102,7 @@
   "files": [
     "lib/index.js",
     "lib/client.js",
+    "lib/portable.js",
     "lib/types/**/*.d.ts"
   ]
 }

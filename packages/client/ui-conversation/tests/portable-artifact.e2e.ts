@@ -1,0 +1,85 @@
+/** Built Conversation assembly shares no browser runtime or Node dependencies. */
+import { spawnSync } from 'node:child_process'
+import { createRequire } from 'node:module'
+import { expect, it } from 'vitest'
+
+it('publishes and disposes a Conversation through the portable artifact without a page or frame clock', { retry: 0 }, () => {
+  const artifact = createRequire(new URL('../package.json', import.meta.url))
+    .resolve('@deepseek-ai/dsh-client-ui-conversation/client/portable')
+  const result = spawnSync(process.execPath, ['--experimental-vm-modules', '--experimental-import-meta-resolve', '--input-type=module', '-e', `
+    import assert from 'node:assert/strict';
+    import { readFileSync } from 'node:fs';
+    import { isBuiltin } from 'node:module';
+    import { fileURLToPath, pathToFileURL } from 'node:url';
+    import { SourceTextModule, createContext } from 'node:vm';
+    const context = createContext({ queueMicrotask, setTimeout, clearTimeout, console });
+    const modules = new Map();
+    function fileModule(file) {
+      if (!modules.has(file)) modules.set(file, new SourceTextModule(readFileSync(file, 'utf8'), { context, identifier: file }));
+      return modules.get(file);
+    }
+    function link(specifier, parent) {
+      if (isBuiltin(specifier)) throw new Error('portable dependency: ' + specifier);
+      return fileModule(fileURLToPath(import.meta.resolve(specifier, pathToFileURL(parent.identifier))));
+    }
+    async function load(file) {
+      const module = fileModule(file);
+      if (module.status === 'unlinked') await module.link(link);
+      if (module.status === 'linked') await module.evaluate();
+      return module.namespace;
+    }
+    const forbidden = new SourceTextModule('import fs from "node:fs"', { context });
+    await assert.rejects(forbidden.link(link), /portable dependency/);
+    const page = new SourceTextModule('window.document.createElement("div")', { context });
+    await page.link(link);
+    await assert.rejects(page.evaluate(), /window is not defined/);
+    const api = await load(process.argv[1]);
+    const { Context } = await load(fileURLToPath(import.meta.resolve('@deepseek-ai/cordis', pathToFileURL(process.argv[1]))));
+    const ctx = new Context();
+    let binding;
+    let unsubscribe;
+    const listeners = new Set();
+    try {
+      const events = new api.ConversationEventRegistry(ctx);
+      const views = new api.ConversationViewRegistry(ctx);
+      events.register({ kind: 'probe', target: 'probe',
+        match: event => event.type === 'turn/start' ? { id: 'one', role: 'start' }
+          : event.type === 'assistant/live-chunk' ? { id: 'one', role: 'update' } : null,
+        start: () => 0, update: value => value.state + 1,
+        publication: match => match.event.type === 'assistant/live-chunk' ? 'animation-frame' : 'immediate',
+        buildViewNode: value => ({ key: value.key, kind: 'probe', id: value.id, target: 'probe', data: value.state }),
+      });
+      views.register({ target: 'probe', create: () => ({ empty: 0,
+        replace: value => value.nodes[0]?.data ?? 0, apply: value => value.upserts[0]?.data ?? 0,
+      }) });
+      let window = { entries: [], revision: 0, hasMore: false, change: { kind: 'replace', entries: [] } };
+      const feed = { getSnapshot: () => window, subscribe: listener => { listeners.add(listener); return () => listeners.delete(listener); } };
+      binding = new api.ConversationBindingModel(feed, new api.ConversationNodeAssembler(events, views), null);
+      const target = binding.target('probe');
+      unsubscribe = target.subscribe(() => {});
+      function append(entry) {
+        window = { ...window, entries: [...window.entries, entry], revision: window.revision + 1, change: { kind: 'append', entries: [entry] } };
+        for (const listener of listeners) listener();
+      }
+      append({ type: 'event', event: { type: 'turn/start', seq: 1, time: 1, data: { turn: 1 } } });
+      append({ type: 'transient', event: { type: 'assistant/live-chunk', seq: 2, time: 2,
+        data: { turn: 1, step: 1, attemptId: 'probe-attempt', chunk: { type: 'text-delta', index: 0, text: 'x' } } } });
+      assert.equal(target.getSnapshot(), 1);
+      assert.equal(listeners.size, 1);
+      binding.dispose();
+      assert.equal(listeners.size, 0);
+      const snapshot = binding.snapshot.getSnapshot();
+      append({ type: 'event', event: { type: 'turn/start', seq: 3, time: 3, data: { turn: 2 } } });
+      assert.equal(binding.snapshot.getSnapshot(), snapshot);
+    } finally {
+      unsubscribe?.();
+      binding?.dispose();
+      await ctx.fiber.dispose();
+    }
+    console.log('portable Conversation artifact passed');
+  `, artifact], { encoding: 'utf8', timeout: 30_000 })
+  expect(result.error).toBeUndefined()
+  expect(result.signal).toBeNull()
+  expect(result.status, result.stderr).toBe(0)
+  expect(result.stdout).toContain('portable Conversation artifact passed')
+})

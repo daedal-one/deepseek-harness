@@ -45,6 +45,10 @@ Portable unary fetch adapters require only HTTP success, status and JSON decodin
 
 The shared Session-list projection must retain the owning manager's read activity and structured failure alongside arrival phase. A settled read promise does not imply a successful result. Initial failure remains pending arrival with a visible error; refresh and continuation failures retain existing rows, preserve the next cursor, and expose retry state. Native and browser consumers use this same feed without issuing duplicate reads or deriving success from promise settlement.
 
+## Portable Conversation assembly
+
+Expose the existing target-neutral Conversation assembler, effect-owned Definition registries and observable Session binding through an ordinary ESM entry that does not load the browser shell, editor, image URL cache or React. Reuse this binding in the existing browser service. Portable consumers supply the publication scheduler or explicitly request immediate publication; the browser adapter preserves its current three-frame streaming cadence. The binding consumes the existing contiguous Session event source, including replace, prepend, append, revision gaps and Assistant settlement, without opening another history stream or redefining Session projection semantics. Closing the binding detaches its source and cancels queued publication; late callbacks cannot flush or reactivate it. Qualify subscription identity, target activation, cumulative streaming, registry changes, pagination, resynchronization and disposal with deterministic schedulers and the existing browser composition. Business target Definitions, native renderer integration and installable mobile distribution remain separate required work before native Conversation acceptance.
+
 ## Acceptance
 
 A native iPhone build and browser/Electron consumers attach to an existing session, stream, prompt and resolve an interaction through native DSH semantics. Shared source and artifact checks reject Node/DOM imports on native paths. Focused lifecycle tests cover cancellation, disposal, disconnect after acceptance and reconnect; recorded-session output remains faithful.
