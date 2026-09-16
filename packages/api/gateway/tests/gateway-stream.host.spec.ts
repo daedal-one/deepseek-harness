@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import { once } from 'node:events'
+import { Socket } from 'node:net'
+import type { IncomingMessage } from 'node:http'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import WebSocket, { type RawData } from 'ws'
+import WebSocket, { WebSocketServer, type RawData } from 'ws'
 import { Context, Service, symbols } from '@deepseek-ai/cordis'
 import { apply as applyConnection, inject as connectionInject } from '@deepseek-ai/dsh-client-connection'
 import WebServer from '@deepseek-ai/dsh-host-webserver'
@@ -279,10 +281,10 @@ describe('Typert Remote streams', () => {
     })).rejects.toThrow('Remote invocation "feed/abortBeforeOpen" was aborted')
 
     const abortedBeforeIteration = new AbortController()
-    abortedBeforeIteration.abort(new Error('cancelled before iteration'))
     const preCancelled = await ctx.typertGateway.stream({
       namespace: 'feed', method: 'sync', args: { label: 'ignored' }, signal: abortedBeforeIteration.signal,
     })
+    abortedBeforeIteration.abort(new Error('cancelled before iteration'))
     await expect(collect(preCancelled)).rejects.toThrow('Remote invocation "feed/sync" was aborted')
   })
 
@@ -294,6 +296,47 @@ describe('Typert Remote streams', () => {
     await expect(ctx.typertGateway.stream({
       namespace: 'feed', method: 'unary', args: { label: 'a' },
     })).rejects.toMatchObject({ code: 'gateway/signature-invalid' } satisfies Partial<TypertGatewayError>)
+  })
+
+  it('cancels logical streams synchronously on revocation and releases their WebSocket lease', async () => {
+    const { ctx, service } = await setup(true)
+    const controller = new AbortController()
+    const dispose = vi.fn()
+    const authorize = vi.spyOn(ctx.connection, 'authorizeRequest').mockResolvedValue({ ok: true, lease: { signal: controller.signal, dispose } })
+    const socket = new WebSocket(`ws://127.0.0.1:${String(ctx.webServer.port)}/api/remote.mux`)
+    try {
+      await once(socket, 'open')
+      const item = once(socket, 'message')
+      sendOpen(socket, 'leased', 'feed/follow', { label: 'phone' })
+      await item
+      expect(service.signals[0]?.aborted).toBe(false)
+      const closed = once(socket, 'close')
+      controller.abort(new Error('device revoked'))
+      expect(service.signals[0]?.aborted).toBe(true)
+      await closed
+      expect(dispose).toHaveBeenCalledOnce()
+    } finally { socket.terminate(); authorize.mockRestore() }
+  })
+
+  it.each(['closed', 'revoked', 'upgrade-failure'] as const)('releases admission leases when a WebSocket is %s', async (reason) => {
+    const registration = vi.spyOn(WebServer.prototype, 'registerUpgrade')
+    const { ctx } = await setup(true)
+    const route = registration.mock.calls.map(([candidate]) => candidate).find(candidate => candidate.path === '/api/remote.mux')!
+    registration.mockRestore()
+    const controller = new AbortController()
+    const dispose = vi.fn()
+    const authorize = vi.spyOn(ctx.connection, 'authorizeRequest').mockResolvedValue({ ok: true, lease: { signal: controller.signal, dispose } })
+    const socket = new Socket()
+    const failure = new Error('upgrade failure')
+    const upgrade = vi.spyOn(WebSocketServer.prototype, 'handleUpgrade').mockImplementation(() => { throw failure })
+    try {
+      if (reason === 'closed') socket.destroy()
+      if (reason === 'revoked') controller.abort()
+      const result = route.handler({} as IncomingMessage, socket, Buffer.alloc(0))
+      if (reason === 'upgrade-failure') await expect(result).rejects.toBe(failure)
+      else { await result; expect(upgrade).not.toHaveBeenCalled() }
+      expect(dispose).toHaveBeenCalledOnce()
+    } finally { socket.destroy(); upgrade.mockRestore(); authorize.mockRestore() }
   })
 
   it('uses the configured WebSocket heartbeat interval', { timeout: 1_000 }, async () => {

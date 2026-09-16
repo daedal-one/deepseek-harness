@@ -44,7 +44,24 @@ Remote methods start at business semantic revision 1. An explicit positive safe 
 
 Native composition explicitly selects required endpoints from the same generated contributions that it mounts. The requirement records contain endpoint, unary or stream mode, wire fingerprint and semantic revision; no Host response supplies Client expectations. On each authenticated event-stream opening, validate the paired Host and read capability metadata for that exact activation before publishing readiness or delivering forwarded events. Every required endpoint must match mode, schema and business revision and be available or context-required. Missing, unverified, unavailable or incompatible required endpoints refuse admission; unrelated optional capabilities do not block it. An explicit empty requirement list admits metadata-only compositions. The accepted snapshot is visible only for its active generation and disappears on loss. Cancellation and late metadata responses cannot publish readiness; reconnect repeats admission. Per-operation Host enforcement and Session format/event checks remain authoritative after admission.
 
+## Device enrollment and revocation
+
+Connection owns an opt-in device-access configuration with explicit enrollment lifetime, pending-challenge limit and enrolled-device limit. The Web composition supplies those values. Browser-authenticated owner requests may create a challenge, list device metadata and revoke a device. Device bearer credentials cannot perform those administrative operations or mint other credentials. Existing browser cookies, index authentication, Host/Origin checks and private DesktopHost transport retain their policies.
+
+An exact enrollment-claim POST is the only unauthenticated API exception and still passes the Host/Origin fence. Its request carries the expected Host id, single-use challenge and bounded device label in JSON. Challenges use cryptographic randomness, expire by elapsed time, stay in memory only and are consumed before durable grant creation. Restarts and plugin reloads invalidate outstanding challenges. A failed or lost claim never causes automatic replay or returns a second credential. QR data carries only the short-lived challenge, expected Host identity and selected origin; permanent credentials never enter QR codes or URLs.
+
+A successful claim returns a random device bearer credential once, only after the credential provider commits its Host-bound record. Persist only a digest and bounded device metadata, never the bearer secret or enrollment challenge. Stored versions and fields validate on load and every admission; malformed state fails closed. Administrative listing never exposes hashes or secrets. Device authorization uses the Authorization header for API requests and WebSocket upgrades, never query strings, and never falls back to a browser cookie when a supplied bearer is invalid.
+
+Every accepted device request owns a revocation lifetime. A committed revoke rejects future requests and cancels that device's active HTTP and WebSocket carriers; other devices and browser sessions remain valid. Credential-record changes reconcile active grants, and malformed or removed state cancels affected access. Abort before dispatch or after asynchronous Context/lookup preparation prevents business execution; an operation already accepted may have an uncertain outcome and cannot be undone by revocation. Teardown stops new admission, cancels active leases, clears challenges and waits for owned work. Privileged browser-only auxiliary routes retain their current policy.
+
+Portable claim validation binds the returned grant to the expected Host and respects caller cancellation before accepting credentials. Native storage, the QR presentation and discovery remain separate application work. Live public-profile qualification must prove single-use enrollment, bearer access to identity/capabilities and native generation admission, durable credentials across restart, revocation of active streams and rejection of revoked or wrong-Host credentials. Keep physical iPhone acceptance distinct from local and fixture checks.
+
 ## Sources
+
+- [Device grant persistence and revocation](spec:src:packages/client/connection/src/device-access.ts)
+- [Device enrollment routes](spec:src:packages/client/connection/src/device-routes.ts)
+- [Device wire validation](spec:src:packages/client/connection/src/device-protocol.ts)
+- [Portable enrollment claim](spec:src:packages/client/connection/src/client/device-access.ts)
 
 - [Generated wire fingerprints](spec:src:packages/typert/generator/src/emitter.ts)
 - [Portable Host capability read](spec:src:packages/api/gateway/src/client/host-capabilities.ts)

@@ -1,4 +1,5 @@
 /** Host HTTP bridge for browser-client RPC. */
+import type { ConnectionRequestAuthorization } from './rpc.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-attachment'
@@ -7,7 +8,9 @@ import type {} from '@deepseek-ai/dsh-credentials'
 import type { WebRoute } from '@deepseek-ai/dsh-host-webserver'
 import { API_PATH } from './api-path.ts'
 import { bridge, DEFAULT_MAX_REQUEST_BODY_BYTES } from './http-bridge.ts'
-import { assertTrustedAuthority } from './api-request-trust.ts'
+import { DeviceAccess, DeviceAccessConfigSchema, DEVICE_ACCESS_KEY, type DeviceAccessConfig } from './device-access.ts'
+import { DEVICE_ACCESS_PATHS, DEVICE_CLAIM_MAX_BYTES } from './device-protocol.ts'
+import { assertTrustedAuthority, isTrustedApiRequest } from './api-request-trust.ts'
 import { BrowserAuth } from './browser-auth.ts'
 import { createHostIdentity } from './host-identity.ts'
 import { CONNECTION_IDENTITY_ENDPOINT, connectionIdentityRequestSchema } from './host-identity-protocol.ts'
@@ -24,6 +27,7 @@ export type {
   ConnectionRpcFailure,
   ConnectionRpcHandler,
   ConnectionRequestRejection,
+  ConnectionRequestAuthorization, ConnectionRequestLease,
   ConnectionRpcResult,
   ConnectionRequestBodyMode,
   ConnectionTrustRequest,
@@ -87,10 +91,13 @@ export interface ConnectionConfig {
   cookieMaxAgeDays?: number
   /** Maximum buffered JSON body for every `/api` request. Default: 300 MiB. */
   maxRequestBodyBytes?: number
+  /** Explicit enrollment limits; omitted configurations disable device access. */
+  deviceAccess?: DeviceAccessConfig
 }
 
 export const Config: z<ConnectionConfig> = z.object({
   recovery: ConnectionRecoveryConfigSchema.default({}),
+  deviceAccess: DeviceAccessConfigSchema,
   trustedHosts: z.array(String).default([]),
   cookieMaxAgeDays: z.natural().min(1).default(30),
   maxRequestBodyBytes: z.natural().min(1).default(DEFAULT_MAX_REQUEST_BODY_BYTES),
@@ -114,11 +121,20 @@ export async function apply(ctx: Context, config?: ConnectionConfig): Promise<vo
   for (const entry of trustedHosts) assertTrustedAuthority(entry)
   assertImageBodyCapacity(ctx, maxRequestBodyBytes)
   const identity = await createHostIdentity(ctx.root, ctx.credentials)
+  const devices = config?.deviceAccess === undefined ? undefined : await DeviceAccess.create(ctx.credentials, identity, config.deviceAccess)
+  if (devices !== undefined) {
+    ctx.on('credentials/record-updated', (key) => {
+      if (key !== DEVICE_ACCESS_KEY) return
+      void devices.refresh().catch(() => { ctx.logger.warn('Device authorization unavailable') })
+    })
+    ctx.effect(() => () => devices.dispose(), 'client-connection: device access')
+  }
   const connection = new HostConnectionService(
     ctx,
     trustedHosts,
     await BrowserAuth.create(ctx.root, ctx.credentials, cookieMaxAgeDays),
     identity,
+    devices,
   )
   connection.rpc.handleRoute(CONNECTION_IDENTITY_ENDPOINT, (_endpoint, payload) => {
     if (!connectionIdentityRequestSchema.safeParse(payload).success) {
@@ -138,13 +154,20 @@ export async function apply(ctx: Context, config?: ConnectionConfig): Promise<vo
       kind: 'prefix',
       path: API_PATH,
       handler: async (req, res) => {
-        const rejection = connection.requestRejection(req)
-        if (rejection !== undefined) {
-          res.writeHead(rejection)
-          res.end(rejection === 401 ? 'unauthorized' : 'forbidden')
+        const claiming = devices !== undefined && req.method === 'POST'
+          && new URL(req.url ?? '/', 'http://dsh.internal').pathname === DEVICE_ACCESS_PATHS.claim
+        const authorization: ConnectionRequestAuthorization = claiming
+          ? isTrustedApiRequest(req, trustedHosts) ? { ok: true as const } : { ok: false as const, status: 403 as const }
+          : await connection.authorizeRequest(req)
+        if (!authorization.ok) {
+          res.writeHead(authorization.status)
+          res.end(authorization.status === 401 ? 'unauthorized' : 'forbidden')
           return
         }
-        await bridge(req, res, fetchHandler, maxRequestBodyBytes)
+        try {
+          const bodyLimit = claiming ? Math.min(maxRequestBodyBytes, DEVICE_CLAIM_MAX_BYTES) : maxRequestBodyBytes
+          await bridge(req, res, fetchHandler, bodyLimit, authorization.lease?.signal)
+        } finally { authorization.lease?.dispose() }
       },
     }
     webCtx.effect(() => webCtx.webServer.register(route), 'client-connection: /api route')

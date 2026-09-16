@@ -214,13 +214,23 @@ export class TypertGatewayService extends Service implements TypertGateway {
       webCtx.effect(() => {
         const route: WebUpgradeRoute = {
           path: REMOTE_STREAM_MUX_PATH,
-          handler: (req, socket, head) => {
-            const rejection = webCtx.connection.requestRejection(req)
-            if (rejection !== undefined) {
-              rejectRemoteStreamUpgrade(socket, rejection)
+          handler: async (req, socket, head) => {
+            const authorization = await webCtx.connection.authorizeRequest(req)
+            if (!authorization.ok) {
+              rejectRemoteStreamUpgrade(socket, authorization.status)
               return
             }
-            mux.handleUpgrade(req, socket, head)
+            const lease = authorization.lease
+            const revoke = (): void => { socket.destroy() }
+            const release = (): void => {
+              lease?.signal.removeEventListener('abort', revoke)
+              socket.off('close', release)
+              lease?.dispose()
+            }
+            if (socket.destroyed || lease?.signal.aborted === true) { release(); socket.destroy(); return }
+            socket.once('close', release)
+            lease?.signal.addEventListener('abort', revoke, { once: true })
+            try { mux.handleUpgrade(req, socket, head, lease?.signal) } catch (error) { release(); throw error }
           },
         }
         const unregister = webCtx.webServer.registerUpgrade(route)
@@ -358,6 +368,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
     }
 
     try {
+      request.signal?.throwIfAborted()
       return await Reflect.apply(prepared.method, prepared.receiver, prepared.args) as unknown
     } catch (error) {
       if (request.signal?.aborted === true) throw remoteCancelled(prepared.endpoint, error)
@@ -382,6 +393,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
     }
     let source: unknown
     try {
+      request.signal?.throwIfAborted()
       source = Reflect.apply(prepared.method, prepared.receiver, prepared.args) as unknown
     } catch (error) {
       if (request.signal?.aborted === true) throw remoteCancelled(prepared.endpoint, error)
@@ -661,6 +673,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
 
   private async prepareInvocation(request: InvokeRemoteRequest): Promise<PreparedInvocation> {
     const endpoint = endpointOf(request.namespace, request.method)
+    if (request.signal?.aborted === true) throw remoteCancelled(endpoint, request.signal.reason)
     const descriptor = this.resolveDescriptor(request.namespace, request.method, endpoint)
     this.assertCompatibility(request, descriptor, endpoint)
     assertExactArguments(request.args, descriptor, endpoint)

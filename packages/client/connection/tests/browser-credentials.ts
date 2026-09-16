@@ -33,6 +33,8 @@ export class RecordCredentials {
 /** Keyed record double serializing mutations like the provider contract. */
 export class KeyedCredentials {
   readonly records = new Map<CredentialKey, CredentialRecord>()
+
+  readRecord(key: CredentialKey): Promise<CredentialRecord | undefined> { return Promise.resolve(this.records.get(key)) }
   private pending: Promise<unknown> = Promise.resolve()
 
   modifyRecord: CredentialProvider['modifyRecord'] = (key, mutate) => {

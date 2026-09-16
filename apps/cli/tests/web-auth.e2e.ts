@@ -2,7 +2,7 @@
 
 import type { ChildProcess } from 'node:child_process'
 import { spawn, spawnSync } from 'node:child_process'
-import { stat } from 'node:fs/promises'
+import { stat, readFile } from 'node:fs/promises'
 import { request as httpRequest } from 'node:http'
 import { createRequire } from 'node:module'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -12,6 +12,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { serverResponseSchema } from '@deepseek-ai/dsh-client-connection'
 import { connectionIdentitySchema } from '@deepseek-ai/dsh-client-connection/identity'
+import { connectionDeviceGrantSchema } from '../../../packages/client/connection/src/device-protocol.ts'
 import type { HostCapabilities } from '@deepseek-ai/dsh-api-gateway/types'
 
 const REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url))
@@ -176,20 +177,25 @@ function expectNativeCapabilities(value: unknown): HostCapabilities {
 }
 
 /** Exercise the built Client facade on the authenticated HTTP and WebSocket carriers. */
-function verifyNativeAdmission(origin: string, cookie: string, hostId: string, activationId: string): void {
+function verifyNativeAdmission(
+  origin: string, auth: { cookie: string } | { bearer: string; revoke?: { cookie: string; deviceId: string } },
+  hostId: string, activationId: string,
+): void {
   const require = createRequire(join(REPO_ROOT, 'packages/api/remotes/package.json'))
   const result = spawnSync(process.execPath, ['--input-type=module', '-e', `
     import assert from 'node:assert/strict';
     const api = await import(process.argv[1]);
     const { Context } = await import(process.argv[2]);
     const { default: WebSocket } = await import(process.argv[3]);
-    const [baseUrl, cookie, expectedHostId, activationId] = process.argv.slice(4);
+    const [baseUrl, encodedAuth, expectedHostId, activationId] = process.argv.slice(4);
+    const auth = JSON.parse(encodedAuth);
+    const headers = { ...auth.bearer ? { Authorization: 'Bearer ' + auth.bearer } : { Cookie: auth.cookie }, Origin: baseUrl };
     const requiredCapabilities = api.selectRemoteCapabilities(['settings/describe', 'session/list', 'session/follow', 'workspace/follow']);
     let metadataReads = 0;
     const rpc = api.createConnectionRpc({ baseUrl, randomId: () => crypto.randomUUID(),
       fetch: (input, init) => {
         if (input.pathname.endsWith('/$capabilities')) metadataReads++;
-        return fetch(input, { ...init, headers: { ...init.headers, Cookie: cookie, Origin: baseUrl } });
+        return fetch(input, { ...init, headers: { ...init.headers, ...headers } });
       },
     });
     const connection = api.createConnection({ isLoopback: false, rpc });
@@ -202,7 +208,7 @@ function verifyNativeAdmission(origin: string, cookie: string, hostId: string, a
       gateway = ctx.plugin({ inject: ['typert', 'connection'], apply(scope) {
         api.applyRemoteClient(scope, { baseUrl, expectedHostId, requiredCapabilities,
           randomId: () => crypto.randomUUID(), createAbortController: () => new AbortController(),
-          createSocket: url => new WebSocket(url, { headers: { Cookie: cookie, Origin: baseUrl } }),
+          createSocket: url => new WebSocket(url, { headers }),
         });
       } });
       await gateway;
@@ -225,6 +231,24 @@ function verifyNativeAdmission(origin: string, cookie: string, hostId: string, a
       const settings = await ctx.remote.settings.describe();
       assert.equal(settings.ok, true);
       assert.ok(Array.isArray(settings.value.namespaces));
+      if (auth.revoke) {
+        const lost = new Promise((resolve, reject) => {
+          const timer = setTimeout(() => { stop(); reject(new Error('device revocation did not close the generation')); }, 5000);
+          const stop = connection.generation.subscribe(() => {
+            if (!connection.generation.getSnapshot()) { clearTimeout(timer); stop(); resolve(); }
+          });
+        });
+        const revoke = await fetch(new URL('/api/connection/devices/revoke', baseUrl), {
+          method: 'POST', headers: { Cookie: auth.revoke.cookie, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deviceId: auth.revoke.deviceId }),
+        });
+        assert.equal(revoke.status, 200);
+        assert.deepEqual(await revoke.json(), { ok: true, value: { revoked: true } });
+        await lost;
+        assert.equal(ctx.remote.$host.capabilities, undefined);
+        const refused = await fetch(new URL('/api/connection/identity', baseUrl), { method: 'POST', headers });
+        assert.equal(refused.status, 401);
+      }
       const remote = ctx.remote;
       await assembly.dispose(); assembly = undefined;
       await gateway.dispose(); gateway = undefined;
@@ -237,7 +261,7 @@ function verifyNativeAdmission(origin: string, cookie: string, hostId: string, a
     }
   `, ...['@deepseek-ai/dsh-api-remotes/client/portable', '@deepseek-ai/cordis'].map(name => pathToFileURL(require.resolve(name)).href),
   pathToFileURL(createRequire(join(REPO_ROOT, 'apps/cli/package.json')).resolve('ws')).href,
-  origin, cookie, hostId, activationId], { encoding: 'utf8', timeout: 30_000 })
+  origin, JSON.stringify(auth), hostId, activationId], { encoding: 'utf8', timeout: 30_000 })
   expect(result.error, result.stderr).toBeUndefined()
   expect(result.signal, result.stderr).toBeNull()
   expect(result.status, result.stderr).toBe(0)
@@ -290,7 +314,7 @@ describe('dsh web authentication through the real CLI', () => {
       const identity = connectionIdentitySchema.parse(rpcValue(await postRpc(port, firstUrl.host, 'connection/identity', {}, cookie)))
       const capabilities = expectNativeCapabilities(rpcValue(await postRpc(port, firstUrl.host, '$capabilities', {}, cookie)))
       expect(capabilities.identity).toEqual(identity)
-      verifyNativeAdmission(firstUrl.origin, cookie, identity.hostId, identity.activationId)
+      verifyNativeAdmission(firstUrl.origin, { cookie }, identity.hostId, identity.activationId)
       const settings = capabilities.capabilities.find(row => row.endpoint === 'settings/describe')!
       const compatibility = { wireFingerprint: settings.wireFingerprint, semanticRevision: settings.semanticRevision, identity }
       expect(rpcValue(await postRpc(port, firstUrl.host, 'settings/describe', { args: {}, compatibility }, cookie)))
@@ -304,6 +328,25 @@ describe('dsh web authentication through the real CLI', () => {
         } } })
       }
       expect(await postRpc(port, 'example.invalid', '$capabilities', {}, cookie)).toEqual({ status: 403, body: 'forbidden' })
+
+      const devicePost = async (origin: string, route: string, body: unknown, headers: Record<string, string> = {}) => fetch(new URL(`/api/connection/devices/${route}`, origin), {
+        method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(10_000),
+      })
+      const enrolled = await devicePost(firstUrl.origin, 'enroll', {}, { cookie })
+      expect(enrolled.status).toBe(200)
+      const enrollment = await enrolled.json() as { value: { hostId: string; challenge: string } }
+      const claim = { hostId: enrollment.value.hostId, challenge: enrollment.value.challenge, label: 'iPhone fixture' }
+      const claimed = await devicePost(firstUrl.origin, 'claim', claim)
+      expect(claimed.status).toBe(200)
+      const grant = connectionDeviceGrantSchema.parse((await claimed.json() as { value: unknown }).value)
+      expect(grant.hostId).toBe(identity.hostId)
+      expect((await devicePost(firstUrl.origin, 'claim', claim)).status).toBe(401)
+      verifyNativeAdmission(firstUrl.origin, { bearer: grant.credential }, identity.hostId, identity.activationId)
+      const unclaimed = await devicePost(firstUrl.origin, 'enroll', {}, { cookie })
+      const staleEnrollment = await unclaimed.json() as { value: { hostId: string; challenge: string } }
+      const stored = await readFile(join(dshHome, '.credentials.yaml'), 'utf8')
+      expect(stored.includes(grant.credential)).toBe(false)
+      expect(stored.includes(claim.challenge)).toBe(false)
 
       const firstExit = await stopWeb(first)
       expect(firstExit.signal).not.toBe('SIGKILL')
@@ -319,7 +362,14 @@ describe('dsh web authentication through the real CLI', () => {
       expect(nextIdentity.activationId).not.toBe(identity.activationId)
       const nextCapabilities = expectNativeCapabilities(rpcValue(await postRpc(secondPort, secondUrl.host, '$capabilities', {}, cookie)))
       expect(nextCapabilities.identity).toEqual(nextIdentity)
-      verifyNativeAdmission(secondUrl.origin, cookie, nextIdentity.hostId, nextIdentity.activationId)
+      verifyNativeAdmission(secondUrl.origin, { cookie }, nextIdentity.hostId, nextIdentity.activationId)
+      const expiredClaim = { hostId: staleEnrollment.value.hostId, challenge: staleEnrollment.value.challenge, label: 'Unclaimed phone' }
+      expect((await devicePost(secondUrl.origin, 'claim', expiredClaim)).status).toBe(401)
+      verifyNativeAdmission(secondUrl.origin, { bearer: grant.credential, revoke: { cookie, deviceId: grant.device.deviceId } },
+        nextIdentity.hostId, nextIdentity.activationId)
+      const devices = await fetch(new URL('/api/connection/devices', secondUrl.origin), { headers: { cookie } })
+      expect(devices.status).toBe(200)
+      expect(await devices.json()).toMatchObject({ ok: true, value: { devices: [] } })
       const stale = await postRpc(secondPort, secondUrl.host, 'settings/describe', { args: {}, compatibility }, cookie)
       expect(JSON.parse(stale.body)).toMatchInlineSnapshot(`
         {

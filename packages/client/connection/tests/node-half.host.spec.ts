@@ -10,6 +10,7 @@ import type { AttachmentStore } from '@deepseek-ai/dsh-attachment'
 import type { IndexInjection, WebServer, WebRoute, WebUpgradeRoute } from '@deepseek-ai/dsh-host-webserver'
 import { API_PATH, RpcId, apply, inject, type ClientRequest, type ConnectionConfig, type HostConnectionHandle } from '../src/index.ts'
 import { DEFAULT_MAX_REQUEST_BODY_BYTES } from '../src/http-bridge.ts'
+import { connectionDeviceGrantSchema, DEVICE_ACCESS_PATHS, DEVICE_CLAIM_MAX_BYTES } from '../src/device-protocol.ts'
 import { connectionIdentitySchema } from '../src/host-identity-protocol.ts'
 import { provideBrowserCredentials } from './browser-credentials.ts'
 
@@ -65,6 +66,8 @@ function fakeResponse(): {
   const chunks: Buffer[] = []
   const response = Object.assign(new EventEmitter(), {
     writableEnded: false,
+    destroyed: false,
+    destroy(this: EventEmitter & { destroyed: boolean }) { this.destroyed = true; this.emit('close'); return this },
     writeHead(value: number, headers?: Record<string, string>) {
       state.status = value
       if (headers !== undefined) state.headers = headers
@@ -119,6 +122,76 @@ function browserCookie(connection: HostConnectionHandle, authority: string): str
 }
 
 describe('connection node half', () => {
+  it('enrolls a device through the owner, authenticates its bearer and revokes a pending HTTP request', async () => {
+    const { routes, connection, dispose } = await mounted({ trustedHosts: ['harness.example'],
+      deviceAccess: { enrollmentTtlMs: 1000, maxPendingEnrollments: 2, maxDevices: 2 } })
+    const handler = routes.find(route => route.path === API_PATH)!.handler
+    const host = 'harness.example'
+    const owner = { host, cookie: browserCookie(connection, host) }
+    const send = async (request: IncomingMessage) => {
+      const result = fakeResponse(); await handler(request, result.response); return result.state
+    }
+    const release = Promise.withResolvers<undefined>()
+    let pending: Promise<void> | undefined
+    try {
+      expect(await send(fakePost({ host }, DEVICE_ACCESS_PATHS.enroll, {}))).toMatchObject({ status: 401 })
+      const enrollmentResponse = await send(fakePost(owner, DEVICE_ACCESS_PATHS.enroll, {}))
+      expect(enrollmentResponse.status).toBe(200)
+      expect(enrollmentResponse.headers?.['cache-control']).toBe('no-store')
+      const enrollment = JSON.parse(String(enrollmentResponse.body)) as { value: { hostId: string; challenge: string } }
+      const claim = { hostId: enrollment.value.hostId, challenge: enrollment.value.challenge, label: 'Phone' }
+      expect(await send(fakePost({ host: 'attacker.invalid' }, DEVICE_ACCESS_PATHS.claim, claim))).toMatchObject({ status: 403 })
+      expect(await send(fakePost({ host, origin: 'https://attacker.invalid' }, DEVICE_ACCESS_PATHS.claim, claim))).toMatchObject({ status: 403 })
+      expect(await send(fakePost({ host }, DEVICE_ACCESS_PATHS.claim, { ...claim, extra: true }))).toMatchObject({ status: 400 })
+      expect(await send(fakeRawPost({ host }, DEVICE_ACCESS_PATHS.claim, '{}'))).toMatchObject({ status: 415 })
+      expect(await send(fakeRawPost({ host, 'content-type': 'application/json' }, DEVICE_ACCESS_PATHS.claim, '{'))).toMatchObject({ status: 400 })
+      expect(await send(fakeRawPost({ host, 'content-type': 'application/json' }, DEVICE_ACCESS_PATHS.claim, ' '.repeat(DEVICE_CLAIM_MAX_BYTES + 1)))).toMatchObject({ status: 413 })
+      const issued = await send(fakePost({ host }, DEVICE_ACCESS_PATHS.claim, claim))
+      expect(issued.status).toBe(200)
+      const grant = connectionDeviceGrantSchema.parse((JSON.parse(String(issued.body)) as { value: unknown }).value)
+      expect(await send(fakePost({ host }, DEVICE_ACCESS_PATHS.claim, claim))).toMatchObject({ status: 401 })
+      const bearer = { host, authorization: `Bearer ${grant.credential}` }
+      for (const headers of [{ host }, { ...owner, authorization: 'Bearer invalid' }, { ...owner, authorization: 'Basic invalid' }]) {
+        expect(await send(fakePost(headers, '/api/connection/identity', { type: 'client-request', rpcId: 'identity', method: 'connection/identity', payload: {} }))).toMatchObject({ status: 401 })
+      }
+      expect(await send(fakePost(bearer, '/api/connection/identity', { type: 'client-request', rpcId: 'identity', method: 'connection/identity', payload: {} }))).toMatchObject({ status: 200 })
+      const lease = await connection.authorizeRequest({ headers: new Headers(bearer) })
+      expect(lease.ok).toBe(true)
+      if (lease.ok) lease.lease?.dispose()
+      expect(await send(fakePost(bearer, DEVICE_ACCESS_PATHS.enroll, {}))).toMatchObject({ status: 401 })
+      expect(await send(fakeRequest(bearer, DEVICE_ACCESS_PATHS.list))).toMatchObject({ status: 401 })
+      const listed = await send(fakeRequest(owner, DEVICE_ACCESS_PATHS.list))
+      expect(JSON.parse(String(listed.body))).toMatchObject({ ok: true, value: { devices: [grant.device] } })
+      expect(String(listed.body)).not.toContain(grant.credential)
+      const entered = Promise.withResolvers<AbortSignal>()
+      connection.rpc.handleRoute('fixture/wait', async (_endpoint, _payload, signal) => {
+        entered.resolve(signal); await release.promise; return { ok: true, value: 'late value' }
+      })
+      const active = fakeResponse()
+      pending = Promise.resolve(handler(fakePost(bearer, '/api/fixture/wait', { type: 'client-request', rpcId: 'wait', method: 'fixture/wait', payload: {} }), active.response))
+      const signal = await entered.promise
+      expect(signal.aborted).toBe(false)
+      const revoke = { deviceId: grant.device.deviceId }
+      expect(await send(fakePost(bearer, DEVICE_ACCESS_PATHS.revoke, revoke))).toMatchObject({ status: 401 })
+      expect(await send(fakePost(owner, DEVICE_ACCESS_PATHS.revoke, revoke))).toMatchObject({ status: 200 })
+      expect(signal.aborted).toBe(true)
+      expect(active.response.destroyed).toBe(true)
+      release.resolve(undefined); await pending
+      expect(active.state.body).toBeUndefined()
+      expect(await send(fakePost(bearer, '/api/connection/identity', {}))).toMatchObject({ status: 401 })
+      expect(await send(fakeRequest(owner, DEVICE_ACCESS_PATHS.list))).toMatchObject({ status: 200 })
+    } finally { release.resolve(undefined); await pending; await dispose() }
+  })
+
+  it('keeps enrollment closed when device access is omitted', async () => {
+    const { routes, dispose } = await mounted()
+    try {
+      const result = fakeResponse()
+      await routes.find(route => route.path === API_PATH)!.handler(fakePost({ host: 'localhost' }, DEVICE_ACCESS_PATHS.claim, {}), result.response)
+      expect(result.state.status).toBe(401)
+    } finally { await dispose() }
+  })
+
   it('provides the carrier-neutral service without a Web server', async () => {
     const ctx = new Context()
     provideBrowserCredentials(ctx)

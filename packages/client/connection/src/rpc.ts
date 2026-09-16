@@ -85,6 +85,18 @@ export interface ConnectionTrustRequest {
 /** HTTP status returned before dispatch, or undefined when the request may proceed. */
 export type ConnectionRequestRejection = 401 | 403 | undefined
 
+/** One accepted device carrier's revocation lifetime, released when the carrier ends. */
+export interface ConnectionRequestLease {
+  readonly signal: AbortSignal
+  /** Release this carrier's registration without revoking the device. */
+  dispose(): void
+}
+
+/** Browser authority needs no device lease; device credentials retain one until carrier teardown. */
+export type ConnectionRequestAuthorization =
+  | { readonly ok: false; readonly status: 401 | 403 }
+  | { readonly ok: true; readonly lease?: ConnectionRequestLease }
+
 /** Root/index request facts used by the browser-token exchange. */
 export interface ConnectionIndexRequest extends ConnectionTrustRequest {
   readonly method?: string | undefined
@@ -193,6 +205,13 @@ export interface HostConnectionHandle {
    * @returns rejection status, or undefined when the route may accept the request.
    */
   requestRejection(request: ConnectionTrustRequest): ConnectionRequestRejection
+
+  /**
+   * Authenticate API traffic by browser cookie or an explicit device bearer.
+   * @param request - trusted HTTP headers; an invalid bearer never falls back to cookies.
+   * @returns refusal or caller-owned authorization, whose lease must be bound to carrier teardown.
+   */
+  authorizeRequest(request: ConnectionTrustRequest): Promise<ConnectionRequestAuthorization>
 
   /**
    * Authenticate one frontend index request, owning a token redirect or 401.

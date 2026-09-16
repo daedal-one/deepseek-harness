@@ -185,6 +185,10 @@
         # A deployment adding authorities keeps this expression and concatenates
         # its literals, for example: ['app.internal', ...ctx.webRuntime.trustedHosts].
         trustedHosts: !!js ctx.webRuntime.trustedHosts
+        deviceAccess:
+          enrollmentTtlMs: 300000
+          maxPendingEnrollments: 4
+          maxDevices: 16
 
     # Raw Blob and ReadableStream uploads run independently of Connection's
     # RPC and generation service.

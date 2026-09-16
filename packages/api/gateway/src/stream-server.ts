@@ -44,13 +44,16 @@ export class RemoteStreamMuxServer {
    * @param req - authenticated HTTP upgrade request.
    * @param socket - carrier socket transferred to the WebSocket server.
    * @param head - bytes already read after the HTTP upgrade headers.
+   * @param authorization - optional device lifetime, applied synchronously to every logical stream.
    */
-  handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): void {
+  handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer, authorization?: AbortSignal): void {
     this.server.handleUpgrade(req, socket, head, (websocket) => {
       this.missedHeartbeats.set(websocket, 0)
       websocket.on('pong', () => { this.missedHeartbeats.set(websocket, 0) })
       this.startHeartbeat()
-      const connection = new RemoteStreamMuxConnection(websocket, this.open, this.failure)
+      const open: RemoteStreamOpener = authorization === undefined ? this.open
+        : (endpoint, payload, signal) => this.open(endpoint, payload, AbortSignal.any([authorization, signal]))
+      const connection = new RemoteStreamMuxConnection(websocket, open, this.failure)
       const done = connection.run()
       this.connections.add(done)
       void done.then(() => { this.connections.delete(done) })

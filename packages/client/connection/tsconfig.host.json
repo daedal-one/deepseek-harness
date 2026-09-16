@@ -18,7 +18,10 @@
     "src/rpc-host.ts",
     "src/rpc-schema.ts",
     "src/rpc.ts",
-    "src/types.ts"
+    "src/types.ts",
+    "src/device-protocol.ts",
+    "src/device-access.ts",
+    "src/device-routes.ts"
   ],
   "references": [
     {

@@ -131,3 +131,7 @@ export function apply(ctx: Context): void {
 export { readHostIdentity } from './host-identity.ts'
 export type { ConnectionIdentity, ConnectionHostId, ConnectionActivationId } from '../host-identity-protocol.ts'
 export { connectionIdentitySchema } from '../host-identity-protocol.ts'
+
+export { claimDeviceEnrollment } from './device-access.ts'
+export type { DeviceEnrollmentClaimOptions } from './device-access.ts'
+export type { ConnectionDeviceId, ConnectionDeviceCredential, ConnectionDeviceInfo, ConnectionDeviceEnrollment, ConnectionDeviceGrant } from '../device-protocol.ts'

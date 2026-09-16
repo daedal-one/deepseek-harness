@@ -143,6 +143,8 @@ class FakeConnectionService extends Service {
     }
   }
 
+  authorizeRequest(): Promise<{ readonly ok: true }> { return Promise.resolve({ ok: true }) }
+
   requestRejection(): undefined {
     return undefined
   }
@@ -461,6 +463,27 @@ describe('TypertGatewayService', () => {
       await entered.promise
       await unregister()
       registerStrict(ctx, [{ ...descriptor }])
+      release.resolve({ id: 'agent-1' })
+      await rejected
+      expect(service.calls).toEqual([])
+    } finally { release.resolve({ id: 'agent-1' }); await ctx.fiber.dispose() }
+  })
+
+  it.each(['unary', 'stream'] as const)('refuses business execution cancelled during asynchronous %s preparation', async (mode) => {
+    const { ctx, service } = await setup()
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<FixtureAgent>()
+    const controller = new AbortController()
+    try {
+      ctx.typert.lookups.register('gatewayFixture', { ...agentLookup({ id: 'agent-1' }), resolve: () => {
+        entered.resolve(undefined); return release.promise
+      } })
+      registerStrict(ctx, [{ ...createDescriptor(), ...mode === 'stream' ? { mode: 'stream' as const } : {} }])
+      const request = { namespace: 'goals', method: 'create', args: { agentId: 'agent-1', request: { title: 'cancelled' } }, signal: controller.signal }
+      const pending = mode === 'stream' ? ctx.typertGateway.stream(request) : ctx.typertGateway.invoke(request)
+      const rejected = expect(pending).rejects.toMatchObject({ code: 'gateway/cancelled' })
+      await entered.promise
+      controller.abort(new Error('device revoked'))
       release.resolve({ id: 'agent-1' })
       await rejected
       expect(service.calls).toEqual([])
@@ -1248,11 +1271,11 @@ describe('TypertGatewayService', () => {
     if (invalid.ok) throw new Error('invalid Remote payload unexpectedly succeeded')
     expect(invalid.error.message).toMatch(/plain-object args field and optional compatibility expectations/)
 
-    await expect(handler('goals/maybe', { args: {} }, signal)).resolves.toEqual({
+    await expect(handler('goals/maybe', { args: {} }, new AbortController().signal)).resolves.toEqual({
       ok: true,
       value: undefined,
     })
-    await expect(handler('goals/maybe', { args: { value: null } }, signal)).resolves.toEqual({
+    await expect(handler('goals/maybe', { args: { value: null } }, new AbortController().signal)).resolves.toEqual({
       ok: true,
       value: null,
     })
@@ -1280,8 +1303,7 @@ describe('TypertGatewayService', () => {
       error: { code: 'gateway/internal', message: 'non-error failure', details: {} },
     })
 
-    // A business rejection observed while the carrier signal is already aborted
-    // is the caller's cancellation, not an internal gateway fault.
+    // A cancelled carrier refuses the next call before entering business code.
     const cancelledCall = new AbortController()
     cancelledCall.abort(new Error('client disconnected'))
     service.businessError = new Error('fixture business failure')

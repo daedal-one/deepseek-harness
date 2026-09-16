@@ -21,7 +21,9 @@
     "src/loopback-hostname.ts",
     "src/recovery-config.ts",
     "src/rpc.ts",
-    "src/types.ts"
+    "src/types.ts",
+    "src/device-protocol.ts",
+    "src/client/device-access.ts"
   ],
   "references": [
     {

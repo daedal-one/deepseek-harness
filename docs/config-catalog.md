@@ -387,6 +387,8 @@ export interface ConnectionConfig {
   cookieMaxAgeDays?: number
   /** Maximum buffered JSON body for every `/api` request. Default: 300 MiB. */
   maxRequestBodyBytes?: number
+  /** Explicit enrollment limits; omitted configurations disable device access. */
+  deviceAccess?: DeviceAccessConfig
 }
 
 /** Timing for generation readiness and automatic reconnection. */
@@ -405,9 +407,19 @@ export interface ConnectionRecoveryConfig {
   /** Deadline in ms for readiness, including physical connection setup. Default: 15000. */
   generationReadyTimeoutMs?: number
 }
+
+/** Explicit deployment limits; omission of the whole configuration disables device access. */
+export interface DeviceAccessConfig {
+  /** Elapsed lifetime of a single-use enrollment challenge in milliseconds. */
+  readonly enrollmentTtlMs: number
+  /** Maximum simultaneously outstanding, unexpired challenges. */
+  readonly maxPendingEnrollments: number
+  /** Maximum durable device grants owned by this Host. */
+  readonly maxDevices: number
+}
 ```
 
-Source: [`packages/client/connection/src/index.ts:74`](../packages/client/connection/src/index.ts)
+Source: [`packages/client/connection/src/index.ts:78`](../packages/client/connection/src/index.ts)
 
 <a id="deepseek-aidsh-client-hmr"></a>
 
