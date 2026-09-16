@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { parseArgs } from 'node:util'
 import ts from 'typescript'
+import { stageDeclarationGraph } from './portable-declarations.ts'
 import { pnpmInvocation } from '../pnpm-invocation.ts'
 import { capture, isEntry, runConcurrent } from './process.ts'
 
@@ -17,7 +18,9 @@ const supportDirectories = [
   'packages/util/values',
 ] as const
 
-function packageManifest(root: string, directory: string): { name: string; version: string; license: string; zod?: string } {
+function packageManifest(
+  root: string, directory: string,
+): { name: string; version: string; license: string; zod?: string; standardSchema?: string } {
   const path = join(root, directory, 'package.json')
   const value: unknown = JSON.parse(readFileSync(path, 'utf8'))
   if (value === null || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${path} must be an object`)
@@ -30,7 +33,11 @@ function packageManifest(root: string, directory: string): { name: string; versi
   }
   const zod = (dependencies as Record<string, unknown> | undefined)?.zod
   if (zod !== undefined && (typeof zod !== 'string' || zod === '')) throw new Error(`${path} has an invalid Zod dependency`)
-  return { name, version, license, ...(zod === undefined ? {} : { zod }) }
+  const standardSchema = (dependencies as Record<string, unknown> | undefined)?.['@standard-schema/spec']
+  if (standardSchema !== undefined && (typeof standardSchema !== 'string' || standardSchema === '')) {
+    throw new Error(`${path} has an invalid Standard Schema dependency`)
+  }
+  return { name, version, license, ...(zod === undefined ? {} : { zod }), ...(standardSchema === undefined ? {} : { standardSchema }) }
 }
 
 function assertPortableImports(runtime: string): void {
@@ -58,9 +65,12 @@ function assertPortableImports(runtime: string): void {
  * @param root - Repository containing the compiled portable facade and shared manifests.
  * @param destination - New, exclusively acquired staging directory; never overwritten.
  * @param sourceCommit - Full revision recorded by the caller after checking source cleanliness.
+ * @param application - include shared Conversation and Chat in one application declaration graph.
  * @returns Package identity used by the archive step.
  */
-export function stagePortableClient(root: string, destination: string, sourceCommit: string): { name: string; version: string } {
+export function stagePortableClient(
+  root: string, destination: string, sourceCommit: string, application = false,
+): { name: string; version: string } {
   if (!/^[0-9a-f]{40}$/u.test(sourceCommit)) throw new Error('portable client: expected a full source commit')
   const source = packageManifest(root, 'packages/api/remotes')
   const dependencies: Record<string, string> = {}
@@ -72,29 +82,49 @@ export function stagePortableClient(root: string, destination: string, sourceCom
   if (zod === undefined) throw new Error('portable client: facade must declare its Zod runtime dependency')
   dependencies.zod = zod
   const cordis = packageManifest(root, supportDirectories[0])
-  const identity = { name: '@deepseek-ai/dsh-api-remotes-client', version: source.version }
-  const runtime = readFileSync(join(root, 'packages/api/remotes/lib/portable.js'))
-  assertPortableImports(runtime.toString('utf8'))
-  const declarations = readFileSync(join(root, 'packages/api/remotes/lib/client/portable.d.ts'))
+  const identity = { name: application ? '@deepseek-ai/dsh-client' : '@deepseek-ai/dsh-api-remotes-client', version: source.version }
+  const members = application
+    ? [['api', 'packages/api/remotes'], ['conversation', 'packages/client/ui-conversation'], ['chat', 'packages/client/ui-chat']] as const
+    : [['index', 'packages/api/remotes']] as const
+  const runtimeFiles = members.map(([file, directory]) => {
+    const runtime = readFileSync(join(root, directory, 'lib/portable.js'))
+    assertPortableImports(runtime.toString('utf8'))
+    return { file: `${file}.js`, runtime }
+  })
+  const declarations = application ? null : readFileSync(join(root, 'packages/api/remotes/lib/client/portable.d.ts'))
   const license = readFileSync(join(root, 'LICENSE'))
+  const notices = application ? readFileSync(join(root, 'THIRD_PARTY_NOTICES.md')) : undefined
+  if (application) {
+    if (cordis.standardSchema === undefined) throw new Error('portable client: Cordis must declare its Standard Schema dependency')
+    dependencies['@standard-schema/spec'] = cordis.standardSchema
+  }
   mkdirSync(destination)
   try {
-    writeFileSync(join(destination, 'index.js'), runtime)
-    writeFileSync(join(destination, 'index.d.ts'), declarations)
+    for (const { file, runtime } of runtimeFiles) writeFileSync(join(destination, file), runtime)
+    if (declarations === null) {
+      const entries = stageDeclarationGraph(root, destination, members.map(([, directory]) => `${directory}/lib/types/client/portable.d.ts`), [cordis.name, ...Object.keys(dependencies)])
+      writeFileSync(join(destination, 'index.d.ts'), `${entries.map(entry => `export * from ${JSON.stringify(entry)};`).join('\n')}\n`)
+      writeFileSync(join(destination, 'index.js'), `${runtimeFiles.map(({ file }) => `export * from './${file}';`).join('\n')}\n`)
+    } else {
+      writeFileSync(join(destination, 'index.d.ts'), declarations)
+    }
     writeFileSync(join(destination, 'LICENSE'), license)
+    if (notices !== undefined) writeFileSync(join(destination, 'THIRD_PARTY_NOTICES.md'), notices)
     writeFileSync(join(destination, 'package.json'), `${JSON.stringify({
       ...identity,
       private: true,
-      description: 'Portable generated DSH Client, Connection, Gateway, Workspace and Session APIs',
+      description: application ? 'Portable DSH APIs and shared Conversation and Chat assembly' : 'Portable generated DSH Client, Connection, Gateway, Workspace and Session APIs',
       type: 'module',
       license: source.license,
       main: './index.js',
       types: './index.d.ts',
       exports: { '.': { types: './index.d.ts', default: './index.js' }, './package.json': './package.json' },
-      files: ['index.js', 'index.d.ts', 'LICENSE'],
+      files: application ? ['*.js', 'index.d.ts', 'types/**/*.d.ts', 'LICENSE', 'THIRD_PARTY_NOTICES.md'] : ['index.js', 'index.d.ts', 'LICENSE'],
       dependencies,
       peerDependencies: { [cordis.name]: cordis.version },
-      dshSource: { commit: sourceCommit, package: source.name, entry: './client/portable' },
+      dshSource: application
+        ? { commit: sourceCommit, packages: members.map(([, directory]) => packageManifest(root, directory).name), entry: './client/portable' }
+        : { commit: sourceCommit, package: source.name, entry: './client/portable' },
     }, null, 2)}\n`)
     return identity
   } catch (error) {
@@ -115,8 +145,8 @@ async function pnpm(args: readonly string[], cwd: string): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  const { values } = parseArgs({ options: { out: { type: 'string' } }, allowPositionals: false })
-  if (values.out === undefined) throw new Error('usage: pnpm run pack:portable-client --out <new directory outside this checkout>')
+  const { values } = parseArgs({ options: { out: { type: 'string' }, application: { type: 'boolean', default: false } }, allowPositionals: false })
+  if (values.out === undefined) throw new Error('usage: pnpm run pack:portable-client [--application] --out <new directory outside this checkout>')
   const root = realpathSync(resolve(import.meta.dirname, '../..'))
   const output = join(realpathSync(dirname(resolve(values.out))), basename(resolve(values.out)))
   const within = relative(root, output)
@@ -134,7 +164,7 @@ async function main(): Promise<void> {
     await pnpm(['run', 'clean'], root)
     await pnpm(['run', 'build:lib'], root)
     const distribution = join(temporary, 'client')
-    const client = stagePortableClient(root, distribution, sourceCommit)
+    const client = stagePortableClient(root, distribution, sourceCommit, values.application)
     const members = [
       ...supportDirectories.map(directory => ({ ...packageManifest(root, directory), directory: join(root, directory) })),
       { ...client, directory: distribution },

@@ -12,19 +12,27 @@ function fixture(): { root: string; destination: string } {
   roots.push(root)
   const files: Record<string, string> = {
     'LICENSE': 'license bytes\n',
+    'THIRD_PARTY_NOTICES.md': 'third-party attribution\n',
+    'packages/api/remotes/lib/types/client/portable.d.ts': 'export interface Api {}\n',
+    'packages/client/ui-conversation/lib/portable.js': 'export const conversation = 1;\n',
+    'packages/client/ui-conversation/lib/types/client/portable.d.ts': 'export interface Conversation {}\n',
+    'packages/client/ui-chat/lib/portable.js': 'export const chat = 1;\n',
+    'packages/client/ui-chat/lib/types/client/portable.d.ts': 'export interface Chat {}\n',
     'packages/api/remotes/lib/portable.js': 'export const generated = 1;\n',
     'packages/api/remotes/lib/client/portable.d.ts': 'export declare const generated = 1;\n',
   }
   const manifests = [
     ['packages/api/remotes', '@deepseek-ai/dsh-api-remotes'],
     ['vendor/cordis', '@deepseek-ai/cordis'],
+    ['packages/client/ui-conversation', '@deepseek-ai/dsh-client-ui-conversation'],
+    ['packages/client/ui-chat', '@deepseek-ai/dsh-client-ui-chat'],
     ['packages/util/brand', '@deepseek-ai/dsh-brand'],
     ['packages/typert/protocol', '@deepseek-ai/dsh-typert-protocol'],
     ['packages/util/values', '@deepseek-ai/dsh-util-values'],
   ]
   for (const [directory, name] of manifests) {
     files[`${directory}/package.json`] = JSON.stringify({
-      name, version: '1.0.0', license: 'MIT', dependencies: { zod: '^4.4.3', 'host-only': '1.0.0' },
+      name, version: '1.0.0', license: 'MIT', dependencies: { zod: '^4.4.3', '@standard-schema/spec': '^1.1.0', 'host-only': '1.0.0' },
     })
   }
   for (const [path, content] of Object.entries(files)) {
@@ -56,6 +64,26 @@ describe('portable Client package', () => {
       dshSource: { commit: revision, package: '@deepseek-ai/dsh-api-remotes', entry: './client/portable' },
     })
     expect(readFileSync(join(destination, 'package.json'), 'utf8')).not.toContain('host-only')
+  })
+
+  it('stages application artifacts with one declaration graph and explicit shared dependencies', () => {
+    const { root, destination } = fixture()
+    stagePortableClient(root, destination, revision, true)
+    const manifest: unknown = JSON.parse(readFileSync(join(destination, 'package.json'), 'utf8'))
+    expect(manifest).toMatchObject({ name: '@deepseek-ai/dsh-client', dependencies: { '@standard-schema/spec': '^1.1.0' },
+      dshSource: { commit: revision, packages: ['@deepseek-ai/dsh-api-remotes', '@deepseek-ai/dsh-client-ui-conversation', '@deepseek-ai/dsh-client-ui-chat'] } })
+    expect(readFileSync(join(destination, 'index.js'), 'utf8')).toBe("export * from './api.js';\nexport * from './conversation.js';\nexport * from './chat.js';\n")
+    expect(readFileSync(join(destination, 'chat.js'))).toEqual(readFileSync(join(root, 'packages/client/ui-chat/lib/portable.js')))
+    expect(readFileSync(join(destination, 'index.d.ts'), 'utf8')).toContain('./types/packages/client/ui-chat/lib/types/client/portable.js')
+    expect(readFileSync(join(destination, 'THIRD_PARTY_NOTICES.md'), 'utf8')).toBe('third-party attribution\n')
+    expect(readFileSync(join(destination, 'package.json'), 'utf8')).not.toContain('host-only')
+  })
+
+  it('removes acquired application staging on a declaration failure', () => {
+    const { root, destination } = fixture()
+    writeFileSync(join(root, 'packages/client/ui-chat/lib/types/client/portable.d.ts'), "export * from 'missing-dependency';")
+    expect(() => stagePortableClient(root, destination, revision, true)).toThrow('unresolved module')
+    expect(existsSync(destination)).toBe(false)
   })
 
   it('does not overwrite a directory owned by another caller', () => {
