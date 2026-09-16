@@ -1,0 +1,14 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Devices settings > presents the empty owner workflow and removes its data when unmounted 1`] = `
+[
+  "Devices",
+  "Pair Daedal DSH on your iPhone with this Host, or revoke a device’s access.",
+  "https://host.example.test:3081",
+  "Host identity: 10000000-0000-4000-8000-000000000001",
+  "Create pairing QR",
+  "Refresh devices",
+  "Enrolled devices",
+  "No devices are enrolled.",
+]
+`;

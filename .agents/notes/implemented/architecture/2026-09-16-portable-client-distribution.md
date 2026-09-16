@@ -10,7 +10,7 @@ A portable subpath can execute without Host code while its parent npm manifest s
 
 A DSH-owned build command produces a separate Client distribution from the generated portable facade's existing JavaScript and bundled declarations. Its dependency manifest retains the shared nominal Cordis, Brand and Typert identities and the declaration dependency on value primitives. The command packs the unpublished shared dependencies alongside the Client, after a clean committed-source build, and records their archive hashes and source revision. The frontend installs those archives with its own lockfile. Packaging rejects runtime imports outside the declared Cordis/Zod pair, including unresolved chunks and dynamic loading. The portable bundle reads the Client store from emitted TypeScript output, so parallel Client bundling never depends on that store's separately produced bundle.
 
-The [portable Connection decision](2026-09-15-portable-client-connections.md) continues to own transport injection and the shared runtime implementation. This distribution changes installation ownership only; it does not replace that decision or the full Remotes package's Host dependency declarations.
+The [portable Connection decision](2026-09-15-portable-client-connections.md) continues to own transport injection and the shared runtime implementation. This distribution changes installation ownership only; it does not replace that decision or the full Remotes package's Host dependency declarations. The full Gateway plugin declares Connection as a peer for its Host identity validators, without adding a duplicate-safe Host dependency exception.
 
 ## Alternatives considered
 

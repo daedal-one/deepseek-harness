@@ -35,6 +35,16 @@ Every accepted device request owns a revocation lifetime. A committed revoke rej
 
 Portable claim validation binds the returned grant to the expected Host and respects caller cancellation before accepting credentials. Native storage, the QR presentation and discovery remain separate application work. Live public-profile qualification must prove single-use enrollment, bearer access to identity/capabilities and native generation admission, durable credentials across restart, revocation of active streams and rejection of revoked or wrong-Host credentials. Keep physical iPhone acceptance distinct from local and fixture checks.
 
+## Browser owner interface
+
+The authenticated DSH Web Settings page presents enrolled device metadata, creates a pairing QR only after an explicit gesture, and requires a separate confirmation before revoking one selected device. Connection owns the browser administration model and validates its existing exact HTTP routes; a settings contribution renders it without copying business state or exposing browser cookies. Worker, fixture and private desktop carriers do not inherit this browser authority.
+
+Bind every read and mutation result to the active Host generation and the current page origin. Request only same-origin cookies, refuse redirects and never send bearer credentials for administration. Validate complete responses and matching Host identity before publishing metadata or a QR. Closing the section, hiding the page, generation loss and disposal clear QR material and prevent late enrollment results from reappearing. Expiry hides the QR; hiding a challenge does not cancel it on the Host. No challenge or credential is persisted, copied to a clipboard, placed in a URL or logged.
+
+Expose loading, empty, unavailable, owner-required, failed read, capacity and uncertain mutation states through fixed localized copy. Reads may refresh after reconnect; enrollment and revocation are never automatically replayed. A lost revocation result requires refreshing the authoritative device list before deciding to revoke again. Use the current page origin in the version-1 native pairing envelope and warn when a loopback URL cannot be reached by a physical phone. The existing native parser and protected access owner consume that envelope unchanged.
+
+Qualify the controller's cancellation, late-result, expiry, malformed-response and unknown-outcome behavior, the real settings composition and localized render states, and a real isolated Web profile with browser-created QR data, device admission and revocation. Keep synthetic UI snapshots, browser execution, Simulator and physical-camera acceptance distinct.
+
 ## Acceptance
 
 Real iPhone QR pairing and host discovery succeed without address entry. Expired or replayed enrollment, revoked devices, mismatched host identity and unauthorized discovery fail explicitly. Candidate probes never receive another host credential and never imply enrollment.

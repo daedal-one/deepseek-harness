@@ -1,0 +1,36 @@
+/** English browser device-administration copy. */
+export const en = {
+  title: 'Devices',
+  intro: 'Pair Daedal DSH on your iPhone with this Host, or revoke a device’s access.',
+  hostIdentity: 'Host identity:',
+  unavailable: 'Device administration is available only in an authenticated DSH Web page with device access enabled.',
+  disconnected: 'Connect to the Host before managing devices.',
+  loopback: 'A physical phone cannot reach this local address. Open this page using the Host’s private-network address before pairing your phone.',
+  create: 'Create pairing QR',
+  refresh: 'Refresh devices',
+  qrTitle: 'Single-use device enrollment QR',
+  qrHint: 'On iPhone, open Settings → DSH hosts → Scan pairing QR. Check the displayed Host before confirming. Keep this code private.',
+  hideHint: 'Hiding this code does not cancel it. It remains valid until its short expiry or first use.',
+  hide: 'Hide QR',
+  devices: 'Enrolled devices',
+  empty: 'No devices are enrolled.',
+  revoke: 'Revoke access…',
+  confirmation: 'Revoke device access?',
+  revokeHint: 'This closes the device’s authenticated connections and prevents it from reconnecting. Sessions keep running. Pair the device again to restore access.',
+  confirmRevoke: 'Revoke device access',
+  cancel: 'Cancel',
+  'busy.list': 'Loading devices…',
+  'busy.enroll': 'Creating pairing QR…',
+  'busy.revoke': 'Revoking device access…',
+  'error.owner-required': 'Open this Host through its authenticated browser sign-in to manage devices.',
+  'error.unavailable': 'Device administration is unavailable on this Host.',
+  'error.read-failed': 'Could not load devices. Refresh to try again.',
+  'error.enrollment-unknown': 'The pairing request may have reached the Host. Refresh before requesting another QR; unused codes expire automatically.',
+  'error.revocation-unknown': 'The revocation result is unknown. Refresh devices to check whether access was removed before trying again.',
+  'error.invalid-response': 'Could not verify the Host’s response. Refresh devices before another action.',
+  'error.enrollment-limit': 'Too many pairing codes are pending. Wait for unused codes to expire, then refresh devices.',
+  'error.expired': 'The pairing code expired. Create a new QR to pair a device.',
+} satisfies Record<string, string>
+
+/** Dictionary keys owned by the Devices settings contribution. */
+export type DeviceSettingsKey = keyof typeof en

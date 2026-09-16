@@ -1,4 +1,5 @@
 /** Browser adapter for the shared per-host Connection. */
+import { BrowserDeviceAdministration, type DeviceAdministrationService } from './device-administration.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import { createConnection, type ConnectionNetworkSource } from './handle.ts'
 import { createFixtureConnectionRpc } from './fixture.ts'
@@ -7,6 +8,10 @@ import { isLoopbackHostname } from '../loopback-hostname.ts'
 import { resolveConnectionConfig } from '../recovery-config.ts'
 
 declare module '@deepseek-ai/cordis' {
+  interface Context {
+    /** Browser-owner administration over the current page origin; unavailable on private carriers. */
+    connectionDevices: DeviceAdministrationService
+  }
   interface Events {
     /**
      * A connection generation was established. Wire-derived caches must
@@ -120,12 +125,26 @@ export function apply(ctx: Context): void {
   const transport = (globalThis as ClientTransportGlobal).__DSH_TRANSPORT__
   const recovery = resolveConnectionConfig((globalThis as ClientTransportGlobal).__DSH_CONNECTION_RECOVERY__)
   const network = browserNetwork()
-  ctx.provide('connection', createConnection({
+  const connection = createConnection({
     rpc: fixture ? createFixtureConnectionRpc() : createWebConnectionRpc(transport?.fetch, transport?.openStream),
     isLoopback: transport?.ownsHost === true || pageLocation === undefined || isLoopbackHostname(pageLocation.hostname),
     recovery,
     ...network === undefined ? {} : { network },
-  }))
+  })
+  ctx.provide('connection', connection)
+  const origin = !fixture && transport === undefined && pageLocation !== undefined
+    && (pageLocation.protocol === 'http:' || pageLocation.protocol === 'https:') ? pageLocation.origin : undefined
+  const devices = new BrowserDeviceAdministration({ origin, fetch: (input, init) => fetch(input, init), generation: connection.generation })
+  ctx.provide('connectionDevices', devices)
+  ctx.effect(() => {
+    devices.start()
+    const hide = (): void => { if (document.visibilityState === 'hidden') devices.hideEnrollment() }
+    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', hide)
+    return async () => {
+      if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', hide)
+      await devices.dispose()
+    }
+  }, 'connection: browser device administration')
 }
 
 export { readHostIdentity } from './host-identity.ts'
@@ -136,3 +155,5 @@ export { claimDeviceEnrollment } from './device-access.ts'
 export type { DeviceEnrollmentClaimOptions } from './device-access.ts'
 export type { ConnectionDeviceId, ConnectionDeviceCredential, ConnectionDeviceInfo, ConnectionDeviceEnrollment, ConnectionDeviceGrant } from '../device-protocol.ts'
 export { connectionDeviceGrantSchema, connectionDeviceEnrollmentSchema, DEVICE_ACCESS_PATHS } from '../device-protocol.ts'
+
+export type { DeviceAdministrationService, DeviceAdministrationSnapshot, DeviceAdministrationError } from './device-administration.ts'

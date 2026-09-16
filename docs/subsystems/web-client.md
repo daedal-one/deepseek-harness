@@ -29,6 +29,8 @@ The Connection owns request correlation, the `/api` carrier, trust checks, exact
 
 The [portable Connection entry](../../packages/client/connection/README.md#portable-client) shares connection ownership with the Web plugin. Its callers supply transport, network availability and local-Host hints per instance; the Web adapter supplies these from the page. The ordinary ESM entry does not require the Web module loader.
 
+The browser-only `ctx.connectionDevices` source provides generation-bound owner administration to the [Devices settings contribution](../../packages/client/ui-device-access/README.md). Its same-origin cookie requests are separate from the portable Connection handle and from private shell transports; [Connection](../../packages/client/connection/README.md#device-enrollment) owns the request and QR lifetimes.
+
 The internal `$events` logical stream is the Connection generation source. Its opening `ready` frame carries the Host home used for path display and establishes the generation after Host listeners are attached, before any controller begins a baseline read. `ctx.remote.$on()` delivers allowlisted ordinary events to the root Client Context and scoped waterfall events to the resolved Session Context; a waterfall listener returns a result, calls `next()`, or rejects.
 
 ## Client models

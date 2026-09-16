@@ -97,7 +97,8 @@ export interface ConnectionConfig {
 
 export const Config: z<ConnectionConfig> = z.object({
   recovery: ConnectionRecoveryConfigSchema.default({}),
-  deviceAccess: DeviceAccessConfigSchema,
+  // A union leaves omission disabled instead of applying the object schema's empty default.
+  deviceAccess: z.union([DeviceAccessConfigSchema]),
   trustedHosts: z.array(String).default([]),
   cookieMaxAgeDays: z.natural().min(1).default(30),
   maxRequestBodyBytes: z.natural().min(1).default(DEFAULT_MAX_REQUEST_BODY_BYTES),
