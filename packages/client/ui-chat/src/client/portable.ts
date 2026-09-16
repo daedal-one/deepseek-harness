@@ -1,0 +1,22 @@
+/** Renderer-independent Chat business composition and observable presentation data. */
+export { registerConversationNodes as registerChatConversation } from './conversation-nodes/register.ts'
+export type { ChatConversationRegistration } from './conversation-nodes/register.ts'
+export { EMPTY_CHAT_SNAPSHOT } from './contract/snapshot.ts'
+export type * from './contract/snapshot.ts'
+export type * from './contract/chat-nodes.ts'
+export type * from './contract/turn-process.ts'
+
+// Preserve business module augmentations when declarations erase implementation-only imports.
+import './conversation-nodes/assistant.ts'
+import './conversation-nodes/command.ts'
+import './conversation-nodes/compaction.ts'
+import './conversation-nodes/fallback.ts'
+import './conversation-nodes/inbox.ts'
+import './conversation-nodes/message.ts'
+import './conversation-nodes/request-prompt.ts'
+import './conversation-nodes/retry.ts'
+import './conversation-nodes/tool.ts'
+import './conversation-nodes/turn-error.ts'
+import './conversation-nodes/turn-max-tokens.ts'
+import './conversation-nodes/turn-process.ts'
+import './conversation-nodes/turn-tail.ts'

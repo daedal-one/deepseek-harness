@@ -54,6 +54,8 @@ Disabled Send and Stop buttons suppress their tooltips, including a Stop button 
 
 `@deepseek-ai/dsh-client-ui-conversation/client/portable` exposes the same event assembler, Definition registries and `ConversationBindingModel` used by the browser service as ordinary ESM. It does not load the browser shell, editor or attachment URL cache. Supply the shared Session event source, an exclusively owned assembler and a `ConversationScheduler`, or `null` for immediate publication. The caller owns Definition registration, registry-change rebuilds and final binding disposal. Rendering and target-specific business Definitions remain with their target packages; this entry does not install Chat or a native screen. See [Conversation assembly](../../../docs/subsystems/conversation.md#portable-binding) for subscription and publication semantics.
 
+The type-only `./client/types` outlet owns the merge-extensible Conversation maps. Definitions augment this outlet so browser and portable entrypoints observe the same target, Turn and Step vocabulary.
+
 <a id="temporary-composer-entries"></a>
 ## Temporary composer entries
 

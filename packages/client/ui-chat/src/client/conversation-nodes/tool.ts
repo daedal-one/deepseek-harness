@@ -1,8 +1,7 @@
-import type { Context } from '@deepseek-ai/cordis'
 import type {
   ConversationMatch, ConversationNodeContext, ConversationNodeDefinition, RunningToolCall,
   ToolCallBlock, ToolResultNode,
-} from '@deepseek-ai/dsh-client-ui-conversation/client'
+} from '@deepseek-ai/dsh-client-ui-conversation/client/portable'
 import { isAppendSurfaceEvent } from '@deepseek-ai/dsh-session/surface'
 import type {} from '@deepseek-ai/dsh-tools/types'
 import type { ToolChatData } from '../contract/chat-nodes.ts'
@@ -262,12 +261,4 @@ export const toolDefinition: ConversationNodeDefinition<ToolState> = {
       ?? ('kind' in state.root ? state.root.seq : context.matches[0]?.event.seq ?? 0)
     return chatNode(context, 'tool-call', anchor, { root: projected } satisfies ToolChatData)
   },
-}
-
-/**
- * Register the root Tool lifecycle and nested-subcall contribution.
- * @param ctx - owning UI Conversation context.
- */
-export function registerToolConversationNode(ctx: Context): void {
-  ctx.uiConversation.events.register(toolDefinition)
 }

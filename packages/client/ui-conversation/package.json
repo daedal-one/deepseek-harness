@@ -27,6 +27,9 @@
     "./client/portable": {
       "types": "./lib/types/client/portable.d.ts",
       "default": "./lib/portable.js"
+    },
+    "./client/types": {
+      "types": "./lib/types/client/contract/conversation.d.ts"
     }
   },
   "dsh": {

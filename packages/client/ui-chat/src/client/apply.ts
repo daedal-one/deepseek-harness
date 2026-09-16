@@ -67,7 +67,7 @@ export function apply(ctx: Context): void {
     }
     return source
   }
-  registerConversationNodes(ctx)
+  registerConversationNodes(ctx.uiConversation)
   registerChatNodeRenderers(ctx)
   ctx.uiSession.provide({
     hooks: ['chat'],

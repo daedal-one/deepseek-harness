@@ -1,7 +1,6 @@
-import type { Context } from '@deepseek-ai/cordis'
 import type {
   ConversationNodeDefinition, ConversationPreviousContext,
-} from '@deepseek-ai/dsh-client-ui-conversation/client'
+} from '@deepseek-ai/dsh-client-ui-conversation/client/portable'
 
 interface InboxIdentity {
   readonly id: string
@@ -123,12 +122,4 @@ export const nextStepInboxDefinition: ConversationNodeDefinition<InboxState> = {
   },
   update: context => context.state,
   publication: () => 'none',
-}
-
-/**
- * Register the next-step Inbox state used by Chat message classification.
- * @param ctx - owning UI Conversation context.
- */
-export function registerInboxConversationNodes(ctx: Context): void {
-  ctx.uiConversation.events.register(nextStepInboxDefinition)
 }
