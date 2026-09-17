@@ -65,7 +65,7 @@ function assertPortableImports(runtime: string): void {
  * @param root - Repository containing the compiled portable facade and shared manifests.
  * @param destination - New, exclusively acquired staging directory; never overwritten.
  * @param sourceCommit - Full revision recorded by the caller after checking source cleanliness.
- * @param application - include shared Conversation and Chat in one application declaration graph.
+ * @param application - include shared Conversation, Chat and pending interactions in one declaration graph.
  * @returns Package identity used by the archive step.
  */
 export function stagePortableClient(
@@ -84,7 +84,14 @@ export function stagePortableClient(
   const cordis = packageManifest(root, supportDirectories[0])
   const identity = { name: application ? '@deepseek-ai/dsh-client' : '@deepseek-ai/dsh-api-remotes-client', version: source.version }
   const members = application
-    ? [['api', 'packages/api/remotes'], ['conversation', 'packages/client/ui-conversation'], ['chat', 'packages/client/ui-chat']] as const
+    ? [
+      ['api', 'packages/api/remotes'],
+      ['conversation', 'packages/client/ui-conversation'],
+      ['chat', 'packages/client/ui-chat'],
+      ['pending', 'packages/client/ui-session'],
+      ['approval', 'packages/client/ui-approval'],
+      ['questions', 'packages/client/ui-user-questions'],
+    ] as const
     : [['index', 'packages/api/remotes']] as const
   const runtimeFiles = members.map(([file, directory]) => {
     const runtime = readFileSync(join(root, directory, 'lib/portable.js'))
@@ -113,7 +120,7 @@ export function stagePortableClient(
     writeFileSync(join(destination, 'package.json'), `${JSON.stringify({
       ...identity,
       private: true,
-      description: application ? 'Portable DSH APIs and shared Conversation and Chat assembly' : 'Portable generated DSH Client, Connection, Gateway, Workspace and Session APIs',
+      description: application ? 'Portable DSH APIs, Conversation, Chat and pending interactions' : 'Portable generated DSH Client, Connection, Gateway, Workspace and Session APIs',
       type: 'module',
       license: source.license,
       main: './index.js',

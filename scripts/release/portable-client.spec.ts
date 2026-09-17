@@ -18,6 +18,12 @@ function fixture(): { root: string; destination: string } {
     'packages/client/ui-conversation/lib/types/client/portable.d.ts': 'export interface Conversation {}\n',
     'packages/client/ui-chat/lib/portable.js': 'export const chat = 1;\n',
     'packages/client/ui-chat/lib/types/client/portable.d.ts': 'export interface Chat {}\n',
+    'packages/client/ui-session/lib/portable.js': 'export const pending = 1;\n',
+    'packages/client/ui-session/lib/types/client/portable.d.ts': 'export declare const pending: number;\n',
+    'packages/client/ui-approval/lib/portable.js': 'export const approval = 1;\n',
+    'packages/client/ui-approval/lib/types/client/portable.d.ts': 'export declare const approval: number;\n',
+    'packages/client/ui-user-questions/lib/portable.js': 'export const questions = 1;\n',
+    'packages/client/ui-user-questions/lib/types/client/portable.d.ts': 'export declare const questions: number;\n',
     'packages/api/remotes/lib/portable.js': 'export const generated = 1;\n',
     'packages/api/remotes/lib/client/portable.d.ts': 'export declare const generated = 1;\n',
   }
@@ -26,6 +32,9 @@ function fixture(): { root: string; destination: string } {
     ['vendor/cordis', '@deepseek-ai/cordis'],
     ['packages/client/ui-conversation', '@deepseek-ai/dsh-client-ui-conversation'],
     ['packages/client/ui-chat', '@deepseek-ai/dsh-client-ui-chat'],
+    ['packages/client/ui-session', '@deepseek-ai/dsh-client-ui-session'],
+    ['packages/client/ui-approval', '@deepseek-ai/dsh-client-ui-approval'],
+    ['packages/client/ui-user-questions', '@deepseek-ai/dsh-client-ui-user-questions'],
     ['packages/util/brand', '@deepseek-ai/dsh-brand'],
     ['packages/typert/protocol', '@deepseek-ai/dsh-typert-protocol'],
     ['packages/util/values', '@deepseek-ai/dsh-util-values'],
@@ -71,10 +80,14 @@ describe('portable Client package', () => {
     stagePortableClient(root, destination, revision, true)
     const manifest: unknown = JSON.parse(readFileSync(join(destination, 'package.json'), 'utf8'))
     expect(manifest).toMatchObject({ name: '@deepseek-ai/dsh-client', dependencies: { '@standard-schema/spec': '^1.1.0' },
-      dshSource: { commit: revision, packages: ['@deepseek-ai/dsh-api-remotes', '@deepseek-ai/dsh-client-ui-conversation', '@deepseek-ai/dsh-client-ui-chat'] } })
-    expect(readFileSync(join(destination, 'index.js'), 'utf8')).toBe("export * from './api.js';\nexport * from './conversation.js';\nexport * from './chat.js';\n")
+      dshSource: { commit: revision, packages: ['@deepseek-ai/dsh-api-remotes', '@deepseek-ai/dsh-client-ui-conversation', '@deepseek-ai/dsh-client-ui-chat', '@deepseek-ai/dsh-client-ui-session', '@deepseek-ai/dsh-client-ui-approval', '@deepseek-ai/dsh-client-ui-user-questions'] } })
+    expect(readFileSync(join(destination, 'index.js'), 'utf8')).toBe("export * from './api.js';\nexport * from './conversation.js';\nexport * from './chat.js';\nexport * from './pending.js';\nexport * from './approval.js';\nexport * from './questions.js';\n")
     expect(readFileSync(join(destination, 'chat.js'))).toEqual(readFileSync(join(root, 'packages/client/ui-chat/lib/portable.js')))
     expect(readFileSync(join(destination, 'index.d.ts'), 'utf8')).toContain('./types/packages/client/ui-chat/lib/types/client/portable.js')
+    for (const [name, directory] of [['pending', 'ui-session'], ['approval', 'ui-approval'], ['questions', 'ui-user-questions']]) {
+      expect(readFileSync(join(destination, `${name}.js`))).toEqual(readFileSync(join(root, `packages/client/${directory}/lib/portable.js`)))
+      expect(readFileSync(join(destination, 'index.d.ts'), 'utf8')).toContain(`./types/packages/client/${directory}/lib/types/client/portable.js`)
+    }
     expect(readFileSync(join(destination, 'THIRD_PARTY_NOTICES.md'), 'utf8')).toBe('third-party attribution\n')
     expect(readFileSync(join(destination, 'package.json'), 'utf8')).not.toContain('host-only')
   })
@@ -83,6 +96,13 @@ describe('portable Client package', () => {
     const { root, destination } = fixture()
     writeFileSync(join(root, 'packages/client/ui-chat/lib/types/client/portable.d.ts'), "export * from 'missing-dependency';")
     expect(() => stagePortableClient(root, destination, revision, true)).toThrow('unresolved module')
+    expect(existsSync(destination)).toBe(false)
+  })
+
+  it.each(['ui-session', 'ui-approval', 'ui-user-questions'])('refuses an application missing the %s runtime', (directory) => {
+    const { root, destination } = fixture()
+    rmSync(join(root, `packages/client/${directory}/lib/portable.js`))
+    expect(() => stagePortableClient(root, destination, revision, true)).toThrow()
     expect(existsSync(destination)).toBe(false)
   })
 
