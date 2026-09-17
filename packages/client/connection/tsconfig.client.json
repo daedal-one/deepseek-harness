@@ -25,7 +25,9 @@
     "src/device-protocol.ts",
     "src/client/device-access.ts",
     "src/client/device-api.ts",
-    "src/client/device-administration.ts"
+    "src/client/device-administration.ts",
+    "src/discovery-protocol.ts",
+    "src/client/host-discovery.ts"
   ],
   "references": [
     {

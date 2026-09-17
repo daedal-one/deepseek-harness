@@ -6,6 +6,10 @@ import type {} from '@deepseek-ai/dsh-attachment'
 import type {} from '@deepseek-ai/dsh-credentials'
 // Activates the webServer Context merge used below.
 import type { WebRoute } from '@deepseek-ai/dsh-host-webserver'
+import { HostDiscovery } from './host-discovery.ts'
+import { createDiscoveryIo } from './discovery-io.ts'
+import { HostDiscoveryConfigSchema, type HostDiscoveryConfig } from './discovery-config.ts'
+import { HOST_ADVERTISEMENT_PATH, HOST_DISCOVERY_ENDPOINT, hostDiscoveryRequestSchema } from './discovery-protocol.ts'
 import { API_PATH } from './api-path.ts'
 import { bridge, DEFAULT_MAX_REQUEST_BODY_BYTES } from './http-bridge.ts'
 import { DeviceAccess, DeviceAccessConfigSchema, DEVICE_ACCESS_KEY, type DeviceAccessConfig } from './device-access.ts'
@@ -93,12 +97,15 @@ export interface ConnectionConfig {
   maxRequestBodyBytes?: number
   /** Explicit enrollment limits; omitted configurations disable device access. */
   deviceAccess?: DeviceAccessConfig
+  /** Opt-in Host-assisted Tailscale discovery; requires deviceAccess. */
+  discovery?: HostDiscoveryConfig
 }
 
 export const Config: z<ConnectionConfig> = z.object({
   recovery: ConnectionRecoveryConfigSchema.default({}),
   // A union leaves omission disabled instead of applying the object schema's empty default.
   deviceAccess: z.union([DeviceAccessConfigSchema]),
+  discovery: z.union([HostDiscoveryConfigSchema]),
   trustedHosts: z.array(String).default([]),
   cookieMaxAgeDays: z.natural().min(1).default(30),
   maxRequestBodyBytes: z.natural().min(1).default(DEFAULT_MAX_REQUEST_BODY_BYTES),
@@ -112,6 +119,9 @@ export const Config: z<ConnectionConfig> = z.object({
  * @param config - resolved plugin config (schema defaults applied).
  */
 export async function apply(ctx: Context, config?: ConnectionConfig): Promise<void> {
+  if (config?.discovery !== undefined && config.deviceAccess === undefined) {
+    throw new Error('Connection discovery requires device access')
+  }
   const recovery = resolveConnectionConfig(config?.recovery)
   // The Loader resolves schema defaults; hand-built test contexts may pass none.
   const trustedHosts = config?.trustedHosts ?? []
@@ -145,6 +155,25 @@ export async function apply(ctx: Context, config?: ConnectionConfig): Promise<vo
     }
     return Promise.resolve({ ok: true, value: identity })
   })
+  if (config?.discovery !== undefined) {
+    const discoveryConfig = HostDiscoveryConfigSchema(config.discovery)
+    const discovery = new HostDiscovery(identity, discoveryConfig, createDiscoveryIo(discoveryConfig))
+    ctx.effect(() => () => discovery.dispose(), 'client-connection: discovery')
+    connection.rpc.handleRoute(HOST_DISCOVERY_ENDPOINT, async (_endpoint, payload, signal) => {
+      if (!hostDiscoveryRequestSchema.safeParse(payload).success) {
+        return { ok: false, error: { code: 'connection/invalid-request', message: 'Discovery requires an empty object', details: {} } }
+      }
+      return { ok: true, value: await discovery.scan(signal) }
+    })
+    connection.fetch.register({
+      path: HOST_ADVERTISEMENT_PATH, methods: ['GET'], requestBody: 'buffered',
+      fetch: request => Promise.resolve(new Response(
+        JSON.stringify({ version: 1, identity, label: discoveryConfig.label.trim() }),
+        { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, status:
+          new URL(request.url).search !== '' || request.headers.has('authorization') ? 403 : 200 },
+      )),
+    })
+  }
   ctx.inject(['webServer'], (webCtx) => {
     assertImageBodyCapacity(webCtx, maxRequestBodyBytes)
     webCtx.on('webserver/index-inject', (table) => {
@@ -155,9 +184,11 @@ export async function apply(ctx: Context, config?: ConnectionConfig): Promise<vo
       kind: 'prefix',
       path: API_PATH,
       handler: async (req, res) => {
-        const claiming = devices !== undefined && req.method === 'POST'
-          && new URL(req.url ?? '/', 'http://dsh.internal').pathname === DEVICE_ACCESS_PATHS.claim
-        const authorization: ConnectionRequestAuthorization = claiming
+        const url = new URL(req.url ?? '/', 'http://dsh.internal')
+        const claiming = devices !== undefined && req.method === 'POST' && url.pathname === DEVICE_ACCESS_PATHS.claim
+        const advertising = config?.discovery !== undefined && req.method === 'GET'
+          && req.url === HOST_ADVERTISEMENT_PATH && req.headers.authorization === undefined
+        const authorization: ConnectionRequestAuthorization = claiming || advertising
           ? isTrustedApiRequest(req, trustedHosts) ? { ok: true as const } : { ok: false as const, status: 403 as const }
           : await connection.authorizeRequest(req)
         if (!authorization.ok) {
@@ -166,7 +197,7 @@ export async function apply(ctx: Context, config?: ConnectionConfig): Promise<vo
           return
         }
         try {
-          const bodyLimit = claiming ? Math.min(maxRequestBodyBytes, DEVICE_CLAIM_MAX_BYTES) : maxRequestBodyBytes
+          const bodyLimit = advertising ? 0 : claiming ? Math.min(maxRequestBodyBytes, DEVICE_CLAIM_MAX_BYTES) : maxRequestBodyBytes
           await bridge(req, res, fetchHandler, bodyLimit, authorization.lease?.signal)
         } finally { authorization.lease?.dispose() }
       },

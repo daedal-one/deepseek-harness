@@ -55,6 +55,14 @@ it('awaits the generated assembly and disposes calls and streams after async low
       assert.equal(api.connectionDeviceEnrollmentSchema.safeParse({}).success, false);
       assert.equal(api.connectionDeviceGrantSchema.safeParse({}).success, false);
       assert.equal(api.DEVICE_ACCESS_PATHS.claim, '/api/connection/devices/claim');
+      assert.equal(api.HOST_DISCOVERY_ENDPOINT, 'connection/discovery');
+      const discoveryHost = api.connectionHostIdSchema.parse('26e99520-f2d3-4874-84b5-07c5ef24775d');
+      const invalidDiscovery = await api.discoverHosts({ call: async (channel, endpoint, payload) => {
+        assert.equal(channel, '/api'); assert.equal(endpoint, 'connection/discovery'); assert.equal(JSON.stringify(payload), '{}');
+        return { ok: true, value: { version: 999 } };
+      } }, discoveryHost);
+      assert.equal(invalidDiscovery.ok, false);
+      assert.equal(invalidDiscovery.error.code, 'connection/invalid-discovery');
       const identity = await api.readHostIdentity({ call: async (channel, endpoint, payload) => {
         assert.equal(channel, '/api'); assert.equal(endpoint, 'connection/identity'); assert.equal(Object.keys(payload).length, 0);
         return { ok: true, value: { version: 1, hostId: '26e99520-f2d3-4874-84b5-07c5ef24775d', activationId: 'f5292bdb-ebda-41ba-b473-6c587a3c1d02' } };

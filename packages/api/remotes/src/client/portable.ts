@@ -4,10 +4,12 @@ import { applySessions as applySessionClient } from '@deepseek-ai/dsh-api-sessio
 import { apply as applyWorkspaceClient } from '@deepseek-ai/dsh-api-workspace-controller/client'
 export * from './index.ts'
 export {
-  createConnection, createConnectionRpc, readHostIdentity, claimDeviceEnrollment,
+  createConnection, createConnectionRpc, readHostIdentity, claimDeviceEnrollment, discoverHosts,
+  hostDiscoveryResultSchema, hostDiscoveryCandidateSchema, HOST_DISCOVERY_ENDPOINT,
   connectionHostIdSchema, connectionDeviceGrantSchema, connectionDeviceEnrollmentSchema, DEVICE_ACCESS_PATHS,
 } from '@deepseek-ai/dsh-client-connection/client/portable'
 export type {
+  HostAdvertisement, HostDiscoveryCandidate, HostDiscoveryResult, TailnetOrigin,
   DeviceEnrollmentClaimOptions, ConnectionDeviceId, ConnectionDeviceCredential, ConnectionDeviceInfo,
   ConnectionDeviceEnrollment, ConnectionDeviceGrant, ConnectionOptions, ConnectionRpcOptions,
   ConnectionNetworkSource, RpcFetch, RpcFetchResponse, RpcStreamOpen,

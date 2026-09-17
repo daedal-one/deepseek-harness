@@ -21,7 +21,11 @@
     "src/types.ts",
     "src/device-protocol.ts",
     "src/device-access.ts",
-    "src/device-routes.ts"
+    "src/device-routes.ts",
+    "src/discovery-protocol.ts",
+    "src/discovery-config.ts",
+    "src/discovery-io.ts",
+    "src/host-discovery.ts"
   ],
   "references": [
     {
@@ -44,6 +48,9 @@
     },
     {
       "path": "../../util/brand"
+    },
+    {
+      "path": "../../subprocess/subprocess"
     }
   ]
 }

@@ -3,11 +3,14 @@ import { EventEmitter, once } from 'node:events'
 import { createServer, request as httpRequest } from 'node:http'
 import { Readable } from 'node:stream'
 import { Context } from '@deepseek-ai/cordis'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import * as DiscoveryIo from '../src/discovery-io.ts'
 import type { AddressInfo } from 'node:net'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { AttachmentStore } from '@deepseek-ai/dsh-attachment'
 import type { IndexInjection, WebServer, WebRoute, WebUpgradeRoute } from '@deepseek-ai/dsh-host-webserver'
+import { discoveryConfig } from './discovery-fixture.ts'
+import { HOST_ADVERTISEMENT_PATH, HOST_DISCOVERY_ENDPOINT, hostAdvertisementSchema } from '../src/discovery-protocol.ts'
 import { API_PATH, RpcId, apply, inject, type ClientRequest, type ConnectionConfig, type HostConnectionHandle } from '../src/index.ts'
 import { DEFAULT_MAX_REQUEST_BODY_BYTES } from '../src/http-bridge.ts'
 import { connectionDeviceGrantSchema, DEVICE_ACCESS_PATHS, DEVICE_CLAIM_MAX_BYTES } from '../src/device-protocol.ts'
@@ -122,6 +125,92 @@ function browserCookie(connection: HostConnectionHandle, authority: string): str
 }
 
 describe('connection node half', () => {
+  it('revokes an active discovery caller and discards its late HTTP response', async () => {
+    const entered = Promise.withResolvers<AbortSignal>(); const release = Promise.withResolvers<unknown>()
+    const operations: DiscoveryIo.HostDiscoveryIo = {
+      readStatus: (signal) => { entered.resolve(signal); return release.promise },
+      probe: vi.fn<DiscoveryIo.HostDiscoveryIo['probe']>(() => Promise.reject(new Error('Cancelled scans must not probe'))),
+    }
+    const factory = vi.spyOn(DiscoveryIo, 'createDiscoveryIo').mockReturnValue(operations)
+    let mountedHost: Awaited<ReturnType<typeof mounted>> | undefined
+    let pending: Promise<void> | undefined
+    try {
+      mountedHost = await mounted({ discovery: discoveryConfig,
+        deviceAccess: { enrollmentTtlMs: 300_000, maxDevices: 2, maxPendingEnrollments: 2 } })
+      const { routes, connection, dispose } = mountedHost
+      const handler = routes.find(route => route.path === API_PATH)!.handler
+      const host = 'localhost'; const owner = { host, cookie: browserCookie(connection, host) }
+      const send = async (request: IncomingMessage) => {
+        const result = fakeResponse(); await handler(request, result.response); return result.state
+      }
+      const enrolled = await send(fakePost(owner, DEVICE_ACCESS_PATHS.enroll, {}))
+      const enrollment = JSON.parse(String(enrolled.body)) as { value: { hostId: string; challenge: string } }
+      const claimed = await send(fakePost({ host }, DEVICE_ACCESS_PATHS.claim, {
+        hostId: enrollment.value.hostId, challenge: enrollment.value.challenge, label: 'Discovery device',
+      }))
+      const grant = connectionDeviceGrantSchema.parse((JSON.parse(String(claimed.body)) as { value: unknown }).value)
+      const response = fakeResponse()
+      pending = Promise.resolve(handler(fakePost({ host, authorization: `Bearer ${grant.credential}` }, '/api/' + HOST_DISCOVERY_ENDPOINT,
+        { type: 'client-request', rpcId: 'scan', method: HOST_DISCOVERY_ENDPOINT, payload: {} }), response.response))
+      const signal = await entered.promise
+      expect(signal.aborted).toBe(false)
+      expect(await send(fakePost(owner, DEVICE_ACCESS_PATHS.revoke, { deviceId: grant.device.deviceId }))).toMatchObject({ status: 200 })
+      await pending
+      expect(signal.aborted).toBe(true); expect(response.response.destroyed).toBe(true); expect(response.state.body).toBeUndefined()
+      release.resolve({ BackendState: 'Running' }); await dispose()
+      expect(response.state.body).toBeUndefined(); expect(operations.probe).not.toHaveBeenCalled()
+    } finally {
+      release.resolve({ BackendState: 'Running' }); await pending; await mountedHost?.dispose(); factory.mockRestore()
+    }
+  })
+
+  it('keeps discovery opt-in and requires device access at activation', async () => {
+    const ctx = new Context()
+    await expect(apply(ctx, { discovery: discoveryConfig })).rejects.toThrow('requires device access')
+    const { routes, connection, dispose } = await mounted()
+    try {
+      const handler = routes.find(route => route.path === API_PATH)!.handler
+      const anonymous = fakeResponse(); await handler(fakeRequest({ host: 'localhost' }, HOST_ADVERTISEMENT_PATH), anonymous.response)
+      expect(anonymous.state.status).toBe(401)
+      const cookie = browserCookie(connection, 'localhost')
+      const owner = fakeResponse(); await handler(fakeRequest({ host: 'localhost', cookie }, HOST_ADVERTISEMENT_PATH), owner.response)
+      expect(owner.state.status).toBe(404)
+    } finally { await dispose() }
+  })
+
+  it('exposes only an exact bodyless advertisement and keeps scans and other routes authenticated', async () => {
+    const { routes, connection, dispose } = await mounted({ discovery: discoveryConfig,
+      trustedHosts: ['100.64.0.1:3081'], deviceAccess: { enrollmentTtlMs: 1000, maxDevices: 2, maxPendingEnrollments: 2 } })
+    const handler = routes.find(route => route.path === API_PATH)!.handler
+    const host = '100.64.0.1:3081'; const cookie = browserCookie(connection, host)
+    const send = async (request: IncomingMessage) => {
+      const result = fakeResponse(); await handler(request, result.response); return result.state
+    }
+    try {
+      const ad = await send(fakeRequest({ host }, HOST_ADVERTISEMENT_PATH))
+      expect(ad.status).toBe(200); expect(ad.headers?.['cache-control']).toBe('no-store')
+      expect(hostAdvertisementSchema.parse(JSON.parse(String(ad.body)))).toMatchObject({ version: 1, label: discoveryConfig.label })
+      for (const url of [HOST_ADVERTISEMENT_PATH + '?x=1', HOST_ADVERTISEMENT_PATH + '/', '/api/connection/discovery/../discovery/advertisement']) {
+        expect(await send(fakeRequest({ host }, url))).toMatchObject({ status: 401 })
+      }
+      expect(await send(fakeRequest({ host, cookie }, HOST_ADVERTISEMENT_PATH + '?x=1'))).toMatchObject({ status: 403 })
+      expect(await send(fakeRequest({ host, authorization: 'Bearer invalid' }, HOST_ADVERTISEMENT_PATH))).toMatchObject({ status: 401 })
+      expect(await send(fakeRequest({ host: 'evil.invalid' }, HOST_ADVERTISEMENT_PATH))).toMatchObject({ status: 403 })
+      expect(await send(fakeRequest({ host, origin: 'http://evil.invalid' }, HOST_ADVERTISEMENT_PATH))).toMatchObject({ status: 403 })
+      expect(await send(fakePost({ host }, HOST_ADVERTISEMENT_PATH, {}))).toMatchObject({ status: 401 })
+      expect(await send(fakeRequest({ host, 'content-length': '1' }, HOST_ADVERTISEMENT_PATH))).toMatchObject({ status: 413 })
+      const envelope = { type: 'client-request', rpcId: 'scan', method: HOST_DISCOVERY_ENDPOINT, payload: {} }
+      expect(await send(fakePost({ host }, '/api/' + HOST_DISCOVERY_ENDPOINT, envelope))).toMatchObject({ status: 401 })
+      expect(await send(fakePost({ host, cookie }, '/api/' + HOST_DISCOVERY_ENDPOINT, { ...envelope, payload: { targets: ['127.0.0.1'] } })))
+        .toMatchObject({ status: 200, body: expect.stringContaining('connection/invalid-request') as unknown })
+      const scan = await send(fakePost({ host, cookie }, '/api/' + HOST_DISCOVERY_ENDPOINT, envelope))
+      expect(JSON.parse(String(scan.body))).toMatchObject({ result: { ok: true, value: { status: 'tailscale-unavailable', candidates: [] } } })
+      expect(await send(fakePost({ host }, '/api/connection/identity', {}))).toMatchObject({ status: 401 })
+      const exact = connection.createSharedFetchHandler('/api')
+      expect((await exact.fetch(new Request('http://localhost' + HOST_ADVERTISEMENT_PATH, { headers: { authorization: 'invalid' } }))).status).toBe(403)
+    } finally { await dispose() }
+  })
+
   it('enrolls a device through the owner, authenticates its bearer and revokes a pending HTTP request', async () => {
     const { routes, connection, dispose } = await mounted({ trustedHosts: ['harness.example'],
       deviceAccess: { enrollmentTtlMs: 1000, maxPendingEnrollments: 2, maxDevices: 2 } })

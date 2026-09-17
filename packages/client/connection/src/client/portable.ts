@@ -14,3 +14,7 @@ export { RpcId, transportError } from '../rpc.ts'
 export type { ClientConnectionRpc, ConnectionRpcFailure, ConnectionRpcResult } from '../rpc.ts'
 
 export * from './device-api.ts'
+
+export { discoverHosts } from './host-discovery.ts'
+export { hostDiscoveryResultSchema, hostDiscoveryCandidateSchema, HOST_DISCOVERY_ENDPOINT } from '../discovery-protocol.ts'
+export type { HostAdvertisement, HostDiscoveryCandidate, HostDiscoveryResult, TailnetOrigin } from '../discovery-protocol.ts'

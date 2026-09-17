@@ -48,7 +48,8 @@
   "dependencies": {
     "@deepseek-ai/dsh-credentials": "workspace:^",
     "@deepseek-ai/schemastery": "workspace:^",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "undici": "^8.10.0"
   },
   "files": [
     "lib/index.js",
@@ -58,7 +59,8 @@
     "lib/types/**/*.d.ts"
   ],
   "peerDependencies": {
-    "@deepseek-ai/cordis": "workspace:^"
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-subprocess": "workspace:^"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
@@ -73,6 +75,7 @@
     "@deepseek-ai/dsh-settings": "workspace:^",
     "@deepseek-ai/dsh-tool-todo": "workspace:^",
     "@deepseek-ai/dsh-util-values": "workspace:^",
-    "@deepseek-ai/dsh-client-store": "workspace:^"
+    "@deepseek-ai/dsh-client-store": "workspace:^",
+    "@deepseek-ai/dsh-subprocess": "workspace:^"
   }
 }

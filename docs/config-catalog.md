@@ -389,6 +389,8 @@ export interface ConnectionConfig {
   maxRequestBodyBytes?: number
   /** Explicit enrollment limits; omitted configurations disable device access. */
   deviceAccess?: DeviceAccessConfig
+  /** Opt-in Host-assisted Tailscale discovery; requires deviceAccess. */
+  discovery?: HostDiscoveryConfig
 }
 
 /** Timing for generation readiness and automatic reconnection. */
@@ -417,9 +419,35 @@ export interface DeviceAccessConfig {
   /** Maximum durable device grants owned by this Host. */
   readonly maxDevices: number
 }
+
+/** Explicit local status execution and Tailscale probe policy. */
+export interface HostDiscoveryConfig {
+  /** Public display label, without machine paths or credentials. */
+  readonly label: string
+  /** Actual local Tailscale executable, resolved by the Host; no shell or wrapper arguments. */
+  readonly executable: string
+  /** HTTP ports already exposed by the deployment through Tailscale. */
+  readonly ports: number[]
+  /** Maximum address/port probes per scan. */
+  readonly maxProbes: number
+  /** Maximum simultaneous advertisement requests. */
+  readonly concurrency: number
+  /** Maximum time for the local status process. */
+  readonly statusTimeoutMs: number
+  /** Maximum UTF-8 status output bytes. */
+  readonly maxStatusBytes: number
+  /** Maximum lifetime of one advertisement request, including its body. */
+  readonly probeTimeoutMs: number
+  /** Maximum lifetime of the whole scan, including status acquisition. */
+  readonly scanTimeoutMs: number
+  /** Completed result cache lifetime, measured on a monotonic clock. */
+  readonly cacheTtlMs: number
+  /** Maximum advertisement response bytes, regardless of Content-Length. */
+  readonly maxAdvertisementBytes: number
+}
 ```
 
-Source: [`packages/client/connection/src/index.ts:78`](../packages/client/connection/src/index.ts)
+Source: [`packages/client/connection/src/index.ts:82`](../packages/client/connection/src/index.ts)
 
 <a id="deepseek-aidsh-client-hmr"></a>
 

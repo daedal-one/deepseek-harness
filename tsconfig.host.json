@@ -15,7 +15,8 @@
     "packages/client/connection/src/client/rpc-caller.ts",
     "packages/client/connection/src/client/host-identity.ts",
     "packages/client/connection/src/client/device-access.ts",
-    "packages/client/connection/src/client/device-api.ts"
+    "packages/client/connection/src/client/device-api.ts",
+    "packages/client/connection/src/client/host-discovery.ts"
   ],
   "include": [
     "apps/web/tests/poor-connection.e2e.ts",

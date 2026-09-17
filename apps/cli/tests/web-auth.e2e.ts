@@ -2,7 +2,7 @@
 
 import type { ChildProcess } from 'node:child_process'
 import { spawn, spawnSync } from 'node:child_process'
-import { stat, readFile } from 'node:fs/promises'
+import { stat, readFile, writeFile } from 'node:fs/promises'
 import { request as httpRequest } from 'node:http'
 import { createRequire } from 'node:module'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -12,6 +12,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { serverResponseSchema } from '@deepseek-ai/dsh-client-connection'
 import { connectionIdentitySchema } from '@deepseek-ai/dsh-client-connection/identity'
+import { discoveryConfig } from '../../../packages/client/connection/tests/discovery-fixture.ts'
+import { hostAdvertisementSchema, hostDiscoveryResultSchema, HOST_ADVERTISEMENT_PATH } from '../../../packages/client/connection/src/discovery-protocol.ts'
 import { connectionDeviceGrantSchema } from '../../../packages/client/connection/src/device-protocol.ts'
 import type { HostCapabilities } from '@deepseek-ai/dsh-api-gateway/types'
 
@@ -56,11 +58,12 @@ function cleanEnvironment(root: string, dshHome: string): NodeJS.ProcessEnv {
 }
 
 /** Start the public source CLI and wait for its authenticated readiness URL. */
-async function startWeb(root: string, dshHome: string, port: number): Promise<RunningWeb> {
+async function startWeb(root: string, dshHome: string, port: number, patch?: string): Promise<RunningWeb> {
   const child = spawn(process.execPath, [
     '--import', TSX_LOADER,
     DSH_SOURCE_BIN,
     '--profile', 'web',
+    ...patch === undefined ? [] : ['--patch', patch],
     '--no-open',
     '--port', String(port),
   ], {
@@ -269,6 +272,52 @@ function verifyNativeAdmission(
 }
 
 describe('dsh web authentication through the real CLI', () => {
+  it.skipIf(process.platform === 'win32')('mounts opt-in discovery through the Loader with a controlled POSIX status executable', { retry: 0 }, async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-web-discovery-'))
+    const statusCommand = join(root, 'tailscale')
+    const patch = join(root, 'discovery.patch.yml')
+    let running: RunningWeb | undefined
+    try {
+      await writeFile(statusCommand, `#!${process.execPath}\nprocess.stdout.write(JSON.stringify({ BackendState: 'Running', Peer: {}, private: 'omitted' }))\n`, { mode: 0o700 })
+      await writeFile(patch, JSON.stringify([{ id: 'connection', config: {
+        deviceAccess: { enrollmentTtlMs: 300_000, maxPendingEnrollments: 2, maxDevices: 2 },
+        discovery: { ...discoveryConfig, executable: statusCommand },
+      } }]))
+      running = await startWeb(root, join(root, '.dsh'), 0, patch)
+      const url = new URL(running.launchUrl)
+      const exchange = await fetch(running.launchUrl, { redirect: 'manual', signal: AbortSignal.timeout(30_000) })
+      const cookie = exchange.headers.get('set-cookie')?.split(';', 1)[0]
+      if (cookie === undefined) throw new Error('missing browser cookie')
+      const advertisement = await fetch(url.origin + HOST_ADVERTISEMENT_PATH, { signal: AbortSignal.timeout(10_000) })
+      expect(advertisement.status).toBe(200); expect(advertisement.headers.get('cache-control')).toBe('no-store')
+      const metadata = hostAdvertisementSchema.parse(await advertisement.json())
+      const identity = connectionIdentitySchema.parse(rpcValue(await postRpc(Number(url.port), url.host, 'connection/identity', {}, cookie)))
+      expect(metadata).toEqual({ version: 1, identity, label: discoveryConfig.label })
+      expect((await fetch(url.origin + HOST_ADVERTISEMENT_PATH + '?extra=1')).status).toBe(401)
+      expect((await fetch(url.origin + HOST_ADVERTISEMENT_PATH, { headers: { origin: 'http://untrusted.invalid' } })).status).toBe(403)
+      expect((await fetch(url.origin + HOST_ADVERTISEMENT_PATH, { headers: { authorization: 'Bearer invalid', cookie } })).status).toBe(401)
+      expect((await postRpc(Number(url.port), url.host, 'connection/discovery', {})).status).toBe(401)
+      const result = hostDiscoveryResultSchema.parse(rpcValue(await postRpc(Number(url.port), url.host, 'connection/discovery', {}, cookie)))
+      expect(result).toEqual({ version: 1, host: identity, status: 'ready', truncated: false, candidates: [] })
+      const enroll = await fetch(url.origin + '/api/connection/devices/enroll', { method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' }, body: '{}' })
+      const enrolled = await enroll.json() as { value: { hostId: string; challenge: string } }
+      const claim = await fetch(url.origin + '/api/connection/devices/claim', { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ hostId: enrolled.value.hostId, challenge: enrolled.value.challenge, label: 'Discovery device' }) })
+      const grant = connectionDeviceGrantSchema.parse((await claim.json() as { value: unknown }).value)
+      const scan = await fetch(url.origin + '/api/connection/discovery', { method: 'POST',
+        headers: { authorization: `Bearer ${grant.credential}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ type: 'client-request', rpcId: 'device-discovery', method: 'connection/discovery', payload: {} }) })
+      expect(scan.status).toBe(200)
+      expect(await scan.json()).toMatchObject({ result: { ok: true, value: result } })
+      const revoked = await fetch(url.origin + '/api/connection/devices/revoke', { method: 'POST', headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ deviceId: grant.device.deviceId }) })
+      expect(revoked.status).toBe(200)
+      expect((await fetch(url.origin + '/api/connection/discovery', { method: 'POST', headers: { authorization: `Bearer ${grant.credential}` } })).status).toBe(401)
+      const exit = await stopWeb(running); expect(exit.signal).not.toBe('SIGKILL'); running = undefined
+    } finally { if (running !== undefined) await stopWeb(running); await rm(root, { recursive: true, force: true }) }
+  })
+
   it('authorizes native metadata and retains Host identity and browser access across restart', { timeout: 180_000, retry: 0 }, async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-web-auth-real-cli-'))
     const dshHome = join(root, '.dsh')
@@ -281,6 +330,7 @@ describe('dsh web authentication through the real CLI', () => {
       const port = Number(firstUrl.port)
       expect(port).toBeGreaterThan(0)
       expect(firstUrl.pathname).toBe('/')
+      expect((await fetch(firstUrl.origin + HOST_ADVERTISEMENT_PATH)).status).toBe(401)
       expect(firstUrl.searchParams.get('token')).toMatch(/^[A-Za-z0-9_-]{43}$/u)
 
       expect(await describeSettings(port, `localhost:${String(port)}`)).toEqual({

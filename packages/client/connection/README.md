@@ -16,6 +16,7 @@ The package carries browser-to-Host Remote calls, exact Fetch responses, and con
 - [Browser authentication and request trust](#browser-authentication-and-request-trust)
 - [Device enrollment](#device-enrollment)
 - [Host identity](#host-identity)
+- [Host discovery](#host-discovery)
 - [Connection generation](#connection-generation)
 - [Model Experience](#model-experience)
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
@@ -80,6 +81,17 @@ An ended `$events` stream, a Remote stream error, a non-ready opening item, or a
 Set the Host Connection row's `config.recovery` to override retry caps, the growth factor, or handshake warning and cancellation times; the [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-client-connection) lists accepted fields. The Host validates these values and injects them into each served page. The Client validates the bootstrap data before providing Connection and uses those defaults when Gateway starts its loop; explicit `start()` timing overrides take precedence. The growth factor must be finite and at least one. Readiness, failure, cancellation, or a hard deadline that occurs before the warning cancels that warning. Reload the page after changing Host recovery configuration.
 
 
+<a id="host-discovery"></a>
+## Host discovery
+
+An authenticated browser or enrolled device can call `discoverHosts(rpc, expectedHostId, signal)` through the portable entry to find opt-in DSH Hosts reachable from its paired Host. Discovery is optional: omission of `config.discovery` exposes neither the scan endpoint nor the public advertisement. Enabling it requires device access and explicit [deployment limits](../../../docs/config-catalog.md#deepseek-aidsh-client-connection); it does not start Tailscale, change listeners or publish Serve routes. Configure the actual local Tailscale executable, a public label, and the HTTP ports already exposed inside the tailnet. A missing executable reports `tailscale-unavailable`; stopped status reports `tailscale-disconnected`; bounded execution or parsing failures report `scan-failed`.
+
+The exact bodyless `GET /api/connection/discovery/advertisement` returns only version, Host identity and label, with no-store caching. It retains Host/Origin validation, rejects query variants and Authorization headers, and publishes no addresses, grants, challenges or tailnet membership. The authenticated scan accepts only an empty object. It reads bounded local status, probes canonical numeric Tailscale IPv4/IPv6 addresses and configured ports, and derives origins from those probe targets. Its HTTP client bypasses ambient proxies, omits cookies and authorization, refuses redirects, limits streamed bytes and closes its dispatcher after every probe.
+
+Concurrent callers share one scan with separate cancellation. The last caller cancels owned work; a replacement waits for that work to settle. Completed results have a bounded cache lifetime. The result identifies the assisting Host and exposes truncation, so an empty or truncated list cannot prove that no other Host exists. Duplicate Host ids select the lexicographically greatest origin deterministically. A candidate's advertised identity remains an unauthenticated claim: each newly selected Host requires its own enrollment, and a saved grant must never transfer to a candidate address. The [discovery decision](../../../.agents/notes/implemented/architecture/2026-09-17-host-assisted-discovery.md) records that authorization separation.
+
+-----
+
 <a id="model-experience"></a>
 ## Model Experience
 
@@ -95,6 +107,7 @@ None; this package neither assembles nor sends a provider request.
 
 - **Buffered `/api` routes retain each request body in memory** — `maxRequestBodyBytes` (default 300 MiB, sized for the default 200 MiB aggregate image limit after base64 expansion plus envelope headroom) bounds ordinary image and RPC envelopes. Opt-in streaming routes receive backpressured chunks and bypass the aggregate cap; route implementations own persistence, cancellation, and any storage quota.
 - **The browser cookie is not marked `Secure`** — loopback HTTP is the shipped transport, so exposing the same authority over plaintext networking can expose the bearer cookie in transit.
+- **Discovery covers opt-in advertisements on configured HTTP ports** — it does not resolve MagicDNS aliases, probe HTTPS origins, validate advertisements as authorization, or discover arbitrary services. The configured executable must be the local Tailscale binary, not a wrapper that launches descendants.
 - **There is no logout operation** — clearing the browser cookie ends one browser session; deleting the owner credential record and restarting `dsh` revokes every session.
 
 
