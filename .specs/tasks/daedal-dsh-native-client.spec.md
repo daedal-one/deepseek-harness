@@ -25,6 +25,10 @@ Generate per-endpoint wire fingerprints from the same resolved codec projection 
 
 Remote methods start at business semantic revision 1. An explicit positive safe integer `@remoteRevision` annotation changes that revision when observable behavior becomes incompatible without a codec change. The generator emits the resolved revision independently of the wire fingerprint; neither field substitutes for the other. Generated Client calls carry both expectations and native calls also carry the admitted Host identity and activation. Native dispatch refuses absent evidence before sending a domain operation. The Host compares expectations to its live strict descriptor and identity before resolving Contexts or lookups, and rechecks the same descriptor before business execution after asynchronous preparation. Mismatch refuses unary and stream operations without business execution or automatic retry. Calls that omit expectations retain the existing unnegotiated Web/source route during migration. Authenticated capability metadata carries optional semantic revisions; absence remains unverified. Native generation admission uses the explicit Client requirement set below.
 
+## Existing browser regression qualification
+
+Qualify the shipped Settings, authentication, recovery and Sidebar workflows alongside native clients. Configuration-only browser fixtures mount the owning provider catalog with the existing keyless adapter configuration and issue no model calls. Expected labels and captured output follow the current locale dictionaries; fixture corrections preserve assertions, Session recordings and product behavior.
+
 ## Shared Client exports
 
 Keep each shared public export list in one package-owned module while retaining the exact browser and portable export sets, type declarations and runtime owners. Consolidation must not expose native installers through the browser plugin or pull browser dependencies into the portable entry. Compare resolved exports before and after, and qualify the existing transport suites and built artifacts.

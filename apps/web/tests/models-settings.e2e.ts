@@ -7,8 +7,8 @@
 // provider status. The customized-settings fold writes its curated fields —
 // the endpoint, and a declared route's own name and protocol — as merge
 // patches against the stored profile. Zero model calls: configuration is pure
-// settings/credentials/llm-domain traffic, so there is no fixture and a
-// stray stream would fail loud because the adapter registry is empty. The provider under test is
+// settings/credentials/llm-domain traffic. The mounted pi-ai catalog supplies
+// the configuration directory. The provider under test is
 // minimax-cn so a developer's real ANTHROPIC/OPENAI environment keys can
 // never shadow the derived reference. The deletion dialog distinguishes a
 // reference-free profile from a page-managed key before the credential and
@@ -42,9 +42,11 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
   let tripwire: ReturnType<typeof watchConsole>
 
   beforeAll(async () => {
-    scaffold = await launchWebScaffold({})
+    scaffold = await launchWebScaffold({
+      openRouterMissingCredential: true,
+      extraOverlayPath: fileURLToPath(new URL('./models-settings.overlay.yml', import.meta.url)),
+    })
     browser = await chromium.launch()
-    // The scenario asserts the shipped Chinese copy, so the browser asks for it.
     page = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: EN_BROWSER_LOCALE })
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
@@ -109,8 +111,8 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     const row = dialog.getByText('minimax-cn', { exact: true }).first()
     await row.waitFor({ timeout: 10_000 })
     await dialog.getByText('Saved minimax-cn.', { exact: true }).waitFor({ timeout: 10_000 })
-    expect(await dialog.getByRole('img', { name: 'API key configured' }).count()).toBe(0)
-    expect(await dialog.getByRole('img', { name: 'API key missing' }).count()).toBe(0)
+    expect(await dialog.getByText('API key configured', { exact: true }).count()).toBe(0)
+    expect(await dialog.getByText('API key missing', { exact: true }).count()).toBe(0)
     const document = await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')
     expect(document).toContain('minimax-cn: {}')
     expect(document).not.toContain('MINIMAX_CN_API_KEY')
@@ -120,11 +122,11 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-models-native-delete'))
     const settingsDialog = page.getByRole('dialog', { name: 'Settings' })
     await settingsDialog.getByRole('button', { name: 'Delete minimax-cn', exact: true }).click()
-    const deleteDialog = page.getByRole('dialog', { name: 'Delete minimax-cn？' })
+    const deleteDialog = page.getByRole('dialog', { name: 'Delete minimax-cn?' })
     await deleteDialog.waitFor({ timeout: 10_000 })
     const snapshot = await captureStableAria(
       page,
-      '[role="dialog"][aria-label="删除 minimax-cn？"]',
+      '[role="dialog"][aria-label="Delete minimax-cn?"]',
       scaffold.workspaceCwd,
     )
     await compareOrRefreshGolden(NATIVE_DELETE_EXPECTED, snapshot, MODE)
@@ -144,7 +146,7 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
       async () => dialog.getByRole('textbox', { name: 'API key', exact: true }).count(),
       { timeout: 10_000 },
     ).toBe(0)
-    await dialog.getByRole('img', { name: 'API key configured' }).waitFor({ timeout: 10_000 })
+    await dialog.getByText('API key configured', { exact: true }).waitFor({ timeout: 10_000 })
     await dialog.getByText('Saved minimax-cn.', { exact: true }).waitFor({ timeout: 10_000 })
     const document = await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')
     expect(document).toContain('minimax-cn:')
@@ -211,7 +213,7 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     await picker.getByRole('button', { name: 'Select all' }).click()
     const snapshot = await captureStableAria(
       page,
-      '[role="dialog"][aria-label="选择要添加的模型"]',
+      '[role="dialog"][aria-label="Choose models to add"]',
       scaffold.workspaceCwd,
     )
     await compareOrRefreshGolden(MODEL_PICKER_EXPECTED, snapshot, MODE)
@@ -235,9 +237,9 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     // No reasoning effort on a provider card at all: effort is a per-model
     // capability, the models under one provider disagree about it, and a
     // switch in the composer already records provider+model+effort together.
-    expect(await dialog.getByLabel('推理强度').count()).toBe(0)
+    expect(await dialog.getByLabel('Reasoning effort').count()).toBe(0)
     await dialog.getByRole('button', { name: 'Add model' }).click()
-    await dialog.getByLabel('模型 ID 1').fill('acme-large')
+    await dialog.getByLabel('Model ID 1').fill('acme-large')
     await dialog.getByRole('button', { name: 'Create provider', exact: true }).click()
 
     const row = dialog.getByText('Acme Gateway', { exact: true }).first()
@@ -294,11 +296,11 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-models-delete'))
     const settingsDialog = page.getByRole('dialog', { name: 'Settings' })
     await settingsDialog.getByRole('button', { name: 'Delete minimax-cn', exact: true }).click()
-    const deleteDialog = page.getByRole('dialog', { name: 'Delete minimax-cn？' })
+    const deleteDialog = page.getByRole('dialog', { name: 'Delete minimax-cn?' })
     await deleteDialog.waitFor({ timeout: 10_000 })
     const snapshot = await captureStableAria(
       page,
-      '[role="dialog"][aria-label="删除 minimax-cn？"]',
+      '[role="dialog"][aria-label="Delete minimax-cn?"]',
       scaffold.workspaceCwd,
     )
     await compareOrRefreshGolden(DELETE_EXPECTED, snapshot, MODE)
@@ -306,7 +308,7 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     await deleteDialog.getByRole('button', { name: 'Cancel', exact: true }).click()
     expect(await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')).toContain('minimax-cn:')
     await settingsDialog.getByRole('button', { name: 'Delete minimax-cn', exact: true }).click()
-    await page.getByRole('dialog', { name: 'Delete minimax-cn？' })
+    await page.getByRole('dialog', { name: 'Delete minimax-cn?' })
       .getByRole('button', { name: 'Delete minimax-cn', exact: true }).click()
     await expect.poll(
       async () => readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8'),
@@ -315,7 +317,7 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     expect(await readFile(join(scaffold.harnessHome, '.credentials.yaml'), 'utf8'))
       .not.toContain('MINIMAX_CN_API_KEY')
     await expect.poll(
-      async () => page.getByRole('dialog', { name: 'Delete minimax-cn？' }).count(),
+      async () => page.getByRole('dialog', { name: 'Delete minimax-cn?' }).count(),
       { timeout: 10_000 },
     ).toBe(0)
     await page.keyboard.press('Escape')
