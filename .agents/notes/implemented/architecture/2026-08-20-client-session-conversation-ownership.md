@@ -214,7 +214,7 @@ The renderer-independent `PendingInteractions` registry owns pending domains for
 
 A business plugin calls `registerPendingInteraction(precedence)` in `apply()` to create a stable registration for its pending domain. The returned per-request publication function publishes one exact object together with its waterfall-delegation callback and returns an idempotent disposer for that object. Plugin teardown removes all published objects before invoking and awaiting their delegation callbacks, so active Host requests cannot remain suspended after their Client answerer unloads.
 
-Concurrent objects with the same key in one domain are rejected; replacement requests use a new key. Released domains reject publication, including during their asynchronous teardown, so late handlers cannot retain invisible requests. One Session may hold multiple domains or requests at once.
+Concurrent objects with the same key in one domain are rejected; replacement requests use a new key. Released domains reject publication, including during their asynchronous teardown, so late handlers cannot retain invisible requests. A request handler whose publication fails aborts its carrier and observes the carrier result before propagating the failure, including when the request was already aborted. This releases its abort listener without leaving an unhandled rejection. One Session may hold multiple domains or requests at once.
 
 `ui-session` selects each Session's effective object using domain precedence. Higher precedence wins; at equal precedence, the later valid object in traversal order wins.
 
@@ -316,7 +316,7 @@ Other targets use the same registration flow without modifying the renderer, Ses
 
 ### Stable registration
 
-Approval and Question plugin installation separates stable registrations from per-request handling. `apply()` registers locale data, calls `registerPendingInteraction()` once for its pending domain, and registers one stable entry in `conversation.composer`.
+Approval and Question plugin installation separates stable registrations from per-request handling. Each domain has one renderer-independent carrier and Remote-request registration function, used by the browser plugin and portable composition. Event registration and the pending-domain registrar belong to the same contributing Cordis fiber. Slots and locale registration remain browser-owned. `apply()` registers locale data, calls `registerPendingInteraction()` once for its pending domain, and registers one stable entry in `conversation.composer`.
 
 The stable Approval entry also declares its detail child Slot. Concurrent requests and Session count do not add composer entries or redeclare Slots, and every registration follows plugin-fiber disposal.
 

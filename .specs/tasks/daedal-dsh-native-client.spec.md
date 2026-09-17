@@ -61,6 +61,12 @@ Expose the existing Session-scoped pending-interaction registry through an ordin
 
 Qualification covers independent domain and Host ownership, same-Session precedence, duplicate identities, failed delegation, publication during teardown and late removal through deterministic barriers, plus the existing browser adapter and renderer-free built artifact. Portable approval/question request handlers, application distribution, native answer controls, actual Remote waterfall and physical-device acceptance remain required follow-up work; exposing the registry alone does not complete interaction support.
 
+## Portable approval and question consumers
+
+Expose the existing PendingApproval and PendingQuestion carriers, plan-review narrowing and scoped Remote Event registration through renderer-independent ESM entries. Browser and native composition must use the same request handlers and carrier classes. Preserve exact Session scope resolution, approval/question/plan precedence, whole-batch answers, single settlement, wire-preserved cancellation errors, abort-listener removal and next-listener delegation. Bind event and pending-domain registration to the same caller-owned Cordis fiber. Keep Slots, locale dictionaries, React props and viewing drafts in browser presentation modules; do not move business request state into native component stores.
+
+A failed pending publication must settle and observe its carrier before propagating the failure, including an already aborted request, so no listener or rejected promise survives the failed handoff. Qualify known and absent Session scopes, answers, cancellation, already-aborted and later-aborted delivery, plugin disposal with a blocked next listener, mixed-domain precedence and publication rejection through the shared registry. Built-artifact probes must refuse Node/browser dependencies. Existing browser composition remains covered; application packaging, actual Remote transport and physical-device answering are separate required acceptance gates.
+
 ## Acceptance
 
 A native iPhone build and browser/Electron consumers attach to an existing session, stream, prompt and resolve an interaction through native DSH semantics. Shared source and artifact checks reject Node/DOM imports on native paths. Focused lifecycle tests cover cancellation, disposal, disconnect after acceptance and reconnect; recorded-session output remains faithful.

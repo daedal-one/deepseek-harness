@@ -31,7 +31,7 @@ The [portable Connection entry](../../packages/client/connection/README.md#porta
 
 The browser-only `ctx.connectionDevices` source provides generation-bound owner administration to the [Devices settings contribution](../../packages/client/ui-device-access/README.md). Its same-origin cookie requests are separate from the portable Connection handle and from private shell transports; [Connection](../../packages/client/connection/README.md#device-enrollment) owns the request and QR lifetimes.
 
-The internal `$events` logical stream is the Connection generation source. Its opening `ready` frame carries the Host home used for path display and establishes the generation after Host listeners are attached, before any controller begins a baseline read. `ctx.remote.$on()` delivers allowlisted ordinary events to the root Client Context and scoped waterfall events to the resolved Session Context; a waterfall listener returns a result, calls `next()`, or rejects.
+The internal `$events` logical stream is the Connection generation source. Its opening `ready` frame carries the Host home used for path display and establishes the generation after Host listeners are attached, before any controller begins a baseline read. `ctx.remote.$on()` delivers allowlisted ordinary events to the root Client Context and scoped waterfall events to the resolved Session Context; a waterfall listener returns a result, calls `next()`, or rejects. The [approval](../../packages/client/ui-approval/README.md#portable-requests) and [question](../../packages/client/ui-user-questions/README.md#portable-requests) consumers share renderer-independent carriers and request registration with native clients; browser plugins retain Slots, dictionaries and draft presentation.
 
 ## Client models
 

@@ -3,9 +3,8 @@ import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import {
-  PendingQuestion, planReviewOf, type QuestionComposerProps, type QuestionWait,
-} from '../src/client/contract/slots.ts'
+import { PendingQuestion, planReviewOf } from '../src/client/pending-question.ts'
+import type { QuestionComposerProps, QuestionWait } from '../src/client/contract/slots.ts'
 import { createQuestionDraftStore } from '../src/client/draft-store.ts'
 import { QuestionComposer } from '../src/client/QuestionComposer.tsx'
 import { en, en as copy } from '../src/client/locales.ts'
