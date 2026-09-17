@@ -1054,14 +1054,18 @@ Source: [`packages/host/directory-picker-browse/src/index.ts:181`](../packages/h
 Requires: `webServer` · `connection`
 
 ```ts config-catalog
-/** Plugin config: the dist anchor. */
+/** Distribution anchor and explicit URL entry points. */
 export interface Config {
   /** Absolute path of index.html inside the dist root. */
   distIndex: string
+  /** Named URL prefix, or `/` for the Web shell's fallback seat and injections. */
+  mountPath?: string
+  /** Additional index routes relative to the mount, using ASCII path segments. */
+  indexPaths?: string[]
 }
 ```
 
-Source: [`packages/host/frontend-static/src/index.ts:30`](../packages/host/frontend-static/src/index.ts)
+Source: [`packages/host/frontend-static/src/index.ts:24`](../packages/host/frontend-static/src/index.ts)
 
 <a id="deepseek-aidsh-host-open-in-app"></a>
 

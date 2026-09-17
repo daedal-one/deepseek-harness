@@ -1,14 +1,8 @@
 /**
- * @deepseek-ai/dsh-host-frontend-static — SPA dist server over the webserver
- * fallback seat: serves the built frontend directory with explicit index
- * entry points. A readable index renders at the dist root and configured index
- * path; missing paths return 404, traversal outside the dist root is 403,
- * unknown extensions ship as octet-stream, and non-GET/HEAD is 405. Every
- * index response first passes Connection's browser authentication, then the
- * webserver's index render (structured injection rows, then raw taps).
- * Non-index assets stay public. The dist location is workspace knowledge of
- * the composing application, so `distIndex` is typically supplied through a
- * `!!js` expression, never hardcoded by a deployment.
+ * Serves an authenticated frontend from a dist directory. The root application
+ * owns the fallback seat and receives Web index injections; mounted applications
+ * own a named prefix and their own bootstrap. Only explicit index entries render
+ * HTML. Assets remain public, missing paths return 404, and traversal returns 403.
  * @module @deepseek-ai/dsh-host-frontend-static
  */
 
@@ -18,22 +12,31 @@ import { dirname, extname, join, normalize, resolve, sep } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-client-connection'
-import type {} from '@deepseek-ai/dsh-host-webserver'
+import type { WebRoute } from '@deepseek-ai/dsh-host-webserver'
 
 /** Stable Cordis plugin name. */
 export const name = 'frontend-static'
 
-/** Services required before the authenticated fallback seat can be claimed. */
+/** Services required before an authenticated frontend can be registered. */
 export const inject = ['webServer', 'connection']
 
-/** Plugin config: the dist anchor. */
+/** Distribution anchor and explicit URL entry points. */
 export interface Config {
   /** Absolute path of index.html inside the dist root. */
   distIndex: string
+  /** Named URL prefix, or `/` for the Web shell's fallback seat and injections. */
+  mountPath?: string
+  /** Additional index routes relative to the mount, using ASCII path segments. */
+  indexPaths?: string[]
 }
+
+// Fixed URL vocabulary excludes encoded separators, dot segments and HTML delimiters.
+const ROUTE_PATH = /^\/(?:[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*)?$/
 
 export const Config: z<Config> = z.object({
   distIndex: z.string().required(),
+  mountPath: z.string().pattern(ROUTE_PATH).default('/'),
+  indexPaths: z.array(z.string().pattern(ROUTE_PATH)).default([]),
 })
 
 const HTML_MIME = 'text/html; charset=utf-8'
@@ -43,6 +46,11 @@ const MIME: Record<string, string> = {
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.ico': 'image/x-icon',
+  '.ttf': 'font/ttf',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
   '.json': 'application/json',
   '.map': 'application/json',
   '.webmanifest': 'application/manifest+json',
@@ -110,24 +118,23 @@ export async function serveStatic(
 }
 
 /**
- * Claim the webserver fallback seat and serve the dist.
+ * Register a named frontend prefix or the Web shell fallback and serve its dist.
  * @param ctx - plugin context carrying the webServer service.
  * @param config - validated {@link Config}.
  */
 export function apply(ctx: Context, config: Config): void {
   const distIndex = config.distIndex
   const distRoot = dirname(distIndex)
-  // The dist is built with a relative base so the same files mount under any
-  // static directory; served pages also answer deep SPA-fallback paths, where
-  // relative asset URLs would resolve under the request directory, so the
-  // served form anchors them at the site root ahead of every URL-bearing tag.
+  const mountPath = config.mountPath ?? '/'
+  const indexPaths = new Set(config.indexPaths ?? [])
+  const mounted = mountPath !== '/'
+  const base = mounted ? `${mountPath}/` : '/'
   const renderIndex = async (): Promise<string> => {
-    const body = ctx.webServer.renderIndex(await readFile(distIndex, 'utf8'))
-    return body.replace(/<head(?:\s[^>]*)?>/i, open => `${open}<base href="/">`)
+    const raw = await readFile(distIndex, 'utf8')
+    const body = mounted ? raw : ctx.webServer.renderIndex(raw)
+    return body.replace(/<head(?:\s[^>]*)?>/i, open => `${open}<base href="${base}">`)
   }
-  ctx.effect(() => ctx.webServer.registerFallback(async (req, res) => {
-    // Non-GET/HEAD without a matching named route is 405 (fallback-only
-    // semantics: named routes own their method handling).
+  const handler: WebRoute['handler'] = async (req, res) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       res.writeHead(405)
       res.end()
@@ -135,13 +142,18 @@ export function apply(ctx: Context, config: Config): void {
     }
     /* v8 ignore next -- node:http always sets url on server requests */
     const rawPath = new URL(req.url ?? '/', 'http://x').pathname
+    const relativePath = mounted ? rawPath.slice(mountPath.length) || '/' : rawPath
+    const pathname = decodeURIComponent(relativePath)
     await serveStatic(
-      decodeURIComponent(rawPath),
+      indexPaths.has(pathname) ? '/' : pathname,
       res,
       distRoot,
       distIndex,
       () => ctx.connection.authorizeIndex(req, res),
       renderIndex,
     )
-  }), 'frontend-static: fallback seat')
+  }
+  ctx.effect(() => mounted
+    ? ctx.webServer.register({ kind: 'prefix', path: mountPath, handler })
+    : ctx.webServer.registerFallback(handler), 'frontend-static: route ownership')
 }
