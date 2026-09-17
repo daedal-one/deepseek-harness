@@ -420,6 +420,50 @@ describe('UiSession bindings', () => {
 })
 
 describe('UiSession pending interactions', () => {
+  it('withdraws only the domain registered through the disposed plugin Context', async () => {
+    const ctx = new Context()
+    const service = createUiSession(ctx, createSessionsBench(ctx))
+    const first = { key: 'first', kind: 'approval', sessionId: sessionId('s1') }
+    const second = { key: 'second', kind: 'question', sessionId: sessionId('s1') }
+    const delegated = vi.fn(() => Promise.resolve())
+    let removed = false
+    const firstFiber = ctx.plugin((child: Context) => {
+      child.uiSession.registerPendingInteraction<SessionPendingInteractionBase>(() => 0)(
+        first, delegated,
+      )
+    })
+    const secondFiber = ctx.plugin((child: Context) => {
+      child.uiSession.registerPendingInteraction<SessionPendingInteractionBase>(() => 1)(
+        second, () => { removed = true; return Promise.resolve() },
+      )
+    })
+    try {
+      await Promise.all([firstFiber.await(), secondFiber.await()])
+      expect(service.pendingInteractions.getSnapshot().get(first.sessionId)).toBe(second)
+      await firstFiber.dispose()
+      expect(delegated).toHaveBeenCalledOnce()
+      expect(removed).toBe(false)
+      expect(service.pendingInteractions.getSnapshot().get(first.sessionId)).toBe(second)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+    expect(removed).toBe(true)
+    expect(service.pendingInteractions.getSnapshot().size).toBe(0)
+  })
+
+  it('refuses new requests after the contributing domain is disposed', async () => {
+    const ctx = new Context()
+    const service = createUiSession(ctx, createSessionsBench(ctx))
+    const publish = service.registerPendingInteraction<SessionPendingInteractionBase>(() => 1)
+    await ctx.fiber.dispose()
+
+    expect(() => publish(
+      { key: 'question:late', kind: 'question', sessionId: sessionId('s1') },
+      () => Promise.resolve(),
+    )).toThrow('pending interaction domain is disposed')
+    expect(service.pendingInteractions.getSnapshot().size).toBe(0)
+  })
+
   it('publishes the highest-precedence exact object and removes each source independently', async () => {
     const ctx = new Context()
     const bench = createSessionsBench(ctx)

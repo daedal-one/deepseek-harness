@@ -1,5 +1,6 @@
 /** Approval composer and optional correlated-detail contracts. */
 import type { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type {} from '@deepseek-ai/dsh-client-ui-session/client/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {
   PropsLocale, PropsRenderSlots, PropsRuntime,
@@ -19,7 +20,7 @@ function settlePendingComposer(settle: () => void, failureMessage: string): Prom
 }
 /* jscpd:ignore-end */
 
-declare module '@deepseek-ai/dsh-client-ui-session/client' {
+declare module '@deepseek-ai/dsh-client-ui-session/client/types' {
   interface SessionPendingInteractionMap {
     /** Pending approval request. */
     approval: PendingApproval

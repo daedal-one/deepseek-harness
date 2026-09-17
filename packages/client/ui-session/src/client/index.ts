@@ -22,6 +22,10 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only service merge for ctx.slots.
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+import { PendingInteractions } from './pending-interactions.ts'
+import type {
+  PendingInteractionPublisher, SessionPendingInteractionBase, SessionPendingInteractionSnapshot,
+} from './contract/pending-interactions.ts'
 import { renderSessionArea } from './session-provider.tsx'
 
 /** Selector hook over the Session Controller list and current selection. */
@@ -31,75 +35,13 @@ export type SessionSnapshotSelector = SnapshotSelectorHook<SessionSnapshot>
 /** Public name for the Session lifecycle selector hook. */
 export type UseSession = SessionSnapshotSelector
 
-/** Common identity carried by every Session-scoped pending interaction. */
-export interface SessionPendingInteractionBase {
-  /** Opaque request identity; a replacement request must use a new key. */
-  readonly key: string
-  /** Domain-owned presentation discriminator. */
-  readonly kind: string
-  /** Session whose UI can answer this interaction. */
-  readonly sessionId: SessionId
-}
+export type {
+  PendingInteractionPublisher, SessionPendingInteractionBase, SessionPendingInteraction,
+  SessionPendingInteractionMap, SessionPendingInteractionSnapshot,
+} from './contract/pending-interactions.ts'
 
-/** Declaration-merged roster of domain-owned pending interaction values. */
-export interface SessionPendingInteractionMap {}
-
-/** Every pending interaction contributed by the assembled Client. */
-export type SessionPendingInteraction =
-  [keyof SessionPendingInteractionMap] extends [never]
-    ? SessionPendingInteractionBase
-    : SessionPendingInteractionMap[keyof SessionPendingInteractionMap]
-
-/** Current effective pending interaction by Session. */
-export type SessionPendingInteractionSnapshot = ReadonlyMap<SessionId, SessionPendingInteraction>
 /** Selector hook over Session-scoped pending interactions. */
 export type UseSessionPendingInteraction = SnapshotSelectorHook<SessionPendingInteractionSnapshot>
-
-/** Publish one pending interaction and define how plugin teardown delegates it. */
-export type PendingInteractionPublisher<T extends SessionPendingInteractionBase> = (
-  interaction: T,
-  delegate: () => Promise<void>,
-) => () => void
-
-interface PendingInteractionEntry<T> {
-  readonly interaction: T
-  readonly delegate: () => Promise<void>
-}
-
-class PendingInteractionDomain<T extends SessionPendingInteractionBase> {
-  private readonly values = new Map<string, PendingInteractionEntry<T>>()
-
-  constructor(
-    readonly precedence: (interaction: T) => number,
-    private readonly changed: () => void,
-  ) {}
-
-  valuesSnapshot(): readonly T[] {
-    return [...this.values.values()].map(entry => entry.interaction)
-  }
-
-  publish(interaction: T, delegate: () => Promise<void>): () => void {
-    if (this.values.has(interaction.key)) {
-      throw new Error(`ui-session: duplicate pending interaction key '${interaction.key}'`)
-    }
-    this.values.set(interaction.key, { interaction, delegate })
-    this.changed()
-    let active = true
-    return () => {
-      if (!active) return
-      active = false
-      if (!this.values.delete(interaction.key)) return
-      this.changed()
-    }
-  }
-
-  /** Remove every pending value and return the operations that settle their owners. */
-  release(): readonly (() => Promise<void>)[] {
-    const delegates = [...this.values.values()].map(entry => entry.delegate)
-    this.values.clear()
-    return delegates
-  }
-}
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface GlobalStandardProps {
@@ -186,8 +128,6 @@ interface RuntimeSessionSourceDescriptor {
   resolve(binding: SessionBinding): RuntimeSessionSourceContribution
 }
 
-type RuntimePendingDomain = PendingInteractionDomain<SessionPendingInteractionBase>
-
 interface MaterializedBinding {
   readonly owner: SessionBinding
   readonly value: ScopedStandardSourceBinding
@@ -218,17 +158,9 @@ export class UiSession extends Service {
   private absent: StandardSourceBinding
   private currentBinding: StandardSourceBinding
   private readonly currentListeners = new Set<() => void>()
-  private readonly pendingDomains: RuntimePendingDomain[] = []
-  private pendingSnapshot: ReadonlyMap<SessionId, SessionPendingInteractionBase> = new Map()
-  private readonly pendingListeners = new Set<() => void>()
+  private readonly pending = new PendingInteractions()
   /** Root source of pending UI interactions, independent from Controller snapshots. */
-  readonly pendingInteractions: HostObservable<SessionPendingInteractionSnapshot> = {
-    getSnapshot: () => this.pendingSnapshot,
-    subscribe: (listener) => {
-      this.pendingListeners.add(listener)
-      return () => { this.pendingListeners.delete(listener) }
-    },
-  }
+  readonly pendingInteractions: HostObservable<SessionPendingInteractionSnapshot> = this.pending.source
   /** Renderer-facing adapter for `session` and `session-maybe` scopes. */
   readonly adapter: SlotScopeAdapter
 
@@ -297,29 +229,14 @@ export class UiSession extends Service {
   /**
    * Register one pending-interaction domain and return its publication function.
    * Domain teardown first removes its visible values, then delegates and awaits
-   * every still-active owner request.
+   * every still-active owner request. Released domains reject new publication.
    * @param precedence - deterministic cross-domain precedence; larger values win.
    * @returns a function that publishes one interaction and its teardown delegation.
    */
   registerPendingInteraction<T extends SessionPendingInteractionBase>(
     precedence: (interaction: T) => number,
   ): PendingInteractionPublisher<T> {
-    const domain = new PendingInteractionDomain(precedence, () => {
-      this.publishPendingInteractions()
-    })
-    const runtimeDomain = domain as unknown as RuntimePendingDomain
-    this.ctx.effect(() => {
-      this.pendingDomains.push(runtimeDomain)
-      this.publishPendingInteractions()
-      return async () => {
-        const delegates = domain.release()
-        const index = this.pendingDomains.indexOf(runtimeDomain)
-        this.pendingDomains.splice(index, 1)
-        this.publishPendingInteractions()
-        await Promise.allSettled(delegates.map(delegate => Promise.resolve().then(delegate)))
-      }
-    }, 'uiSession.registerPendingInteraction()')
-    return (interaction, delegate) => domain.publish(interaction, delegate)
+    return this.pending.register(this.ctx, precedence)
   }
 
   private rebuildBindings(): void {
@@ -361,28 +278,6 @@ export class UiSession extends Service {
     if (next === this.currentBinding) return
     this.currentBinding = next
     notifySubscribers(this.currentListeners, '[ui-session] current binding')
-  }
-
-  private publishPendingInteractions(): void {
-    const next = new Map<SessionId, {
-      interaction: SessionPendingInteractionBase
-      precedence: number
-    }>()
-    for (const domain of this.pendingDomains) {
-      for (const interaction of domain.valuesSnapshot()) {
-        const precedence = domain.precedence(interaction)
-        const previous = next.get(interaction.sessionId)
-        if (previous === undefined || precedence >= previous.precedence) {
-          next.set(interaction.sessionId, { interaction, precedence })
-        }
-      }
-    }
-    const projected = new Map(
-      [...next].map(([sessionId, value]) => [sessionId, value.interaction] as const),
-    )
-    if (samePendingInteractions(this.pendingSnapshot, projected)) return
-    this.pendingSnapshot = projected
-    notifySubscribers(this.pendingListeners, '[ui-session] pending interactions')
   }
 
   private createMaterializedBinding(owner: SessionBinding): MaterializedBinding {
@@ -511,15 +406,4 @@ export function apply(ctx: Context): void {
     },
   } satisfies RootStandardSourceContribution)
   ctx.slots.installScope('session', service.adapter)
-}
-
-function samePendingInteractions(
-  left: ReadonlyMap<SessionId, SessionPendingInteractionBase>,
-  right: ReadonlyMap<SessionId, SessionPendingInteractionBase>,
-): boolean {
-  if (left.size !== right.size) return false
-  for (const [sessionId, interaction] of left) {
-    if (right.get(sessionId) !== interaction) return false
-  }
-  return true
 }

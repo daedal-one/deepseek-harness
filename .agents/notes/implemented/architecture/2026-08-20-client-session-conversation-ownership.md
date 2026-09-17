@@ -210,15 +210,17 @@ Session identity comes from the scope binding and standard `sessionId` prop. The
 
 ### Pending interactions
 
-Business packages extend `SessionPendingInteractionMap` through declaration merging. Every pending object carries at least a stable `key`, domain `kind`, and `sessionId`; `ui-session` does not import concrete Approval or Question types.
+The renderer-independent `PendingInteractions` registry owns pending domains for one Host. The browser `UiSession` delegates registration and exposes that same observable source. Business packages extend `SessionPendingInteractionMap` through declaration merging. The canonical declaration lives at the type-only `@deepseek-ai/dsh-client-ui-session/client/types` entry, shared by browser and portable consumers. Every pending object carries at least a stable `key`, domain `kind`, and `sessionId`; `ui-session` does not import concrete Approval or Question types.
 
 A business plugin calls `registerPendingInteraction(precedence)` in `apply()` to create a stable registration for its pending domain. The returned per-request publication function publishes one exact object together with its waterfall-delegation callback and returns an idempotent disposer for that object. Plugin teardown removes all published objects before invoking and awaiting their delegation callbacks, so active Host requests cannot remain suspended after their Client answerer unloads.
 
-Concurrent objects with the same key are rejected; replacement requests use a new key. One Session may hold multiple domains or requests at once.
+Concurrent objects with the same key in one domain are rejected; replacement requests use a new key. Released domains reject publication, including during their asynchronous teardown, so late handlers cannot retain invisible requests. One Session may hold multiple domains or requests at once.
 
 `ui-session` selects each Session's effective object using domain precedence. Higher precedence wins; at equal precedence, the later valid object in traversal order wins.
 
 The aggregate is published as `pendingInteractions: ObservableSnapshot<ReadonlyMap<SessionId, SessionPendingInteraction>>`; `useSessionPendingInteraction` is its React read face.
+
+Portable and browser tests pin precedence, cached snapshot identity, independent owners, contained subscriber errors and withdrawal before awaited delegation. The built portable entry executes with Node builtins and browser globals unavailable; this establishes dependency isolation, not native request delivery or physical-device acceptance.
 
 Session navigation state and composer takeover read the same effective object. They do not maintain separate status maps or takeover rosters.
 
