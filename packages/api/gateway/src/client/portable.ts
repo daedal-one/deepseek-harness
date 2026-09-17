@@ -5,18 +5,7 @@ import { installRemoteClient } from './service.ts'
 import { REMOTE_STREAM_MUX_PATH } from '../stream-protocol.ts'
 import { RemoteStreamMuxClient, type RemoteStreamSocket } from './stream-client.ts'
 
-export { readHostCapabilities } from './host-capabilities.ts'
-export type { RemoteCapabilityRequirement, RemoteClientAdmission } from './host-capabilities.ts'
-export type { HostCapabilities, HostCapability } from '../capabilities-protocol.ts'
-
-export {
-  inject, isRemoteFailure, RemoteStreamCarrierError, RemoteJournalStream, RemoteStream, RemoteSnapshotStream,
-} from './service.ts'
-export type {
-  ClientRemote, RemoteHostFacts, TypertGatewayFaultDetails,
-  RemoteJournalChange, RemoteJournalFrame, RemoteJournalStreamOptions, RemoteStreamFactory,
-  RemoteStreamItem, RemoteStreamOptions, RemoteSnapshotStreamOptions,
-} from './service.ts'
+export * from './shared-api.ts'
 export type { RemoteStreamSignal, RemoteStreamSocket } from './stream-client.ts'
 
 /** Explicit host and platform inputs for a multiplexed Remote stream carrier. */

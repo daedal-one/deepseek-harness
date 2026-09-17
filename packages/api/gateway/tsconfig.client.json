@@ -18,6 +18,7 @@
     "src/client/portable.ts",
     "src/client/stream-client-browser.ts",
     "src/client/service.ts",
+    "src/client/shared-api.ts",
     "src/client/cancellation.ts",
     "src/capabilities-protocol.ts",
     "src/client/host-capabilities.ts",
