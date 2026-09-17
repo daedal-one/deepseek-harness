@@ -23,6 +23,7 @@
   - img
   - img
   - text: Think The user wants me to use the ask_user_question tool with specific parameters. Let me do exactly that.
+- button "Load full result"
 - button "Ask question cancelled" [expanded]:
   - img
   - text: Ask question cancelled
@@ -36,10 +37,10 @@
 - button "Add attachment":
   - img
 - 'button "Access mode, current: Workspace Write"': Workspace Write
-- button "Select model, current DeepSeek-V4.1-Flash":
-  - text: DeepSeek-V4.1-Flash
+- button "Select model, current DeepSeek V4.1 Flash":
+  - text: DeepSeek V4.1 Flash
   - img
-- button "3% of context used"
+- button "0% of context used"
 - button "Send message" [disabled]
 - button "1 turns 1 steps · {{throughput}} tok/s":
   - img

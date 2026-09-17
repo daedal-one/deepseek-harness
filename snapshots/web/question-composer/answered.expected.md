@@ -39,10 +39,10 @@
 - button "Add attachment":
   - img
 - 'button "Access mode, current: Workspace Write"': Workspace Write
-- button "Select model, current DeepSeek-V4.1-Flash":
-  - text: DeepSeek-V4.1-Flash
+- button "Select model, current DeepSeek V4.1 Flash, reasoning effort high":
+  - text: DeepSeek V4.1 Flash high
   - img
-- button "3% of context used"
+- button "0% of context used"
 - button "Send message" [disabled]
 - button "1 turns 2 steps · {{throughput}} tok/s":
   - img
