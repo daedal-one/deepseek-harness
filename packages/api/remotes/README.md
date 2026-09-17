@@ -71,6 +71,8 @@ That exception is not just a `files` entry. The root `tsconfig.base.json` maps `
 
 The package-local `clientBundle(..., { hostPhase: true })` makes Host tsdown bundle the Host entry and the later Client tsdown bundle the browser entry plus its portable Client companion. Client companions run only after Client TypeScript output exists; they cannot be emitted during the earlier Host phase. Ordinary Client plugins remain single Client projects and produce both their Node loader entry and browser bundle during Client tsdown; split only when the two source sets require different compiler faces.
 
+The application facade also exports the shared [prompt admission observer](../session-controller/README.md#use-this-package) for correlating uncertain submissions with authoritative Session facts.
+
 <a id="model-experience"></a>
 ## Model Experience
 
@@ -87,7 +89,6 @@ No direct effect; mounted Host capabilities own any model-visible behavior they 
 - Generated Client methods are fixed by explicit build-time value imports. The portable facade exports `readHostCapabilities()` for advisory, identity-bound discovery of current strict Host endpoints; it does not mount new Client methods or establish domain schema compatibility. The capability envelope is version 3 and retains optional wire fingerprints and business revisions. Generated calls use the Gateway's [operation compatibility checks](../gateway/README.md#operation-compatibility); capability reads remain advisory and grant no authorization.
 - Additional capabilities require an explicit `/remote` value import and mount in this assembly.
 - Ordinary forwarded events are not replayed; state that requires reliable recovery needs an owner-provided query, cursor, or opening baseline.
-
 
 <a id="dev-note"></a>
 ### Dev Note

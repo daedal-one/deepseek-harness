@@ -80,7 +80,7 @@ export interface ISession {
    * @param content - text plus browser-owned temporary image uploads.
    * @param mode - 'queue' appends a turn; 'steer' interrupts the running one.
    * @param signal - optional caller cancellation for the complete admission round-trip.
-   * @param requestId - identity from {@link beginSubmission}; a failed identified prompt retires its echo.
+   * @param requestId - caller-owned identity, optionally from {@link beginSubmission}; failure retires any matching echo.
    * @returns acceptance, or the business error (also mirrored into snapshot.promptError).
    */
   prompt(

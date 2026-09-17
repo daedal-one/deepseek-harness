@@ -36,6 +36,7 @@ The shared Session list exposes `phase` for first-baseline arrival, `state` for 
 
 The Session object also carries local submission echoes: `session.beginSubmission` inserts one into `SessionSnapshot.pendingSubmissions` synchronously, before the caller serializes and prompts, so a conversation UI can show the message on the submit click's own frame. The echo stores ordered image previews and durable file references. Session derives its `transcript`, `queued`, or `steering` placement from the current running state and requested delivery mode, then retains that placement while serialization is in flight. The prompt's `requestId` is the correlation identity: the Host echoes it as the durable user source's `rpcId`, and queue occurrences project it as `SessionQueuedItem.rpcId`. An echo retires one animation frame after its durable event or queue occurrence is observed, immediately when its identified prompt fails or is abandoned, and as failed on disposal. Each retirement fires `onRetire` exactly once; an observed retirement includes the ordered durable attachment references so the composer can release successful cards while preserving failed drafts. Echoes are Client memory only; reload and reconnect rebuild the conversation from durable events alone.
 
+A Client `PromptAdmission` observer watches one Session binding for the original request id in its authoritative queue or durable user messages. An observed match confirms admission even if its RPC reply was lost. Missing history and local echoes remain unknown. The observer reads existing publications, latches positive evidence, and releases its subscriptions on observation or disposal; it never retries a prompt or fetches history.
 
 <a id="session-media-references"></a>
 ## Session media references
@@ -73,7 +74,6 @@ No direct effect; model requests remain owned by the Agent and LLM packages.
 - A failed follow resumption remains visible to the caller instead of retrying indefinitely.
 - The raw browser upload is one streaming HTTP request without resumable offsets; a retry sends the file again from byte zero.
 - File-reference completion uses the shared Agent lookup and can resume a cold Session; the `skills/list` catalog is the non-activating alternative for skill metadata.
-
 
 <a id="dev-note"></a>
 ### Dev Note

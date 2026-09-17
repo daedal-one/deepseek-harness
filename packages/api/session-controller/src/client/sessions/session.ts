@@ -229,7 +229,7 @@ export class Session implements SessionFace {
    * @param content - text, browser-owned temporary image uploads, and staged-file receipts.
    * @param mode - queue appends after the current turn; steer interrupts it.
    * @param signal - optional caller cancellation for the complete admission round-trip.
-   * @param requestId - identity from {@link beginSubmission}; a failed identified prompt retires its echo.
+   * @param requestId - caller-owned identity, optionally from {@link beginSubmission}; failure retires any matching echo.
    * @returns the prompt result (also mirrored into promptError on failure).
    */
   async prompt(

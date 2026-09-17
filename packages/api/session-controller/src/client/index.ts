@@ -8,6 +8,8 @@ import { applySessions, inject as sessionInject } from './portable.ts'
 import { createBrowserSessionClientOptions } from './browser.ts'
 
 export { applySessions, inject as sessionInject } from './portable.ts'
+export { PromptAdmission } from './prompt-admission.ts'
+export type { PromptAdmissionState } from './prompt-admission.ts'
 export type { SessionPlatform, SessionSelection, SessionSelectionStore, SessionClientOptions } from './platform.ts'
 
 export {

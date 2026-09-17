@@ -46,12 +46,12 @@ export type { IWorkspaces, WorkspaceSource, WorkspaceSnapshot, WorkspaceListPhas
 export const applyWorkspaces: (ctx: Parameters<typeof applyWorkspaceClient>[0]) => void = applyWorkspaceClient.bind(undefined)
 
 export { sessionInject, SessionCreateError, SessionForkError, SessionEventStream,
-  createSessionControlStream, MutableSessionEventSource, scopeOf,
+  createSessionControlStream, MutableSessionEventSource, PromptAdmission, scopeOf,
 } from '@deepseek-ai/dsh-api-session-controller/client'
 export type { ISessions, SessionFace, SessionSnapshot, SessionListState, SessionBinding,
   SessionPlatform, SessionSelection, SessionSelectionStore, SessionClientOptions,
   SessionEventSource, SessionEventWindow, SessionEventChange, SessionEventLikeEntry,
-  BeginSubmissionInput, SubmissionHandle, PendingSubmission,
+  BeginSubmissionInput, SubmissionHandle, PendingSubmission, PromptAdmissionState,
 } from '@deepseek-ai/dsh-api-session-controller/client'
 
 /**
