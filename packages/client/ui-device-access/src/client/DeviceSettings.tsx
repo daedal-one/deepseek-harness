@@ -1,7 +1,7 @@
 /** Owner-facing pairing and revocation controls for the current browser Host. */
 import { useEffect, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
-import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsRuntime, PropsLocale, InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
 import type { DeviceAdministrationService, ConnectionDeviceId } from '@deepseek-ai/dsh-client-connection/client'
 import css from './DeviceSettings.module.css'
@@ -18,6 +18,19 @@ export interface DeviceSettingsInjected {
 }
 /** Section owner values, localized copy and private administration source. */
 export type DeviceSettingsProps = PropsRuntime<'settings.section'> & PropsLocale<'settings.devices'> & InjectFace<DeviceSettingsInjected>
+
+function EnrollmentCopy({ value, t }: { value: string; t: DeviceSettingsProps['t'] }) {
+  const [status, setStatus] = useState<'idle' | 'copying' | 'copied' | 'failed'>('idle')
+  const copy = async () => {
+    setStatus('copying')
+    setStatus(await writeClipboard(value) ? 'copied' : 'failed')
+  }
+  return <>
+    <Button variant="outline" disabled={status === 'copying'} onClick={() => { void copy() }}>{t('copy')}</Button>
+    {status === 'copied' ? <p role="status">{t('copied')}</p> : null}
+    {status === 'failed' ? <p role="alert" className={css.error}>{t('copyFailed')}</p> : null}
+  </>
+}
 
 /**
  * Render metadata and a transient QR; revocation needs a separate confirmation.
@@ -52,6 +65,8 @@ export function DeviceSettings({ openSection, closeSection, refresh, enroll, hid
             <div className={css.pairing}>
               <QRCodeSVG value={qr} size={256} marginSize={4} level="M" title={t('qrTitle')} />
               <p>{t('qrHint')}</p>
+              <p>{t('desktopHint')}</p>
+              <EnrollmentCopy key={qr} value={qr} t={t} />
               <p>{t('hideHint')}</p>
               <Button variant="outline" onClick={hide}>{t('hide')}</Button>
             </div>

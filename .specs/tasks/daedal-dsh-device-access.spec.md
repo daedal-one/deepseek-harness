@@ -47,6 +47,10 @@ Qualify the controller's cancellation, late-result, expiry, malformed-response a
 
 Keep a committed keyless assembled-browser scenario for owner-created enrollment, visible QR presentation, single-use public claim, authenticated device admission, cancelled and confirmed revocation, and refused admission after revocation. Its expected UI output contains only bounded public metadata, with scenario-owned Host and device identities normalized. Read enrollment and bearer material only in memory; QR decoding and physical-camera acceptance remain separate evidence. Scenario teardown waits for pending startup before releasing its browser and Host, including failed or timed-out setup. Existing Web request interception must assert the generated compatibility expectations and settle its route without unhandled callback assertions.
 
+## Desktop enrollment transfer
+
+The browser Devices section offers an explicit copy action beside the enrollment QR. Copy exactly the same version, origin and challenge envelope into the system clipboard only after the owner presses the control; never include browser cookies or existing device grants. Report clipboard refusal instead of claiming success. The desktop enrollment form reviews that Host identity before claiming it. Hiding or expiring a QR clears application state but cannot erase copies already placed in the clipboard. Qualify successful and denied writes with the existing clipboard primitive and preserve the owner-only enrollment flow.
+
 ## Acceptance
 
 Real iPhone QR pairing and host discovery succeed without address entry. Expired or replayed enrollment, revoked devices, mismatched host identity and unauthorized discovery fail explicitly. Candidate probes never receive another host credential and never imply enrollment.

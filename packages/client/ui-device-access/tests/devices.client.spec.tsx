@@ -18,7 +18,7 @@ const device = { deviceId: '20000000-0000-4000-8000-000000000001', label: 'Carlo
 const list = (devices: unknown[] = []) => ({ version: 1, hostId: identity.hostId, devices })
 const ok = (value: unknown) => Response.json({ ok: true, value })
 const disposals: Array<() => Promise<unknown>> = []
-afterEach(async () => { cleanup(); for (const dispose of disposals.splice(0).reverse()) await dispose() })
+afterEach(async () => { cleanup(); vi.unstubAllGlobals(); for (const dispose of disposals.splice(0).reverse()) await dispose() })
 const unused = (() => { throw new Error('Unused Settings framework hook') }) as never
 const kit = { useSessions: unused, useSessionPendingInteraction: unused, usePanelInfo: unused,
   useResource: unused, useWorkspaces: unused, close: unused }
@@ -72,6 +72,24 @@ describe('Devices settings', () => {
     expect(screen.queryByTitle(en.qrTitle)).toBeNull()
     expect(b.service.state.getSnapshot().enrollment).toBeNull()
   })
+  it.each([true, false])('copies the exact QR envelope only on demand and reports accepted=%s', async (accepted) => {
+    const writeText = vi.fn<(text: string) => Promise<void>>()
+    if (accepted) writeText.mockResolvedValue(undefined)
+    else writeText.mockRejectedValue(new Error('Clipboard refused'))
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    const b = bench(); const view = render(<DeviceSettings {...b.props} />); await ready()
+    const enrollment = { version: 1, hostId: identity.hostId, challenge: 'c'.repeat(43), expiresAt: Date.now() + 60_000 }
+    b.fetch.mockResolvedValueOnce(ok(enrollment)); click(en.create); await screen.findByTitle(en.qrTitle)
+    expect(writeText).not.toHaveBeenCalled()
+    click(en.copy)
+    await screen.findByText(accepted ? en.copied : en.copyFailed)
+    expect(writeText).toHaveBeenCalledExactlyOnceWith(JSON.stringify({ version: 1, origin: 'https://host.example.test:3081', enrollment }))
+    expect(view.container.textContent).not.toContain(enrollment.challenge)
+    if (!accepted) expect(screen.queryByText(en.copied)).toBeNull()
+    click(en.hide); expect(screen.queryByRole('button', { name: en.copy })).toBeNull()
+    expect(writeText).toHaveBeenCalledOnce()
+  })
+
   it('requires a separate confirmation and allows cancelling before revocation', async () => {
     const b = bench(); b.fetch.mockResolvedValueOnce(ok(list([device])))
     render(<DeviceSettings {...b.props} />); await ready()

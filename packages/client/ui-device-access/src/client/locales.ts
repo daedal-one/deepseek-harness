@@ -1,7 +1,7 @@
 /** English browser device-administration copy. */
 export const en = {
   title: 'Devices',
-  intro: 'Pair Daedal DSH on your iPhone with this Host, or revoke a device’s access.',
+  intro: 'Pair Daedal DSH on your iPhone or desktop with this Host, or revoke a device’s access.',
   hostIdentity: 'Host identity:',
   unavailable: 'Device administration is available only in an authenticated DSH Web page with device access enabled.',
   disconnected: 'Connect to the Host before managing devices.',
@@ -10,7 +10,11 @@ export const en = {
   refresh: 'Refresh devices',
   qrTitle: 'Single-use device enrollment QR',
   qrHint: 'On iPhone, open Settings → DSH hosts → Scan pairing QR. Check the displayed Host before confirming. Keep this code private.',
-  hideHint: 'Hiding this code does not cancel it. It remains valid until its short expiry or first use.',
+  desktopHint: 'On desktop, copy these enrollment contents, open Settings → DSH hosts → Pair a DSH host, paste them and review the Host.',
+  copy: 'Copy enrollment contents',
+  copied: 'Enrollment contents copied. Keep the clipboard private.',
+  copyFailed: 'Could not copy the enrollment contents. Allow clipboard access and try again.',
+  hideHint: 'Hiding this code does not cancel it. It remains valid until its short expiry or first use. Copies in your clipboard remain until you replace them.',
   hide: 'Hide QR',
   devices: 'Enrolled devices',
   empty: 'No devices are enrolled.',

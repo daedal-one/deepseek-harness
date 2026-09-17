@@ -7,7 +7,7 @@ kind: "package-reference"
 
 ## Summary
 
-The **Devices** section lets a browser owner pair Daedal DSH on an iPhone and revoke an enrolled device. Pairing uses a short-lived, single-use QR instead of transferring the browser credential. Device access can be removed independently while Sessions keep running. The browser must reach the same Host through an address the phone can use.
+The **Devices** section lets a browser owner pair Daedal DSH on an iPhone or desktop and revoke an enrolled device. Pairing uses a short-lived, single-use QR instead of transferring the browser credential. Device access can be removed independently while Sessions keep running. The browser must reach the same Host through an address the device can use.
 
 ## Table of Contents
 
@@ -23,7 +23,7 @@ The **Devices** section lets a browser owner pair Daedal DSH on an iPhone and re
 <a id="use-this-package"></a>
 ## Use this package
 
-Open **Settings → Devices** in an authenticated DSH Web page. **Create pairing QR** displays a code for that page's Host and address. In Daedal DSH on iPhone, open **Settings → DSH hosts → Scan pairing QR**, review the Host, and confirm. Keep the QR private. A loopback address cannot reach another computer from a physical phone; open the page using its private-network address before creating the code.
+Open **Settings → Devices** in an authenticated DSH Web page. **Create pairing QR** displays a code for that page's Host and address. In Daedal DSH on iPhone, open **Settings → DSH hosts → Scan pairing QR**, review the Host, and confirm. On desktop, select **Copy enrollment contents**, then open **Settings → DSH hosts → Pair a DSH host** in Daedal DSH, paste the contents and review the Host. Copying requires a separate gesture and reports a clipboard refusal. Keep the QR and clipboard private. A loopback address cannot reach another computer from a physical phone; open the page using its private-network address before creating the code.
 
 **Refresh devices** reads the current enrolled devices. Select **Revoke access…**, check the selected device, and confirm **Revoke device access** to close its authenticated connections and prevent reconnection. Revocation does not stop Sessions or undo accepted operations. A lost revocation response disables further mutations until a refresh reconciles the device list.
 
@@ -37,9 +37,9 @@ The Web bundle mounts this plugin through its `cordis.patch.yml` row. The plugin
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-[Connection](../connection/README.md#device-enrollment) owns same-origin administrative requests and a generation-bound observable. The [entry](src/client/index.ts) contributes a localized Settings section and injects plain actions plus that source; the renderer supplies the selector hook. The [component](src/client/DeviceSettings.tsx) keeps only revocation-confirmation state locally and renders QR graphics through `qrcode.react`. Plugin activation makes no request.
+[Connection](../connection/README.md#device-enrollment) owns same-origin administrative requests and a generation-bound observable. The [entry](src/client/index.ts) contributes a localized Settings section and injects plain actions plus that source; the renderer supplies the selector hook. The [component](src/client/DeviceSettings.tsx) keeps revocation-confirmation and clipboard-feedback state locally and renders QR graphics through `qrcode.react`. Plugin activation makes no request.
 
-Closing the section, hiding the page, disconnecting, disposal or challenge expiry erases QR material from the browser state. Cancelling a browser request cannot retract a challenge already created on the Host; hiding a code leaves it valid until expiry or first claim. Neither credentials nor challenges are persisted by this package. Only reads refresh automatically after a generation change; mutations require a gesture.
+Closing the section, hiding the page, disconnecting, disposal or challenge expiry erases QR material from the browser state. Cancelling a browser request cannot retract a challenge already created on the Host; hiding a code leaves it valid until expiry or first claim. The copy control writes only the QR envelope to the system clipboard after an explicit gesture. Hiding or expiring the QR does not erase that clipboard copy. The package stores neither browser credentials nor device grants. Only reads refresh automatically after a generation change; mutations require a gesture.
 
 No invariant companion is published: the section projects one Connection-owned source and registers through the slot lifecycle, with no independently owned relationship to assert.
 
