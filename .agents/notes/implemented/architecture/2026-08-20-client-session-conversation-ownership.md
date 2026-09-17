@@ -326,7 +326,7 @@ A Remote Event listener resolves the Session from its own Agent Context. Without
 
 The listener publishes the object through the registered domain publication function, waits for user completion, cancellation, or request-signal abortion, and removes the exact object in `finally`.
 
-One request does not register a Slot, create another lifecycle effect, or mutate the Session snapshot.
+One request does not register a Slot, create another lifecycle effect, or mutate the Session snapshot. Pending carriers and consumer completion barriers use the baseline Promise constructor because the supported iPhone Hermes runtime lacks `Promise.withResolvers`. Native bytecode compilation does not detect missing runtime methods. The portable artifact probe removes that method in its private VM before exercising answers and delegation; the app does not patch global Promise behavior.
 
 Approval exposes allow and reject; Question exposes answer and cancel. User cancellation of a Question returns `ASK_CANCELLED`; interruption of a pending request by `AbortSignal` returns `UserQuestionError(ASK_ABORTED)` rather than leaking the carrier's `AbortError` or an ordinary `Error`.
 

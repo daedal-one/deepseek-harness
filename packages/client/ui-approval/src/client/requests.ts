@@ -30,17 +30,18 @@ async function answerApproval(
     ...(request.reason === undefined ? {} : { reason: request.reason }),
     ...(request.signal === undefined ? {} : { signal: request.signal }),
   })
-  const completed = Promise.withResolvers<undefined>()
+  let finish!: () => void
+  const completed = new Promise<void>((resolve) => { finish = resolve })
   let remove: () => void
   try {
     remove = registerPendingInteraction(pending, async () => {
       pending.delegate()
-      await completed.promise
+      await completed
     })
   } catch (error) {
     pending.abort(error)
     await Promise.allSettled([pending.result])
-    completed.resolve(undefined)
+    finish()
     throw error
   }
   try {
@@ -52,7 +53,7 @@ async function answerApproval(
     }
   } finally {
     remove()
-    completed.resolve(undefined)
+    finish()
   }
 }
 /* jscpd:ignore-end */

@@ -21,7 +21,7 @@ Browser approval presentation over the Agent-scoped Remote Event waterfall. The 
 
 The `@deepseek-ai/dsh-client-ui-approval/client/portable` entry exposes `PendingApproval` and `registerApprovalRequests` without React or Slots. Supply the generated Remote service, Session scope lookup and a pending-domain registrar owned by the same Cordis fiber. The shared consumer publishes approval requests at precedence zero and returns an allow-once or rejection decision to the Host. Requests without a Session scope delegate to the next listener.
 
-Request cancellation removes the abort listener and pending value. Domain disposal withdraws the request before delegating and waits for the next listener to finish. Failed publication settles and observes the carrier before propagating its error. The browser plugin uses this same consumer; native applications provide their own controls and consume the shared pending source.
+Request cancellation removes the abort listener and pending value. Domain disposal withdraws the request before delegating and waits for the next listener to finish. Failed publication settles and observes the carrier before propagating its error. The browser plugin uses this same consumer; native applications provide their own controls and consume the shared pending source. Pending carriers and completion barriers require only the baseline Promise constructor; native consumers do not need `Promise.withResolvers` or a global Promise polyfill.
 
 <a id="model-experience"></a>
 ## Model Experience

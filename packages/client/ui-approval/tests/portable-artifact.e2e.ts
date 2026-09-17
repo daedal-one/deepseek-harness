@@ -15,8 +15,12 @@ it('answers and delegates requests through the portable domain artifacts', { ret
     import { readFileSync } from 'node:fs';
     import { isBuiltin } from 'node:module';
     import { fileURLToPath, pathToFileURL } from 'node:url';
-    import { SourceTextModule, createContext } from 'node:vm';
+    import { SourceTextModule, createContext, runInContext } from 'node:vm';
     const context = createContext({ queueMicrotask, setTimeout, clearTimeout, console });
+    runInContext('Promise.withResolvers = undefined', context);
+    const modernPromise = new SourceTextModule('Promise.withResolvers()', { context });
+    await modernPromise.link(() => { throw new Error('unexpected import'); });
+    await assert.rejects(modernPromise.evaluate(), /withResolvers is not a function/);
     const modules = new Map();
     function fileModule(file) {
       if (!modules.has(file)) modules.set(file, new SourceTextModule(readFileSync(file, 'utf8'), { context, identifier: file }));

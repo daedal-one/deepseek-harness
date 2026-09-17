@@ -3,16 +3,12 @@ import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client/types'
 
-/* jscpd:ignore-start -- Approval and Question intentionally own independent pending-settlement lifecycles. */
-function settlePendingComposer(settle: () => void, failureMessage: string): Promise<void> {
-  try {
+/* jscpd:ignore-start -- Approval and Question preserve synchronous, independent settlement. */
+function settlePendingComposer(settle: () => void): Promise<void> {
+  return new Promise<void>((resolve) => {
     settle()
-    return Promise.resolve()
-  } catch (error) {
-    return Promise.reject(error instanceof Error
-      ? error
-      : new Error(failureMessage, { cause: error }))
-  }
+    resolve()
+  })
 }
 /* jscpd:ignore-end */
 
@@ -73,10 +69,14 @@ export class PendingApproval {
     this.toolName = request.toolName
     this.callId = request.callId
     this.reason = request.reason
-    const completion = Promise.withResolvers<ApprovalDecision>()
-    this.result = completion.promise
-    this.#resolve = completion.resolve
-    this.#reject = completion.reject
+    let resolve!: (value: ApprovalDecision) => void
+    let reject!: (reason: unknown) => void
+    this.result = new Promise<ApprovalDecision>((resolvePromise, rejectPromise) => {
+      resolve = resolvePromise
+      reject = rejectPromise
+    })
+    this.#resolve = resolve
+    this.#reject = reject
     this.#signal = request.signal
     if (request.signal === undefined) {
       this.#onAbort = undefined
@@ -98,7 +98,7 @@ export class PendingApproval {
   answer(outcome: ApprovalDecision): Promise<void> {
     return settlePendingComposer(() => {
       this.finish(() => { this.#resolve(outcome) })
-    }, 'pending approval settlement failed')
+    })
   }
 
   /** Delegate an unanswered request to the next waterfall listener. */

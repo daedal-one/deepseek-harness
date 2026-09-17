@@ -55,7 +55,7 @@ The card claims a request only when it can send every answer that request allows
 
 The `@deepseek-ai/dsh-client-ui-user-questions/client/portable` entry exposes `PendingQuestion`, plan-review narrowing and `registerQuestionRequests` without React, Slots or draft storage. The generated Remote service, Session scope lookup and pending-domain registrar belong to the same caller-owned Cordis fiber. The shared consumer publishes ordinary questions at precedence one and valid plan reviews at precedence two. Answering returns the complete batch; cancellation retains the Host's `ASK_CANCELLED` or `ASK_ABORTED` error code.
 
-Disposal withdraws pending requests, delegates them and waits for the next listener. Failed publication settles and observes its carrier before returning the error. Browser presentation uses the same handler and carrier as portable applications; viewing drafts and controls remain renderer-owned.
+Disposal withdraws pending requests, delegates them and waits for the next listener. Failed publication settles and observes its carrier before returning the error. Browser presentation uses the same handler and carrier as portable applications; viewing drafts and controls remain renderer-owned. Pending carriers and completion barriers require only the baseline Promise constructor; native consumers do not need `Promise.withResolvers` or a global Promise polyfill.
 
 ### Copy and locale
 

@@ -19,16 +19,12 @@ type QuestionItem = AskUserQuestionItem
 /** One option the asker offered on a question. */
 type QuestionOption = NonNullable<QuestionItem['options']>[number]
 
-/* jscpd:ignore-start -- Question and Approval intentionally own independent pending-settlement lifecycles. */
-function settlePendingComposer(settle: () => void, failureMessage: string): Promise<void> {
-  try {
+/* jscpd:ignore-start -- Approval and Question preserve synchronous, independent settlement. */
+function settlePendingComposer(settle: () => void): Promise<void> {
+  return new Promise<void>((resolve) => {
     settle()
-    return Promise.resolve()
-  } catch (error) {
-    return Promise.reject(error instanceof Error
-      ? error
-      : new Error(failureMessage, { cause: error }))
-  }
+    resolve()
+  })
 }
 /* jscpd:ignore-end */
 
@@ -133,10 +129,14 @@ export class PendingQuestion {
     this.key = `question:${String(nextQuestionKey)}`
     this.questions = questions
     this.kind = planReviewOf(questions) === undefined ? 'question' : 'plan-review'
-    const completion = Promise.withResolvers<QuestionAnswer>()
-    this.result = completion.promise
-    this.#resolve = completion.resolve
-    this.#reject = completion.reject
+    let resolve!: (value: QuestionAnswer) => void
+    let reject!: (reason: unknown) => void
+    this.result = new Promise<QuestionAnswer>((resolvePromise, rejectPromise) => {
+      resolve = resolvePromise
+      reject = rejectPromise
+    })
+    this.#resolve = resolve
+    this.#reject = reject
     this.#signal = signal
     if (signal === undefined) {
       this.#onAbort = undefined
@@ -158,7 +158,7 @@ export class PendingQuestion {
   answer(answer: QuestionAnswer): Promise<void> {
     return settlePendingComposer(() => {
       this.finish(() => { this.#resolve(answer) })
-    }, 'pending question settlement failed')
+    })
   }
 
   /** Delegate an unanswered request to the next waterfall listener. */
@@ -185,7 +185,7 @@ export class PendingQuestion {
       this.finish(() => {
         this.#reject(questionError('the user cancelled ask_user_question', 'ASK_CANCELLED'))
       })
-    }, 'pending question cancellation failed')
+    })
   }
 
   /**

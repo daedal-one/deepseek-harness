@@ -253,48 +253,4 @@ describe('PendingQuestion', () => {
 
     await rejected
   })
-
-  it('wraps a non-Error answer settlement failure with its cause', async () => {
-    const failure = 'resolve failed'
-    const completion = Promise.withResolvers<QuestionAnswer>()
-    const withResolvers = vi.spyOn(Promise, 'withResolvers').mockImplementationOnce(() => ({
-      promise: completion.promise,
-      resolve: () => { throw failure },
-      reject: completion.reject,
-    }))
-    const pending = new PendingQuestion(SESSION_ID, QUESTIONS)
-    withResolvers.mockRestore()
-
-    const settlement = await pending.answer(ANSWER).catch((error: unknown) => error)
-
-    expect(settlement).toBeInstanceOf(Error)
-    expect(settlement).toMatchObject({
-      message: 'pending question settlement failed',
-      cause: failure,
-    })
-    completion.resolve(ANSWER)
-    await expect(pending.result).resolves.toBe(ANSWER)
-  })
-
-  it('wraps a non-Error cancellation settlement failure with its cause', async () => {
-    const failure = 'reject failed'
-    const completion = Promise.withResolvers<QuestionAnswer>()
-    const withResolvers = vi.spyOn(Promise, 'withResolvers').mockImplementationOnce(<T>() => ({
-      promise: completion.promise,
-      resolve: completion.resolve as (value: T | PromiseLike<T>) => void,
-      reject: () => { throw failure },
-    }))
-    const pending = new PendingQuestion(SESSION_ID, QUESTIONS)
-    withResolvers.mockRestore()
-
-    const settlement = await pending.cancel().catch((error: unknown) => error)
-
-    expect(settlement).toBeInstanceOf(Error)
-    expect(settlement).toMatchObject({
-      message: 'pending question cancellation failed',
-      cause: failure,
-    })
-    completion.resolve(ANSWER)
-    await expect(pending.result).resolves.toBe(ANSWER)
-  })
 })

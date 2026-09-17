@@ -22,17 +22,18 @@ async function answerQuestion(
   const sessionId = sessions.scopeOf(owner)
   if (sessionId === undefined) return next()
   const pending = new PendingQuestion(sessionId, request.questions, request.signal)
-  const completed = Promise.withResolvers<undefined>()
+  let finish!: () => void
+  const completed = new Promise<void>((resolve) => { finish = resolve })
   let remove: () => void
   try {
     remove = registerPendingInteraction(pending, async () => {
       pending.delegate()
-      await completed.promise
+      await completed
     })
   } catch (error) {
     pending.abort(error)
     await Promise.allSettled([pending.result])
-    completed.resolve(undefined)
+    finish()
     throw error
   }
   try {
@@ -44,7 +45,7 @@ async function answerQuestion(
     }
   } finally {
     remove()
-    completed.resolve(undefined)
+    finish()
   }
 }
 

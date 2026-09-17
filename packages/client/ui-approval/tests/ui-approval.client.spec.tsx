@@ -173,28 +173,6 @@ describe('PendingApproval', () => {
 
     await expect(pending.result).rejects.toBe(reason)
   })
-
-  it('wraps a non-Error answer settlement failure with its cause', async () => {
-    const failure = 'resolve failed'
-    const completion = Promise.withResolvers<'allowed-once' | 'rejected'>()
-    const withResolvers = vi.spyOn(Promise, 'withResolvers').mockImplementationOnce(() => ({
-      promise: completion.promise,
-      resolve: () => { throw failure },
-      reject: completion.reject,
-    }))
-    const pending = new PendingApproval(id('s1'), { toolName: 'write' })
-    withResolvers.mockRestore()
-
-    const settlement = await pending.answer('allowed-once').catch((error: unknown) => error)
-
-    expect(settlement).toBeInstanceOf(Error)
-    expect(settlement).toMatchObject({
-      message: 'pending approval settlement failed',
-      cause: failure,
-    })
-    completion.resolve('allowed-once')
-    await expect(pending.result).resolves.toBe('allowed-once')
-  })
 })
 
 describe('approval Remote Event consumer', () => {
