@@ -1,0 +1,10 @@
+{
+  "repetitions": 2,
+  "seed": 42,
+  "deadlineMs": 15000,
+  "maxRepairs": 1,
+  "variants": [
+    { "id": "direct", "scriptedBehavior": "solve" },
+    { "id": "repair-control", "scriptedBehavior": "repair" }
+  ]
+}

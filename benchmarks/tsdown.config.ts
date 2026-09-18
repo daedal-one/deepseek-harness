@@ -35,6 +35,17 @@ export default defineConfig([
   },
   {
     ...shared,
+    entry: {
+      cli: '../scripts/benchmark-coding-delivery.ts',
+      'scripted-adapter': 'coding-delivery/scripted-adapter.ts',
+      'coding-delivery.worker': 'coding-delivery/coding-delivery.worker.ts',
+    },
+    outDir: '.dsh-build/coding-delivery',
+    clean: true,
+    tsconfig: 'tsconfig.host.json',
+  },
+  {
+    ...shared,
     entry: { 'session-open.worker': 'session-open/session-open.worker.ts' },
     outDir: '.dsh-build/session-open',
     clean: true,
