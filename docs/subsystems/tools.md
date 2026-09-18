@@ -534,8 +534,9 @@ guard(guard: ToolGuard): () => void
 get(name: string, scope?: ScopeKey): ToolDefinition | undefined
 
 /**
- * Project visible definitions onto the allowlisted model-facing schema fields,
- * excluding execution and presentation callbacks.
+ * Project the authorized registry inventory onto schema fields, excluding
+ * execution and presentation callbacks. Includes undiscovered definitions;
+ * model requests and program bindings additionally apply Session admission.
  * @param scope - the viewing scope (the agent); omitted = the global view.
  * @returns one deep-cloned schema per visible tool.
  */

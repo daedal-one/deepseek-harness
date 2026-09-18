@@ -23,7 +23,7 @@ Use `dsh-tools` to expose typed capabilities to models, validate calls, enforce 
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount `dsh-tools` wherever agents call tools: it provides `ctx.tools`, the registry every tool plugin registers into and the loop dispatches through. Registering a tool is enough to make it visible — the registry feeds its schemas into the system-prompt assembly automatically.
+Mount `dsh-tools` wherever agents call tools: it provides `ctx.tools`, the registry every tool plugin registers into and the loop dispatches through. Registered tools enter prompt assembly automatically; optional [discovery](#defer-specialist-tools) postpones selected schemas until the model searches for them.
 
 ### Register a tool
 
@@ -76,7 +76,27 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### Restrict tools per agent
 
-`ctx.tools.restrict(filter)` applies an allow or deny mask to the global tools one agent inherits; masks intersect, scoped registrations stay visible, and the restriction lifts when disposed. `ctx.tools.get(name, scope)` resolves a tool as one scope sees it. A Host-local presenter consumer passes the calling agent when it must match the definition that executed. `ctx.tools.schemas(scope)` returns the visible schemas without the `execute` functions.
+`ctx.tools.restrict(filter)` applies an allow or deny mask to the global tools one agent inherits; masks intersect, scoped registrations stay visible, and the restriction lifts when disposed. `ctx.tools.get(name, scope)` resolves a tool as one scope sees it. A Host-local presenter consumer passes the calling agent when it must match the definition that executed. `ctx.tools.schemas(scope)` returns the authorized registry inventory without the `execute` functions, including deferred definitions; request assembly additionally applies discovery admission.
+
+### Defer specialist tools
+
+Add `discovery` to the tools row's configuration to keep tools with selected literal name prefixes out of initial model requests. For MCP tools, use `mcp__`. The limits below are deployment choices; every field is required when discovery is enabled. Omission preserves eager presentation.
+
+```yaml
+- id: tools
+  config:
+    mode: native
+    discovery:
+      prefixes: [mcp__]
+      defaultLimit: 5
+      maxLimit: 20
+      maxQueryBytes: 1024
+      maxResultBytes: 8192
+```
+
+The model calls `tool_search` with a capability description or tool name. MiniSearch ranks authorized deferred names and descriptions using BM25+ lexical relevance; equal scores sort by name. The bounded JSON result contains `tools` and `truncated`. Only listed names become available, after the successful result is recorded. The next request includes admitted input schemas; generated SDKs also carry output declarations. A PTC program must finish before a subsequent program can bind its discoveries. Search does not connect an MCP server or start a missing tool provider.
+
+Recorded successful native and nested PTC search results reconstruct admission after resume or fork. A failed, cancelled, or policy-blocked search admits nothing. Restrictions and registration lifetime still apply, and discovery never bypasses execution policy. Direct or nested calls to undiscovered tools fail as unknown tools. `tool_search` is reserved while discovery is enabled, and neither it nor `run_code` can be deferred. The [discovery decision](../../../.agents/notes/implemented/feature/2026-09-15-deferred-tool-discovery.md) owns persistence and ranking rationale.
 
 ### Enforce policy on calls
 
@@ -105,6 +125,7 @@ The registry holds typed `ToolDefinition`s in scoped layers and projects them on
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `ToolRuntime` service, config, registry, execution pipeline |
+| [`src/discovery.ts`](src/discovery.ts) | Deferred search and admission reconstructed from recorded results |
 | [`src/types.ts`](src/types.ts) | `ToolDefinition`, `ToolExecution`, `ToolExecutionResult`, guard and decision types |
 | [`src/schema.ts`](src/schema.ts) | The `defineTool` DSL: `ValueSchemaSpec`, `ParameterSchemaSpec`, `InferValue`, `InferArgs` |
 | [`src/json-schema.ts`](src/json-schema.ts) | The enforced raw JSON Schema subset and validation |
@@ -158,11 +179,11 @@ In normal mode the model sees each visible definition's exact name, description,
 
 #### Token effect
 
-Fixed per-request cost proportional to the visible definitions. Restrictions that hide tools remove their entire schema cost for that agent.
+Fixed per-request cost proportional to the presented definitions. Restrictions remove hidden schemas; discovery initially replaces deferred schemas with one search schema and adds successful discoveries to later requests. Search results add bounded transcript text and may require an extra model step.
 
 #### KV Cache effect
 
-Prefix-stable while visible definitions and their order are unchanged. Registration, disposal, or scoped restriction may invalidate reuse from the first changed schema token.
+Prefix-stable while presented definitions and their order are unchanged. Registration, disposal, scoped restriction, or a newly admitted discovery may invalidate reuse from the first changed schema token.
 
 ### PTC mode schema and system prompt
 
@@ -225,6 +246,7 @@ These limits define when the registry needs special care. They are current packa
 - **PTC mode's SDK language follows the one loaded runtime, and a presentation is per agent rather than per tool** — `mode: ptc`/`both` rejects prompt assembly unless `ctx.codeRuntime.language` has a registered SDK renderer; within one agent no tool can be native-only while another is ptc-only.
 - **PTC mode intermediate values are execution-local and unbounded by bytes** — they cannot be reconstructed from session replay and may exhaust process or worker memory; only the outer `run_code` output has the worker's configurable hard cap.
 - **`run_code` state is fresh per run** — a persistent REPL-style kernel is rejected for the MVP, because cross-call state would be invisible to the log.
+- **Discovery is lexical and Session admission is cumulative** — search does not connect providers or evict previously admitted names, and newly admitted schemas can reduce prompt-cache reuse.
 
 <a id="dev-note"></a>
 ### Dev Note

@@ -30,6 +30,32 @@ This effect-scoped provider interprets explicitly mapped shell tools through the
 
 Host-root destruction primitives and protected credential paths are denied before rules or model calls. Unconditional Git force pushes, remote deletes, and mirrors ask; `--force-with-lease` and `--force-if-includes` remain eligible for ordinary evaluation. Rules use glob-like whole-command matching, the last match wins, and an allow rule cannot admit a command containing shell metacharacters.
 
+### Literal argument-prefix rules
+
+Add optional `prefixRules` alongside the required configuration above, and set `commandSyntax: posix` on each mapping that uses them. Each pattern position is one literal argument or an array of alternatives. Matching uses complete tokens, so `git status` does not match `git statusx`; an absolute executable path needs its own explicit pattern. Quotes preserve literal argument contents. At activation, `match` and `notMatch` examples must agree with their individual rule; contradictions and empty patterns fail with a corrective error.
+
+```yaml
+mappings:
+  - tool: bash
+    commandArgument: command
+    intentArgument: description
+    commandSyntax: posix
+prefixRules:
+  - pattern: [git, [status, diff]]
+    decision: allow
+    reason: Inspect local changes.
+    match: ['git status --short', 'git diff --stat']
+    notMatch: ['git statusx', 'git push', '/usr/bin/git status']
+  - pattern: [git, diff, --no-index]
+    decision: ask
+    reason: Review comparison paths outside the repository.
+    match: ['git diff --no-index a b']
+```
+
+All matching prefix rules combine as `deny` before `ask` before `allow`, independent of order; the stricter of that result and the legacy rule result wins. Fixed security denials and mandatory Git escalation precede both. With active prefix rules, unsupported syntax—including compound commands, pipelines, substitutions, expansions, redirections, and backslash escapes—requires explicit approval and cannot inherit a legacy or parsed-read allow. Unmatched literal commands retain the parsed-read and independent-review paths. Configurations without prefix rules retain their existing behavior. The [prefix-rule decision](../../../.agents/notes/implemented/feature/2026-09-15-command-prefix-rules.md) explains the bounded grammar and approval choice.
+
+### Independent evidence
+
 The parsed fast path accepts literal read pipelines and command lists whose stages write only to stdout and whose resolved files stay in the workspace or platform temporary directory. It recognizes a `cd` back to the authoritative workspace, literal `echo`, and stderr discard to `/dev/null`; other directory changes, substitution, redirection, execution syntax, write flags, unresolved paths, and symlink escapes leave the fast path.
 
 For an enforced session, `prewarm()` sends bounded ordered direct-user messages to the intent route. Concurrent preparation for the same latest message shares one request, and only a validated result remains reusable; invalid or unavailable preparation fails closed for its current waiter and is discarded so a later evaluation can retry. The validated result is a short summary plus allowed and explicitly forbidden effects. Its prompt assigns those fields to three numbered newline-separated lines and gives the literal prefix for empty effect lists, keeping the two lists distinct on the configured route. Tool-time review receives that context, the bounded acting-model intent, exact command, and working directory, but no raw user message. It returns only alignment and closed direct effects through one compact line. Validation accepts the compact separators emitted by the configured route and an exact closed JSON object, while extra prose, extra fields, and unknown effects remain invalid. Host code derives risk and the verdict. Effect review resolves explicit path operands against the working directory and excludes ambient runtime access, implicit tool configuration, descriptor plumbing, and `/dev/null`; only an explicitly named or command-derived path outside the working directory produces an outside-workspace effect. Reading filesystem state outside the working directory requires aligned, explicit `outside-workspace-read` intent; `host-read` is limited to non-file operating-system or hardware information, and credential access remains separately approval-requiring. A secondary effect route runs only within the remaining decision time when the primary route does not return valid effect evidence; it never overrides a validated sensitive effect. Invalid, unavailable, failed, expired, conflicting, or out-of-list evidence becomes `ask`; caller cancellation remains cancellation.
@@ -58,7 +84,8 @@ Classifier requests use a fixed system prefix and stable line order, improving a
 
 ## Known Limitations and Deferred Work
 
-- The fast path intentionally recognizes only a small shell grammar; commands outside it use independent model evidence.
+- The fast path intentionally recognizes only a small shell grammar; unsupported prefix-rule syntax requires approval, while other unmatched commands use independent model evidence.
+- Prefix rules require an explicitly declared POSIX mapping; PowerShell mappings retain the legacy rules and independent review.
 - A bounded command that exceeds its configured limit asks instead of sending a truncated command to a classifier.
 
 ### Dev Note

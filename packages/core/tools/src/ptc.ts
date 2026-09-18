@@ -8,7 +8,8 @@
 
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { createUserMessage, HarnessError } from '@deepseek-ai/dsh-llm'
-import type { ContentBlock, ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { ContentBlock, ToolCallId, ToolSchema } from '@deepseek-ai/dsh-llm'
+import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { CodeBindingFunction, CodeRunResult, CodeRuntime } from '@deepseek-ai/dsh-code-runtime'
 import { snapshotJsonValue, type JsonValue } from '@deepseek-ai/dsh-util-values'
 import { defineTool, parameterSchemaSpecToJsonSchema } from './schema.ts'
@@ -264,6 +265,8 @@ type RunCodeOutput = { logs: string[]; result?: JsonValue }
  * off its public service API and flow here as closures instead.
  */
 export interface RunCodeBridgeOptions {
+  /** Schemas admitted for the caller's next program bindings. */
+  schemas: (agent?: Agent) => ToolSchema[]
   /** Resolves `ctx.codeRuntime` or throws the loud misconfiguration error (shared with the registry's assembly-time checks). */
   requireRuntime: () => CodeRuntime
   /**
@@ -608,7 +611,7 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
       // restricted globals vanish) — the same view the SDK section declared,
       // so a program can bind exactly what its prompt promised; sub-dispatch
       // re-resolves per call through the same view (exec.agent threads down).
-      for (const schema of registry.schemas(exec.agent)) {
+      for (const schema of options.schemas(exec.agent)) {
         if (schema.name === RUN_CODE_NAME) continue
         Object.defineProperty(functions, schema.name, { enumerable: true, value: binding(schema.name) })
       }

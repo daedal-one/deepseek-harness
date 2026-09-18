@@ -14,7 +14,7 @@ import LlmRuntime, {
   type LlmResolvedModelInfo,
   type StreamChunk,
 } from '@deepseek-ai/dsh-llm'
-import SessionStore from '@deepseek-ai/dsh-session'
+import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolPolicyService from '@deepseek-ai/dsh-tool-policy'
 import * as shellPolicy from '@deepseek-ai/dsh-tool-policy-shell'
@@ -49,7 +49,7 @@ afterEach(async () => {
   root = undefined
 })
 
-async function load(configureEnforcer = true): Promise<Context> {
+async function load(configureEnforcer = true, prefixRules?: readonly shellPolicy.CommandPrefixRule[]): Promise<Context> {
   root = await mkdtemp(join(tmpdir(), 'dsh-tool-policy-loader-'))
   const configPath = join(root, 'cordis.yml')
   await writeFile(configPath, [
@@ -61,7 +61,7 @@ async function load(configureEnforcer = true): Promise<Context> {
     "- name: '@deepseek-ai/dsh-tool-policy-shell'",
     '  config:',
     '    id: shell',
-    '    mappings: [{ tool: bash, commandArgument: command, intentArgument: description }]',
+    `    mappings: [{ tool: bash, commandArgument: command, intentArgument: description${prefixRules === undefined ? '' : ', commandSyntax: posix'} }]`,
     '    intent: { provider: intent, model: intent-reviewer, reasoningEffort: minimal }',
     '    primary: { provider: intent, model: intent-reviewer, reasoningEffort: minimal }',
     '    secondary: { provider: secondary, model: effect-reviewer }',
@@ -75,6 +75,7 @@ async function load(configureEnforcer = true): Promise<Context> {
     '    maxSummaryChars: 80',
     '    maxEffects: 8',
     '    rules: []',
+    ...prefixRules === undefined ? [] : [`    prefixRules: ${JSON.stringify(prefixRules)}`],
     "- name: '@deepseek-ai/dsh-tool-policy-enforcer'",
     ...(configureEnforcer ? [
       '  config:',
@@ -112,6 +113,34 @@ async function load(configureEnforcer = true): Promise<Context> {
 }
 
 describe('real Loader policy composition', () => {
+  it('rejects contradictory examples while loading the provider', async () => {
+    await expect(load(false, [
+      { pattern: ['git', 'status'], decision: 'allow', reason: 'inspect', match: ['git push'] },
+    ])).rejects.toThrow('match example')
+  })
+
+  it('enforces validated prefixes through the registry without auxiliary model calls', async () => {
+    const loaded = await load(false, [
+      { pattern: ['printf', ['one', 'two']], decision: 'allow', reason: 'print a value', match: ['printf one', 'printf two'], notMatch: ['printf three'] },
+      { pattern: ['printf', 'two'], decision: 'deny', reason: 'second value is forbidden' },
+    ])
+    expect([...loaded.loader.entries()].filter(entry => entry.fiber === undefined && !entry.disabled)).toEqual([])
+    let executions = 0
+    loaded.tools.register(defineTool({
+      name: 'bash', description: 'test shell', parameters: { command: { type: 'string', required: true } },
+      output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
+      execute: async () => { executions += 1; return 'ran' },
+    }))
+    const agent = { options: {}, session: Session.create(SessionId('prefix-rules')) } as unknown as Agent
+    for (const [command, isError] of [['printf one', false], ['printf two', true], ['printf one && printf two', true]] as const) {
+      await expect(loaded.tools.execute({
+        callId: ToolCallId(command), name: 'bash', arguments: { command }, agent, signal: new AbortController().signal,
+      })).resolves.toMatchObject({ isError })
+    }
+    expect(executions).toBe(1)
+    expect(agent.session.snapshotEvents().some(event => event.type === 'tool-policy/classifier-request')).toBe(false)
+  })
+
   it('loads an omitted enforcer config for unconditional enforcement', async () => {
     const loaded = await load(false)
     expect([...loaded.loader.entries()].filter(entry => entry.fiber === undefined && !entry.disabled)).toEqual([])

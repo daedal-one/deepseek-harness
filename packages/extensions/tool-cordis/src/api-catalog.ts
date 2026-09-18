@@ -2868,7 +2868,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'schemas(scope?: ScopeKey): ToolSchema[]',
-        description: 'Project visible definitions onto the allowlisted model-facing schema fields, excluding execution and presentation callbacks.',
+        description: 'Project the authorized registry inventory onto schema fields, excluding execution and presentation callbacks. Includes undiscovered definitions; model requests and program bindings additionally apply Session admission.',
         parameters: [{ name: 'scope', description: 'the viewing scope (the agent); omitted = the global view.' }],
         returns: 'one deep-cloned schema per visible tool.',
       },

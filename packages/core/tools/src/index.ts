@@ -11,9 +11,9 @@ import type { ScopeKey, ScopeLayer, Scoped } from '@deepseek-ai/dsh-scope'
 import type { ToolCallId, ContentBlock, ToolSchema } from '@deepseek-ai/dsh-llm'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import type { UserMessage } from '@deepseek-ai/dsh-session'
+import type { Session, UserMessage } from '@deepseek-ai/dsh-session'
 import { assertNever, deepFreeze, snapshotJsonValue, type JsonValue } from '@deepseek-ai/dsh-util-values'
-import type { ToolProviderResult } from '@deepseek-ai/dsh-system-prompt'
+import type { AssembleContext, ToolProviderResult } from '@deepseek-ai/dsh-system-prompt'
 import type { CodeRuntime } from '@deepseek-ai/dsh-code-runtime'
 // Type-only: makes `ctx.get('approval')` resolve to the ApprovalService
 // augmentation. The seam stays optional at runtime — see `serviceAsk`.
@@ -26,6 +26,10 @@ import type { CodeSdkLanguage } from './ptc.ts'
 import { renderToolsSdk } from './ts-types.ts'
 import type { ToolSdkSchema } from './ts-types.ts'
 import { renderToolsSdkPy } from './py-types.ts'
+import { resolveDiscovery, ToolDiscovery } from './discovery.ts'
+import type { ToolDiscoveryConfig } from './discovery.ts'
+
+export type { ToolDiscoveryConfig } from './discovery.ts'
 
 /**
  * Language → SDK-section renderer. The registry looks up the loaded
@@ -645,6 +649,8 @@ export type ToolPresentationMode = 'native' | 'ptc' | 'both'
 
 /** Plugin config: how the registered tools are presented to the model. */
 export interface Config {
+  /** Optional deferred tool discovery; omission eagerly presents all authorized tools. */
+  discovery?: ToolDiscoveryConfig
   /**
    * Model presentation. `native` (default) sends every visible schema; `ptc`
    * sends only `run_code` plus a generated SDK prompt and collapses the
@@ -781,9 +787,16 @@ export class ToolRuntime extends Service {
   static inject = ['systemPrompt']
 
   static Config: z<Config> = z.object({
+    discovery: z.union([z.object({
+      prefixes: z.array(z.string()).required(),
+      defaultLimit: z.natural().min(1).required(),
+      maxLimit: z.natural().min(1).required(),
+      maxQueryBytes: z.natural().min(1).required(),
+      maxResultBytes: z.natural().min(1).required(),
+    })]),
     mode: z.union(['native', 'ptc', 'both'] as const).default('native'),
     maxParallelSubCalls: z.natural().min(1).default(10),
-  })
+  }) as z<Config>
 
   /** Internal staged view consumed by `dsh-agent-loop`'s parallel scheduler. */
   readonly [TOOL_RUNTIME_SCHEDULER]: ToolRuntimeScheduler = {
@@ -815,6 +828,7 @@ export class ToolRuntime extends Service {
    * transport is stateless beyond its closures over `this`.
    */
   private ptcTransport: ToolDefinition | undefined
+  private readonly discovery: ToolDiscovery | undefined
 
   constructor(ctx: Context, config: Config = {}) {
     super(ctx, 'tools')
@@ -822,7 +836,12 @@ export class ToolRuntime extends Service {
     // optional-input type for direct (non-Loader) construction in tests.
     this.defaultMode = config.mode ?? 'native'
     this.maxParallelSubCalls = resolveMaxParallelSubCalls(config.maxParallelSubCalls)
-    ctx.systemPrompt.tools(context => this.wireSchemas(context.scope))
+    const discovery = resolveDiscovery(config.discovery)
+    if (discovery !== undefined) {
+      this.discovery = new ToolDiscovery(discovery, scope => [...this.view(scope).visible.values()])
+      this.register(this.discovery.tool)
+    }
+    ctx.systemPrompt.tools(context => this.wireSchemas(context.scope, context.agent?.session))
     if (this.defaultMode !== 'native') {
       ctx.systemPrompt.section(this.collapseSection())
       ctx.systemPrompt.section(this.sdkSection())
@@ -864,7 +883,7 @@ export class ToolRuntime extends Service {
    * dropped from the rendered prompt.
    * @returns the section registration.
    */
-  private sdkSection(): { name: string; order: number; text: (context: { scope?: ScopeKey }) => string } {
+  private sdkSection(): { name: string; order: number; text: (context: AssembleContext) => string } {
     return {
       name: 'tools:sdk',
       order: this.ctx.systemPrompt.getSectionOrder('TOOLS_SDK'),
@@ -878,7 +897,7 @@ export class ToolRuntime extends Service {
         const render = SDK_RENDERERS[runtime.language]
         /* v8 ignore next -- requireCodeRuntime rejects an unknown language before this runs. */
         if (render === undefined) throw new Error(`dsh-tools: no SDK renderer for ${runtime.language}`)
-        return render(this.sdkSchemas(context.scope))
+        return render(this.sdkSchemas(context.scope, context.agent?.session))
       },
     }
   }
@@ -920,6 +939,7 @@ export class ToolRuntime extends Service {
       peekRuntime: () => this.ctx.get('codeRuntime'),
       maxParallel: this.maxParallelSubCalls,
       shapeDispatchLog: dispatch => this.shapeDispatchLog(dispatch),
+      schemas: agent => this.modelDefinitions(agent, agent?.session).map(definition => this.schemaOf(definition, true)),
     })
     return this.ptcTransport
   }
@@ -969,11 +989,11 @@ export class ToolRuntime extends Service {
    * Build one scope's wire schemas and names for prompt-order validation.
    * Restrictions do not make known tools invalid, but a mode collapse does.
    */
-  private wireSchemas(scope?: ScopeKey): ToolProviderResult {
+  private wireSchemas(scope?: ScopeKey, session?: Session): ToolProviderResult {
     const view = this.view(scope)
     const mode = this.modeFor(scope)
     if (mode === 'native') {
-      const schemas = [...view.visible.values()].map(definition => this.schemaOf(definition, false))
+      const schemas = this.modelDefinitions(scope, session).map(definition => this.schemaOf(definition, false))
       return { schemas, knownNames: [...view.knownNames] }
     }
     // Validate the runtime language BEFORE projecting schemas: schemaOf reads
@@ -982,7 +1002,7 @@ export class ToolRuntime extends Service {
     // renderer-table rejection the canonical assembly-time error for a
     // language with no SDK renderer.
     this.requireCodeRuntime(mode)
-    const schemas = [...view.visible.values()].map(definition => this.schemaOf(definition, false))
+    const schemas = this.modelDefinitions(scope, session).map(definition => this.schemaOf(definition, false))
     if (mode === 'ptc') {
       return {
         schemas: schemas.filter(schema => schema.name === RUN_CODE_NAME),
@@ -1026,6 +1046,9 @@ export class ToolRuntime extends Service {
    */
   register(definition: ToolDefinition): () => void {
     const name = definition.name
+    if (this.discovery !== undefined && name === this.discovery.tool.name && definition !== this.discovery.tool) {
+      throw new Error('tool name "tool_search" is reserved while tools.discovery is enabled')
+    }
     const output = (definition as Partial<ToolDefinition>).output
     if (output === undefined || typeof output !== 'object'
       || typeof output.render !== 'function'
@@ -1208,16 +1231,18 @@ export class ToolRuntime extends Service {
    * @param nested - whether the call is a transport sub-dispatch, not a model-direct call.
    * @returns the definition that may run, or undefined when the call must be rejected.
    */
-  private resolveExecution(name: string, scope: ScopeKey | undefined, nested: boolean): ToolDefinition | undefined {
+  private resolveExecution(name: string, scope: Agent | undefined, nested: boolean): ToolDefinition | undefined {
     const tool = this.get(name, scope)
     if (tool === undefined) return undefined
     if (this.collapses(name, scope, nested)) return undefined
+    if (this.discovery !== undefined && !this.discovery.admits(name, scope?.session)) return undefined
     return tool
   }
 
   /**
-   * Project visible definitions onto the allowlisted model-facing schema fields,
-   * excluding execution and presentation callbacks.
+   * Project the authorized registry inventory onto schema fields, excluding
+   * execution and presentation callbacks. Includes undiscovered definitions;
+   * model requests and program bindings additionally apply Session admission.
    * @param scope - the viewing scope (the agent); omitted = the global view.
    * @returns one deep-cloned schema per visible tool.
    */
@@ -1226,8 +1251,8 @@ export class ToolRuntime extends Service {
   }
 
   /** Project visible callable tools onto the generated PTC mode SDK contract. */
-  private sdkSchemas(scope?: ScopeKey): ToolSdkSchema[] {
-    return [...this.view(scope).visible.values()]
+  private sdkSchemas(scope?: ScopeKey, session?: Session): ToolSdkSchema[] {
+    return this.modelDefinitions(scope, session)
       .filter(definition => definition.name !== RUN_CODE_NAME)
       .map((definition): ToolSdkSchema => {
         const output = snapshotJsonValue(definition.output.schema)
@@ -1240,6 +1265,12 @@ export class ToolRuntime extends Service {
           output,
         }
       })
+  }
+
+  /** Authorized definitions whose deferred names have a committed admission. */
+  private modelDefinitions(scope?: ScopeKey, session?: Session): ToolDefinition[] {
+    return [...this.view(scope).visible.values()].filter(definition =>
+      this.discovery === undefined || this.discovery.admits(definition.name, session))
   }
 
   /** Project one definition onto the model-facing schema fields. */

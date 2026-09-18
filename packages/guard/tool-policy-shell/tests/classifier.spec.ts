@@ -108,6 +108,69 @@ async function prewarm(ctx: Context, agent: Agent): Promise<void> {
 }
 
 describe('shell classifier dispatch', () => {
+  it('preserves ordered legacy rules for a POSIX mapping without prefix rules', async () => {
+    const ctx = new Context()
+    try {
+      await ctx.plugin(LlmRuntime)
+      await ctx.plugin(ToolPolicyService, {})
+      apply(ctx, Object.assign({}, makeConfig(), {
+        mappings: [{ tool: 'bash', commandArgument: 'command', commandSyntax: 'posix' as const }],
+        rules: [
+          { pattern: 'git *', decision: 'deny' as const, reason: 'broad restriction' },
+          { pattern: 'git status', decision: 'allow' as const, reason: 'inspect status' },
+        ],
+      }))
+      await expect(ctx.toolPolicy.evaluate({
+        callId: ToolCallId('c'), toolName: 'bash', arguments: { command: 'git status' }, agent: fakeAgent().agent, signal: new AbortController().signal,
+      })).resolves.toMatchObject({ decision: 'allow', reason: 'inspect status' })
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it.each([
+    ['git status', 'allow', 'ask', 'ask'],
+    ['git status', 'deny', 'allow', 'deny'],
+    ['git status', 'allow', 'deny', 'deny'],
+    ['git status', 'ask', 'allow', 'ask'],
+    ['rm -rf /', 'allow', 'allow', 'deny'],
+    ['git push --force origin main', 'allow', 'allow', 'ask'],
+    ['uname && uname', 'allow', 'allow', 'ask'],
+  ] as const)('combines prefixes and legacy rules for %s (%s, %s)', async (command, prefixDecision, legacyDecision, expected) => {
+    const ctx = new Context()
+    try {
+      await ctx.plugin(LlmRuntime)
+      await ctx.plugin(ToolPolicyService, {})
+      const adapter = new RoutedAdapter({})
+      ctx.llm.registerAdapter(['intent', 'primary', 'secondary'], adapter)
+      apply(ctx, Object.assign({}, makeConfig(), {
+        mappings: [{ tool: 'bash', commandArgument: 'command', commandSyntax: 'posix' as const }],
+        rules: [{ pattern: '*', decision: legacyDecision, reason: 'legacy policy' }],
+        prefixRules: [{ pattern: [command.split(' ')[0]!], decision: prefixDecision, reason: 'prefix policy' }],
+      }))
+      await expect(ctx.toolPolicy.evaluate({
+        callId: ToolCallId('c'), toolName: 'bash', arguments: { command }, agent: fakeAgent().agent, signal: new AbortController().signal,
+      })).resolves.toMatchObject({ decision: expected })
+      expect(adapter.seen).toEqual([])
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('rejects contradictory prefix examples and missing POSIX mappings before registration', async () => {
+    const ctx = new Context()
+    try {
+      await ctx.plugin(LlmRuntime)
+      await ctx.plugin(ToolPolicyService, {})
+      const prefixRules = [{ pattern: ['git', 'status'], decision: 'allow' as const, reason: 'read', match: ['git push'] }]
+      expect(() => { apply(ctx, Object.assign({}, makeConfig(), { prefixRules })) }).toThrow('match example')
+      expect(() => { apply(ctx, Object.assign({}, makeConfig(), { prefixRules: [{ ...prefixRules[0]!, match: ['git status'] }] })) }).toThrow('commandSyntax: posix')
+      expect(shellPlugin.Config(makeConfig()).mappings[0]?.commandSyntax).toBeUndefined()
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('prewarms user intent and hands its short context to one tool-time effect review', async () => {
     const adapter = new RoutedAdapter({ intent: [INTENT_ALLOW], primary: [EFFECT_ALLOW] }, 5)
     const ctx = await setup(adapter)

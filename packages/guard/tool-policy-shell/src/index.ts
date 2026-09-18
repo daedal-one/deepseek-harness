@@ -29,6 +29,10 @@ import {
   type IntentReview,
 } from './effects.ts'
 import { isDeterministicRead } from './safe-read.ts'
+import { matchPrefixRules, validatePrefixRules } from './prefix-rules.ts'
+import type { CommandPrefixRule } from './prefix-rules.ts'
+
+export type { CommandPrefixRule } from './prefix-rules.ts'
 
 export const name = 'tool-policy-shell'
 export const inject = ['toolPolicy', 'llm']
@@ -41,6 +45,8 @@ export interface ShellToolMapping {
   readonly commandArgument: string
   /** Optional root argument containing the acting model's stated intent. */
   readonly intentArgument?: string
+  /** Explicit POSIX grammar for literal prefix rules; omission leaves this mapping on legacy rules and review. */
+  readonly commandSyntax?: 'posix'
 }
 
 /** One auxiliary review route. */
@@ -95,6 +101,8 @@ export interface Config {
   readonly maxEffects: number
   /** Ordered deterministic rules whose last matching entry wins. */
   readonly rules: readonly CommandRule[]
+  /** Literal argument-prefix rules; strictest matches compose with legacy rules. Requires a POSIX mapping. */
+  readonly prefixRules?: readonly CommandPrefixRule[]
 }
 
 const decisionSchema = z.union(['allow', 'ask', 'deny'] as const)
@@ -111,6 +119,7 @@ export const Config: z<Config> = z.object({
     tool: z.string().required(),
     commandArgument: z.string().required(),
     intentArgument: z.string(),
+    commandSyntax: z.const('posix'),
   })).required(),
   intent: routeSchema.required(),
   primary: routeSchema.required(),
@@ -129,6 +138,13 @@ export const Config: z<Config> = z.object({
     decision: decisionSchema.required(),
     reason: z.string().required(),
   })).required(),
+  prefixRules: z.array(z.object({
+    pattern: z.array(z.union([z.string(), z.array(z.string())])).required(),
+    decision: decisionSchema.required(),
+    reason: z.string().required(),
+    match: z.array(z.string()),
+    notMatch: z.array(z.string()),
+  })),
 }) as z<Config>
 
 const EFFECT_LIST = SHELL_EFFECTS.join(', ')
@@ -700,6 +716,15 @@ class ShellPolicyProvider implements ToolPolicyProvider {
       decision: 'ask', risk: 100, categories: ['bounded-input'], reason: 'command exceeded the classifier input bound',
     })
     const deterministic = configuredRuleDecision(command, this.config.rules, this.config.id)
+    const prefix = mapping.commandSyntax === 'posix'
+      ? matchPrefixRules(command, this.config.prefixRules ?? []) : undefined
+    if (prefix !== undefined) {
+      if (deterministic?.decision === 'deny' || (deterministic?.decision === 'ask' && prefix.decision === 'allow')) return deterministic
+      return verdict(this.config.id, {
+        ...prefix, risk: prefix.decision === 'allow' ? 5 : prefix.decision === 'ask' ? 60 : 90,
+        categories: ['configured-prefix-rule'],
+      })
+    }
     if (deterministic !== undefined) return deterministic
     if (await isDeterministicRead(command, request.agent.session.header.cwd ?? '')) {
       return verdict(this.config.id, { decision: 'allow', risk: 5, categories: ['workspace-read'], reason: 'command is in the parsed read-only set' })
@@ -756,6 +781,10 @@ class ShellPolicyProvider implements ToolPolicyProvider {
 
 /** Register the shell policy provider for the plugin lifetime. */
 export function apply(ctx: Context, config: Config): void {
+  validatePrefixRules(config.prefixRules ?? [])
+  if (config.prefixRules?.length && !config.mappings.some(mapping => mapping.commandSyntax === 'posix')) {
+    throw new Error('tool-policy-shell: prefixRules requires a mapping with commandSyntax: posix')
+  }
   if (config.mappings.length === 0) throw new Error('tool-policy-shell: at least one tool mapping is required')
   if (new Set(config.mappings.map(mapping => mapping.tool)).size !== config.mappings.length) {
     throw new Error('tool-policy-shell: mappings must use unique tool names')
