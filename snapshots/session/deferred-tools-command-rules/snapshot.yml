@@ -1,0 +1,10 @@
+version: 1
+scenario: deferred-tools-command-rules
+profile: headless
+composition: deferred-tools-command-rules
+recording: authored
+platform: posix
+header:
+  class: deferred-tools-command-rules
+  pin: true
+  changes: 1

@@ -3296,6 +3296,8 @@ export interface Config {
   readonly maxEffects: number
   /** Ordered deterministic rules whose last matching entry wins. */
   readonly rules: readonly CommandRule[]
+  /** Literal argument-prefix rules; strictest matches compose with legacy rules. Requires a POSIX mapping. */
+  readonly prefixRules?: readonly CommandPrefixRule[]
 }
 
 /** Explicit tool argument mapping; no shell name or argument is implicit. */
@@ -3306,6 +3308,8 @@ export interface ShellToolMapping {
   readonly commandArgument: string
   /** Optional root argument containing the acting model's stated intent. */
   readonly intentArgument?: string
+  /** Explicit POSIX grammar for literal prefix rules; omission leaves this mapping on legacy rules and review. */
+  readonly commandSyntax?: 'posix'
 }
 
 /** One auxiliary review route. */
@@ -3327,11 +3331,25 @@ export interface CommandRule {
   /** Secret-free audit explanation for the deterministic verdict. */
   readonly reason: string
 }
+
+/** A literal argument prefix with optional alternatives at each position. */
+export interface CommandPrefixRule {
+  /** Ordered argument tokens; an array at one position permits any listed literal. */
+  readonly pattern: readonly (string | readonly string[])[]
+  /** Decision combined with other matches by deny, then ask, then allow. */
+  readonly decision: ToolPolicyDecision
+  /** Secret-free explanation retained in the policy decision. */
+  readonly reason: string
+  /** Complete literal commands that must match this rule at activation. */
+  readonly match?: readonly string[]
+  /** Complete commands that must not match this rule at activation. */
+  readonly notMatch?: readonly string[]
+}
 ```
 
 Depends on: [`ToolPolicyDecision`](../packages/guard/tool-policy/src/index.ts)
 
-Source: [`packages/guard/tool-policy-shell/src/index.ts:67`](../packages/guard/tool-policy-shell/src/index.ts)
+Source: [`packages/guard/tool-policy-shell/src/index.ts:73`](../packages/guard/tool-policy-shell/src/index.ts)
 
 <a id="deepseek-aidsh-tool-present"></a>
 
@@ -3643,6 +3661,8 @@ Requires: `systemPrompt`
 ```ts config-catalog
 /** Plugin config: how the registered tools are presented to the model. */
 export interface Config {
+  /** Optional deferred tool discovery; omission eagerly presents all authorized tools. */
+  discovery?: ToolDiscoveryConfig
   /**
    * Model presentation. `native` (default) sends every visible schema; `ptc`
    * sends only `run_code` plus a generated SDK prompt and collapses the
@@ -3664,11 +3684,25 @@ export interface Config {
   maxParallelSubCalls?: number
 }
 
+/** Opt-in limits and tool-name prefixes for deferred model presentation. */
+export interface ToolDiscoveryConfig {
+  /** Non-empty literal prefixes of deferred tool names, for example `mcp__`. */
+  readonly prefixes: readonly string[]
+  /** Search result count when the model omits limit. */
+  readonly defaultLimit: number
+  /** Maximum result count accepted from the model. */
+  readonly maxLimit: number
+  /** Maximum UTF-8 bytes accepted in a search query. */
+  readonly maxQueryBytes: number
+  /** Maximum UTF-8 bytes in the complete JSON search result. */
+  readonly maxResultBytes: number
+}
+
 /** How the registry presents its tools to the model (see {@link Config.mode}). */
 export type ToolPresentationMode = 'native' | 'ptc' | 'both'
 ```
 
-Source: [`packages/core/tools/src/index.ts:647`](../packages/core/tools/src/index.ts)
+Source: [`packages/core/tools/src/index.ts:651`](../packages/core/tools/src/index.ts)
 
 <a id="deepseek-aidsh-typert-loader"></a>
 

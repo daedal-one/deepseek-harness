@@ -27,7 +27,7 @@ async function safePath(value: string, validation: ReadValidation): Promise<bool
   }
 }
 
-function parseCommandList(command: string): CommandList | undefined {
+function parseCommandList(command: string, literalOnly = false): CommandList | undefined {
   const commands: CommandList = []
   let stages: Pipeline = [[]]
   let token = ''
@@ -58,6 +58,7 @@ function parseCommandList(command: string): CommandList | undefined {
     }
     if (char === "'" || char === '"') { quote = char; tokenStarted = true; requiresCommand = false; continue }
     if (char === '\n' || char === '\r' || char === ';') {
+      if (literalOnly) return undefined
       if (stages.at(-1)?.length === 0 && !tokenStarted) {
         if (stages.length > 1 || char === ';') return undefined
         continue
@@ -65,20 +66,27 @@ function parseCommandList(command: string): CommandList | undefined {
       if (!pushCommand()) return undefined
       continue
     }
-    if (/\s/u.test(char)) { pushToken(); continue }
+    if (/\s/u.test(char)) {
+      if (literalOnly && char !== ' ' && char !== '\t') return undefined
+      pushToken(); continue
+    }
+    if (literalOnly && char === '~') return undefined
     if (!tokenStarted && command.startsWith('2>/dev/null', index)) {
+      if (literalOnly) return undefined
       const after = command.charAt(index + '2>/dev/null'.length)
       if (after.length > 0 && !/[\s|;&]/u.test(after)) return undefined
       index += '2>/dev/null'.length - 1
       continue
     }
     if (char === '&') {
+      if (literalOnly) return undefined
       if (command[index + 1] !== '&' || !pushCommand()) return undefined
       requiresCommand = true
       index += 1
       continue
     }
     if (char === '|') {
+      if (literalOnly) return undefined
       if (command[index + 1] === '|') return undefined
       pushToken()
       if (stages.at(-1)?.length === 0) return undefined
@@ -94,6 +102,15 @@ function parseCommandList(command: string): CommandList | undefined {
   if (requiresCommand) return undefined
   if (stages.at(-1)?.length === 0 && !tokenStarted) return commands.length === 0 || stages.length > 1 ? undefined : commands
   return pushCommand() ? commands : undefined
+}
+
+/**
+ * Parse one literal POSIX command without expansion, redirection, or compound execution.
+ * @param command - complete shell input.
+ * @returns argument tokens, or undefined for unsupported syntax or empty input.
+ */
+export function parseLiteralCommand(command: string): readonly string[] | undefined {
+  return parseCommandList(command, true)?.[0]?.[0]
 }
 
 const catFlags = new Set([

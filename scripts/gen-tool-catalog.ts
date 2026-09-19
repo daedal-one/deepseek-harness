@@ -177,10 +177,9 @@ export interface ToolPackage {
   /** Agent-like scope key whose tool view is catalogued instead of the global view. */
   scope?: (ctx: Context) => Agent
   /**
-   * Config for the caller's `ToolRuntime` mount. The registry itself ships a
-   * model-facing tool (`run_code`, registered under a non-native `mode`), so
-   * ITS catalog entry boots the registry in the mode that exposes it;
-   * every other entry uses the default (native) registry.
+   * Config for the caller's ToolRuntime mount. The registry's catalog entry
+   * enables its optional run_code and tool_search definitions; other entries
+   * use the default eager native registry.
    */
   toolsConfig?: ToolsConfig
   /**
@@ -215,16 +214,17 @@ const TOOL_PACKAGES: ToolPackage[] = [
   {
     pkg: '@deepseek-ai/dsh-tools',
     dir: 'tools',
-    source: 'packages/core/tools/src/ptc.ts',
+    source: 'packages/core/tools/src/index.ts',
     requires: ['ctx.tools', 'ctx.codeRuntime (execution time)', 'ctx.systemPrompt'],
     writes: ['tool/call', 'one tool/ptc-dispatch-start + tool/ptc-dispatch pair per bridged sub-call', 'tool/result'],
-    // The registry's OWN tool: run_code exists only under a non-native mode
-    // (the registry registers it in its constructor; the code runtime is read
-    // at assembly/execution time, so the schema harvest needs none mounted).
-    toolsConfig: { mode: 'ptc' },
+    // Schema inventory does not execute programs or require a code runtime.
+    toolsConfig: {
+      mode: 'ptc',
+      discovery: { prefixes: ['mcp__'], defaultLimit: 5, maxLimit: 20, maxQueryBytes: 1024, maxResultBytes: 8192 },
+    },
     async mount() {},
     note:
-      'Owned by the tool registry as a reserved transport outside filterable capability layers under `mode: ptc` / `mode: both` (see the PTC mode Agent Note). Under `ptc` it is the registry\'s only wire contribution; the other visible capabilities are declared in a generated SDK section in the loaded runtime\'s language, and a program calls them through bindings scheduled under the native concurrency contract (submission-ordered starts and policy; concurrency-safe bodies overlap up to `maxParallelSubCalls`) that re-enter the complete guarded tool pipeline and link each nested execution to this outer result.',
+      '`tool_search` is present only when discovery is configured; these example bounds defer the MCP namespace. Successful recorded search results admit authorized names for subsequent requests. `run_code` is the reserved transport under `mode: ptc` / `mode: both`. Under `ptc` it is the registry\'s only wire contribution; other admitted capabilities, including tool_search, are declared in the runtime language\'s generated SDK. Their program bindings re-enter the guarded tool pipeline and link each nested execution to the outer result.',
   },
   {
     pkg: '@deepseek-ai/dsh-plan-mode',

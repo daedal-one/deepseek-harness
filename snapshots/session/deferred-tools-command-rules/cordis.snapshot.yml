@@ -1,0 +1,84 @@
+# Replay patch shared by the ordinary headless snapshot composition. The model
+# script comes from the scenario's committed session JSONL.
+
+- id: llm-deepseek
+  name: '@deepseek-ai/dsh-llm-deepseek'
+  disabled: true
+
+- id: plugin-package-inventory-deepseek
+  disabled: true
+
+- id: session-title-llm
+  disabled: true
+
+- id: session-persistence-jsonl
+  name: '@deepseek-ai/dsh-session-persistence-jsonl'
+  config:
+    root: !!js dshHomePath('sessions')
+    compression: none
+
+- id: sandbox
+  name: '@deepseek-ai/dsh-sandbox-local'
+  config:
+    runnerCommand:
+      - bash
+      - -c
+      - while [ "$1" != "--" ]; do shift; done; shift; exec "$@"
+      - passthrough-runner
+    runnerFailureSignatures:
+      - 'passthrough-runner: profile rejected'
+
+- insert:
+    - id: llm-replay
+      name: '@deepseek-ai/dsh-llm-replay'
+      config:
+        providers:
+          - id: deepseek-official
+            name: DeepSeek
+            models:
+              - id: deepseek-flash
+              - id: deepseek-v4-pro
+
+- id: tools
+  config:
+    mode: native
+    discovery:
+      prefixes: [read]
+      defaultLimit: 2
+      maxLimit: 4
+      maxQueryBytes: 256
+      maxResultBytes: 1024
+
+- insert:
+    - id: snapshot-tool-policy
+      name: '@deepseek-ai/dsh-tool-policy'
+    - id: snapshot-shell-policy
+      name: '@deepseek-ai/dsh-tool-policy-shell'
+      config:
+        id: snapshot-shell
+        mappings: [{ tool: bash, commandArgument: command, commandSyntax: posix }]
+        intent: { provider: unavailable-intent, model: intent-reviewer }
+        primary: { provider: unavailable-primary, model: effect-reviewer }
+        secondary: { provider: unavailable-secondary, model: effect-reviewer }
+        decisionTimeoutMs: 1000
+        intentContextTimeoutMs: 1000
+        maxTokens: 80
+        maxCommandChars: 4096
+        maxUserMessageChars: 1024
+        maxIntentChars: 256
+        maxOutputChars: 1024
+        maxSummaryChars: 256
+        maxEffects: 8
+        rules: []
+        prefixRules:
+          - pattern: [printf, ['%s', '%s\n']]
+            decision: allow
+            reason: Print a literal value.
+            match: ["printf '%s' PREFIX_OK"]
+            notMatch: ["printf '%sX' PREFIX_OK"]
+          - pattern: [printf, '%s', FORBIDDEN]
+            decision: deny
+            reason: This value is forbidden by deployment policy.
+            match: ["printf '%s' FORBIDDEN"]
+    - id: snapshot-policy-enforcer
+      name: '@deepseek-ai/dsh-tool-policy-enforcer'
