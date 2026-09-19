@@ -30,6 +30,8 @@ This effect-scoped provider interprets explicitly mapped shell tools through the
 
 Host-root destruction primitives and protected credential paths are denied before rules or model calls. Unconditional Git force pushes, remote deletes, and mirrors ask; `--force-with-lease` and `--force-if-includes` remain eligible for ordinary evaluation. Rules use glob-like whole-command matching, the last match wins, and an allow rule cannot admit a command containing shell metacharacters.
 
+`containedExecutionWorld: true` omits classifier prewarming, command review, and policy decisions only when the local-container startup validator has published its verified marker and both `ctx.fs` and `ctx.subprocess` carry that same opaque identity. The Loader entry declares `inject: [localContainerExecutionWorld, fs, subprocess]` so activation waits for verification. Configuration without the marker or with either provider in another world fails at activation; every contained call rechecks the identities. This opt-in applies only to mapped shell tools; MCP, browser, Web, credentials, persistence, and every other policy provider retain their independent decisions.
+
 ### Literal argument-prefix rules
 
 Add optional `prefixRules` alongside the required configuration above, and set `commandSyntax: posix` on each mapping that uses them. Each pattern position is one literal argument or an array of alternatives. Matching uses complete tokens, so `git status` does not match `git statusx`; an absolute executable path needs its own explicit pattern. Quotes preserve literal argument contents. At activation, `match` and `notMatch` examples must agree with their individual rule; contradictions and empty patterns fail with a corrective error.

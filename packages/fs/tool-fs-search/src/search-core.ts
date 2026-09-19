@@ -1,15 +1,16 @@
 /**
  * Shared execution plumbing for the `glob` / `grep` search tools: the
  * package-owned `SEARCH_*` error vocabulary, one spawn helper that runs the
- * PACKAGED ripgrep binary (`@vscode/ripgrep`) with a plain argv vector and
- * returns complete raw stdout, the best-effort formatted-result spill handoff,
+ * packaged ripgrep binary (`@vscode/ripgrep`) or a configured executable from
+ * the subprocess execution world with a plain argv vector and returns complete
+ * raw stdout, the best-effort formatted-result spill handoff,
  * and workdir-relative path display.
  *
  * Both tools execute as ordinary foreground spawns through `ctx.subprocess` —
  * never `ctx.shell`, never `ctx.shell.start()`, never a model-visible background
- * task. The ripgrep binary ships inside the npm package, so no system `rg`
- * install is required, and no shell layer exists between the argv vector and
- * ripgrep, so no shell quoting is involved. Raw `rg` stdout is an internal
+ * task. Local deployments use the binary shipped inside the npm package;
+ * another execution world may supply a configured `rg`. No shell layer exists
+ * between the argv vector and ripgrep, so no shell quoting is involved. Raw `rg` stdout is an internal
  * transport detail: the tools request a per-run stdout capture budget from the
  * subprocess seam, parse only complete in-memory stdout within
  * `rawOutputMaxBytes`, and never read spill files. The model-facing recovery
@@ -214,6 +215,7 @@ export function resolveRgPath(): Promise<string> {
  * @param rawOutputMaxBytes - cap on the complete raw stdout the tool will parse.
  * @param graceMs - the seam's terminate-escalation grace period.
  * @param stderrMaxBytes - cap on the retained stderr diagnostic tail.
+ * @param ripgrepCommand - optional executable resolved by the subprocess provider; omission uses the packaged host binary.
  * @returns the complete stdout, the zero-result flag, and the resolved workdir.
  */
 export async function runRipgrep(
@@ -224,16 +226,21 @@ export async function runRipgrep(
   rawOutputMaxBytes: number,
   graceMs: number,
   stderrMaxBytes: number,
+  ripgrepCommand?: string,
 ): Promise<RipgrepRun> {
   if (exec.signal.aborted) {
     throw new SearchError(`${toolName} was aborted before completion (tool timeout or caller cancellation)`, 'SEARCH_ABORTED')
   }
   const cwd = exec.agent?.session.header.cwd
-  const workdir = cwd ?? process.cwd()
+  let workdir = cwd ?? process.cwd()
   let handle: SubprocessHandle
   try {
+    const executable = ripgrepCommand === undefined
+      ? await resolveRgPath()
+      : await ctx.subprocess.resolveExecutable(ripgrepCommand, undefined, exec.signal)
+    workdir = ctx.subprocess.resolveWorkingDirectory(workdir)
     handle = ctx.subprocess.spawn({
-      argv: [await resolveRgPath(), '--no-config', ...argv],
+      argv: [executable, '--no-config', ...argv],
       cwd: workdir,
       stdio: {
         stdin: 'ignore',

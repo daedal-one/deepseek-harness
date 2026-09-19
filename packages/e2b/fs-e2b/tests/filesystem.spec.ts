@@ -328,8 +328,9 @@ describe('E2BFileSystem identity, metadata, and reads', () => {
     remote.other('/workspace/special')
     remote.file('/workspace/dir/nested.txt', 'nested')
     remote.symlink('/workspace/link.txt', '/workspace/a.txt')
-    const { fs } = await setup(remote)
+    const { ctx, fs } = await setup(remote)
 
+    expect(fs.executionWorld).toBe(ctx.get('e2b'))
     const link = await fs.resolve('link.txt')
     expect(link).toEqual({ targetKey: '/workspace/a.txt', displayPath: '/workspace/link.txt' })
     await expect(fs.lstat('link.txt')).resolves.toMatchObject({ type: 'symlink', size: 1 })

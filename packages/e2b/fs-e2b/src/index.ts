@@ -171,6 +171,11 @@ function literalEdit(content: string, request: FsEditRequest, displayPath: strin
 export class E2BFileSystem extends FileSystem {
   static inject = ['e2b']
 
+  /** The shared E2B runtime is this provider family's execution-world identity. */
+  override get executionWorld(): object {
+    return this.ctx.e2b
+  }
+
   private readonly locks = new Map<string, Promise<unknown>>()
 
   override async resolve(path: string, opts?: { cwd?: string; signal?: AbortSignal }): Promise<FsTarget> {

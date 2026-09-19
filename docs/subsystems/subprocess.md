@@ -286,6 +286,15 @@ Implementations must honor these semantics:
 
 ```ts cordis-catalog
 /**
+ * Map an absolute consumer working directory into this provider's execution
+ * world. Host and already-normalized providers return it unchanged; isolated
+ * providers reject unconfigured roots.
+ * @param path - absolute working directory supplied by a consumer.
+ * @returns the corresponding provider-world directory.
+ */
+resolveWorkingDirectory(path: string): string
+
+/**
  * Resolve one configured executable in this provider's execution world.
  * Absolute paths are verified; bare names use the provider's scrubbed PATH
  * plus explicit environment overrides. Relative paths containing separators

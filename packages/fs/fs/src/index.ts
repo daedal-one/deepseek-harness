@@ -89,6 +89,15 @@ export abstract class FileSystem extends Service {
   }
 
   /**
+   * Opaque same-process identity of the path and process world this provider
+   * inhabits. Providers sharing an execution world return the same token;
+   * composition validators compare it by reference and never serialize it.
+   */
+  get executionWorld(): symbol | object {
+    return Symbol.for('@deepseek-ai/dsh/host-execution-world')
+  }
+
+  /**
    * The sandbox mode this backend enforces on mutations BY DEFAULT, or
    * `undefined` when it does not confine at all — the capability fact the tool
    * layer reads to advertise the escalation fields honestly (mirrors

@@ -1628,6 +1628,7 @@ describe('E2BSubprocessRuntime', () => {
     const fake = new FakeSandbox()
     fake.trapsTerm = true
     const { ctx, fiber } = await service(fake)
+    expect(ctx.subprocess.executionWorld).toBe(ctx.get('e2b'))
     const handle = ctx.subprocess.spawn(spec({ graceMs: 1 }))
     await flush()
     await fiber.dispose()

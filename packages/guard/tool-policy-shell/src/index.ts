@@ -103,6 +103,8 @@ export interface Config {
   readonly rules: readonly CommandRule[]
   /** Literal argument-prefix rules; strictest matches compose with legacy rules. Requires a POSIX mapping. */
   readonly prefixRules?: readonly CommandPrefixRule[]
+  /** Allow mapped commands without review only when a verified non-host execution-world marker matches both providers. */
+  readonly containedExecutionWorld?: boolean
 }
 
 const decisionSchema = z.union(['allow', 'ask', 'deny'] as const)
@@ -145,6 +147,7 @@ export const Config: z<Config> = z.object({
     match: z.array(z.string()),
     notMatch: z.array(z.string()),
   })),
+  containedExecutionWorld: z.boolean().default(false),
 }) as z<Config>
 
 const EFFECT_LIST = SHELL_EFFECTS.join(', ')
@@ -566,6 +569,7 @@ class ShellPolicyProvider implements ToolPolicyProvider {
   }
 
   prewarm(request: ToolPolicyPrewarmRequest): Promise<void> {
+    if (this.config.containedExecutionWorld === true) return Promise.resolve()
     if (currentTurn(request.session) === 0 || latestDirectUser(request.session) === undefined) return Promise.resolve()
     return this.track(this.intentContext(
       request.session,
@@ -710,6 +714,10 @@ class ShellPolicyProvider implements ToolPolicyProvider {
     if (command === undefined) return verdict(this.config.id, {
       decision: 'deny', risk: 100, categories: ['invalid-input'], reason: 'mapped command argument is missing',
     })
+    if (this.config.containedExecutionWorld === true) {
+      verifyContainedWorld(this.ctx)
+      return undefined
+    }
     const fixed = hardSecurityDecision(command, this.config.id) ?? gitEscalationDecision(command, this.config.id)
     if (fixed !== undefined) return fixed
     if (command.length > this.config.maxCommandChars) return verdict(this.config.id, {
@@ -779,6 +787,15 @@ class ShellPolicyProvider implements ToolPolicyProvider {
   }
 }
 
+function verifyContainedWorld(ctx: Context): void {
+  const verified = ctx.get('localContainerExecutionWorld') as object | undefined
+  const fs = ctx.get('fs') as { executionWorld: symbol | object } | undefined
+  const subprocess = ctx.get('subprocess') as { executionWorld: symbol | object } | undefined
+  if (verified === undefined || fs?.executionWorld !== verified || subprocess?.executionWorld !== verified) {
+    throw new Error('tool-policy-shell: containedExecutionWorld requires a verified matching filesystem and subprocess world')
+  }
+}
+
 /** Register the shell policy provider for the plugin lifetime. */
 export function apply(ctx: Context, config: Config): void {
   validatePrefixRules(config.prefixRules ?? [])
@@ -796,6 +813,9 @@ export function apply(ctx: Context, config: Config): void {
   }
   if (sameRoute(config.primary, config.secondary)) {
     throw new Error('tool-policy-shell: primary and secondary effect review must select distinct routes')
+  }
+  if (config.containedExecutionWorld === true) {
+    verifyContainedWorld(ctx)
   }
   const provider = new ShellPolicyProvider(ctx, config)
   const dispose = ctx.toolPolicy.register(ToolPolicyProviderId(config.id), provider)

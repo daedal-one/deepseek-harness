@@ -53,6 +53,8 @@ describe('SubprocessRuntime seam', () => {
   it('a concrete subclass registers as ctx.subprocess and serves the abstract API', async () => {
     const ctx = new Context()
     await ctx.plugin(StubSubprocessRuntime)
+    expect(ctx.subprocess.executionWorld).toBe(Symbol.for('@deepseek-ai/dsh/host-execution-world'))
+    expect(ctx.subprocess.resolveWorkingDirectory('/stub')).toBe('/stub')
     const handle = ctx.subprocess.spawn({
       argv: ['true'],
       cwd: '/stub',

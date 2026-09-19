@@ -345,6 +345,16 @@
         "tests/**/*.ts"
       ]
     },
+    "packages/sandbox/local-container-runtime": {
+      "entry": [
+        "tests/**/*.spec.ts",
+        "tests/**/*.e2e.ts"
+      ],
+      "project": [
+        "src/**/*.ts",
+        "tests/**/*.ts"
+      ]
+    },
     "packages/session/session-telemetry-otel": {
       "entry": [
         "tests/**/*.spec.ts",
@@ -632,6 +642,26 @@
       ]
     },
     "packages/subagent/subagent-claude-code": {
+      "entry": [
+        "tests/**/*.spec.ts",
+        "tests/**/*.e2e.ts"
+      ],
+      "project": [
+        "src/**/*.ts",
+        "tests/**/*.ts"
+      ]
+    },
+    "packages/fs/fs-local-container": {
+      "entry": [
+        "tests/**/*.spec.ts",
+        "tests/**/*.e2e.ts"
+      ],
+      "project": [
+        "src/**/*.ts",
+        "tests/**/*.ts"
+      ]
+    },
+    "packages/subprocess/subprocess-local-container": {
       "entry": [
         "tests/**/*.spec.ts",
         "tests/**/*.e2e.ts"

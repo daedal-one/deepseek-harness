@@ -163,6 +163,39 @@ Provider selection, probing, caching, and backend-specific enforcement reports b
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxlocalcontainerruntime--localcontainerruntime"></a>
+
+### `ctx.localContainerRuntime` — `LocalContainerRuntime`
+
+Owns one disposable rootless Podman container. Provider adapters await getContainer; it resolves only after engine, image, created-container, and started-container inspection prove the configured controls.
+
+```ts cordis-catalog
+/**
+ * Return the verified running container identity for provider adapters.
+ * @returns the owner-retained Engine id and fixed workspace path.
+ * @throws when engine verification, setup, or teardown prevents readiness.
+ */
+async getContainer(): Promise<LocalContainerHandle>
+
+/**
+ * Execute one owner-controlled provider controller in the verified container.
+ * Caller cancellation or deadline expiry tears down the whole execution world,
+ * because the Podman exec API cannot prove that it stopped one exec process.
+ * @param request - bounded command, input, deadline, output limit, and cancellation signal.
+ * @returns settled bounded standard streams and exit code.
+ */
+async executeController(request: PodmanControllerExecRequest & { readonly deadlineMs: number }): Promise<PodmanControllerExecResult>
+
+/**
+ * Create one independently removable process container in this execution world.
+ * @param request - exact process, environment, terminal, and allocation cancellation facts.
+ * @returns an attached started handle whose removal proves descendant quiescence.
+ */
+async createProcess(request: LocalContainerProcessRequest): Promise<LocalContainerProcessHandle>
+```
+
+Source: [`packages/sandbox/local-container-runtime/src/index.ts`](../../packages/sandbox/local-container-runtime/src/index.ts)
+
 <a id="ctxsandbox--sandboxprovider-abstract-seam"></a>
 
 ### `ctx.sandbox` — `SandboxProvider` (abstract seam)
@@ -216,3 +249,7 @@ Types: [Session](session.md)
 
 Source: [`packages/sandbox/sandbox-policy/src/index.ts`](../../packages/sandbox/sandbox-policy/src/index.ts)
 <!-- END GENERATED cordis-surface -->
+
+## Local container execution world
+
+The optional [runtime owner](../../packages/sandbox/local-container-runtime/README.md) supplies a verified process-owned workspace to matching filesystem and subprocess providers. `LocalContainerHandle` identifies the owner and canonical workspace; `PodmanControllerExecRequest` and `PodmanControllerExecResult` define bounded controller input, output, cancellation, and deadlines. `LocalContainerProcessRequest` supplies an explicit process, environment, cwd, and terminal dimensions, while `LocalContainerProcessHandle` owns its streams, exit observation, signalling, and removal. The [type declarations](../../packages/sandbox/local-container-runtime/src/types.ts) define these provider-facing values.

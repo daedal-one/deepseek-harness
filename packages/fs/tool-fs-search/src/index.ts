@@ -1,8 +1,8 @@
 /**
  * The model-facing filesystem discovery tool suite (`glob`, `grep`) over the
- * packaged ripgrep binary (`@vscode/ripgrep`). This single plugin registers
- * both tools; the binary ships inside the npm dependency, so no system `rg`
- * install and no shell layer is involved.
+ * packaged ripgrep binary (`@vscode/ripgrep`) or an explicitly configured
+ * execution-world executable. This single plugin registers both tools; local
+ * Node deployments need no system `rg`, and no shell layer is involved.
  *
  * ## Spawn-backed, not a `ctx.fs` provider method
  *
@@ -83,6 +83,8 @@ export interface Config {
   searchMetaMaxBytes?: number
   /** Max complete raw `rg` stdout bytes a search will parse; larger raw output fails with `SEARCH_RAW_OUTPUT_OVERFLOW`. */
   rawOutputMaxBytes?: number
+  /** Executable name or absolute path resolved in the subprocess execution world; omission uses the packaged host binary. */
+  ripgrepCommand?: string
   /** Terminate-escalation grace (ms), handed to the subprocess seam and bounded by `MAX_TIMER_DELAY_MS`. */
   graceMs?: number
   /** Max bytes retained for one search's stderr tail; the excerpt is embedded in `SEARCH_*` error messages, never shown on success. */
@@ -101,13 +103,14 @@ export const Config: z<Config> = z.object({
   grepMaxLineBytes: z.number().default(GREP_MAX_LINE_BYTES),
   searchMetaMaxBytes: z.number().default(SEARCH_META_MAX_BYTES),
   rawOutputMaxBytes: z.number().default(RAW_OUTPUT_MAX_BYTES),
+  ripgrepCommand: z.string(),
   graceMs: z.number().default(SEARCH_GRACE_MS),
   stderrMaxBytes: z.number().default(SEARCH_STDERR_MAX_BYTES),
   timeoutMs: z.number().default(SEARCH_TIMEOUT_MS),
 })
 
-/** The shape after schemastery applied the defaults. */
-type ResolvedConfig = Required<Config>
+/** The shape after schemastery applied the numeric defaults while preserving the optional executable override. */
+type ResolvedConfig = Required<Omit<Config, 'ripgrepCommand'>> & Pick<Config, 'ripgrepCommand'>
 
 /** Every search cap counts items/bytes/milliseconds — a positive integer, or retention and timeout arithmetic misbehaves silently. */
 function assertPositiveInteger(name: string, value: number): void {
@@ -118,8 +121,8 @@ function assertPositiveInteger(name: string, value: number): void {
 
 /**
  * Register the `glob`/`grep` filesystem discovery tool suite. The packaged
- * ripgrep binary is always available (an npm dependency), so registration is
- * unconditional.
+ * ripgrep binary is valid only in the host execution world; other providers
+ * must configure an executable that they can resolve.
  *
  * @param ctx - plugin context; registrations are effects scoped to this plugin.
  * @param config - resolved plugin configuration from schemastery.
@@ -133,6 +136,13 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   assertPositiveInteger('grepMaxLineBytes', resolved.grepMaxLineBytes)
   assertPositiveInteger('searchMetaMaxBytes', resolved.searchMetaMaxBytes)
   assertPositiveInteger('rawOutputMaxBytes', resolved.rawOutputMaxBytes)
+  if (resolved.ripgrepCommand !== undefined && resolved.ripgrepCommand.trim().length === 0) {
+    throw new Error('tool-fs-search: ripgrepCommand must be a non-empty string when configured')
+  }
+  if (resolved.ripgrepCommand === undefined
+    && ctx.subprocess.executionWorld !== Symbol.for('@deepseek-ai/dsh/host-execution-world')) {
+    throw new Error('tool-fs-search: ripgrepCommand is required outside the host execution world')
+  }
   assertPositiveInteger('graceMs', resolved.graceMs)
   if (resolved.graceMs > MAX_TIMER_DELAY_MS) {
     throw new Error(`tool-fs-search: graceMs must be no greater than ${MAX_TIMER_DELAY_MS}`)
@@ -147,6 +157,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     graceMs: resolved.graceMs,
     stderrMaxBytes: resolved.stderrMaxBytes,
     timeoutMs: resolved.timeoutMs,
+    ...resolved.ripgrepCommand === undefined ? {} : { ripgrepCommand: resolved.ripgrepCommand },
   })
   applyGrepTool(ctx, {
     maxMatches: resolved.grepMaxMatches,
@@ -156,5 +167,6 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     graceMs: resolved.graceMs,
     stderrMaxBytes: resolved.stderrMaxBytes,
     timeoutMs: resolved.timeoutMs,
+    ...resolved.ripgrepCommand === undefined ? {} : { ripgrepCommand: resolved.ripgrepCommand },
   })
 }

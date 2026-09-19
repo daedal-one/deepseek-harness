@@ -148,7 +148,15 @@ class FakeHandle implements SubprocessHandle {
  */
 class FakeSubprocess extends SubprocessRuntime {
   spawns: SubprocessSpawnSpec[] = []
-  override async resolveExecutable(command: string): Promise<string> { return command }
+  resolutions: string[] = []
+  mappedWorkingDirectory?: string
+  world: symbol | object = Symbol.for('@deepseek-ai/dsh/host-execution-world')
+  override get executionWorld(): symbol | object { return this.world }
+  override resolveWorkingDirectory(path: string): string { return this.mappedWorkingDirectory ?? path }
+  override async resolveExecutable(command: string): Promise<string> {
+    this.resolutions.push(command)
+    return `/execution-world/bin/${command}`
+  }
   override spawnTerminal(): Promise<never> { throw new Error('search tools spawn pipes, never terminals') }
   handles: FakeHandle[] = []
   /** Arms the per-spawn script; a `{ reject }` return scripts a spawn-level failure. */
@@ -183,6 +191,7 @@ class FakeSpill extends SpillStore {
 interface SetupOptions {
   config?: Partial<ToolFsSearch.Config>
   spill?: boolean
+  executionWorld?: object
 }
 
 const DEFAULT_CONFIG = { sampleOverCapGlobResults: true } satisfies ToolFsSearch.Config
@@ -195,6 +204,7 @@ async function setup(options: SetupOptions = {}) {
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(FakeSubprocess)
   const subprocess = ctx.subprocess as FakeSubprocess
+  if (options.executionWorld !== undefined) subprocess.world = options.executionWorld
   if (options.spill === true) await ctx.plugin(FakeSpill)
   const fiber = await ctx.plugin(ToolFsSearch, { ...DEFAULT_CONFIG, ...options.config })
   const spill = options.spill === true ? ctx.get('spillStore') as FakeSpill : undefined
@@ -313,6 +323,27 @@ describe('config validation', () => {
     await expect(ctx.plugin(ToolFsSearch, { ...DEFAULT_CONFIG, ...config })).rejects.toThrow(new RegExp(`tool-fs-search: ${name} must be a positive integer`))
   })
 
+  it('rejects an empty execution-world ripgrep command at load', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ToolRuntime)
+    await ctx.plugin(FakeSubprocess)
+    await expect(ctx.plugin(ToolFsSearch, {
+      ...DEFAULT_CONFIG,
+      ripgrepCommand: '  ',
+    })).rejects.toThrow('tool-fs-search: ripgrepCommand must be a non-empty string when configured')
+  })
+
+  it('requires an execution-world ripgrep command outside the host world', async () => {
+    await expect(setup({ executionWorld: {} })).rejects.toThrow(
+      'tool-fs-search: ripgrepCommand is required outside the host execution world',
+    )
+  })
+
+  it('accepts a configured ripgrep command outside the host world', async () => {
+    await expect(setup({ executionWorld: {}, config: { ripgrepCommand: 'rg' } })).resolves.toBeDefined()
+  })
+
   it('rejects a grace beyond the Node timer range at load', async () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
@@ -386,6 +417,16 @@ describe('workdir derivation and signal forwarding', () => {
     expect(subprocess.spawns[0]?.cwd).toBe('/sessions/s1')
   })
 
+  it('uses the subprocess provider working-directory mapping for spawn and display', async () => {
+    const { ctx, subprocess } = await setup()
+    subprocess.mappedWorkingDirectory = '/workspace'
+    subprocess.handler = () => runResult('/workspace/a.ts\n')
+    const result = await call(ctx, 'glob', { pattern: '*' }, { agent: agent('/host/project') })
+    expect(subprocess.spawns[0]?.cwd).toBe('/workspace')
+    expect(text(result)).toContain('a.ts')
+    expect(text(result)).not.toContain('/workspace/a.ts')
+  })
+
   it('defaults the spawn cwd to process.cwd() without a session cwd', async () => {
     const { ctx, subprocess } = await setup()
     subprocess.handler = () => runResult('a.ts\n')
@@ -412,6 +453,16 @@ describe('workdir derivation and signal forwarding', () => {
     expect((spec?.stdio.stdout as { maxBytes: number }).maxBytes).toBe(1234)
     expect((spec?.stdio.stderr as { maxBytes: number }).maxBytes).toBe(4096)
     expect(spec?.graceMs).toBe(5_000)
+  })
+
+  it('resolves a configured ripgrep command inside the subprocess execution world', async () => {
+    const { ctx, subprocess } = await setup({ config: { ripgrepCommand: 'rg' } })
+    subprocess.handler = () => runResult('', { exitCode: 1 })
+    await call(ctx, 'grep', { pattern: 'needle' })
+    expect(subprocess.resolutions).toEqual(['rg'])
+    expect(subprocess.spawns[0]?.argv).toEqual([
+      '/execution-world/bin/rg', '--no-config', '--json', '--regexp=needle',
+    ])
   })
 
   it('defaults the stderr tail budget and grace period when the config omits them', async () => {

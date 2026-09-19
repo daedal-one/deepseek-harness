@@ -29,6 +29,8 @@ Remote methods start at business semantic revision 1. An explicit positive safe 
 
 Qualify the shipped Settings, authentication, recovery and Sidebar workflows alongside native clients. Configuration-only browser fixtures mount the owning provider catalog with the existing keyless adapter configuration and issue no model calls. Expected labels and captured output follow the current locale dictionaries; fixture corrections preserve assertions, Session recordings and product behavior.
 
+Recorded search fixtures explicitly disable the per-agent preset loader and enable their recorded host-owned consumers when selecting the minimal host-owned tool composition. Preserve recorded Session generations and output assertions when repairing fixture activation.
+
 ## Shared Client exports
 
 Keep each shared public export list in one package-owned module while retaining the exact browser and portable export sets, type declarations and runtime owners. Consolidation must not expose native installers through the browser plugin or pull browser dependencies into the portable entry. Compare resolved exports before and after, and qualify the existing transport suites and built artifacts.

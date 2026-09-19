@@ -23,7 +23,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## Use this package
 
-Use this package when the agent's shell commands and terminals should run inside the remote sandbox rather than on your machine. It is the command half of the E2B family: commands, terminals, and files share one remote world.
+Use this package when the agent's shell commands and terminals should run inside the remote sandbox rather than on your machine. It is the command half of the E2B family: commands, terminals, and files share one remote world. Its opaque execution-world identity is the shared E2B runtime, matching the E2B filesystem provider.
 
 ### When to choose it
 

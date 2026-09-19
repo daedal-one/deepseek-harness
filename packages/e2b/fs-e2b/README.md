@@ -23,7 +23,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## Use this package
 
-Use this package when the agent's file work — reading, writing, editing, listing — should happen inside the remote sandbox rather than on your machine. It is the filesystem half of the E2B family: what the agent writes here is what its commands can read in the same sandbox.
+Use this package when the agent's file work — reading, writing, editing, listing — should happen inside the remote sandbox rather than on your machine. It is the filesystem half of the E2B family: what the agent writes here is what its commands can read in the same sandbox. Its opaque execution-world identity is the shared E2B runtime, matching the E2B subprocess provider.
 
 ### When to choose it
 
