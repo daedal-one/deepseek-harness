@@ -904,6 +904,30 @@ export interface Config {
 
 Source: [`packages/fs/fs-local/src/index.ts:42`](../packages/fs/fs-local/src/index.ts)
 
+<a id="deepseek-aidsh-fs-local-container"></a>
+
+## `@deepseek-ai/dsh-fs-local-container`
+
+Requires: `localContainerRuntime`
+
+```ts config-catalog
+/** Deployment-specific bounds and host Session cwd aliases for this provider. */
+export interface Config {
+  /** Exact host Session cwd values that represent the container workspace. */
+  cwdAliases: string[]
+  /** Maximum UTF-8 bytes in a file read, written, or edited through this provider. */
+  maxFileBytes: number
+  /** Exclusive UTF-8 byte limit on each overwrite diff basis side. */
+  diffBasisMaxBytes: number
+  /** Complete stdout and stderr byte bound on each controller execution. */
+  maxControllerOutputBytes: number
+  /** Per-filesystem-operation deadline enforced by the runtime owner. */
+  operationTimeoutMs: number
+}
+```
+
+Source: [`packages/fs/fs-local-container/src/index.ts:49`](../packages/fs/fs-local-container/src/index.ts)
+
 <a id="deepseek-aidsh-fs-sandbox"></a>
 
 ## `@deepseek-ai/dsh-fs-sandbox`
@@ -1609,6 +1633,48 @@ export type Config = Readonly<Record<string, never>>
 ```
 
 Source: [`packages/llm/llm-retry/src/index.ts:25`](../packages/llm/llm-retry/src/index.ts)
+
+<a id="deepseek-aidsh-local-container-runtime"></a>
+
+## `@deepseek-ai/dsh-local-container-runtime`
+
+```ts config-catalog
+/** The fixed, validated configuration for one runtime owner. */
+export interface LocalContainerRuntimeConfig {
+  /** Explicit Unix socket for the rootless Podman service. */
+  socketPath: string
+  /** Start and own a rootless Podman API service for this DSH process. */
+  manageService: boolean
+  /** Absolute Podman executable used only when `manageService` is true. */
+  podmanCommand?: string
+  /** Maximum wait for the managed API socket to become ready. */
+  serviceStartupTimeoutMs: number
+  /** Digest-pinned trusted runtime image. */
+  image: string
+  /** Explicit non-root user that the image provides. */
+  user: string
+  /** Complete allowlisted replacement environment. */
+  environment: Record<string, string>
+  /** Hard memory limit in bytes. */
+  memoryBytes: number
+  /** Hard CPU limit in Docker NanoCPUs. */
+  nanoCpus: number
+  /** Hard PID limit. */
+  pidsLimit: number
+  /** Private tmpfs size in bytes. */
+  tmpfsBytes: number
+  /** Maximum duration of one Engine API request. */
+  engineRequestTimeoutMs: number
+  /** Maximum number of concurrently owned sibling process containers. */
+  maxLiveProcesses: number
+  /** Maximum world lifetime before automatic teardown. */
+  lifetimeMs: number
+  /** Engine stop timeout in whole seconds. */
+  stopTimeoutSeconds: number
+}
+```
+
+Source: [`packages/sandbox/local-container-runtime/src/types.ts:284`](../packages/sandbox/local-container-runtime/src/types.ts)
 
 <a id="deepseek-aidsh-lsp-stdio"></a>
 
@@ -2821,6 +2887,26 @@ export interface Config {
 
 Source: [`packages/e2b/subprocess-e2b/src/index.ts:26`](../packages/e2b/subprocess-e2b/src/index.ts)
 
+<a id="deepseek-aidsh-subprocess-local-container"></a>
+
+## `@deepseek-ai/dsh-subprocess-local-container`
+
+Requires: `localContainerRuntime`
+
+```ts config-catalog
+/** Provider-specific controller and cwd mapping bounds. */
+export interface Config {
+  /** Exact host Session cwd values that map to `/workspace`. */
+  cwdAliases: string[]
+  /** Maximum bytes accepted from one executable or terminal-control response. */
+  controlOutputBytes: number
+  /** Deadline for executable lookup and spill publication. */
+  controlTimeoutMs: number
+}
+```
+
+Source: [`packages/subprocess/subprocess-local-container/src/index.ts:36`](../packages/subprocess/subprocess-local-container/src/index.ts)
+
 <a id="deepseek-aidsh-system-prompt"></a>
 
 ## `@deepseek-ai/dsh-system-prompt`
@@ -3256,6 +3342,8 @@ export interface Config {
   readonly rules: readonly CommandRule[]
   /** Literal argument-prefix rules; strictest matches compose with legacy rules. Requires a POSIX mapping. */
   readonly prefixRules?: readonly CommandPrefixRule[]
+  /** Allow mapped commands without review only when a verified non-host execution-world marker matches both providers. */
+  readonly containedExecutionWorld?: boolean
 }
 
 /** Explicit tool argument mapping; no shell name or argument is implicit. */

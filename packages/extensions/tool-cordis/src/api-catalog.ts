@@ -1400,6 +1400,47 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'localContainerRuntime',
+    summary: 'Owns one disposable rootless Podman container.',
+    description: 'Owns one disposable rootless Podman container. Provider adapters await getContainer; it resolves only after engine, image, created-container, and started-container inspection prove the configured controls.',
+    methods: [
+      {
+        signature: 'readonly executionWorld: object = Object.freeze({})',
+        description: 'Opaque stable identity shared by every provider mounted in this world.',
+        parameters: [],
+      },
+      {
+        signature: 'readonly workspacePath: \'/workspace\' = WORKSPACE_PATH',
+        description: 'Fixed canonical working directory for every adapter in this world.',
+        parameters: [],
+      },
+      {
+        signature: 'readonly containerName: string = `dsh-local-container-${randomUUID()}`',
+        description: 'Random retained Engine name, safe to use in host-side diagnostics.',
+        parameters: [],
+      },
+      {
+        signature: 'async getContainer(): Promise<LocalContainerHandle>',
+        description: 'Return the verified running container identity for provider adapters.',
+        parameters: [],
+        returns: 'the owner-retained Engine id and fixed workspace path.',
+        throws: ['when engine verification, setup, or teardown prevents readiness.'],
+      },
+      {
+        signature: 'async executeController(request: PodmanControllerExecRequest & { readonly deadlineMs: number }): Promise<PodmanControllerExecResult>',
+        description: 'Execute one owner-controlled provider controller in the verified container. Caller cancellation or deadline expiry tears down the whole execution world, because the Podman exec API cannot prove that it stopped one exec process.',
+        parameters: [{ name: 'request', description: 'bounded command, input, deadline, output limit, and cancellation signal.' }],
+        returns: 'settled bounded standard streams and exit code.',
+      },
+      {
+        signature: 'async createProcess(request: LocalContainerProcessRequest): Promise<LocalContainerProcessHandle>',
+        description: 'Create one independently removable process container in this execution world.',
+        parameters: [{ name: 'request', description: 'exact process, environment, terminal, and allocation cancellation facts.' }],
+        returns: 'an attached started handle whose removal proves descendant quiescence.',
+      },
+    ],
+  },
+  {
     key: 'lsp',
     summary: 'The LSP capability seam (`ctx.lsp`).',
     description: 'The LSP capability seam (`ctx.lsp`). Owns provider registration/selection and normalized query execution; exposes exactly the four operations and no protocol escape hatch.',
@@ -2581,6 +2622,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     summary: 'Abstract subprocess service.',
     description: 'Abstract subprocess service. Subclass, implement spawn, and load the subclass as a plugin — it registers as `ctx.subprocess` (one implementation per context; loading a second throws, which is cordis\' standard duplicate-service behavior).\n\nImplementations must honor these semantics:\n\n- Executable paths belong to one execution world shared with the mounted filesystem provider.\n- spawn returns a live handle synchronously. Target identity remains provider-private; `done` resolves with the spawned command\'s exit facts and may reject for spawn or provider failures.\n- Collect-mode readers are offset-based and non-consuming, so independent readers never consume one another\'s output; lossy reads report truncation and the spill file holding the complete stream when one exists. Piped streams are handed to the caller raw and never buffered here.\n- SubprocessHandle.terminate (and the spec\'s abort signal) starts the provider\'s documented procedure against its managed range. SubprocessHandle.waitForExit observes that same range so a consumer-owned teardown ladder can hold each tier on real quiescence; each provider documents its signalling and observability limits.\n- Disposal of the service terminates all still-running managed processes and awaits their exit.\n- spawnTerminal owns terminal allocation, text transport, foreground groups, signalling, and whole-session quiescence behind one awaited termination method; readiness and persistent-shell policy stay in the PTY consumer. Its output stream ends after queued terminal output when the top-level process exits.',
     methods: [
+      {
+        signature: 'resolveWorkingDirectory(path: string): string',
+        description: 'Map an absolute consumer working directory into this provider\'s execution world. Host and already-normalized providers return it unchanged; isolated providers reject unconfigured roots.',
+        parameters: [{ name: 'path', description: 'absolute working directory supplied by a consumer.' }],
+        returns: 'the corresponding provider-world directory.',
+      },
       {
         signature: 'abstract resolveExecutable( command: string, env?: Readonly<Record<string, string>>, signal?: AbortSignal, ): Promise<string>',
         description: 'Resolve one configured executable in this provider\'s execution world. Absolute paths are verified; bare names use the provider\'s scrubbed PATH plus explicit environment overrides. Relative paths containing separators are rejected: the resolution base is undefined, so providers fail loud instead of guessing.',
@@ -4833,6 +4880,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    @Remote(\'discoverModels\')\n    async remoteDiscoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | undefined;\n    fileRequestText(ref: FileAttachmentRef): string;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async resolveCallConfig(config: LlmCallConfig, signal?: AbortSignal): Promise<LlmCallConfig>;\n    async prepareCall(config: LlmCallConfig, signal?: AbortSignal): Promise<PreparedLlmCall>;\n    stream(options: GenerateOptions) /* …truncated — full shape in source */',
   },
   {
+    name: 'LocalContainerHandle',
+    declaration: 'export interface LocalContainerHandle {\n    readonly id: string;\n    readonly workspacePath: \'/workspace\';\n}',
+  },
+  {
+    name: 'LocalContainerProcessHandle',
+    declaration: 'export interface LocalContainerProcessHandle {\n    readonly id: string;\n    readonly stream: Duplex;\n    readonly tty: boolean;\n    readonly done: Promise<{\n        exitCode: number | null;\n        error?: string;\n    }>;\n    resize(rows: number, cols: number): Promise<void>;\n    inspect(argv: readonly string[], maxOutputBytes: number): Promise<{\n        exitCode: number;\n        output: string;\n    }>;\n    signal(signal: string): Promise<void>;\n    terminate(): Promise<void>;\n    waitForRemoval(signal?: AbortSignal): Promise<boolean>;\n}',
+  },
+  {
+    name: 'LocalContainerProcessRequest',
+    declaration: 'export interface LocalContainerProcessRequest {\n    readonly argv: readonly [\n        string,\n        ...string[]\n    ];\n    readonly cwd: \'/workspace\' | `/workspace/${string}`;\n    readonly environment: Readonly<Record<string, string | undefined>>;\n    readonly tty: boolean;\n    readonly stdin: boolean;\n    readonly rows?: number;\n    readonly cols?: number;\n    readonly signal?: AbortSignal;\n}',
+  },
+  {
     name: 'LspHover',
     declaration: 'export interface LspHover {\n    readonly contents: string;\n    readonly range?: LspRange;\n}',
   },
@@ -5083,6 +5142,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'PermissionSelect',
     declaration: 'export interface PermissionSelect {\n    options: PresetOption[];\n    currentValue: string;\n}',
+  },
+  {
+    name: 'PodmanControllerExecRequest',
+    declaration: 'export interface PodmanControllerExecRequest {\n    readonly argv: readonly string[];\n    readonly stdin: Uint8Array;\n    readonly maxOutputBytes: number;\n    readonly signal?: AbortSignal;\n}',
+  },
+  {
+    name: 'PodmanControllerExecResult',
+    declaration: 'export interface PodmanControllerExecResult {\n    readonly exitCode: number;\n    readonly stdout: Uint8Array;\n    readonly stderr: Uint8Array;\n}',
   },
   {
     name: 'PostToolDecision',

@@ -42,6 +42,7 @@ export { REGION_BEGIN, REGION_END }
  * errors, so the partition can never silently drift from the service API.
  */
 export const SERVICE_PAGE: Record<string, string> = {
+  localContainerRuntime: 'sandbox.md',
   agentLoop: 'core.md',
   agentModels: 'core.md',
   agentPresets: 'core.md',
@@ -140,6 +141,7 @@ export const SERVICE_PAGE: Record<string, string> = {
  * to a model as `cordis_runtime_inspect what:"client"`).
  */
 export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
+  localContainerExecutionWorld: 'not a service: immutable verified provider identity owned by packages/sandbox/local-container-runtime/README.md',
   appReady: 'not a service: launcher-provided successful-startup signal — packages/boot/cmdline/README.md owns the launcher contract',
   appExit: 'not a service: launcher-provided bounded process-exit callback — packages/boot/cmdline/README.md owns the launcher contract',
   cmdlineArgs: 'not a service: launcher-provided immutable app argument accessor — packages/boot/cmdline/README.md owns the launcher contract',
@@ -394,6 +396,11 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   SubprocessSpawnSpec: 'subprocess.md',
   SubprocessTerminalHandle: 'subprocess.md',
   SubprocessTerminalSpawnSpec: 'subprocess.md',
+  LocalContainerHandle: 'sandbox.md',
+  PodmanControllerExecRequest: 'sandbox.md',
+  PodmanControllerExecResult: 'sandbox.md',
+  LocalContainerProcessHandle: 'sandbox.md',
+  LocalContainerProcessRequest: 'sandbox.md',
   CodeRunRequest: 'code-runtime.md',
   CodeRunResult: 'code-runtime.md',
   CompactionResult: 'compaction.md',

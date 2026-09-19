@@ -16,7 +16,7 @@ import LlmRuntime, {
 } from '@deepseek-ai/dsh-llm'
 import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolPolicyService from '@deepseek-ai/dsh-tool-policy'
+import ToolPolicyService, { ToolPolicyProviderId } from '@deepseek-ai/dsh-tool-policy'
 import * as shellPolicy from '@deepseek-ai/dsh-tool-policy-shell'
 import ToolRuntime, { defineTool } from '@deepseek-ai/dsh-tools'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -49,7 +49,7 @@ afterEach(async () => {
   root = undefined
 })
 
-async function load(configureEnforcer = true, prefixRules?: readonly shellPolicy.CommandPrefixRule[]): Promise<Context> {
+async function load(configureEnforcer = true, prefixRules?: readonly shellPolicy.CommandPrefixRule[], contained = false): Promise<Context> {
   root = await mkdtemp(join(tmpdir(), 'dsh-tool-policy-loader-'))
   const configPath = join(root, 'cordis.yml')
   await writeFile(configPath, [
@@ -59,8 +59,10 @@ async function load(configureEnforcer = true, prefixRules?: readonly shellPolicy
     "- name: '@deepseek-ai/dsh-tools'",
     "- name: '@deepseek-ai/dsh-tool-policy'",
     "- name: '@deepseek-ai/dsh-tool-policy-shell'",
+    ...contained ? ['  inject: [localContainerExecutionWorld, fs, subprocess]'] : [],
     '  config:',
     '    id: shell',
+    ...contained ? ['    containedExecutionWorld: true'] : [],
     `    mappings: [{ tool: bash, commandArgument: command, intentArgument: description${prefixRules === undefined ? '' : ', commandSyntax: posix'} }]`,
     '    intent: { provider: intent, model: intent-reviewer, reasoningEffort: minimal }',
     '    primary: { provider: intent, model: intent-reviewer, reasoningEffort: minimal }',
@@ -76,6 +78,7 @@ async function load(configureEnforcer = true, prefixRules?: readonly shellPolicy
     '    maxEffects: 8',
     '    rules: []',
     ...prefixRules === undefined ? [] : [`    prefixRules: ${JSON.stringify(prefixRules)}`],
+    ...contained ? ["- name: 'test:verified-world'"] : [],
     "- name: '@deepseek-ai/dsh-tool-policy-enforcer'",
     ...(configureEnforcer ? [
       '  config:',
@@ -92,6 +95,19 @@ async function load(configureEnforcer = true, prefixRules?: readonly shellPolicy
   await context.plugin(Loader)
   context.loader.builtins.include = Include
   const modules = new Map<string, unknown>([
+    ['test:verified-world', {
+      async apply(ctx: Context) {
+        // The Engine is external; Loader dependency ordering and policy services are real.
+        await Promise.resolve()
+        const world = Object.freeze({})
+        for (const key of ['fs', 'subprocess'] as const) {
+          const dispose = ctx.provide(key, { executionWorld: world } as never)
+          ctx.effect(() => dispose)
+        }
+        const dispose = ctx.provide('localContainerExecutionWorld', world as never)
+        ctx.effect(() => dispose)
+      },
+    }],
     ['@deepseek-ai/dsh-llm', LlmRuntime],
     ['@deepseek-ai/dsh-session', SessionStore],
     ['@deepseek-ai/dsh-system-prompt', SystemPrompt],
@@ -113,6 +129,39 @@ async function load(configureEnforcer = true, prefixRules?: readonly shellPolicy
 }
 
 describe('real Loader policy composition', () => {
+  it('omits contained command decisions while retaining independent external authorization', async () => {
+    const loaded = await load(false, undefined, true)
+    expect([...loaded.loader.entries()].filter(entry => entry.fiber === undefined && !entry.disabled)).toEqual([])
+    const executions: string[] = []
+    for (const name of ['bash', 'external']) {
+      loaded.tools.register(defineTool({
+        name, description: 'test operation', parameters: {},
+        output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
+        execute: async () => { executions.push(name); return 'ran' },
+      }))
+    }
+    const providerId = ToolPolicyProviderId('external')
+    loaded.toolPolicy.register(providerId, {
+      async evaluate(request) {
+        return request.toolName === 'external'
+          ? { providerId, decision: 'deny', risk: 100, categories: ['external'], reason: 'external effects require independent authorization', opinions: [] }
+          : undefined
+      },
+    })
+    const agent = { options: {}, session: Session.create(SessionId('contained-world')) } as unknown as Agent
+    await loaded.toolPolicy.prewarm({ session: agent.session, signal: new AbortController().signal })
+    await expect(loaded.tools.execute({
+      callId: ToolCallId('contained'), name: 'bash', arguments: { command: 'printf contained' }, agent,
+      signal: new AbortController().signal,
+    })).resolves.toMatchObject({ isError: false })
+    expect(agent.session.snapshotEvents().filter(event => event.type.startsWith('tool-policy/'))).toEqual([])
+    await expect(loaded.tools.execute({
+      callId: ToolCallId('external'), name: 'external', arguments: {}, agent, signal: new AbortController().signal,
+    })).resolves.toMatchObject({ isError: true })
+    expect(executions).toEqual(['bash'])
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'tool-policy/decision').map(event => event.data.effectiveDecision)).toEqual(['deny', 'deny'])
+  })
+
   it('rejects contradictory examples while loading the provider', async () => {
     await expect(load(false, [
       { pattern: ['git', 'status'], decision: 'allow', reason: 'inspect', match: ['git push'] },

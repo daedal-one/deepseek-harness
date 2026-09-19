@@ -7,6 +7,10 @@ A service can be a core spine service, a swappable capability seam, or a bundle/
 
 ```mermaid
 flowchart LR
+  pkg_local_container_runtime["local-container-runtime"]
+  svc_localContainerRuntime["ctx.localContainerRuntime<br/>Disposable local container execution world"]
+  pkg_fs_local_container["fs-local-container"]
+  pkg_subprocess_local_container["subprocess-local-container"]
   pkg_attachment["attachment"]
   svc_attachments["ctx.attachments<br/>Durable binary attachment storage"]
   pkg_attachment_local["attachment-local"]
@@ -297,6 +301,7 @@ flowchart LR
   pkg_llm_deepseek --> svc_llm
   pkg_llm_pi_ai --> svc_llm
   pkg_llm_replay --> svc_llm
+  pkg_local_container_runtime --> svc_localContainerRuntime
   pkg_lsp --> svc_lsp
   pkg_lsp_stdio --> svc_lsp
   pkg_memory --> svc_memory
@@ -409,6 +414,8 @@ flowchart LR
   svc_jobs --> pkg_tool_terminal
   svc_llm --> pkg_agent_loop
   svc_llm --> pkg_compaction_basic
+  svc_localContainerRuntime --> pkg_fs_local_container
+  svc_localContainerRuntime --> pkg_subprocess_local_container
   svc_lsp --> pkg_tool_lsp
   svc_memory --> pkg_memory_extractor_llm
   svc_memory --> pkg_tool_memory
@@ -502,6 +509,7 @@ flowchart LR
 
 | ctx key | Role | Owner | Implementations | Direct consumers | Companion plugins | Note |
 | --- | --- | --- | --- | --- | --- | --- |
+| `ctx.localContainerRuntime` | `core` | [`local-container-runtime`](../packages/sandbox/local-container-runtime) | - | [`fs-local-container`](../packages/fs/fs-local-container), [`subprocess-local-container`](../packages/subprocess/subprocess-local-container) | - | Owns one verified rootless container world and removable process ranges shared by the filesystem and subprocess providers. |
 | `ctx.attachments` | `seam` | [`attachment`](../packages/attachment/attachment) | [`attachment-local`](../packages/attachment/attachment-local) | [`api-session-controller`](../packages/api/session-controller), [`tool-fs`](../packages/fs/tool-fs), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-deepseek`](../packages/llm/llm-deepseek) | - | The host commits accepted images before session events; provider adapters resolve authorized durable references into provider-native content. |
 | `ctx.fileUploads` | `core` | [`client-file-upload`](../packages/client/file-upload) | - | [`api-session-controller`](../packages/api/session-controller) | - | Owns streaming intake, durable storage, and staged receipt lifetime; the Session controller binds receipts to accepted submissions. |
 | `ctx.llm` | `seam` | [`llm`](../packages/llm/llm) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-replay`](../packages/test-support/llm-replay) | [`agent-loop`](../packages/core/agent-loop), [`compaction-basic`](../packages/compaction/compaction-basic) | - | Adapters register provider implementations; the loop and compaction call the provider-neutral stream service. |

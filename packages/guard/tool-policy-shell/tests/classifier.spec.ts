@@ -108,6 +108,38 @@ async function prewarm(ctx: Context, agent: Agent): Promise<void> {
 }
 
 describe('shell classifier dispatch', () => {
+  it('omits prewarming and verdicts only while the contained world remains verified', async () => {
+    const ctx = new Context()
+    try {
+      await ctx.plugin(LlmRuntime)
+      await ctx.plugin(ToolPolicyService, {})
+      const adapter = new RoutedAdapter({ intent: [INTENT_ALLOW] })
+      ctx.llm.registerAdapter(['intent', 'primary', 'secondary'], adapter)
+      const world = {}
+      const revoke = ctx.provide('localContainerExecutionWorld', world as never)
+      ctx.provide('fs', { executionWorld: world } as never)
+      ctx.provide('subprocess', { executionWorld: world } as never)
+      apply(ctx, Object.assign({}, makeConfig(), { containedExecutionWorld: true }))
+      const { agent, events } = fakeAgent()
+      await prewarm(ctx, agent)
+      await expect(evaluate(ctx, agent)).resolves.toBeUndefined()
+      expect(adapter.seen).toEqual([])
+      expect(events.filter(event => String(event.type).startsWith('tool-policy/'))).toEqual([])
+      revoke()
+      await expect(evaluate(ctx, agent)).rejects.toThrow(/verified matching/)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('rejects the contained fast path without the verified execution-world marker', async () => {
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(ToolPolicyService, {})
+    expect(() =>{  apply(ctx, Object.assign({}, makeConfig(), { containedExecutionWorld: true })) })
+      .toThrow(/requires a verified matching filesystem and subprocess world/)
+  })
+
   it('preserves ordered legacy rules for a POSIX mapping without prefix rules', async () => {
     const ctx = new Context()
     try {

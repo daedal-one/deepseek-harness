@@ -1,0 +1,23 @@
+FROM docker.io/library/node@sha256:48e4b67d85f87bd551df43704e24d252f56cc5f8e9718841aace50f19948f0f9
+
+RUN apt-get update \
+  && DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends \
+    bash \
+    build-essential \
+    ca-certificates \
+    coreutils \
+    findutils \
+    git \
+    grep \
+    procps \
+    python3 \
+    ripgrep \
+    util-linux \
+  && rm -rf /var/lib/apt/lists/*
+
+RUN usermod --login dsh --home /home/dsh --move-home --shell /usr/sbin/nologin node \
+  && groupmod --new-name dsh node
+
+WORKDIR /workspace
+USER dsh
+CMD ["/usr/bin/sleep", "infinity"]

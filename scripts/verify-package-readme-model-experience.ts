@@ -44,6 +44,9 @@ const NO_MODEL_EXPERIENCE_SECTION: Readonly<Record<string, string>> = {
  * blocks. A package moves on or off this list with its context behavior.
  */
 const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
+  'packages/sandbox/local-container-runtime': { kind: 'none', reason: 'The runtime owns containers and registers no model-facing content.' },
+  'packages/fs/fs-local-container': { kind: 'indirect', reason: 'Filesystem consumers own rendering of container file results.' },
+  'packages/subprocess/subprocess-local-container': { kind: 'indirect', reason: 'Shell, terminal, search, and LSP consumers own rendering of container process results.' },
   'packages/attachment/attachment': { kind: 'indirect', reason: 'The storage seam delegates model request rendering to provider adapters.' },
   'packages/attachment/attachment-local': { kind: 'indirect', reason: 'The local backend delegates model request rendering to provider adapters.' },
   'packages/shell/shell': { kind: 'indirect', reason: 'The service interface delegates all model rendering to dsh-tool-bash.' },

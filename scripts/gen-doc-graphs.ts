@@ -99,6 +99,14 @@ const GROUP_ORDER = [
 
 const SERVICE_ROLES: ServiceRole[] = [
   {
+    key: 'localContainerRuntime',
+    pkg: 'local-container-runtime',
+    title: 'Disposable local container execution world',
+    mode: 'core',
+    consumers: ['fs-local-container', 'subprocess-local-container'],
+    note: 'Owns one verified rootless container world and removable process ranges shared by the filesystem and subprocess providers.',
+  },
+  {
     key: 'attachments',
     pkg: 'attachment',
     title: 'Durable binary attachment storage',

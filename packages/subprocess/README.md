@@ -24,6 +24,7 @@ Every child process and terminal session the harness runs — bash commands, lan
 |---|---|---|
 | [`subprocess`](subprocess/README.md) | Defines the child-process service: executable lookup, managed process spawns, and real terminal sessions | `ctx.subprocess` |
 | [`subprocess-local`](subprocess-local/README.md) | Runs host processes and terminals with native managed ranges where supported and explicit weaker fallbacks elsewhere | registers on `ctx.subprocess` |
+| [`subprocess-local-container`](subprocess-local-container/README.md) | Runs each isolated process range in a removable rootless Podman sibling sharing the execution-world workspace | registers on `ctx.subprocess` |
 | [`win32-process`](win32-process/README.md) | Owns shared Win32 bindings for sandbox and ordinary process creation, stdio, Job assignment, polling, waits, and handle cleanup | library — no ctx key |
 
 The service keeps process lifetime across consumer reloads; consumers own what a process means (a bash command, a language server) and every default that shapes one.

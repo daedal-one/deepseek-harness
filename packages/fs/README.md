@@ -7,7 +7,7 @@ kind: "package-group"
 
 ## Summary
 
-The `fs/` group gives agents durable, policy-governed access to files: the `ctx.fs` service contract in `fs/`, the host-filesystem and sandbox-enforcing backends in `fs-local/` and `fs-sandbox/`, the read-before-edit policy in `fs-observation-policy/`, and the model-facing tools in `tool-fs/` (`read`, `read_image`, `write`, `edit`) and `tool-fs-search/` (`glob`, `grep`). A deployment mounts one backend, loads the policy for freshness-guarded mutations, and registers the tool packages the model should see; backends swap without touching the tools or the policy. File I/O takes no timeout by design: a deadline would kill work the OS still finishes, so cancellation is a best-effort signal at syscall boundaries.
+The `fs/` group gives agents durable, policy-governed access to files: the `ctx.fs` service contract in `fs/`, host and sandbox backends in `fs-local/` and `fs-sandbox/`, the opt-in container backend in `fs-local-container/`, the read-before-edit policy in `fs-observation-policy/`, and model-facing file and search tools. A deployment mounts one backend, loads the policy for freshness-guarded mutations, and registers the tool packages the model should see; backends swap without touching the tools or the policy. The seam has no universal deadline; the container backend instead owns a per-operation deadline because it can fail closed by removing its entire execution world.
 
 ## Table of Contents
 
@@ -20,12 +20,13 @@ The `fs/` group gives agents durable, policy-governed access to files: the `ctx.
 <a id="packages"></a>
 ## Packages
 
-Eight packages plus the remote sibling `fs-e2b` play the filesystem roles; the subsystem reference owns the exhaustive contracts and the error taxonomy.
+Nine packages plus the remote sibling `fs-e2b` play the filesystem roles; the subsystem reference owns the exhaustive contracts and the error taxonomy.
 
 | Package | Role | ctx key |
 |---|---|---|
 | [`fs/`](fs/README.md) | `ctx.fs` service contract: execution-world paths, bounded text I/O, and atomic mutations with an optional version guard | `ctx.fs` |
 | [`fs-local/`](fs-local/README.md) | Host-filesystem backend: reads, writes, and edits real files on the local machine | registers on `ctx.fs` |
+| [`fs-local-container/`](fs-local-container/README.md) | Opt-in container backend: bounded file operations in the runtime owner's `/workspace` | registers on `ctx.fs` |
 | [`fs-sandbox/`](fs-sandbox/README.md) | Sandbox-enforcing backend: fences writes and edits by the per-call sandbox mode while reads pass through | registers on `ctx.fs` |
 | [`e2b/fs-e2b`](../e2b/fs-e2b/README.md) | E2B-backed backend: file state lives in the remote execution world shared with the E2B subprocess provider | registers on `ctx.fs` |
 | [`fs-observation-policy/`](fs-observation-policy/README.md) | Read-before-edit policy: records observed presence or absence and guards write/edit through the `fs/*` events | `fs/*` listeners |
