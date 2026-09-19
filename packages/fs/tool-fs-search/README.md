@@ -23,7 +23,7 @@ Use `dsh-tool-fs-search` to give models `glob` file discovery and `grep` content
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the tools after a `ctx.subprocess` backend; no host `rg` install is needed, and no filesystem provider is required. The model then gets modification-time-ordered file discovery and line-oriented content search, each bounded and timeout-guarded.
+Mount the tools after a `ctx.subprocess` backend; local deployments need no host `rg` install, and no filesystem provider is required. A remote or isolated execution world configures an `rg` executable available through its subprocess provider. The model then gets modification-time-ordered file discovery and line-oriented content search, each bounded and timeout-guarded.
 
 ### Minimal composition
 
@@ -59,6 +59,7 @@ Routine budgets stay out of the model-facing schema: a model that needs surround
 | `grepMaxMatches` | `250` | Max flat matches one `grep` call retains inline; later matches go to the formatted spill artifact |
 | `grepMaxLineBytes` | `2000` | Byte cap per matched-line preview, preserving UTF-8 boundaries |
 | `rawOutputMaxBytes` | `20000000` | Max complete raw `rg` stdout a search will parse; larger raw output fails with `SEARCH_RAW_OUTPUT_OVERFLOW` |
+| `ripgrepCommand` | packaged binary in the host world; required elsewhere | Executable name or absolute path resolved by the subprocess provider; isolated execution worlds set this to an installed `rg` |
 | `timeoutMs` | `30000` | Cooperative tool-call budget on both tools, enforced through `exec.signal` |
 | `graceMs` | `3000` | Terminate-escalation grace the subprocess seam grants past `timeoutMs` |
 | `stderrMaxBytes` | `65536` | Diagnostic-tail budget for `rg` stderr |
@@ -68,7 +69,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### Deployment requirement
 
-Node deployments receive the `@vscode/ripgrep` platform package on supported macOS, Linux, and Windows targets; Python SDK wheels copy the target-native binary beside the single-file runtime as a `-rg` sidecar. No carrier requires a host `rg`. Returned paths are displayed relative to the resolved workdir (the calling session's cwd when present) and are follow-up-readable with `read` only when that workdir and the filesystem root are the same workspace.
+Node deployments receive the `@vscode/ripgrep` platform package on supported macOS, Linux, and Windows targets; Python SDK wheels copy the target-native binary beside the single-file runtime as a `-rg` sidecar. No local carrier requires a host `rg`. A composition whose subprocess provider uses another execution world configures `ripgrepCommand` to an executable installed there; the provider resolves it before spawn. Returned paths are displayed relative to the resolved workdir (the calling session's cwd when present) and are follow-up-readable with `read` only when that workdir and the filesystem root are the same workspace.
 
 ### Failures and recovery
 
@@ -101,7 +102,7 @@ Local workspace discovery is naturally a process-backed `rg` workflow, and putti
 
 ### How a search runs
 
-Each call resolves the packaged binary (`@vscode/ripgrep`, or the executable's `-rg` sidecar in a pkg single-file runtime), prepends `--no-config` so a host `RIPGREP_CONFIG_PATH` cannot inject a `--pre` preprocessor into the unconfined spawn, and passes every model-controlled value as a plain argv element — no shell layer exists, so no quoting applies. Collect-mode budgets bound complete stdout and a stderr tail; a lossy stdout read fails as `SEARCH_RAW_OUTPUT_OVERFLOW` rather than parsing a silently-partial stream. The tools never read a raw spill path.
+Each call resolves either the packaged binary (`@vscode/ripgrep`, or the executable's `-rg` sidecar in a pkg single-file runtime) or the configured `ripgrepCommand` through `ctx.subprocess`, prepends `--no-config` so ambient ripgrep configuration cannot inject a `--pre` preprocessor, and passes every model-controlled value as a plain argv element — no shell layer exists, so no quoting applies. Collect-mode budgets bound complete stdout and a stderr tail; a lossy stdout read fails as `SEARCH_RAW_OUTPUT_OVERFLOW` rather than parsing a silently-partial stream. The tools never read a raw spill path.
 
 ### Two budgets, two artifacts
 

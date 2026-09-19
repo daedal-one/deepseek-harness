@@ -61,7 +61,7 @@ The contract is built on one separation and three commitments:
 
 ### How a call flows
 
-Every ordinary operation starts with `resolve(path, { cwd })`, which produces a stable `FsTarget` (an opaque `targetKey` plus a `displayPath` for model/UI output); the same file reached through different paths yields the same key. `processPathFromHostPath(hostPath)` separately maps an absolute host file into this execution world when the backend shares or explicitly maps it, and otherwise returns `undefined`. Reads then go `stat` → `readText`/`streamText`/`readBytes`/`readByteRange`, listings go `listDir`, and mutations go through one per-target critical section: the optional guard is checked, the new content is applied, and the result is published atomically.
+Every provider publishes an opaque same-process `executionWorld` token; a composition that requires filesystem and subprocess coherence compares those tokens by reference and never serializes them. Every ordinary operation starts with `resolve(path, { cwd })`, which produces a stable `FsTarget` (an opaque `targetKey` plus a `displayPath` for model/UI output); the same file reached through different paths yields the same key. `processPathFromHostPath(hostPath)` separately maps an absolute host file into this execution world when the backend shares or explicitly maps it, and otherwise returns `undefined`. Reads then go `stat` → `readText`/`streamText`/`readBytes`/`readByteRange`, listings go `listDir`, and mutations go through one per-target critical section: the optional guard is checked, the new content is applied, and the result is published atomically.
 
 ### The `fs/*` policy events
 

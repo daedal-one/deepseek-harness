@@ -118,6 +118,26 @@ export abstract class SubprocessRuntime extends Service {
   }
 
   /**
+   * Opaque same-process identity of the path and process world this provider
+   * inhabits. Providers sharing an execution world return the same token;
+   * composition validators compare it by reference and never serialize it.
+   */
+  get executionWorld(): symbol | object {
+    return Symbol.for('@deepseek-ai/dsh/host-execution-world')
+  }
+
+  /**
+   * Map an absolute consumer working directory into this provider's execution
+   * world. Host and already-normalized providers return it unchanged; isolated
+   * providers reject unconfigured roots.
+   * @param path - absolute working directory supplied by a consumer.
+   * @returns the corresponding provider-world directory.
+   */
+  resolveWorkingDirectory(path: string): string {
+    return path
+  }
+
+  /**
    * Resolve one configured executable in this provider's execution world.
    * Absolute paths are verified; bare names use the provider's scrubbed PATH
    * plus explicit environment overrides. Relative paths containing separators

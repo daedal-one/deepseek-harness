@@ -3031,6 +3031,8 @@ export interface Config {
   searchMetaMaxBytes?: number
   /** Max complete raw `rg` stdout bytes a search will parse; larger raw output fails with `SEARCH_RAW_OUTPUT_OVERFLOW`. */
   rawOutputMaxBytes?: number
+  /** Executable name or absolute path resolved in the subprocess execution world; omission uses the packaged host binary. */
+  ripgrepCommand?: string
   /** Terminate-escalation grace (ms), handed to the subprocess seam and bounded by `MAX_TIMER_DELAY_MS`. */
   graceMs?: number
   /** Max bytes retained for one search's stderr tail; the excerpt is embedded in `SEARCH_*` error messages, never shown on success. */

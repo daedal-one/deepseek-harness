@@ -50,6 +50,8 @@ export interface GrepToolCaps {
   stderrMaxBytes: number
   /** Cooperative tool-call budget (ms) attached as `ToolDefinition.timeoutMs`. */
   timeoutMs: number
+  /** Optional executable name resolved inside the subprocess provider's execution world. */
+  ripgrepCommand?: string
 }
 
 /** Validated `grep` arguments. */
@@ -321,7 +323,7 @@ export function applyGrepTool(ctx: Context, caps: GrepToolCaps): void {
     },
     async execute(args, exec) {
       const input = parseGrepArgs(args)
-      const run = await runRipgrep(ctx, exec, 'grep', buildGrepCommand(input), caps.rawOutputMaxBytes, caps.graceMs, caps.stderrMaxBytes)
+      const run = await runRipgrep(ctx, exec, 'grep', buildGrepCommand(input), caps.rawOutputMaxBytes, caps.graceMs, caps.stderrMaxBytes, caps.ripgrepCommand)
       if (run.noMatches) return { matches: [] }
 
       const all: GrepMatch[] = []

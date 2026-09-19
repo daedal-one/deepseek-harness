@@ -60,6 +60,11 @@ function validateNoNullByte(subject: string, value: string): void {
 export class E2BSubprocessRuntime extends SubprocessRuntime {
   static inject = ['e2b']
 
+  /** The shared E2B runtime is this provider family's execution-world identity. */
+  override get executionWorld(): object {
+    return this.ctx.e2b
+  }
+
   static Config: z<Config> = z.object({
     pollMs: z.number().default(20),
   })

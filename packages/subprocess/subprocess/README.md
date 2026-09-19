@@ -27,7 +27,7 @@ Mount a subprocess provider in any composition that must run child processes, an
 
 ### Mounting the service
 
-One provider registers `ctx.subprocess` per composition; load it beside the consumers that spawn through it — the bash executors, the LSP host, the PTY shell backend, or an out-of-process subagent backend. Loading a second provider fails loudly (one service per context, cordis standard).
+One provider registers `ctx.subprocess` per composition; load it beside the consumers that spawn through it — the bash executors, the LSP host, the PTY shell backend, or an out-of-process subagent backend. Loading a second provider fails loudly (one service per context, cordis standard). Every provider publishes an opaque same-process `executionWorld` token for reference comparison with its filesystem peer.
 
 ```yaml
 - name: '@deepseek-ai/dsh-subprocess-local'
@@ -36,7 +36,7 @@ One provider registers `ctx.subprocess` per composition; load it beside the cons
 
 ### Starting a managed process
 
-The request is fully explicit: the program and arguments, the working directory, one stdio disposition per stream, a termination grace, an optional abort signal, and optional environment overrides. Target and managed-range identities remain provider-private. `done` resolves with the direct command's exit facts (`exitCode` and `signal`) and rejects for spawn or provider failures; collected output stays readable after exit.
+The request is fully explicit: the program and arguments, the working directory, one stdio disposition per stream, a termination grace, an optional abort signal, and optional environment overrides. A portable consumer calls `resolveWorkingDirectory()` before retaining or displaying that directory; host providers return it unchanged, while an isolated provider may map configured Session roots and reject every other host root. Target and managed-range identities remain provider-private. `done` resolves with the direct command's exit facts (`exitCode` and `signal`) and rejects for spawn or provider failures; collected output stays readable after exit.
 
 ```text
 const executable = await ctx.subprocess.resolveExecutable('bash')
