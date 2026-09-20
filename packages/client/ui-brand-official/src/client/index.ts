@@ -9,7 +9,7 @@ export const inject = ['slots']
 
 /**
  * Fill the sidebar brand slots as one declaration-aware registration set. The
- * conversation hero stays on its declaring package's animated fish fallback,
+ * conversation hero stays on its declaring package's mark fallback,
  * so the official build registers nothing there.
  * @param ctx - Client root context.
  */

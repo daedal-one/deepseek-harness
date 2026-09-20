@@ -90,25 +90,6 @@ import type {} from '@deepseek-ai/dsh-agent'
 import { provideCmdline } from '@deepseek-ai/dsh-cmdline'
 import { REPO_ROOT, requireDist } from './support.ts'
 
-// Host-side web e2e cannot import a browser package: doing so would pull that
-// package's complete TS project into this graph. Mirrored from
-// packages/client/ui-settings-models/src/onboarding-copy.ts; drift makes the
-// default pre-acknowledgement stop suppressing the notice and fails loudly.
-// import {
-//   WELCOME_NOTICE_ACK_FIELD, WELCOME_NOTICE_SETTINGS_NAMESPACE,
-//   WELCOME_NOTICE_VERSION, WELCOME_NOTICE_COPY,
-// } from '@deepseek-ai/dsh-client-ui-settings-models'
-export const WELCOME_NOTICE_SETTINGS_NAMESPACE = 'ui-onboarding'
-export const WELCOME_NOTICE_ACK_FIELD = 'welcomeNoticeVersion'
-export const WELCOME_NOTICE_VERSION = '2026-08-13.1'
-export const WELCOME_NOTICE_COPY = {
-  en: {
-    title: 'Internal Testing Notice',
-    body: "DeepSeek Harness 0.1 remains in testing for Harness developers. Many areas need further improvement, and we welcome feedback from the developer community. DeepSeek Harness's core plugins and foundational APIs will continue to evolve rapidly over the coming months.\n\nWe look forward to exploring the limits of intelligence with developers around the world, building on open-source, open, reusable, and composable infrastructure. We welcome Harness developers everywhere to join the DSH plugin ecosystem.",
-    continueLabel: 'Continue',
-  },
-} as const
-
 /** Snapshot mode for the lane, from $DSH_SNAPSHOT (same vocabulary as the other snapshot suites). */
 export type WebSnapshotMode = 'replay' | 'record' | 'refresh'
 
@@ -371,8 +352,6 @@ export interface LaunchOptions {
    * keyless first-run configuration lane; the default disables the adapter.
    */
   openRouterMissingCredential?: boolean
-  /** Leave the current welcome notice pending; ordinary scenarios pre-acknowledge it before browser boot. */
-  welcomeNoticePending?: boolean
   /**
    * Patch the shipped OpenRouter search row to a deterministic endpoint and
    * credential reference. Browser search scenarios keep the real provider and
@@ -721,11 +700,6 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
     })
     await ctx.loader.await()
     assertEntriesLoaded(ctx, 'web e2e scaffold')
-    if (options.welcomeNoticePending !== true) {
-      await ctx.settings.mutate(WELCOME_NOTICE_SETTINGS_NAMESPACE, [{
-        op: 'set', path: [WELCOME_NOTICE_ACK_FIELD], value: WELCOME_NOTICE_VERSION,
-      }])
-    }
     const boundPort = ctx.get('webServer')?.port
     if (boundPort === undefined) {
       throw new Error('web e2e scaffold: webServer service missing after settled boot')
