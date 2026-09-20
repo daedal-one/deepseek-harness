@@ -125,7 +125,13 @@ export interface ISession {
   loadOlder(): Promise<void>
   /** Retry a failed history load. @returns completion of the new load. */
   retryOpen(): Promise<void>
-  /** Fetch one exact deferred result. @param seq - result sequence. @returns completion of the window update. */
+  /**
+   * Fetch one deferred result from the active history window. Concurrent callers share
+   * completion; failures reject for explicit retry. Replacement or disposal cancels
+   * the read and suppresses its obsolete result or failure.
+   * @param seq - result sequence in the active history window.
+   * @returns completion of hydration or cancellation; already hydrated or absent entries are no-ops.
+   */
   loadHistoryDetail(seq: number): Promise<void>
   /**
    * Page history backwards until the window covers `seq` (inclusive) — the

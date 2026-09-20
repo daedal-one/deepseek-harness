@@ -87,7 +87,9 @@ export class Session implements SessionFace {
   // ---- Window and derived state (all private; the snapshot is the only read API) ----
   private baseSeq = SessionLogOffset(0)
   private hasMore = false
-  private readonly detailLoads = new Map<number, Promise<void>>()
+  private readonly detailLoads = new Map<number, { abort: AbortController; promise: Promise<void> }>()
+  /** Canceled reads remain owned until settlement, after their coalescing slots are released. */
+  private readonly detailReads = new Set<Promise<void>>()
   private syncing = false
   private openState: OpenState = 'cold'
   private openError: RemoteFailure | null = null
@@ -392,20 +394,36 @@ export class Session implements SessionFace {
   /** Fetch an exact result and replace only its still-deferred entry. */
   loadHistoryDetail(seq: number): Promise<void> {
     const pending = this.detailLoads.get(seq)
-    if (pending !== undefined) return pending
+    if (pending !== undefined) return pending.promise
+    const entry = this.eventSource.getSnapshot().entries.find(value => value.event.seq === seq)
+    if (this.events === undefined || this.openState !== 'open' || entry?.type !== 'event' || entry.detail === undefined) return Promise.resolve()
     const generation = this.openGeneration
+    const abort = new AbortController()
     const task = (async () => {
-      const result = await this.remote.session.historyDetail({ address: this.sessionAddress(), seq })
-      if (!result.ok) throw result.error
+      const result = await this.remote.session.historyDetail({ address: this.sessionAddress(), seq }, abort.signal)
       if (generation !== this.openGeneration) return
+      if (!result.ok) throw result.error
       const window = this.eventSource.getSnapshot()
-      const entry = window.entries.find(value => value.event.seq === seq)
-      if (entry?.type !== 'event' || entry.detail === undefined) return
+      if (!window.entries.includes(entry)) return
       const replacement = result.value as unknown as SessionLiveEventEntry
       this.eventSource.replace(window.entries.map(value => value === entry ? replacement : value), window.hasMore)
-    })().finally(() => { this.detailLoads.delete(seq) })
-    this.detailLoads.set(seq, task)
+    })().catch((error: unknown) => {
+      if (generation === this.openGeneration) throw error
+    }).finally(() => {
+      if (this.detailLoads.get(seq)?.promise === task) this.detailLoads.delete(seq)
+      this.detailReads.delete(task)
+    })
+    this.detailLoads.set(seq, { abort, promise: task })
+    this.detailReads.add(task)
     return task
+  }
+
+  /** Invalidate coalescing before aborting reads so replacement requests have independent owners. */
+  private releaseDetails(): Promise<PromiseSettledResult<void>[]> {
+    const reads = [...this.detailLoads.values()]
+    this.detailLoads.clear()
+    for (const read of reads) read.abort.abort()
+    return Promise.allSettled([...this.detailReads])
   }
 
   /** Retry a failed initial history load. */
@@ -481,7 +499,8 @@ export class Session implements SessionFace {
     const paging = this.releasePaging()
     const events = this.events
     this.events = undefined
-    await Promise.all([events?.dispose(), paging])
+    const details = this.releaseDetails()
+    await Promise.all([events?.dispose(), paging, details])
     if (generation !== this.openGeneration) return
     this.openPromise = null
     this.openState = 'cold'
@@ -620,7 +639,8 @@ export class Session implements SessionFace {
     const paging = this.releasePaging()
     const events = this.events
     this.events = undefined
-    await Promise.all([events?.dispose(), paging])
+    const details = this.releaseDetails()
+    await Promise.all([events?.dispose(), paging, details])
   }
 
   /** Keep an open transcript readable while its Host generation is unavailable. */
@@ -822,11 +842,12 @@ export class Session implements SessionFace {
     this.openGeneration++
     const paging = this.releasePaging()
     this.events = undefined
+    const details = this.releaseDetails()
     this.openPromise = null
     this.openState = 'error'
     this.syncing = false
     this.openError = error
-    void Promise.all([events.dispose(), paging])
+    void Promise.all([events.dispose(), paging, details])
     this.notifier.markDirty()
   }
 

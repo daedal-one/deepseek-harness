@@ -146,7 +146,7 @@ export class FakeApiClient {
   => Promise<RemoteResult<SessionPage & { readonly projections?: SessionProjectionBaseline }>> =
     () => Promise.resolve(ok({ records: [], hasMore: false }))
 
-  onHistoryDetail: (payload: SessionHistoryDetailRequest) => Promise<RemoteResult<SessionEventEntry>> =
+  onHistoryDetail: (payload: SessionHistoryDetailRequest, signal?: AbortSignal) => Promise<RemoteResult<SessionEventEntry>> =
     async () => { throw new Error('History detail response is not programmed') }
 
   onPrompt: (payload: unknown) => Promise<RemoteResult<{ accepted: true }>> = () => Promise.resolve(ok({ accepted: true as const }))
@@ -248,7 +248,7 @@ export class FakeApiClient {
           this.onOpenWorkspacePath(payload),
         ),
         page: request => this.page(request),
-        historyDetail: request => this.record('session.historyDetail', request, this.onHistoryDetail(request)),
+        historyDetail: (request, signal) => this.record('session.historyDetail', request, this.onHistoryDetail(request, signal)),
         follow: (request, signal) => this.openFollow(request, signal),
         control: signal => this.openControl(signal),
       },
