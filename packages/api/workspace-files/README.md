@@ -85,6 +85,8 @@ One supervised `changes` stream serves every followed file in a Session. Followe
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
+With conversation workspaces enabled, file reads, listings, metadata, and watches enter the selected live conversation before resolving paths. A cold conversation must be opened first; the API does not fall back to the source checkout.
+
 <details>
 <summary>Implementation internals — click to expand</summary>
 

@@ -1,3 +1,4 @@
+import { registerWorkspaceConversationNode } from './workspace.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import { registerAssistantConversationNode } from './assistant.ts'
 import { registerChatConversationView } from './chat-snapshot-builder.ts'
@@ -31,6 +32,7 @@ export function registerConversationNodes(ctx: Context): void {
   registerTurnErrorConversationNode(ctx)
   registerTurnMaxTokensConversationNode(ctx)
   registerTurnTailConversationNode(ctx)
+  registerWorkspaceConversationNode(ctx)
   registerUnknownConversationFallback(ctx)
   registerChatConversationView(ctx)
 }

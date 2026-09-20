@@ -1,3 +1,4 @@
+export type {} from './conversation-nodes/workspace.ts'
 /** Browser Chat target plugin. */
 export { apply, inject } from './apply.ts'
 export type {} from './conversation-nodes/assistant.ts'

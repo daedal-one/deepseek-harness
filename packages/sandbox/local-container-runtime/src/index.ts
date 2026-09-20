@@ -115,6 +115,13 @@ export class LocalContainerControllerDeadlineExceeded extends Error {
 }
 
 declare module '@deepseek-ai/cordis' {
+  interface Events {
+    /** Release idle managed processes before capturing a workspace with mutation admission closed.
+     * @param payload.executionWorld - exact world whose process owners must drain.
+     * @mode serial
+     */
+    'workspace/quiesce'(payload: { executionWorld: object }): Promise<void> | void
+  }
   interface Context {
     localContainerRuntime: LocalContainerRuntime
   }
@@ -152,6 +159,9 @@ export class LocalContainerRuntime extends Service {
   readonly containerName: string = `dsh-local-container-${randomUUID()}`
 
   private readonly config: ResolvedConfig
+  private readonly rawConfig: LocalContainerRuntimeConfig
+  private admissionClosed = false
+  private readonly controllers = new Set<Promise<unknown>>()
   private readonly ready: Promise<LocalContainerHandle>
   private readonly cleanupState: CleanupState = { containerRemoved: false, backingDirectoryRemoved: false }
   private cleanup: Promise<void> | undefined
@@ -168,8 +178,9 @@ export class LocalContainerRuntime extends Service {
   private imageId: string | undefined
   private backingDirectory: string | undefined
 
-  constructor(ctx: Context, config: LocalContainerRuntimeConfig) {
+  constructor(ctx: Context, config: LocalContainerRuntimeConfig, private readonly retainedDirectory?: string) {
     super(ctx, 'localContainerRuntime')
+    this.rawConfig = config
     this.config = this.resolveConfig(config)
     this.ready = Promise.resolve().then(() => this.open())
     this.armLifetime()
@@ -198,6 +209,13 @@ export class LocalContainerRuntime extends Service {
    * @returns settled bounded standard streams and exit code.
    */
   async executeController(request: PodmanControllerExecRequest & { readonly deadlineMs: number }): Promise<PodmanControllerExecResult> {
+    if (this.admissionClosed) throw new Error('local-container-runtime: workspace is being saved')
+    const operation = this.runController(request)
+    this.controllers.add(operation)
+    try { return await operation } finally { this.controllers.delete(operation) }
+  }
+
+  private async runController(request: PodmanControllerExecRequest & { readonly deadlineMs: number }): Promise<PodmanControllerExecResult> {
     if (request.argv.length === 0) throw new Error('local-container-runtime: controller argv must not be empty')
     positiveSafeInteger('controller maxOutputBytes', request.maxOutputBytes)
     positiveSafeInteger('controller deadlineMs', request.deadlineMs, MAX_TIMER_DELAY_MS)
@@ -260,6 +278,7 @@ export class LocalContainerRuntime extends Service {
    * @returns an attached started handle whose removal proves descendant quiescence.
    */
   async createProcess(request: LocalContainerProcessRequest): Promise<LocalContainerProcessHandle> {
+    if (this.admissionClosed) throw new Error('local-container-runtime: workspace is being saved')
     this.validateProcessRequest(request)
     request.signal?.throwIfAborted()
     const prior = this.processAllocation
@@ -268,6 +287,8 @@ export class LocalContainerRuntime extends Service {
     await prior
     try {
       this.throwIfDisposing()
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- admission can close while process allocation is awaited
+      if (this.admissionClosed) throw new Error('local-container-runtime: workspace is being saved')
       if (this.processes.size >= this.config.maxLiveProcesses) {
         throw new Error(`local-container-runtime: process-container limit ${this.config.maxLiveProcesses} reached`)
       }
@@ -277,6 +298,78 @@ export class LocalContainerRuntime extends Service {
     } finally {
       turn.resolve()
     }
+  }
+
+  /**
+   * Bind a separately owned workspace to a new isolated world on the same engine.
+   * @param directory - trusted supervisor-owned private backing directory.
+   * @returns the verified world and its quiescent container disposer; storage is retained.
+   */
+  async createWorkspace(directory: string): Promise<{ runtime: LocalContainerRuntime; dispose(): Promise<void> }> {
+    await this.getContainer()
+    if (!isAbsolute(directory) || directory.includes(':')) throw new Error('local-container-runtime: invalid workspace directory')
+    const metadata = await lstat(directory)
+    if (!metadata.isDirectory() || metadata.isSymbolicLink() || (metadata.mode & 0o077) !== 0
+      || metadata.uid !== process.getuid?.()) throw new Error('local-container-runtime: workspace must be an owner-only real directory')
+    const context = new Context()
+    const runtime = new LocalContainerRuntime(context, { ...this.rawConfig, manageService: false }, directory)
+    try { await runtime.getContainer() }
+    catch (error) {
+      try { await context.fiber.dispose() }
+      catch (cleanup) { throw new AggregateError([error, cleanup], 'workspace world preparation and cleanup failed') }
+      throw error
+    }
+    return { runtime, dispose: () => context.fiber.dispose() }
+  }
+
+  /**
+   * Revoke new writes and wait for all existing processes and controllers before capture.
+   * @param timeoutMs - bounded wait for existing writers; expiry leaves them running.
+   * @param operation - trusted capture operation with exclusive controller access.
+   * @param quiesce - release managed idle processes before waiting for all writers.
+   * @returns the capture result, with admission restored only after successful settlement.
+   */
+  async settle<T>(
+    timeoutMs: number,
+    operation: (control: (
+      request: PodmanControllerExecRequest & { readonly deadlineMs: number },
+    ) => Promise<PodmanControllerExecResult>) => Promise<T>,
+    quiesce?: () => Promise<void>,
+  ): Promise<T> {
+    positiveSafeInteger('settlement timeout', timeoutMs, MAX_TIMER_DELAY_MS)
+    this.admissionClosed = true
+    let timer: NodeJS.Timeout | undefined
+    try {
+      await Promise.race([
+        (async () => {
+          await quiesce?.()
+          await this.processAllocation
+          await Promise.all([...this.controllers])
+          await Promise.all([...this.processes].map(process => process.waitForRemoval()))
+        })(),
+        new Promise<never>((_resolve, reject) => { timer = setTimeout(() =>{  reject(new Error('workspace save pending: active writers did not stop before the deadline')) }, timeoutMs) }),
+      ])
+      const result = await operation(request => this.runController(request))
+      this.admissionClosed = false
+      return result
+    } finally { if (timer !== undefined) clearTimeout(timer) }
+  }
+
+  /** Stop every owned subprocess before cancellation or shutdown recovery capture. */
+  async cancelProcesses(): Promise<void> {
+    this.admissionClosed = true
+    await this.processAllocation
+    await Promise.all([...this.processes].map(process => process.terminate()))
+  }
+
+  /** Stop stale process owners before restoring a supervisor-owned directory.
+   * @param directory - exact private bind source whose storage must be quiescent.
+   */
+  async recoverWorkspace(directory: string): Promise<void> {
+    await this.getContainer()
+    if (this.engine === undefined) throw new Error('local-container-runtime: engine unavailable')
+    const containers = await this.engine.containersUsing(directory)
+    await Promise.all(containers.map(container => removeContainer(container, this.config.stopTimeoutSeconds)))
   }
 
   /** Retained Engine identifiers without exposing the private host backing path. */
@@ -309,7 +402,7 @@ export class LocalContainerRuntime extends Service {
       if (image.Config?.Volumes !== undefined && image.Config.Volumes !== null && Object.keys(image.Config.Volumes).length > 0) {
         throw new Error('local-container-runtime: image declares VOLUME entries and is rejected')
       }
-      this.backingDirectory = await this.createBackingDirectory()
+      this.backingDirectory = this.retainedDirectory ?? await this.createBackingDirectory()
       this.throwIfDisposing()
       let container: PodmanContainer
       try {
@@ -562,7 +655,7 @@ export class LocalContainerRuntime extends Service {
       CapDrop: ['ALL'],
       SecurityOpt: ['no-new-privileges'],
       Tmpfs: { '/tmp': `rw,nosuid,nodev,noexec,size=${this.config.tmpfsBytes},mode=1777` },
-      Binds: [`${backingDirectory}:${WORKSPACE_PATH}:rw,rprivate,nosuid,nodev,noexec`],
+      Binds: [`${backingDirectory}:${WORKSPACE_PATH}:rw,rprivate,nosuid,nodev${this.retainedDirectory === undefined ? ',noexec' : ''}`],
       Memory: this.config.memoryBytes,
       MemorySwap: this.config.memoryBytes,
       NanoCpus: this.config.nanoCpus,
@@ -770,7 +863,7 @@ export class LocalContainerRuntime extends Service {
     if (this.backingDirectory !== undefined && !this.cleanupState.backingDirectoryRemoved
       && this.processes.size === 0 && (this.container === undefined || this.cleanupState.containerRemoved)) {
       try {
-        await this.removeBackingDirectory(this.backingDirectory)
+        if (this.retainedDirectory === undefined) await this.removeBackingDirectory(this.backingDirectory)
         this.cleanupState.backingDirectoryRemoved = true
       } catch (error) {
         failures.push(error)
@@ -910,6 +1003,7 @@ class OwnedProcessContainer implements LocalContainerProcessHandle {
   readonly id: string
   readonly done: Promise<{ exitCode: number | null; error?: string }>
   private readonly removed = Promise.withResolvers<void>()
+  private readonly observation = new AbortController()
   private terminating: Promise<void> | undefined
   private removedFlag = false
 
@@ -974,8 +1068,8 @@ class OwnedProcessContainer implements LocalContainerProcessHandle {
   }
 
   private async settle(): Promise<{ exitCode: number | null; error?: string }> {
-    const wait = this.container.wait()
-    const drained = finished(this.stream)
+    const wait = this.container.wait(this.observation.signal)
+    const drained = finished(this.stream, { writable: false })
     let outcome: { statusCode: number; error?: string } | undefined
     let failure: unknown
     try {
@@ -996,6 +1090,7 @@ class OwnedProcessContainer implements LocalContainerProcessHandle {
 
   private async removeOwned(): Promise<void> {
     await removeContainer(this.container, this.stopTimeoutSeconds)
+    this.observation.abort()
     this.stream.destroy()
     this.removedFlag = true
     this.release()

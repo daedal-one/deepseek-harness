@@ -8,6 +8,7 @@
     "rewriteRelativeImportExtensions": false
   },
   "include": [
+    "apps/web/tests/workspace-outcomes.e2e.ts",
     "apps/web/tests/poor-connection.e2e.ts",
     "apps/web/tests/client-plugin-load-recovery.e2e.ts",
     "apps/web/tests/scaffold.ts",

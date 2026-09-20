@@ -46,6 +46,8 @@
     "@deepseek-ai/dsh-file-reference": "workspace:^",
     "@deepseek-ai/dsh-system-prompt": "workspace:^",
     "@deepseek-ai/dsh-tools": "workspace:^",
-    "@deepseek-ai/cordis": "workspace:^"
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-local-container-runtime": "workspace:^",
+    "@deepseek-ai/dsh-fs": "workspace:^"
   }
 }

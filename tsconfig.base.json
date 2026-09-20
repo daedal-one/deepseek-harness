@@ -250,6 +250,8 @@
       // util/ folders are role-named without the util- prefix their npm names carry,
       // so these aliases stay hand-written like dsh-util-crypto above.
       "@deepseek-ai/dsh-util-time": ["./packages/util/time/src"],
+      "@deepseek-ai/dsh-local-container-runtime/workspaces": ["./packages/sandbox/local-container-runtime/src/workspaces.ts"],
+      "@deepseek-ai/dsh-local-container-runtime/workspace-types": ["./packages/sandbox/local-container-runtime/src/workspace-types.ts"],
       // BEGIN generated package aliases — pnpm run gen-tsconfig-paths
       "@deepseek-ai/dsh-acp": ["./packages/acp/acp/src"],
       "@deepseek-ai/dsh-acp-app": ["./packages/bundle/acp-app/src"],

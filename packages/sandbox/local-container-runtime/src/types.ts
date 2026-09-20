@@ -270,6 +270,12 @@ export interface PodmanContainer {
 
 /** Minimal Docker-compatible API consumed by the owner. */
 export interface PodmanEngine {
+  /** Find stale containers that mount one supervisor-owned workspace.
+   * @param directory - exact private host bind source.
+   * @returns container handles to quiesce before restoring storage.
+   */
+  containersUsing(directory: string): Promise<PodmanContainer[]>
+
   /** Report engine capabilities before container creation. */
   info(): Promise<PodmanInfo>
   /** Read image configuration before accepting it. */

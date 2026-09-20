@@ -123,7 +123,10 @@ export function apply(ctx: Context, config: Config): void {
     let desiredBaseline = false
     const authorityMessages = [...claimed]
     /* v8 ignore next -- normal agents carry an absolute session cwd. */
-    const cwd = agent.session.header.cwd ?? process.cwd()
+    const sourceCwd = agent.session.header.cwd ?? process.cwd()
+    const cwd = fileSystem.executionWorld === Symbol.for('@deepseek-ai/dsh/host-execution-world')
+      ? sourceCwd
+      : fileSystem.processPath(await fileSystem.resolve(sourceCwd, { cwd: sourceCwd, signal }))
     const projectRoot = await findProjectRoot(cwd, resolved.projectRootMarkers, fileSystem, signal)
     const identity = workspaceBaselineIdentity(resolved, cwd, projectRoot)
     const visibleBaseline = visibleBaselineSource(agent, authorityMessages)

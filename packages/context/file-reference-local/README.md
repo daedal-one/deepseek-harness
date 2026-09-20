@@ -54,6 +54,8 @@ Every numeric value must be a positive safe integer, and every excluded name mus
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
+With conversation workspaces enabled, reference search reads `/workspace` through the selected live conversation’s filesystem. Host directory enumeration remains the ordinary provider path outside that mode.
+
 <details>
 <summary>Implementation internals — click to expand</summary>
 

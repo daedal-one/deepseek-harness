@@ -11,6 +11,7 @@
  * @module @deepseek-ai/dsh-lsp-stdio
  */
 
+import type {} from '@deepseek-ai/dsh-local-container-runtime'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { LspError, LspProviderId } from '@deepseek-ai/dsh-lsp'
@@ -168,6 +169,10 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     }
   })()
 
+  ctx.on('workspace/quiesce', async ({ executionWorld }) => {
+    await Promise.all(providers.map(provider => provider.disposeWorld(executionWorld)))
+  })
+
   ctx.effect(() => {
     const disposers: Array<() => void> = []
     try {
@@ -219,6 +224,7 @@ class LocalLspProvider implements LspProvider {
   readonly extensionToLanguage: Readonly<Record<string, string>>
   /** One live instance per stable canonical workspace identity. */
   private readonly instances = new Map<WorkspaceKey, LspInstance>()
+  private readonly worlds = new Map<WorkspaceKey, symbol | object>()
   /** One complete source-read→open→query→close serialization tail per canonical workspace. */
   private readonly queues = new Map<WorkspaceKey, Promise<void>>()
   /** Workspace canonicalizations that have not entered a provider-owned queue yet. */
@@ -261,6 +267,7 @@ class LocalLspProvider implements LspProvider {
     // Honor an already-aborted signal before provider I/O so a canceled request never starts a server.
     this.assertActive(signal)
     const querySignal = this.querySignal(signal)
+    const executionWorld = this.fs.executionWorld
     const workspaceResult = canonicalizeWorkspace(this.fs, request.workspaceRoot, querySignal)
     const workspaceLookup = workspaceResult.then(() => undefined, () => undefined)
     this.workspaceLookups.add(workspaceLookup)
@@ -272,6 +279,7 @@ class LocalLspProvider implements LspProvider {
     }
     this.assertActive(querySignal)
     const workspaceKey = workspace.target.targetKey
+    this.worlds.set(workspaceKey, executionWorld)
     return this.enqueue(workspaceKey, querySignal, async () => {
       this.assertActive(querySignal)
       // Read inside the workspace queue but before spawning: a queued query sees current bytes when
@@ -361,6 +369,20 @@ class LocalLspProvider implements LspProvider {
     return new LspInstance(spec, this.spawner)
   }
 
+  /** Release idle language servers in one execution world before its snapshot.
+   * @param executionWorld - exact filesystem/subprocess world being settled.
+   */
+  async disposeWorld(executionWorld: object): Promise<void> {
+    await Promise.all([...this.workspaceLookups])
+    for (const [key, world] of this.worlds) {
+      if (world !== executionWorld) continue
+      await this.queues.get(key)
+      const instance = this.instances.get(key)
+      if (instance !== undefined) { await instance.dispose(); this.evictIfCurrent(key, instance) }
+      this.worlds.delete(key)
+    }
+  }
+
   /** Dispose every live instance and block further queries. */
   async disposeAll(): Promise<void> {
     this.disposed = true
@@ -376,6 +398,7 @@ class LocalLspProvider implements LspProvider {
     ])
     this.queues.clear()
     this.workspaceLookups.clear()
+    this.worlds.clear()
     throwTeardownFailures(results, 'lsp-stdio instance teardown failed')
   }
 }

@@ -4,7 +4,7 @@ type: task
 status: accepted
 summary: Implement transparent conversation-owned Git import, private recovery, fallback commits, and automatic host branch return.
 owners: [carlo]
-progress: pending
+progress: done
 addresses:
   - REQ:sandbox/isolated-execution-world#c-world
   - REQ:sandbox/isolated-execution-world#c-lifecycle
@@ -28,7 +28,9 @@ assignee: carlo
 
 ## Design owner
 
-The [conversation workspace proposal](../../.agents/notes/proposed/architecture/2026-09-20-conversation-git-workspace.md) defines the lifecycle, transactions, failure behavior, and acceptance scenarios. Design is recorded; runtime implementation remains pending.
+The [conversation workspace decision](../../.agents/notes/implemented/architecture/2026-09-20-conversation-git-workspace.md) defines the lifecycle, transactions, failure behavior, and supported repository limits. The opt-in implementation covers preparation, recovery, automatic residual commits, immutable host result branches, and independent UI/SDK receipts. No shipped profile or running service enables it automatically.
+
+Validation includes a real rootless Podman Loader flow, deterministic restart fault injection, affected consumer tests, a recorded Session and TypeScript wire expectation consumed by both SDKs, and a browser check. Models are scripted in these checks; physical host-reboot testing and paid subject-generation quality are outside this evidence.
 
 ## Delivery order
 

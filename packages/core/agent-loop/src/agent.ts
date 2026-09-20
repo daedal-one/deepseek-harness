@@ -273,6 +273,11 @@ export class ReactLoopAgent implements Agent {
     const phase = this.phase
     const { signal } = phase.abort
     signal.throwIfAborted()
+    try {
+      const admission = this.dispatch.waterfall('agent/turn-starting', { signal }, () => undefined)
+      if (admission !== undefined) await admission
+      signal.throwIfAborted()
+    } catch (error) { this.throwError(error) }
     const turn = phase.turn + 1
     try {
       this.session.append('turn/start', { turn })
@@ -337,6 +342,8 @@ export class ReactLoopAgent implements Agent {
       try {
         // oxlint-disable-next-line typescript/no-non-null-assertion -- every exit assigns a turn ending
         this.session.append('turn/end', { turn, reason: turnEnds! })
+        // oxlint-disable-next-line typescript/no-non-null-assertion -- every exit assigns a turn ending
+        await this.dispatch.serial('agent/turn-settled', { turn, reason: turnEnds! })
       } catch (error: unknown) {
         this.throwError(error)
       }

@@ -5,6 +5,8 @@
  * @module @deepseek-ai/dsh-fs-local-container
  */
 
+import type {} from '@deepseek-ai/dsh-local-container-runtime/workspaces'
+import { posix } from 'node:path'
 import { Buffer, constants as bufferConstants } from 'node:buffer'
 import { Context } from '@deepseek-ai/cordis'
 import { FileSystem, FsError, FsTargetKey, FsVersion } from '@deepseek-ai/dsh-fs'
@@ -97,16 +99,16 @@ export class LocalContainerFileSystem extends FileSystem {
 
   /** This provider shares the runtime owner's container path and process world. */
   override get executionWorld(): object {
-    return this.ctx.localContainerRuntime.executionWorld
+    return this.ctx.get('conversationWorkspaces')?.executionWorld ?? this.ctx.localContainerRuntime.executionWorld
   }
 
   override async resolve(path: string, opts?: { cwd?: string; signal?: AbortSignal }): Promise<FsTarget> {
-    this.cwd(opts?.cwd)
+    path = this.executionPath(path, opts?.cwd)
     return this.target(await this.execute({ operation: 'resolve', path }, opts?.signal, 'resolve'))
   }
 
   override processPath(target: FsTarget): string {
-    return String(target.targetKey)
+    return this.targetRequest(target).targetKey
   }
 
   override fileUrl(target: FsTarget): string {
@@ -116,8 +118,8 @@ export class LocalContainerFileSystem extends FileSystem {
   }
 
   override contains(parent: FsTarget, child: FsTarget): boolean {
-    const parentPath = this.processPath(parent)
-    const childPath = this.processPath(child)
+    const parentPath = String(parent.targetKey)
+    const childPath = String(child.targetKey)
     return childPath === parentPath || childPath.startsWith(`${parentPath}/`)
   }
 
@@ -128,7 +130,7 @@ export class LocalContainerFileSystem extends FileSystem {
   }
 
   override async lstat(path: string, opts?: { cwd?: string }, signal?: AbortSignal): Promise<FsPathInfo | undefined> {
-    this.cwd(opts?.cwd)
+    path = this.executionPath(path, opts?.cwd)
     const value = await this.execute({ operation: 'lstat', path }, signal, 'lstat')
     if (value === null) return undefined
     return this.pathInfo(value)
@@ -242,7 +244,7 @@ export class LocalContainerFileSystem extends FileSystem {
       throw new FsError(`${operation} aborted`, 'FS_ABORTED')
     }
     const combined = signal === undefined ? this.lifetime.signal : AbortSignal.any([signal, this.lifetime.signal])
-    const controllerRequest = this.ctx.localContainerRuntime.executeController({
+    const controllerRequest = (this.ctx.get('conversationWorkspaces')?.capture() ?? this.ctx.localContainerRuntime).executeController({
       argv: ['/usr/bin/python3', '-c', FILESYSTEM_CONTROLLER],
       stdin: Buffer.from(JSON.stringify(request), 'utf8'),
       maxOutputBytes: this.config.maxControllerOutputBytes,
@@ -250,7 +252,7 @@ export class LocalContainerFileSystem extends FileSystem {
       signal: combined,
     })
     const tracked = controllerRequest.then(
-      result => this.controllerValue(result.exitCode, result.stdout),
+      result => this.controllerValue(result.exitCode, result.stdout, operation),
       (error: unknown) => { throw this.controllerFailure(operation, error) },
     )
     this.inFlight.add(tracked)
@@ -261,7 +263,7 @@ export class LocalContainerFileSystem extends FileSystem {
     }
   }
 
-  private controllerValue(exitCode: number, stdout: Uint8Array): unknown {
+  private controllerValue(exitCode: number, stdout: Uint8Array, operation: string): unknown {
     if (exitCode !== 0) throw this.protocolFailure()
     let parsed: unknown
     try {
@@ -272,7 +274,7 @@ export class LocalContainerFileSystem extends FileSystem {
     if (!isRecord(parsed) || typeof parsed.ok !== 'boolean') throw this.protocolFailure()
     if (parsed.ok) return parsed.value
     if (typeof parsed.code !== 'string' || !ERROR_CODES.has(parsed.code as FsErrorCode)) throw this.protocolFailure()
-    throw new FsError('container filesystem operation failed', parsed.code as FsErrorCode)
+    throw new FsError(`cannot ${operation}: container filesystem reported ${parsed.code}`, parsed.code as FsErrorCode)
   }
 
   private controllerFailure(operation: string, error: unknown): FsError {
@@ -287,7 +289,22 @@ export class LocalContainerFileSystem extends FileSystem {
   }
 
   private targetRequest(target: FsTarget): { targetKey: string; path: string } {
-    return { targetKey: String(target.targetKey), path: target.displayPath }
+    let key = String(target.targetKey)
+    const workspaces = this.ctx.get('conversationWorkspaces')
+    if (workspaces !== undefined) {
+      const prefix = `${workspaces.capture().containerName}:`
+      if (!key.startsWith(prefix)) throw new FsError('filesystem target belongs to another execution world', 'FS_PERMISSION_DENIED')
+      key = key.slice(prefix.length)
+    }
+    return { targetKey: key, path: target.displayPath }
+  }
+
+  private executionPath(path: string, cwd?: string): string {
+    const workspaces = this.ctx.get('conversationWorkspaces')
+    if (workspaces === undefined) { this.cwd(cwd); return path }
+    const base = cwd === undefined ? WORKSPACE_PATH : workspaces.executionPath(cwd)
+    const mapped = workspaces.executionPath(path)
+    return posix.isAbsolute(mapped) ? mapped : posix.join(base, mapped)
   }
 
   private cwd(cwd: string | undefined): typeof WORKSPACE_PATH {
@@ -300,7 +317,9 @@ export class LocalContainerFileSystem extends FileSystem {
       || !isWorkspacePath(value.targetKey) || !isWorkspacePath(value.displayPath)) {
       throw this.protocolFailure()
     }
-    return { targetKey: FsTargetKey(value.targetKey), displayPath: value.displayPath }
+    const world = this.ctx.get('conversationWorkspaces')?.capture()
+    const key = world === undefined ? value.targetKey : `${world.containerName}:${value.targetKey}`
+    return { targetKey: FsTargetKey(key), displayPath: value.displayPath }
   }
 
   private info(value: unknown): FsInfo {

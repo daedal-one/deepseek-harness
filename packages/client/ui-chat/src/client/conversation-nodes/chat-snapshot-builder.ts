@@ -734,6 +734,8 @@ function legacyContribution(raw: ChatConversationViewNode): LegacyContribution {
   // attempts have no final Node to contribute.
   if (raw.visibility !== 'visible' && node.kind !== 'assistant-step') return EMPTY_CONTRIBUTION
   switch (node.kind) {
+    case 'workspace-state':
+      return EMPTY_CONTRIBUTION
     case 'user':
     case 'steering':
     case 'context':

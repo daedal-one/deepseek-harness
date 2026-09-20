@@ -29,6 +29,7 @@
  *   (`1`), an aborted reason without its cause (`aborted`), an unknown abort
  *   cause (`abort-unknown`), a hook cause without its reason (`hook`), or no
  *   data member (`no-data`) for wire-validation probes.
+ * - `FAKE_WORKSPACE_PHASE`: emit a workspace receipt after turn/end and before idle.
  * - `FAKE_EMPTY_MESSAGE`: record an empty assistant/message whose embedded
  *   stream contains only usage and max-tokens settlement.
  * - `FAKE_HANG_INIT`: never answer `initialize` (mid-handshake cancel probe).
@@ -188,6 +189,12 @@ function runTurn(sessionId: string): void {
                 ? { kind: 'error', error: { message: 'scripted child error', code: 'UNKNOWN' } }
                 : { kind: reasonKind }
     event(sessionId, 'turn/end', { turn: 0, reason })
+  }
+  if (env.FAKE_WORKSPACE_PHASE !== undefined) {
+    event(sessionId, 'workspace/state', {
+      workspaceId: 'a'.repeat(32), turn: 0, phase: env.FAKE_WORKSPACE_PHASE,
+      baseline: 'b'.repeat(40), checkpoint: 2, branches: { 'refs/heads/dsh/result': 'c'.repeat(40) },
+    })
   }
   if (env.FAKE_SUBAGENT !== undefined) {
     const childId = `${sessionId}-child`

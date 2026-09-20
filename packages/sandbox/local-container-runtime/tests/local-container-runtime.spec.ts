@@ -17,6 +17,11 @@ import type {
   PodmanInfo,
 } from '@deepseek-ai/dsh-local-container-runtime'
 
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>()
+  return { ...actual, readlink: async (path: string) => path === '/proc/self/ns/pid' ? 'pid:[host]' : path === '/proc/self/ns/ipc' ? 'ipc:[host]' : actual.readlink(path) }
+})
+
 const IMAGE = 'docker.io/example/dsh-runtime@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
 const activeFibers = new Set<{ dispose(): Promise<void> }>()
 
@@ -72,7 +77,8 @@ class FakeContainer implements PodmanContainer {
   readonly inspect = vi.fn(async (): Promise<PodmanContainerInspect> => this.engine.inspectFor(this.request, this.running))
   readonly attach = vi.fn(async () => this.stream)
   readonly start = vi.fn(async (): Promise<void> => { this.running = true })
-  readonly wait = vi.fn(async () => ({ statusCode: 0 }))
+  readonly wait = vi.fn(async () => this.request.name.startsWith('dsh-local-container-process-')
+    ? await this.engine.processWait : { statusCode: 0 })
   readonly resize = vi.fn(async (_rows: number, _cols: number): Promise<void> => {})
   readonly kill = vi.fn(async (_signal: string): Promise<void> => {})
   readonly stop = vi.fn(async (_timeoutSeconds: number): Promise<void> => { this.running = false })
@@ -91,6 +97,8 @@ class FakeContainer implements PodmanContainer {
 }
 
 class FakeEngine implements PodmanEngine {
+  processWait: Promise<{ statusCode: number }> = Promise.resolve({ statusCode: 0 })
+  async containersUsing(): Promise<PodmanContainer[]> { return [] }
   readonly info = vi.fn(async (): Promise<PodmanInfo> => this.infoResponse)
   readonly inspectImage = vi.fn(async (_image: string): Promise<PodmanImageInspect> => this.imageResponse)
   readonly getContainer = vi.fn((name: string): PodmanContainer => {
@@ -265,6 +273,46 @@ describe('LocalContainerRuntime', () => {
       signal: expect.any(AbortSignal) as unknown,
     }))
     await dispose(fiber)
+  })
+
+  it('closes mutation admission and waits for an existing controller before capture', async () => {
+    const engine = new FakeEngine()
+    const started = Promise.withResolvers<undefined>(); const completed = Promise.withResolvers<PodmanControllerExecResult>()
+    engine.controllerResponse = () => { started.resolve(undefined); return completed.promise }
+    const { ctx, fiber } = await mount(engine)
+    const request = { argv: ['/usr/bin/python3', '-c', 'pass'], stdin: new Uint8Array(), maxOutputBytes: 1024, deadlineMs: 5000 }
+    const writing = ctx.localContainerRuntime.executeController(request)
+    await started.promise
+    let captured = false
+    const saving = ctx.localContainerRuntime.settle(5000, () => { captured = true; return Promise.resolve('saved') })
+    await expect(ctx.localContainerRuntime.executeController(request)).rejects.toThrow('being saved')
+    expect(captured).toBe(false)
+    completed.resolve({ exitCode: 0, stdout: new Uint8Array(), stderr: new Uint8Array() })
+    await writing
+    expect(await saving).toBe('saved')
+    await expect(ctx.localContainerRuntime.executeController(request)).resolves.toMatchObject({ exitCode: 0 })
+    await dispose(fiber)
+  })
+
+  it('leaves a background writer running when the save barrier expires and can settle after it exits', async () => {
+    const engine = new FakeEngine(); const finished = Promise.withResolvers<{ statusCode: number }>()
+    engine.processWait = finished.promise
+    const { ctx, fiber } = await mount(engine)
+    const process = await ctx.localContainerRuntime.createProcess({
+      argv: ['/bin/sh', '-c', 'work'], cwd: '/workspace', environment: {}, tty: false, stdin: false,
+    })
+    try {
+      process.stream.resume()
+      const capture = vi.fn(() => Promise.resolve('saved'))
+      await expect(ctx.localContainerRuntime.settle(10, capture)).rejects.toThrow('active writers')
+      expect(capture).not.toHaveBeenCalled()
+      expect(engine.processContainers[0]?.stop).not.toHaveBeenCalled()
+      expect(engine.processContainers[0]?.kill).not.toHaveBeenCalled()
+      engine.processContainers[0]?.stream.push(null)
+      expect(engine.processContainers[0]?.stream.writableEnded).toBe(false)
+      finished.resolve({ statusCode: 0 }); await process.waitForRemoval()
+      expect(await ctx.localContainerRuntime.settle(5000, capture)).toBe('saved')
+    } finally { engine.processContainers[0]?.stream.end(); finished.resolve({ statusCode: 0 }); await dispose(fiber) }
   })
 
   it('owns one sibling process container through attached output and removal', async () => {

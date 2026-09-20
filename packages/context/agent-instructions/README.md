@@ -74,6 +74,8 @@ Rendering keeps the most specific files first: it drops whole broader files befo
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
+For a non-host execution world, project-root discovery resolves the selected source path through the configured filesystem provider. In conversation-container compositions it reads the imported `/workspace`, so repository instructions follow the same execution identity as editing tools. Host compositions retain their recorded instruction paths.
+
 <details>
 <summary>Implementation internals — click to expand</summary>
 

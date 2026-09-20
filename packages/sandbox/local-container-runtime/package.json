@@ -23,12 +23,20 @@
       "default": "./lib/startup.js"
     },
     "./src/*": "./src/*",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./workspaces": {
+      "types": "./lib/types/workspaces.d.ts",
+      "default": "./lib/workspaces.js"
+    },
+    "./workspace-types": {
+      "types": "./lib/types/workspace-types.d.ts"
+    }
   },
   "files": [
     "lib/index.js",
     "lib/startup.js",
     "Containerfile",
+    "lib/workspaces.js",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
@@ -38,9 +46,16 @@
   "dependencies": {
     "@deepseek-ai/schemastery": "workspace:^",
     "@types/dockerode": "^4.0.1",
-    "dockerode": "^5.0.1"
+    "dockerode": "^5.0.1",
+    "@deepseek-ai/dsh-agent": "workspace:^",
+    "@deepseek-ai/dsh-session": "workspace:^",
+    "@deepseek-ai/dsh-llm": "workspace:^",
+    "@deepseek-ai/dsh-system-prompt": "workspace:^",
+    "@deepseek-ai/node-addon-system": "workspace:^",
+    "@deepseek-ai/dsh-brand": "workspace:^"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "workspace:^"
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-session-persistence": "workspace:^"
   }
 }

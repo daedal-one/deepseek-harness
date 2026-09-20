@@ -81,6 +81,8 @@ The provider implements every `ctx.fs` primitive: resolve, `stat`, `lstat`, whol
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
+When the runtime conversation-workspace plugin is mounted, every operation captures the initiating conversation. Target keys include its execution-world identity, and cross-conversation targets reject before access. Source-root aliases map only to that conversation’s `/workspace`.
+
 <details>
 <summary>Implementation internals — click to expand</summary>
 

@@ -8,6 +8,11 @@ export type ChatKey = keyof typeof en
 
 /** English copy for this feature. */
 export const en = {
+  'workspace.saving': 'Saving workspace…',
+  'workspace.returned': 'Changes saved to host branches',
+  'workspace.checkpointed': 'Workspace saved for recovery',
+  'workspace.pending': 'Workspace save needs attention',
+  'workspace.details': 'Details',
   'view.chat': 'Chat',
   'number.groupSeparator': ',',
   'duration.compactSeconds': '{seconds}s',

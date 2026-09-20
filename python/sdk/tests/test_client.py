@@ -1071,3 +1071,84 @@ def test_client_reports_missing_bundled_runtime_dependency(monkeypatch: pytest.M
 
     with pytest.raises(FileNotFoundError, match="Install deepseek-harness-runtime-bin"):
         HarnessClient(HarnessConfig(dsh_home="/explicit/home")).start()
+
+
+@pytest.mark.parametrize("phase", ["returned", "pending", "checkpointed"])
+def test_workspace_receipt_is_separate_from_model_completion(tmp_path: Path, phase: str) -> None:
+    script = tmp_path / "workspace_runtime.py"
+    script.write_text(
+        """
+import json
+import sys
+
+def send(method, params):
+    print(json.dumps({"jsonrpc": "2.0", "method": method, "params": params}), flush=True)
+
+for line in sys.stdin:
+    msg = json.loads(line)
+    if msg["method"] == "initialize":
+        result = {"serverInfo": {"name": "workspace-fixture"}}
+    elif msg["method"] == "session/prompt":
+        sid = msg["params"]["sessionId"]
+        events = [
+            {"type": "agent/inbox/spliced", "data": {"target": "next-turn", "start": 0, "inserted": [{"id": "accepted"}]}},
+            {"type": "turn/end", "data": {"turn": 1, "reason": {"kind": "completed"}}},
+            {"type": "workspace/state", "data": {"workspaceId": "a" * 32, "turn": 1, "phase": sys.argv[1], "baseline": "b" * 40, "checkpoint": 2, "branches": {"refs/heads/dsh/result": "c" * 40}}},
+        ]
+        send("session.status", {"sessionId": sid, "status": "running"})
+        for event in events:
+            send("session.event", {"sessionId": sid, "event": event})
+        send("session.status", {"sessionId": sid, "status": "idle"})
+        result = {"messageId": "accepted"}
+    else:
+        result = {}
+    print(json.dumps({"jsonrpc": "2.0", "id": msg["id"], "result": result}), flush=True)
+    if msg["method"] == "shutdown":
+        break
+""".strip()
+    )
+    with DeepSeekHarness(_launch_args=(sys.executable, str(script), phase), cwd=str(tmp_path)) as harness:
+        result = harness.run("finish", session_id="main")
+    assert result.finish_reason == "completed"
+    assert [event["type"] for event in result.events] == ["agent/inbox/spliced", "turn/end", "workspace/state"]
+    assert result.events[-1]["data"]["phase"] == phase
+    assert result.events[-1]["data"]["checkpoint"] == 2
+
+
+def test_recorded_workspace_outcomes_match_the_typescript_sdk(tmp_path: Path) -> None:
+    fixture = Path(__file__).resolve().parents[3] / "snapshots/sdk/workspace-outcomes/notifications.expected.jsonl"
+    script = tmp_path / "recorded_workspace_runtime.py"
+    script.write_text(
+        """
+import json
+import sys
+from pathlib import Path
+
+frames = [json.loads(line.replace("{{sessionId}}", "main")) for line in Path(sys.argv[1]).read_text().splitlines()]
+for line in sys.stdin:
+    msg = json.loads(line)
+    if msg["method"] == "initialize":
+        result = {"serverInfo": {"name": "recorded-workspace-fixture"}}
+    elif msg["method"] == "session/prompt":
+        for frame in frames:
+            print(json.dumps({"jsonrpc": "2.0", **frame}), flush=True)
+        result = {"messageId": "main"}
+    else:
+        result = {}
+    print(json.dumps({"jsonrpc": "2.0", "id": msg["id"], "result": result}), flush=True)
+    if msg["method"] == "shutdown":
+        break
+""".strip()
+    )
+    with DeepSeekHarness(_launch_args=(sys.executable, str(script), str(fixture)), cwd=str(tmp_path)) as harness:
+        result = harness.run("finish", session_id="main")
+    assert result.finish_reason == "completed"
+    assert result.final_response == "SDK snapshot OK"
+    actual = [event["data"] for event in result.events if event["type"] == "workspace/state"]
+    expected = [
+        frame["params"]["event"]["data"]
+        for frame in (json.loads(line) for line in fixture.read_text().splitlines())
+        if frame["method"] == "session.event" and frame["params"]["event"]["type"] == "workspace/state"
+    ]
+    assert actual == expected
+    assert [event["phase"] for event in actual] == ["saving", "pending", "returned"]
