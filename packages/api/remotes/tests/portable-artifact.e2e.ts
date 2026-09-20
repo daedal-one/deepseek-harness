@@ -80,11 +80,16 @@ it('awaits the generated assembly and disposes calls and streams after async low
       const { Context } = await load(fileURLToPath(import.meta.resolve('@deepseek-ai/cordis', pathToFileURL(process.argv[1]))));
       ctx = new Context();
       await ctx.plugin({ apply: api.applyRegistry, inject: api.registryInject });
-      const requiredCapabilities = api.selectRemoteCapabilities(['workspace/follow', 'workspace/rename', 'session/list', 'session/control', 'session/follow', 'session/prompt', 'session/search', 'subagents/list']);
-      assert.equal(requiredCapabilities.length, 8);
+      const requiredCapabilities = api.selectRemoteCapabilities(['workspace/follow', 'workspace/rename', 'session/list', 'session/control', 'session/follow', 'session/prompt', 'session/search', 'session/historyDetail', 'subagents/list']);
+      assert.equal(requiredCapabilities.length, 9);
       assert.equal(api.selectRemoteCapabilities(['session/follow', 'session/follow']).length, 1);
       assert.equal(api.selectRemoteCapabilities([]).length, 0);
       assert.throws(() => api.selectRemoteCapabilities(['absent/method']), /lacks generated compatibility evidence/);
+      const detail = (seq, text) => ({ type: 'event', event: { seq, time: seq, type: 'tool/result', surfaceOp: 'append', data: { turn: 0, step: 0,
+        message: { id: 'result-' + seq, role: 'user', source: { kind: 'tool', callId: 'call-' + seq },
+          content: [{ type: 'tool-result', toolCallId: 'call-' + seq, isError: false, content: [{ type: 'text', text }] }] } } } });
+      const compactDetails = [0, 1].map(seq => ({ ...detail(seq, ''), detail: { kind: 'tool-result', bytes: 4000 } }));
+      let secondDetail = 'x'.repeat(2000);
       const calls = [];
       const workspace = id => ({ workspaceId: id, title: id, path: '/work/' + id, sessionIds: [],
         createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' });
@@ -102,6 +107,10 @@ it('awaits the generated assembly and disposes calls and streams after async low
           assert.equal(args[2].compatibility.semanticRevision, 1);
           assert.match(args[2].compatibility.wireFingerprint, /^typert-wire-v1:[0-9a-f]{64}$/);
           assert.equal(args[2].compatibility.identity.activationId, identity.value.activationId);
+          if (args[1] === 'session/historyDetail') {
+            const seq = args[2].args.request.seq;
+            return { ok: true, value: detail(seq, seq === 0 ? 'full zero' : secondDetail) };
+          }
           if (args[1] === 'session/search') return { ok: true, value: { items: [], hasMore: false } };
           if (args[1] === 'subagents/list') return { ok: true, value: { entries: [], parentAvailable: true } };
           if (args[1] === 'session/list') return { ok: true, value: { items: [{ sessionId: 'portable-session', updatedAt: 1, running: false, blank: false }] } };
@@ -137,7 +146,7 @@ it('awaits the generated assembly and disposes calls and streams after async low
               else if (frame.endpoint === 'session/control') value = { type: 'baseline', value: { queues: {}, jobs: {}, projections: {} } };
               else if (frame.endpoint === 'session/follow') value = {
                 type: 'snapshot', header: { version: 3, id: 'portable-session', createdAt: 0, isSeeded: false },
-                cursor: -1, records: [], hasMore: false, projections: { asOfSeq: -1, values: {} }, assistantStream: { revision: 0 },
+                cursor: 1, records: compactDetails, hasMore: false, projections: { asOfSeq: 1, values: {} }, assistantStream: { revision: 0 },
               };
               else throw new Error('unexpected portable stream ' + frame.endpoint);
               queueMicrotask(() => callbacks.get('message')?.({ data: JSON.stringify({ type: 'item', streamId: frame.streamId, value }) }));
@@ -199,6 +208,7 @@ it('awaits the generated assembly and disposes calls and streams after async low
       assert.equal(source.getSnapshot(), disposedSnapshot);
       let selected = { sessionId: 'portable-session' };
       sessions = ctx.plugin({ apply: api.applySessions, inject: api.sessionInject }, {
+        historyDetailRetention: { maxSerializedChars: 500 },
         platform: { createRequestId: () => 'device-request-1', timeZone: () => 'Europe/Rome' },
         selection: { getSnapshot: () => selected, set: value => { selected = value; } },
       });
@@ -208,16 +218,23 @@ it('awaits the generated assembly and disposes calls and streams after async low
       const binding = ctx.sessions.binding('portable-session');
       assert(binding);
       await waitSnapshot(binding.session, state => state.openState === 'open');
+      await binding.session.loadHistoryDetail(0);
+      await assert.rejects(binding.session.loadHistoryDetail(1), error => error instanceof api.HistoryDetailLimitError && error.maxSerializedChars === 500);
+      assert.equal(binding.eventSource.getSnapshot().entries[0].detail, undefined);
+      secondDetail = 'full one';
+      await binding.session.loadHistoryDetail(1);
+      assert.equal(binding.eventSource.getSnapshot().entries[0].detail.kind, 'tool-result');
+      assert.equal(binding.eventSource.getSnapshot().entries[1].event.data.message.content[0].content[0].text, 'full one');
       const pending = binding.session.beginSubmission({ mode: 'queue', text: 'Native prompt', attachments: [] });
       assert.equal(pending.requestId, 'device-request-1');
       assert((await binding.session.prompt([{ type: 'text', text: 'Native prompt' }], 'queue', undefined, pending.requestId)).ok);
       const followId = frames.find(frame => frame.type === 'open' && frame.endpoint === 'session/follow').streamId;
       callbacks.get('message')({ data: JSON.stringify({ type: 'item', streamId: followId, value: { type: 'event', event: {
-        seq: 0, time: 1, type: 'user/message', surfaceOp: 'append',
+        seq: 2, time: 2, type: 'user/message', surfaceOp: 'append',
         data: { id: 'native-message', role: 'user', content: [{ type: 'text', text: 'Native prompt' }], source: { kind: 'user', rpcId: pending.requestId } },
       } } }) });
-      await waitSnapshot(binding.eventSource, state => state.entries.length === 1);
-      assert.equal(binding.eventSource.getSnapshot().entries[0].event.data.content[0].text, 'Native prompt');
+      await waitSnapshot(binding.eventSource, state => state.entries.length === 3);
+      assert.equal(binding.eventSource.getSnapshot().entries[2].event.data.content[0].text, 'Native prompt');
       await waitSnapshot(binding.session, state => state.pendingSubmissions.length === 0);
       ctx.sessions.clear();
       assert.equal(selected.sessionId, undefined);
@@ -298,7 +315,9 @@ it('typechecks the portable application without workspace source aliases or Host
         const workspaces: api.WorkspaceSnapshot = ctx.workspaces.list.getSnapshot();
         const renamed: api.WorkspaceView = await ctx.workspaces.rename(workspaces.items[0].workspaceId, 'Renamed');
         let selected: api.SessionSelection = {};
+        const retention: api.HistoryDetailRetentionPolicy = { maxSerializedChars: 1024 };
         const options: api.SessionClientOptions = {
+          historyDetailRetention: retention,
           platform: { createRequestId: () => 'native-id' as api.SessionRequestId, timeZone: () => 'Europe/Rome' },
           selection: { getSnapshot: () => selected, set: value => { selected = value; } },
         };

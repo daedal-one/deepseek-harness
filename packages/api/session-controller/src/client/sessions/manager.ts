@@ -26,7 +26,8 @@ import { Notifier } from './notifier.ts'
 import { ProjectionValueStore } from './projection-store.ts'
 import { Session } from './session.ts'
 import type { SessionRemotes } from './remotes.ts'
-import type { SessionPlatform } from '../platform.ts'
+import { HistoryDetailRetention } from '../history-detail-retention.ts'
+import type { HistoryDetailRetentionPolicy, SessionPlatform } from '../platform.ts'
 
 function sessionSeqCursor(value: number): SessionSeqCursor {
   return value === -1 ? -1 : SessionSeq(value)
@@ -152,6 +153,8 @@ export class SessionManager {
     this.listSnapshotCache = this.buildListSnapshot()
   })
 
+  private readonly historyDetailRetention: HistoryDetailRetention | undefined
+
   /**
    * @param remote - generated Remote namespaces the Session cluster calls.
    * @param platform - shared request identity and device time zone callbacks.
@@ -162,7 +165,9 @@ export class SessionManager {
     private readonly platform: SessionPlatform,
     restoredSelection?: SessionId,
     restoredAddress?: SubagentAddress,
+    historyDetailRetention?: HistoryDetailRetentionPolicy,
   ) {
+    this.historyDetailRetention = historyDetailRetention === undefined ? undefined : new HistoryDetailRetention(historyDetailRetention)
     this.selected = restoredSelection
     if (restoredAddress !== undefined) this.addresses.set(restoredAddress.childSessionId, restoredAddress)
     this.listSnapshotCache = this.buildListSnapshot()
@@ -341,6 +346,7 @@ export class SessionManager {
         this.recordMutation({ kind: 'engaged', sessionId: engaged.sessionId })
       },
       projections: this.projectionStore(sessionId),
+      ...(this.historyDetailRetention === undefined ? {} : { historyDetailRetention: this.historyDetailRetention }),
     })
   }
 

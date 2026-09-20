@@ -232,6 +232,7 @@ export class ClientSessions implements ISessions {
       options.platform,
       restored.sessionId,
       restored.subagentAddress,
+      options.historyDetailRetention,
     )
     this.list = createSnapshotStore<SessionListState>({
       ids: [], byId: {}, current: undefined, phase: 'pending', state: 'idle', error: null, hasMore: false, loadingMore: false,

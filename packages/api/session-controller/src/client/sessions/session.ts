@@ -28,6 +28,7 @@ import type {
   SessionEventLikeEntry, SessionLiveEventEntry,
 } from '../contract/events.ts'
 import { Notifier } from './notifier.ts'
+import type { HistoryDetailRetention } from '../history-detail-retention.ts'
 import { isRemoteFailure } from '@deepseek-ai/dsh-api-gateway/client'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import type { RemoteFailure, RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
@@ -75,6 +76,8 @@ export interface SessionOptions {
    * private store (bare object-layer construction).
    */
   projections?: ProjectionValueStore
+  /** Shared Host-wide hydration accounting; omitted by unbounded compositions. */
+  historyDetailRetention?: HistoryDetailRetention
 }
 
 /**
@@ -90,6 +93,11 @@ export class Session implements SessionFace {
   private readonly detailLoads = new Map<number, { abort: AbortController; promise: Promise<void> }>()
   /** Canceled reads remain owned until settlement, after their coalescing slots are released. */
   private readonly detailReads = new Set<Promise<void>>()
+  private readonly retainedDetails = new Map<number, {
+    compact: SessionLiveEventEntry
+    hydrated: SessionLiveEventEntry
+    release: () => void
+  }>()
   private syncing = false
   private openState: OpenState = 'cold'
   private openError: RemoteFailure | null = null
@@ -406,7 +414,20 @@ export class Session implements SessionFace {
       const window = this.eventSource.getSnapshot()
       if (!window.entries.includes(entry)) return
       const replacement = result.value as unknown as SessionLiveEventEntry
-      this.eventSource.replace(window.entries.map(value => value === entry ? replacement : value), window.hasMore)
+      const retention = this.options.historyDetailRetention
+      if (retention !== undefined) {
+        const release = retention.retain(JSON.stringify(replacement).length, () => {
+          this.retainedDetails.delete(seq)
+          this.replaceDetail(replacement, entry)
+        })
+        // Evicting another Session publishes synchronously and may replace this generation.
+        if (generation !== this.openGeneration || !this.eventSource.getSnapshot().entries.includes(entry)) {
+          release()
+          return
+        }
+        this.retainedDetails.set(seq, { compact: entry, hydrated: replacement, release })
+      }
+      this.replaceDetail(entry, replacement)
     })().catch((error: unknown) => {
       if (generation === this.openGeneration) throw error
     }).finally(() => {
@@ -418,10 +439,27 @@ export class Session implements SessionFace {
     return task
   }
 
+  private replaceDetail(previous: SessionLiveEventEntry, replacement: SessionLiveEventEntry): void {
+    const window = this.eventSource.getSnapshot()
+    if (!window.entries.includes(previous)) return
+    this.eventSource.replace(window.entries.map(value => value === previous ? replacement : value), window.hasMore)
+  }
+
+  private clearRetainedDetails(restore: boolean): void {
+    const retained = [...this.retainedDetails.values()]
+    this.retainedDetails.clear()
+    for (const entry of retained) entry.release()
+    if (!restore || retained.length === 0) return
+    const replacements = new Map(retained.map(entry => [entry.hydrated, entry.compact]))
+    const window = this.eventSource.getSnapshot()
+    this.eventSource.replace(window.entries.map(entry => entry.type === 'event' ? replacements.get(entry) ?? entry : entry), window.hasMore)
+  }
+
   /** Invalidate coalescing before aborting reads so replacement requests have independent owners. */
   private releaseDetails(): Promise<PromiseSettledResult<void>[]> {
     const reads = [...this.detailLoads.values()]
     this.detailLoads.clear()
+    this.clearRetainedDetails(true)
     for (const read of reads) read.abort.abort()
     return Promise.allSettled([...this.detailReads])
   }
@@ -720,6 +758,7 @@ export class Session implements SessionFace {
     // A durable gap-repair page has no assistant baseline. Clearing transient
     // attempts makes a held notification reopen follow once for an atomic
     // page/baseline pair instead of applying it to an unrelated repair cut.
+    this.clearRetainedDetails(false)
     const visible = this.assistantStream.replace(entries, assistantStream)
     this.baseSeq = SessionLogOffset(entries[0]?.event.seq ?? 0)
     this.hasMore = hasMore

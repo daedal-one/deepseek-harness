@@ -735,6 +735,9 @@ importers:
       '@deepseek-ai/dsh-agent-presets':
         specifier: workspace:^
         version: link:../packages/preset/agent-presets
+      '@deepseek-ai/dsh-api-gateway':
+        specifier: workspace:^
+        version: link:../packages/api/gateway
       '@deepseek-ai/dsh-api-session-controller':
         specifier: workspace:^
         version: link:../packages/api/session-controller

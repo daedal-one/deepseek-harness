@@ -128,7 +128,9 @@ export interface ISession {
   /**
    * Fetch one deferred result from the active history window. Concurrent callers share
    * completion; failures reject for explicit retry. Replacement or disposal cancels
-   * the read and suppresses its obsolete result or failure.
+   * the read and suppresses its obsolete result or failure. Optional Host-wide retention
+   * restores older compact entries; a complete entry larger than that allowance rejects
+   * with HistoryDetailLimitError without truncation or eviction.
    * @param seq - result sequence in the active history window.
    * @returns completion of hydration or cancellation; already hydrated or absent entries are no-ops.
    */

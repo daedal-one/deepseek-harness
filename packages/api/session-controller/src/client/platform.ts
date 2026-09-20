@@ -28,9 +28,17 @@ export interface SessionSelectionStore {
   set(selection: SessionSelection): void
 }
 
+/** Optional bound on complete hydrated entries across every resident Session of one Host. */
+export interface HistoryDetailRetentionPolicy {
+  /** Positive safe integer counting JSON UTF-16 code units, including the entry envelope; not heap bytes. */
+  readonly maxSerializedChars: number
+}
+
 /** Inputs owned by one host connection, never shared between independent hosts. */
 export interface SessionClientOptions {
   platform: SessionPlatform
+  /** Omission leaves hydrated details unbounded in the accepted event window. */
+  historyDetailRetention?: HistoryDetailRetentionPolicy
   /** Persistence failures must not throw through a Session state notification. */
   selection: SessionSelectionStore
 }
