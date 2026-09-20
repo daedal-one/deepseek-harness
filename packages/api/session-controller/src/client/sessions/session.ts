@@ -106,6 +106,8 @@ export class Session implements SessionFace {
    *  passes drop all writes once the generation moves on. */
   private openGeneration = 0
   private paging: Promise<void> | null = null
+  private pagingAbort: AbortController | null = null
+  private readonly pagingReads = new Set<Promise<void>>()
   private olderError: RemoteFailure | null = null
   /** Shared low-water target of the running jump loop; null when no jump is paging. */
   private jumpTargetSeq: SessionSeq | null = null
@@ -400,16 +402,23 @@ export class Session implements SessionFace {
   }
 
   /** Fetch an exact result and replace only its still-deferred entry. */
-  loadHistoryDetail(seq: number): Promise<void> {
+  loadHistoryDetail(seq: number, signal?: AbortSignal): Promise<void> {
+    if (signal?.aborted === true) return Promise.resolve()
     const pending = this.detailLoads.get(seq)
     if (pending !== undefined) return pending.promise
     const entry = this.eventSource.getSnapshot().entries.find(value => value.event.seq === seq)
     if (this.events === undefined || this.openState !== 'open' || entry?.type !== 'event' || entry.detail === undefined) return Promise.resolve()
     const generation = this.openGeneration
     const abort = new AbortController()
+    const current = (): boolean => !abort.signal.aborted && generation === this.openGeneration
+    const cancel = (): void => {
+      if (this.detailLoads.get(seq)?.abort === abort) this.detailLoads.delete(seq)
+      abort.abort(signal?.reason)
+    }
+    signal?.addEventListener('abort', cancel, { once: true })
     const task = (async () => {
       const result = await this.remote.session.historyDetail({ address: this.sessionAddress(), seq }, abort.signal)
-      if (generation !== this.openGeneration) return
+      if (!current()) return
       if (!result.ok) throw result.error
       const window = this.eventSource.getSnapshot()
       if (!window.entries.includes(entry)) return
@@ -421,7 +430,7 @@ export class Session implements SessionFace {
           this.replaceDetail(replacement, entry)
         })
         // Evicting another Session publishes synchronously and may replace this generation.
-        if (generation !== this.openGeneration || !this.eventSource.getSnapshot().entries.includes(entry)) {
+        if (!current() || !this.eventSource.getSnapshot().entries.includes(entry)) {
           release()
           return
         }
@@ -429,12 +438,13 @@ export class Session implements SessionFace {
       }
       this.replaceDetail(entry, replacement)
     })().catch((error: unknown) => {
-      if (generation === this.openGeneration) throw error
+      if (current()) throw error
     }).finally(() => {
+      signal?.removeEventListener('abort', cancel)
       if (this.detailLoads.get(seq)?.promise === task) this.detailLoads.delete(seq)
       this.detailReads.delete(task)
     })
-    this.detailLoads.set(seq, { abort, promise: task })
+    if (!abort.signal.aborted) this.detailLoads.set(seq, { abort, promise: task })
     this.detailReads.add(task)
     return task
   }
@@ -468,11 +478,12 @@ export class Session implements SessionFace {
   retryOpen(): Promise<void> { return this.open() }
 
   /** Page up: pull one earlier page with the window's first seq as beforeSeq and prepend. */
-  loadOlder(): Promise<void> {
+  loadOlder(signal?: AbortSignal): Promise<void> {
+    if (signal?.aborted === true) return Promise.resolve()
     if (this.paging !== null) return this.paging
     const events = this.events
     if (this.openState !== 'open' || !this.hasMore || events === undefined) return Promise.resolve()
-    return this.startPaging(() => events.prepend({ beforeSeq: this.baseSeq, maxMessages: PAGE_MESSAGES }))
+    return this.startPaging(lifetime => events.prepend({ beforeSeq: this.baseSeq, maxMessages: PAGE_MESSAGES }, lifetime), signal)
   }
 
   /** Jump loader: page backwards until the window covers seq (see ISession.loadThrough). */
@@ -487,45 +498,64 @@ export class Session implements SessionFace {
     if (events === undefined) return Promise.resolve()
     this.jumpTargetSeq = seq
     const generation = this.openGeneration
-    return this.startPaging(async () => {
+    return this.startPaging(async (signal) => {
       while (this.hasMore && this.jumpTargetSeq !== null && this.baseSeq > this.jumpTargetSeq) {
         if (generation !== this.openGeneration) return
         const before = this.baseSeq
-        await events.prepend({ beforeSeq: before, maxMessages: JUMP_PAGE_MESSAGES })
+        await events.prepend({ beforeSeq: before, maxMessages: JUMP_PAGE_MESSAGES }, signal)
         if (generation !== this.openGeneration || this.baseSeq >= before) return
       }
     })
   }
 
   /** One operation owns paging activity, retry state, and completion for both page gestures. */
-  private startPaging(read: () => Promise<void>): Promise<void> {
+  private startPaging(read: (signal: AbortSignal) => Promise<void>, signal?: AbortSignal): Promise<void> {
     const generation = this.openGeneration
+    const abort = new AbortController()
+    const cancel = (): void => {
+      if (this.pagingAbort === abort) this.withdrawPaging()
+      abort.abort(signal?.reason)
+    }
+    signal?.addEventListener('abort', cancel, { once: true })
     this.olderError = null
-    const task = read().catch((error: unknown) => {
-      if (generation !== this.openGeneration) return
+    const task = read(abort.signal).catch((error: unknown) => {
+      if (abort.signal.aborted || generation !== this.openGeneration) return
       if (!isRemoteFailure(error)) console.error('[session-controller] history paging failed:', error)
       this.olderError = isRemoteFailure(error)
         ? error
         : new RemoteError('gateway/internal', error instanceof Error ? error.message : String(error), {})
     }).finally(() => {
+      signal?.removeEventListener('abort', cancel)
+      this.pagingReads.delete(task)
       if (this.paging !== task) return
       this.paging = null
+      this.pagingAbort = null
       this.jumpTargetSeq = null
       this.notifier.markDirty()
     })
-    this.paging = task
+    if (!abort.signal.aborted) {
+      this.paging = task
+      this.pagingAbort = abort
+    }
+    this.pagingReads.add(task)
     this.notifier.markDirty()
     return task
   }
 
-  /** Withdraw the prior owner's read state before its stream is canceled and joined. */
-  private releasePaging(): Promise<void> | null {
-    const paging = this.paging
+  private withdrawPaging(): void {
     this.paging = null
+    this.pagingAbort = null
     this.jumpTargetSeq = null
     this.olderError = null
     this.notifier.markDirty()
-    return paging
+  }
+
+  /** Withdraw read state before aborting; canceled transports remain owned until settlement. */
+  private releasePaging(): Promise<PromiseSettledResult<void>[]> {
+    const abort = this.pagingAbort
+    this.withdrawPaging()
+    abort?.abort()
+    return Promise.allSettled([...this.pagingReads])
   }
 
   /** Rebuild an opened history source after address replacement.

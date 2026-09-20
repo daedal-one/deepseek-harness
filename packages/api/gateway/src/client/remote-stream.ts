@@ -3,7 +3,7 @@
 import { RemoteError, remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 import { RemoteStreamCarrierError } from './stream-client.ts'
-import { combineRemoteCancellation } from './cancellation.ts'
+import { combineRemoteCancellation, type RemoteCancellationScope } from './cancellation.ts'
 
 /** One item annotated with the physical Remote-stream generation that delivered it. */
 export interface RemoteStreamItem<Item> {
@@ -61,6 +61,15 @@ export class RemoteStream<Item> implements AsyncIterable<RemoteStreamItem<Item>>
   /** Cancellation lifetime shared by the stream and sibling page requests. */
   get signal(): AbortSignal {
     return this.lifetime.signal
+  }
+
+  /**
+   * Bind a sibling operation to this stream and additional caller lifetimes.
+   * @param signals - generation and caller signals whose cancellation ends the operation.
+   * @returns a portable signal and listener cleanup to dispose when the operation settles.
+   */
+  cancellation(signals: readonly AbortSignal[]): RemoteCancellationScope {
+    return combineRemoteCancellation([this.lifetime.signal, ...signals], this.createController)
   }
 
   /** Interrupt the current generation and immediately request a replacement. */

@@ -95,6 +95,8 @@ export abstract class RemoteJournalStream<
   private resumeCursor: Cursor | undefined
   private hasResumeCursor = false
   private generation = 0
+  private generationSignal!: AbortSignal
+  private windowRevision = 0
   private firstCursor: Cursor | undefined
   private lastCursor: Cursor | undefined
   private started = false
@@ -141,7 +143,7 @@ export abstract class RemoteJournalStream<
    * Read one journal page through the addressed domain source.
    * @param request - domain page request.
    * @param through - inclusive journal cursor that fixes the source read.
-   * @param signal - cancellation lifetime shared with the logical stream.
+   * @param signal - cancellation lifetime of this page operation.
    * @returns the requested page, whose tail equals `through` unless the domain request selects older entries.
    */
   protected abstract readPage(request: PageRequest, through: Cursor, signal: AbortSignal): Promise<Page>
@@ -183,32 +185,46 @@ export abstract class RemoteJournalStream<
   /**
    * Read and prepend one older page after a successful open.
    * @param request - domain page request bound to this stream's address.
-   * @returns after the page is applied or rejected as discontinuous.
+   * @param signal - optional caller lifetime; cancellation leaves follow and the window intact.
+   * @returns after publication, cancellation, window replacement, or a rejected read.
    */
-  async prepend(request: PageRequest): Promise<void> {
+  async prepend(request: PageRequest, signal?: AbortSignal): Promise<void> {
     if (!this.opened || this.disposed) throw new Error(`${this.options.name} is not open`)
-    const page = await this.readPage(request, this.currentCursor(), this.stream.signal)
-    this.stream.signal.throwIfAborted()
-    const entries = this.options.entries(page)
-    this.assertPage(entries)
-    const before = this.firstCursor
-    const accepted = before === undefined
-      ? [...entries]
-      : entries.filter(entry => this.options.compare(this.options.first(entry), before) < 0)
-    const tail = accepted.at(-1)
-    if (tail !== undefined && before !== undefined
-      && !this.options.follows(this.options.last(tail), before)) {
-      this.options.publish({ type: 'prepend', page, entries: [], hasMore: false })
-      throw protocolViolation(`${this.options.name} history page is discontinuous`)
+    const revision = this.windowRevision
+    const cancellation = this.stream.cancellation([
+      this.generationSignal,
+      ...(signal === undefined ? [] : [signal]),
+    ])
+    const current = (): boolean => !cancellation.signal.aborted && revision === this.windowRevision
+    try {
+      if (!current()) return
+      const page = await this.readPage(request, this.currentCursor(), cancellation.signal)
+      if (!current()) return
+      const entries = this.options.entries(page)
+      this.assertPage(entries)
+      const before = this.firstCursor
+      const accepted = before === undefined
+        ? [...entries]
+        : entries.filter(entry => this.options.compare(this.options.first(entry), before) < 0)
+      const tail = accepted.at(-1)
+      if (tail !== undefined && before !== undefined
+        && !this.options.follows(this.options.last(tail), before)) {
+        this.options.publish({ type: 'prepend', page, entries: [], hasMore: false })
+        throw protocolViolation(`${this.options.name} history page is discontinuous`)
+      }
+      const first = accepted[0]
+      if (first !== undefined) this.firstCursor = this.options.first(first)
+      this.options.publish({
+        type: 'prepend',
+        page,
+        entries: accepted,
+        hasMore: this.options.hasMore(page),
+      })
+    } catch (error) {
+      if (current()) throw error
+    } finally {
+      cancellation.dispose()
     }
-    const first = accepted[0]
-    if (first !== undefined) this.firstCursor = this.options.first(first)
-    this.options.publish({
-      type: 'prepend',
-      page,
-      entries: accepted,
-      hasMore: this.options.hasMore(page),
-    })
   }
 
   /** Replace the active physical generation while retaining the published window. */
@@ -281,12 +297,14 @@ export abstract class RemoteJournalStream<
       )
     }
     this.generation = item.generation
+    this.generationSignal = item.signal
     item.accept()
     return { cursor, page: item.value.page }
   }
 
   /** Publish a generation's opening page without issuing a second Remote call. */
   private replaceFromOpening(page: Page, cursor: Cursor): void {
+    this.windowRevision++
     this.assertPageThrough(page, cursor)
     const entries = [...this.options.entries(page)]
     this.assertPage(entries)
@@ -380,6 +398,7 @@ export abstract class RemoteJournalStream<
     const first = entries[0]
     /* v8 ignore next -- a successful positive-cursor replacement page cannot be empty. */
     this.firstCursor = first === undefined ? undefined : this.options.first(first)
+    this.windowRevision++
     this.lastCursor = this.tailCursor(entries)
     this.setResumeCursor(this.lastCursor)
     this.options.publish({

@@ -77,6 +77,49 @@ function supervisor<Item>(
 }
 
 describe('RemoteStream', () => {
+  it('uses the portable factory for caller scopes and releases listeners after settlement', async () => {
+    const factory = vi.fn(() => new AbortController())
+    const stream = new RemoteStream(hostSource(true).connection, {
+      name: 'scope fixture', open: scripted<string>([]), ended: () => new Error('unused'),
+    }, factory)
+    const caller = new AbortController()
+    const removed = vi.spyOn(caller.signal, 'removeEventListener')
+    const scope = stream.cancellation([caller.signal])
+    expect(factory).toHaveBeenCalledTimes(2)
+    const reason = new Error('view closed')
+    caller.abort(reason)
+    expect(scope.signal.reason).toBe(reason)
+    expect(stream.signal.aborted).toBe(false)
+    expect(removed).toHaveBeenCalledWith('abort', expect.any(Function))
+    scope.dispose()
+    const sibling = stream.cancellation([])
+    await stream.dispose()
+    expect(sibling.signal.aborted).toBe(true)
+    sibling.dispose()
+    removed.mockRestore()
+  })
+
+  it('joins disposal while retry is waiting for a Host generation', async () => {
+    const source = hostSource(false)
+    const waiting = Promise.withResolvers<undefined>()
+    const subscribe = source.connection.generation.subscribe.bind(source.connection.generation)
+    const observed = vi.spyOn(source.connection.generation, 'subscribe').mockImplementation((listener) => {
+      const stop = subscribe(listener)
+      waiting.resolve(undefined)
+      return stop
+    })
+    const stream = supervisor(source.connection, [{ terminal: new RemoteStreamCarrierError('lost') }])
+    const next = stream[Symbol.asyncIterator]().next()
+    try {
+      await waiting.promise
+      await stream.dispose()
+      expect(await next).toMatchObject({ done: true })
+    } finally {
+      await stream.dispose()
+      observed.mockRestore()
+    }
+  })
+
   it('annotates replacement generations and resets retry state after acceptance', async () => {
     const source = hostSource(true)
     const stream = supervisor(source.connection, [

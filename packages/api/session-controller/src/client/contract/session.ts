@@ -120,9 +120,11 @@ export interface ISession {
   /**
    * Extend the history window backwards (older messages pagination).
    * Repeated calls share one completion. Failures retain the accepted window and cursor.
-   * @returns completion; inspect snapshot.olderError for a failed read.
+   * @param signal - optional first caller's lifetime; cancellation suppresses late results and
+   * errors without closing the Session. Coalesced callers share that lifetime and completion.
+   * @returns completion, including cancellation; inspect snapshot.olderError for a failed read.
    */
-  loadOlder(): Promise<void>
+  loadOlder(signal?: AbortSignal): Promise<void>
   /** Retry a failed history load. @returns completion of the new load. */
   retryOpen(): Promise<void>
   /**
@@ -132,9 +134,11 @@ export interface ISession {
    * restores older compact entries; a complete entry larger than that allowance rejects
    * with HistoryDetailLimitError without truncation or eviction.
    * @param seq - result sequence in the active history window.
+   * @param signal - optional first caller's lifetime; cancellation frees the coalescing slot
+   * without closing the Session. Coalesced callers share that lifetime and completion.
    * @returns completion of hydration or cancellation; already hydrated or absent entries are no-ops.
    */
-  loadHistoryDetail(seq: number): Promise<void>
+  loadHistoryDetail(seq: number, signal?: AbortSignal): Promise<void>
   /**
    * Page history backwards until the window covers `seq` (inclusive) — the
    * turn-jump loader. Repeated calls while a jump is paging lower its shared

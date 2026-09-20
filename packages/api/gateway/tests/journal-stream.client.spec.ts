@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { combineRemoteCancellation } from '../src/client/cancellation.ts'
 import {
   RemoteJournalStream,
   RemoteStream,
@@ -81,6 +82,7 @@ class FixtureJournal extends RemoteJournalStream<Page, Entry, number, PageReques
     changes: RemoteJournalChange<Page, Entry, string>[],
     failed: (error: unknown) => void,
     factory: RemoteStreamFactory = STREAM_FACTORY,
+    carrierFailed?: (error: RemoteStreamCarrierError) => void,
   ) {
     super(factory, {
       name: 'fixture journal',
@@ -93,6 +95,7 @@ class FixtureJournal extends RemoteJournalStream<Page, Entry, number, PageReques
       follows: (left, right) => right === left + 1,
       publish: (change) => { changes.push(change) },
       failed,
+      ...(carrierFailed === undefined ? {} : { carrierFailed }),
     })
   }
 
@@ -142,6 +145,7 @@ function journalFixture(
   generations: Generation[],
   pages: PageSource[],
   factory: RemoteStreamFactory = STREAM_FACTORY,
+  carrierFailed?: (error: RemoteStreamCarrierError) => void,
 ): {
   readonly journal: RemoteJournalStream<Page, Entry, number, PageRequest, string>
   readonly changes: RemoteJournalChange<Page, Entry, string>[]
@@ -167,6 +171,7 @@ function journalFixture(
     changes,
     failed,
     factory,
+    carrierFailed,
   )
   return { journal, changes, failed, calls, pageRequests, pageCursors, followRequests }
 }
@@ -195,6 +200,8 @@ function controlledFactory(
       }
       return {
         signal: lifetime.signal,
+        cancellation: (signals: readonly AbortSignal[]) =>
+          combineRemoteCancellation([lifetime.signal, ...signals], () => new AbortController()),
         restart: () => {},
         dispose: async () => { lifetime.abort() },
         [Symbol.asyncIterator]: () => iterator,
@@ -204,6 +211,88 @@ function controlledFactory(
 }
 
 describe('RemoteJournalStream', () => {
+  it('reports carrier loss while replacing the physical history generation', async () => {
+    const loss = new RemoteStreamCarrierError('lost')
+    const failed = vi.fn()
+    const fixture = journalFixture([
+      { frames: [opened(0, page('first', [0]))], terminal: loss },
+      { frames: [opened(1, page('second', [0, 1]))], hold: true },
+    ], [], STREAM_FACTORY, failed)
+    try {
+      await fixture.journal.open({})
+      await vi.waitFor(() => { expect(fixture.changes).toHaveLength(2) })
+      expect(failed).toHaveBeenCalledExactlyOnceWith(loss)
+    } finally {
+      await fixture.journal.dispose()
+    }
+  })
+
+  it('skips an already canceled page and leaves follow open for another caller', async () => {
+    const fixture = journalFixture([{ frames: [opened(4, page('tail', [3, 4], true))], hold: true }], [page('head', [1, 2])])
+    const view = new AbortController()
+    view.abort()
+    try {
+      await fixture.journal.open({})
+      await fixture.journal.prepend({ before: 3 }, view.signal)
+      expect(fixture.pageRequests).toHaveLength(0)
+      expect(fixture.journal.signal.aborted).toBe(false)
+      await fixture.journal.prepend({ before: 3 })
+      expect(fixture.changes.at(-1)).toMatchObject({ type: 'prepend', entries: entries(1, 2) })
+    } finally {
+      await fixture.journal.dispose()
+    }
+  })
+
+  it.each(['success', 'failure'] as const)('discards a late page %s after physical generation replacement', async (kind) => {
+    const pending = Promise.withResolvers<Page>()
+    let signal: AbortSignal | undefined
+    const fixture = journalFixture([
+      { frames: [opened(4, page('first', [3, 4], true))], hold: true },
+      { frames: [opened(6, page('second', [5, 6], true))], hold: true },
+    ], [(lifetime) => { signal = lifetime; return pending.promise }, page('older second', [3, 4])])
+    try {
+      await fixture.journal.open({})
+      const loading = fixture.journal.prepend({ before: 3 })
+      fixture.journal.restart()
+      await vi.waitFor(() => { expect(fixture.changes).toHaveLength(2) })
+      expect(signal?.aborted).toBe(true)
+      if (kind === 'success') pending.resolve(page('obsolete', [1, 2]))
+      else pending.reject(new Error('obsolete failure'))
+      await loading
+      expect(fixture.changes).toHaveLength(2)
+      expect(fixture.failed).not.toHaveBeenCalled()
+      await fixture.journal.prepend({ before: 5 })
+      expect(fixture.changes.at(-1)).toMatchObject({ type: 'prepend', entries: entries(3, 4) })
+    } finally {
+      pending.resolve(page('unused', []))
+      await fixture.journal.dispose()
+    }
+  })
+
+  it.each(['success', 'failure'] as const)('discards a late page %s after same-generation gap repair', async (kind) => {
+    const pending = Promise.withResolvers<Page>()
+    const gap = Promise.withResolvers<ScriptedFrame>()
+    const fixture = journalFixture([
+      { frames: [opened(4, page('first', [3, 4], true)), gap.promise], hold: true },
+    ], [pending.promise, page('repair', [3, 4, 5, 6, 7], true)])
+    try {
+      await fixture.journal.open({})
+      const loading = fixture.journal.prepend({ before: 3 })
+      gap.resolve({ type: 'entry', entry: { seq: 7 } })
+      await vi.waitFor(() => { expect(fixture.changes).toHaveLength(2) })
+      if (kind === 'success') pending.resolve(page('obsolete', [1, 2]))
+      else pending.reject(new Error('obsolete failure'))
+      await loading
+      expect(fixture.changes).toHaveLength(2)
+      expect(fixture.failed).not.toHaveBeenCalled()
+      expect(fixture.calls.filter(value => value === 'follow')).toHaveLength(1)
+    } finally {
+      gap.resolve({ type: 'entry', entry: { seq: 7 } })
+      pending.resolve(page('unused', []))
+      await fixture.journal.dispose()
+    }
+  })
+
   it('publishes cursorless notifications without advancing the durable page cursor', async () => {
     const live = Promise.withResolvers<ScriptedFrame>()
     const fixture = journalFixture(

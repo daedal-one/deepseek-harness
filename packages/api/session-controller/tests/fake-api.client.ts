@@ -142,7 +142,7 @@ export class FakeApiClient {
     }))
   onRename: (payload: unknown) => Promise<RemoteResult<{ title: string; seq: number }>> = () => Promise.resolve(ok({ title: 'fk-renamed', seq: 0 }))
   onFork: (payload: unknown) => Promise<RemoteResult<{ sessionId: SessionId }>> = () => Promise.resolve(ok({ sessionId: 'fk-fork' as SessionId }))
-  onHistory: (payload: { sessionId: SessionId; throughSeq?: number; beforeSeq?: number; maxMessages?: number })
+  onHistory: (payload: { sessionId: SessionId; throughSeq?: number; beforeSeq?: number; maxMessages?: number }, signal?: AbortSignal)
   => Promise<RemoteResult<SessionPage & { readonly projections?: SessionProjectionBaseline }>> =
     () => Promise.resolve(ok({ records: [], hasMore: false }))
 
@@ -247,7 +247,7 @@ export class FakeApiClient {
           payload,
           this.onOpenWorkspacePath(payload),
         ),
-        page: request => this.page(request),
+        page: (request, signal) => this.page(request, signal),
         historyDetail: (request, signal) => this.record('session.historyDetail', request, this.onHistoryDetail(request, signal)),
         follow: (request, signal) => this.openFollow(request, signal),
         control: signal => this.openControl(signal),
@@ -340,13 +340,14 @@ export class FakeApiClient {
     return response
   }
 
-  private page(request: SessionPageRequest): Promise<RemoteResult<SessionPage>> {
-    return this.fetchPage(request)
+  private page(request: SessionPageRequest, signal?: AbortSignal): Promise<RemoteResult<SessionPage>> {
+    return this.fetchPage(request, undefined, signal)
   }
 
   private async fetchPage(
     request: SessionPageRequest,
     response?: Promise<RemoteResult<SessionPage>>,
+    signal?: AbortSignal,
   ): Promise<RemoteResult<SessionPage>> {
     const sessionId = addressSessionId(request.address)
     const payload = request.address.kind === 'session'
@@ -370,7 +371,7 @@ export class FakeApiClient {
       throughSeq: request.throughSeq,
       ...request.beforeSeq === undefined ? {} : { beforeSeq: request.beforeSeq },
       ...request.maxMessages === undefined ? {} : { maxMessages: request.maxMessages },
-    }))
+    }, signal))
     if (!result.ok) return result
     return {
       ok: true,
