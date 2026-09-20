@@ -11,6 +11,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
 import { brandString } from '@deepseek-ai/dsh-brand'
+import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import type { SessionListCursor } from '../src/types.ts'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { LlmAttemptId } from '@deepseek-ai/dsh-llm'
@@ -938,6 +939,30 @@ describe('catalog-addressed navigation', () => {
 })
 
 describe('create', () => {
+  it.each([
+    { cwd: '/selected' },
+    { workspaceId: brandString<WorkspaceId>('selected-workspace') },
+  ])('preserves the requested profile and identity for %j', async (location) => {
+    const b = bench()
+    const request = { ...location, sessionId: sid('selected-profile'), agentPreset: 'minimal' }
+    b.api.onCreate = () => Promise.resolve(ok({ sessionId: request.sessionId }))
+    await expect(b.svc.create(request)).resolves.toBe(request.sessionId)
+    expect(b.api.callsOf('session.create')).toEqual([request])
+    expect(b.svc.binding(request.sessionId)).toBeDefined()
+  })
+
+  it('retains a removed-profile failure without creating with a default profile', async () => {
+    const b = bench()
+    const request = { sessionId: sid('profile-removed'), agentPreset: 'removed' }
+    const unavailable = new RemoteError('gateway/internal', 'Profile removed', {})
+    b.api.onCreate = () => Promise.resolve(err(unavailable))
+    await expect(b.svc.create(request)).rejects.toMatchObject({
+      requestedSessionId: request.sessionId, rpcError: unavailable,
+    })
+    expect(b.api.callsOf('session.create')).toEqual([request])
+    expect(b.svc.list.getSnapshot().ids).not.toContain(request.sessionId)
+  })
+
   it('passes a preallocated id and preserves it on ordinary failure', async () => {
     const b = bench()
     b.api.onCreate = () => Promise.resolve(ok({ sessionId: sid('fresh') }))

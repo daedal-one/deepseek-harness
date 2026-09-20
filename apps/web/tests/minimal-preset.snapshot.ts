@@ -42,7 +42,16 @@ describe('minimal agent preset', () => {
   let tripwire: ReturnType<typeof watchConsole> | undefined
 
   beforeAll(async () => {
-    scaffold = await launchWebScaffold({ replayFixture: FIXTURE, compareReplaySession: true, paceMs: 10 })
+    scaffold = await launchWebScaffold({
+      replayFixture: FIXTURE,
+      compareReplaySession: true,
+      paceMs: 10,
+      replayProviders: [{
+        id: 'deepseek-official',
+        name: 'DeepSeek',
+        models: [{ id: 'deepseek-flash', name: 'DeepSeek-V4.1-Flash', contextWindow: 128_000 }],
+      }],
+    })
     disposeInjectedPrompt = scaffold.ctx.systemPrompt.section({
       name: 'test:injected-prompt',
       order: 999,
@@ -159,6 +168,7 @@ describe('minimal agent preset', () => {
     await row.click()
 
     await expect.poll(() => row.getAttribute('aria-expanded')).toBe('true')
+    await page.getByRole('button', { name: 'Load full result', exact: true }).click()
     const call = row.locator('xpath=..')
     await call.getByText('IN', { exact: true }).waitFor()
     await call.getByText('OUT', { exact: true }).waitFor()
