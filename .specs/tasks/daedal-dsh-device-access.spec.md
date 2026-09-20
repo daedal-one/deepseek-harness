@@ -4,7 +4,7 @@ type: task
 status: accepted
 summary: "Add device enrollment and host discovery."
 owners: [carlo]
-progress: in-progress
+progress: done
 addresses: ["REQ:frontend/daedal-dsh#c-device-access", "IFC:frontend/daedal-dsh-client"]
 blocked_by: []
 ---
@@ -64,3 +64,9 @@ Qualify malformed status and advertisements, forbidden addresses, redirect and o
 ## Acceptance
 
 Real iPhone QR pairing and host discovery succeed without address entry. Expired or replayed enrollment, revoked devices, mismatched host identity and unauthorized discovery fail explicitly. Candidate probes never receive another host credential and never imply enrollment.
+
+## Qualification disposition
+
+The native-client task records the qualified Phase 3 client/Host combination, live dsh-dev activation, discovery and enrollment evidence, exercised service recovery and remaining platform limitations. Carlo provisionally accepted the outstanding physical iPhone checks on 20 September 2026; no physical camera or network test is claimed as executed. Keep device credentials and owner administration separate, retain the current Web interface, and use the same task's recorded release evidence.
+
+[Native Client qualification](daedal-dsh-native-client.spec.md#qualification-disposition).

@@ -4,7 +4,7 @@ type: task
 status: accepted
 summary: "Expose the portable DSH client."
 owners: [carlo]
-progress: in-progress
+progress: done
 addresses: ["REQ:frontend/daedal-dsh#c-native-client", "IFC:frontend/daedal-dsh-client"]
 blocked_by: []
 ---
@@ -90,3 +90,11 @@ Expose the same implementation through the installable application Client. Quali
 ## Acceptance
 
 A native iPhone build and browser/Electron consumers attach to an existing session, stream, prompt and resolve an interaction through native DSH semantics. Shared source and artifact checks reject Node/DOM imports on native paths. Focused lifecycle tests cover cancellation, disposal, disconnect after acceptance and reconnect; recorded-session output remains faithful.
+
+## Qualification disposition
+
+The Phase 3 native client and device-access increment is qualified against backend source `752e8d433dee797dea1b2e3dc032ce1846c28c85` and frontend application source `491b80343a9342077b5388154d4e3140fd599967`. Installed portable runtime, browser and packaged Electron flows cover enrollment, Session reads, prompt and interaction delivery, loss and reconnect, protected restore, discovery, revocation and disposal. The intended dsh-dev Web Host retains all 84 existing Sessions, its loopback/Tailscale boundary and the supported companion clients. Native admission and three existing Session reads passed from the Mac against that Host; its owner page renders the pairing QR on the numeric tailnet origin. Service recovery to the frozen compatible profile was exercised without restoring or downgrading Session data.
+
+Carlo provisionally accepted the remaining physical iPhone checks as passed on 20 September 2026 for TestFlight 0.8.0 build 7003006. Those checks were not executed and remain distinct from observed runtime evidence. The Linux headless smoke fails closed because this server restricts the required user-namespace sandbox; its private bubblewrap prerequisite probe confirms the restriction. The same focused owner passes on macOS, and the intended Linux Web profile and real rootless Podman tests pass. No sandbox policy was weakened.
+
+Local evidence is retained under `.dev/daedal-dsh-plan-audit/native-host-activation-20260920/`, including failed activation checks and successful recoveries. Forge action `01a0be96-551b-7e42-8766-9c404f3c68de` records the final preservation and qualification inventory. Structural projection remains partial; this disposition does not attest full semantic adherence. Rich Session features, managed desktop ownership and cutover retain their separate accepted tasks.
