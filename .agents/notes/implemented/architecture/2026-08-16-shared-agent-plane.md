@@ -25,3 +25,5 @@ One preset now has the same model-facing composition on web and headless surface
 The agent-plane bundle does not choose a persona, model, or tool set. Those remain preset data. Surface-specific host services remain outside the preset and can still differ by deployment.
 
 Headless disables source-module HMR but retains live profile and home patch files. Its launcher fallback polls those two exact configuration paths; native directory watchers can exceed the low per-process file-descriptor limit on macOS before a one-shot task starts.
+
+Loader fixtures that exercise host-owned tools disable the preset roster and explicitly enable their selected Consumers. Preset-aware fixtures include the agent-plane layer. Each model-backed fixture pins its provider and model instead of inheriting a deployment default; otherwise a change in deployment configuration can silently select an external provider or test a different tool composition.

@@ -31,6 +31,8 @@ Qualify the shipped Settings, authentication, recovery and Sidebar workflows alo
 
 Recorded search fixtures explicitly disable the per-agent preset loader and enable their recorded host-owned consumers when selecting the minimal host-owned tool composition. Preserve recorded Session generations and output assertions when repairing fixture activation.
 
+CLI and provider Loader fixtures select their owned model route and host or preset composition explicitly. Built Client handoffs resolve the shared store dependency with one module identity. Qualify these existing consumers against the merged Host before native activation, preserving protocol, tool-output and persisted Session assertions.
+
 ## Shared Client exports
 
 Keep each shared public export list in one package-owned module while retaining the exact browser and portable export sets, type declarations and runtime owners. Consolidation must not expose native installers through the browser plugin or pull browser dependencies into the portable entry. Compare resolved exports before and after, and qualify the existing transport suites and built artifacts.

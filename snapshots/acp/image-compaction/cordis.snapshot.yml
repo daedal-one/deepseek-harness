@@ -39,8 +39,6 @@
           - id: deepseek-official
             name: DeepSeek
             models:
-              - id: deepseek-flash
-                inputModalities: [text]
               - id: deepseek-v4-pro
                 inputModalities: [text]
               - id: deepseek-flash

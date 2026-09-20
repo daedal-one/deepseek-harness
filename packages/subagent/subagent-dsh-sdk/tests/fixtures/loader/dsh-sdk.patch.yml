@@ -1,5 +1,8 @@
 # Test-only SDK provider patch over the shipped headless profile. The child
 # is a complete sdk profile; the parent omits `cwd` to exercise inheritance.
+- id: agent-presets
+  disabled: true
+
 - id: headless-startup
   disabled: true
 
@@ -22,17 +25,16 @@
 - id: tool-subagent
   disabled: true
 
+- id: subagent-model-selection-settings
+  config:
+    enabled: true
+    allowedModels:
+      - provider: mock
+        model: mock-routed
+
 - insert:
     - id: mock-llm
       name: './mock-delegating-llm.ts'
-
-    - id: subagent-model-selection-settings
-      name: '@deepseek-ai/dsh-tool-subagent/model-selection-settings'
-      config:
-        enabled: true
-        allowedModels:
-          - provider: mock
-            model: mock-routed
 
     - id: test-tool-subagent
       name: './scoped-tool-subagent.ts'

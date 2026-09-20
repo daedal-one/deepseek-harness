@@ -27,6 +27,7 @@ const SPAWN_TIMEOUT_MS = 60_000
 // prints what this manifest carries, so no test may pin it to a literal.
 const cliVersion = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version
 const dshBin = join(repoRoot, 'apps/cli/lib/bin.js')
+const deepseekModel = fileURLToPath(new URL('./fixtures/deepseek-model.patch.yml', import.meta.url))
 const invalidProvider = fileURLToPath(new URL('./fixtures/invalid-provider.cordis.yml', import.meta.url))
 
 async function runBuiltBin(
@@ -502,7 +503,7 @@ describe.skipIf(!existsSync(dshBin))('dsh BUILT bin (node lib/bin.js, no tsx)', 
       successText: 'ACP BUILT PROFILE OK',
     })
     const home = mkdtempSync(join(tmpdir(), 'dsh-built-acp-'))
-    const child = execa(process.execPath, [dshBin, '--profile', 'acp'], {
+    const child = execa(process.execPath, [dshBin, '--profile', 'acp', '--patch', deepseekModel], {
       cwd: home,
       reject: false,
       timeout: SPAWN_TIMEOUT_MS,
@@ -546,7 +547,7 @@ describe.skipIf(!existsSync(dshBin))('dsh BUILT bin (node lib/bin.js, no tsx)', 
       expect(initialized.agentInfo).toMatchObject({ name: 'deepseek-harness-acp' })
       expect(initialized.agentCapabilities).toEqual({
         mcpCapabilities: { http: true },
-        promptCapabilities: { image: false, audio: false, embeddedContext: false },
+        promptCapabilities: { image: true, audio: false, embeddedContext: false },
         sessionCapabilities: { close: {}, list: {}, resume: {} },
       })
       expect('_meta' in initialized).toBe(false)
@@ -588,7 +589,7 @@ describe.skipIf(!existsSync(dshBin))('dsh BUILT bin (node lib/bin.js, no tsx)', 
     })
     const home = mkdtempSync(join(tmpdir(), 'dsh-built-headless-'))
     try {
-      const result = await runBuiltBin(['--profile', 'headless', 'answer', 'from', 'the', 'published', 'entry'], {
+      const result = await runBuiltBin(['--profile', 'headless', '--patch', deepseekModel, 'answer', 'from', 'the', 'published', 'entry'], {
         DSH_HOME: home,
         DSH_TELEMETRY_DISABLED: '1',
         DEEPSEEK_API_KEY: apiKey,
@@ -666,7 +667,7 @@ describe.skipIf(!existsSync(dshBin))('dsh BUILT bin (node lib/bin.js, no tsx)', 
       }
       expect(manifest.dependencies).toEqual({})
       expect(manifest.dsh.profile).toEqual({
-        bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'],
+        bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-agent-plane', '@deepseek-ai/dsh-web-app'],
         patchReload: 'live',
       })
       expect(readFileSync(join(dir, 'cordis.patch.yml'), 'utf8')).toContain('[]')
@@ -1073,6 +1074,7 @@ describe.skipIf(!existsSync(dshBin))('dsh BUILT bin (node lib/bin.js, no tsx)', 
         ['deepseek-llm-api-extensions', '@deepseek-ai/dsh-deepseek-llm-api-extensions'],
         ['session-log-deepseek', '@deepseek-ai/dsh-session-log-deepseek'],
         ['plugin-package-inventory-deepseek', '@deepseek-ai/dsh-plugin-package-inventory-deepseek'],
+        ['llm-pi-ai', '@deepseek-ai/dsh-llm-pi-ai'],
         ['llm-deepseek', '@deepseek-ai/dsh-llm-deepseek'],
         ['sandbox', '@deepseek-ai/dsh-sandbox-local'],
         ['session-projection', '@deepseek-ai/dsh-session-projection'],
