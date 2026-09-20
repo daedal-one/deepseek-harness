@@ -46,7 +46,7 @@ it('publishes actual Chat nodes through portable artifacts without a page or fra
       const events = new api.ConversationEventRegistry(ctx);
       const views = new api.ConversationViewRegistry(ctx);
       chat.registerChatConversation({ events, views, inspectRequestPrompt: api.inspectRequestPrompt, inspectSystemPrompt: api.inspectSystemPrompt });
-      assert.equal(events.entries().length, 13);
+      assert.equal(events.entries().length, 14);
       let window = { entries: [], revision: 0, hasMore: false, change: { kind: 'replace', entries: [] } };
       const feed = { getSnapshot: () => window, subscribe: listener => { listeners.add(listener); return () => listeners.delete(listener); } };
       binding = new api.ConversationBindingModel(feed, new api.ConversationNodeAssembler(events, views), null);
@@ -62,11 +62,21 @@ it('publishes actual Chat nodes through portable artifacts without a page or fra
         data: { turn: 1, step: 1, attemptId: 'probe-attempt', chunk: { type: 'text-delta', index: 0, text: 'x' } } } });
       assert.equal(target.getSnapshot().navigation.items()[0].response, 'x');
       assert.equal(target.getSnapshot().nodes.values().some(node => node.kind === 'assistant-step'), true);
+      const receipt = { workspaceId: 'workspace-probe', turn: 1, phase: 'pending', baseline: 'a'.repeat(40),
+        checkpoint: 1, checkpointHash: 'b'.repeat(64), branches: {}, error: 'Destination unavailable' };
+      append({ type: 'event', event: { type: 'workspace/state', seq: 4, time: 4, data: receipt } });
+      const workspaceNode = target.getSnapshot().nodes.values().find(node => node.kind === 'workspace-state');
+      assert.equal(workspaceNode.data.phase, 'pending');
+      const workspaceSource = target.getSnapshot().nodes.source(workspaceNode.key);
+      append({ type: 'event', event: { type: 'workspace/state', seq: 5, time: 5,
+        data: { ...receipt, phase: 'returned', error: undefined, branches: { 'refs/heads/dsh/result': 'c'.repeat(40) } } } });
+      assert.equal(workspaceSource.getSnapshot().data.phase, 'returned');
+      assert.equal(target.getSnapshot().nodes.values().filter(node => node.kind === 'workspace-state').length, 1);
       assert.equal(listeners.size, 1);
       binding.dispose();
       assert.equal(listeners.size, 0);
       const snapshot = binding.snapshot.getSnapshot();
-      append({ type: 'event', event: { type: 'turn/start', seq: 4, time: 4, data: { turn: 2 } } });
+      append({ type: 'event', event: { type: 'turn/start', seq: 6, time: 6, data: { turn: 2 } } });
       assert.equal(binding.snapshot.getSnapshot(), snapshot);
     } finally {
       unsubscribe?.();

@@ -60,6 +60,72 @@ function userTexts(agent: Agent): string[] {
 }
 
 describe('agent loop', () => {
+  it('awaits workspace preparation before publishing the agent or assembling context', async () => {
+    const ctx = await harness(new MockAdapter([textResponse('ready')]))
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    ctx.on('agent/prepare', async ({ agent, origin: { parentAgent } }) => {
+      expect(parentAgent).toBeUndefined()
+      expect(ctx.agents.get(agent.id)).toBeUndefined()
+      entered.resolve(undefined); await release.promise
+      agent.ctx.systemPrompt.section({ name: 'prepared-workspace', order: 999, text: 'Prepared repository' })
+    })
+    const pending = ctx.agents.create({ sessionId: SessionId('workspace-preparation'), agentOptions: { provider: 'mock', model: 'mock' } })
+    try {
+      await entered.promise
+      expect(ctx.agents.get(SessionId('workspace-preparation'))).toBeUndefined()
+      release.resolve(undefined)
+      const handle = await pending
+      expect(ctx.agents.get(handle.agent.id)).toBe(handle.agent)
+      await handle.dispose()
+    } finally { release.resolve(undefined); await ctx.fiber.dispose() }
+  })
+
+  it('awaits asynchronous admission and delegates the remaining checks before opening a turn', async () => {
+    const adapter = new MockAdapter([textResponse('ready')])
+    const ctx = await harness(adapter)
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    let delegated = false
+    ctx.on('agent/turn-starting', async (_payload, next) => {
+      entered.resolve(undefined)
+      await release.promise
+      await next()
+    })
+    ctx.on('agent/turn-starting', (_payload, next) => { delegated = true; return next() })
+    const handle = await ctx.agents.create({ sessionId: SessionId('workspace-admission'), agentOptions: { provider: 'mock', model: 'mock' } })
+    try {
+      send(handle.agent, 'begin')
+      await entered.promise
+      expect(handle.agent.session.snapshotEvents().some(event => event.type === 'turn/start')).toBe(false)
+      expect(adapter.requests).toHaveLength(0)
+      release.resolve(undefined)
+      await handle.agent.whenIdle()
+      expect(delegated).toBe(true)
+      expect(adapter.requests).toHaveLength(1)
+    } finally { release.resolve(undefined); await handle.dispose(); await ctx.fiber.dispose() }
+  })
+
+  it('records turn completion before settlement and holds queued turns until settlement finishes', async () => {
+    const adapter = new MockAdapter([textResponse('one'), textResponse('two')])
+    const ctx = await harness(adapter)
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    ctx.on('agent/turn-settled', async ({ agent, turn, reason }) => {
+      expect(agent.session.snapshotEvents().findLast(event => event.type === 'turn/end')?.data).toEqual({ turn, reason })
+      if (turn === 1) { entered.resolve(undefined); await release.promise }
+    })
+    const handle = await ctx.agents.create({ sessionId: SessionId('workspace-settlement'), agentOptions: { provider: 'mock', model: 'mock' } })
+    try {
+      send(handle.agent, 'one')
+      await entered.promise
+      send(handle.agent, 'two')
+      expect(handle.agent.session.snapshotEvents().filter(event => event.type === 'turn/start')).toHaveLength(1)
+      release.resolve(undefined); await handle.agent.whenIdle()
+      expect(handle.agent.session.snapshotEvents().filter(event => event.type === 'turn/end')).toHaveLength(2)
+    } finally { release.resolve(undefined); await handle.dispose(); await ctx.fiber.dispose() }
+  })
+
   it('publishes one dense live attempt and commits one v2 message with the exact embedded stream', async () => {
     const ctx = await harness(new MockAdapter([textResponse('live')]))
     const agent = await ctx.agentLoop.create(SessionId('live-assistant-attempt'), {

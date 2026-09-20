@@ -52,6 +52,7 @@ flowchart TD
   subgraph group_fs["packages/fs"]
     pkg_fs["fs"]
     pkg_fs_local["fs-local"]
+    pkg_fs_local_container["fs-local-container"]
     pkg_fs_observation_policy["fs-observation-policy"]
     pkg_fs_sandbox["fs-sandbox"]
     pkg_tool_fs["tool-fs"]
@@ -300,6 +301,7 @@ flowchart TD
     pkg_invariants["invariants"]
   end
   subgraph group_sandbox["packages/sandbox"]
+    pkg_local_container_runtime["local-container-runtime"]
     pkg_sandbox["sandbox"]
     pkg_sandbox_local["sandbox-local"]
     pkg_sandbox_policy["sandbox-policy"]
@@ -359,6 +361,7 @@ flowchart TD
   subgraph group_subprocess["packages/subprocess"]
     pkg_subprocess["subprocess"]
     pkg_subprocess_local["subprocess-local"]
+    pkg_subprocess_local_container["subprocess-local-container"]
     pkg_win32_process["win32-process"]
   end
   subgraph group_terminal["packages/terminal"]
@@ -450,6 +453,8 @@ flowchart TD
   pkg_memory_sqlite --> pkg_memory
   pkg_subprocess_local --> pkg_subprocess
   pkg_subprocess_local --> pkg_timeout
+  pkg_subprocess_local_container --> pkg_local_container_runtime
+  pkg_subprocess_local_container --> pkg_subprocess
   pkg_skill_badge --> pkg_skill
   pkg_spill --> pkg_brand
   pkg_spill --> pkg_llm
@@ -567,6 +572,8 @@ flowchart TD
   pkg_goal --> pkg_session_projection
   pkg_goal --> pkg_typert_protocol
   pkg_fs_local --> pkg_fs
+  pkg_fs_local_container --> pkg_fs
+  pkg_fs_local_container --> pkg_local_container_runtime
   pkg_fs_observation_policy --> pkg_fs
   pkg_skill_filesystem --> pkg_fs
   pkg_skill_filesystem --> pkg_home_paths
@@ -1350,6 +1357,7 @@ flowchart TD
 | [`host-open-in-app`](../packages/host/open-in-app) | `host` | — |
 | [`host-webserver`](../packages/host/webserver) | `host` | — |
 | [`invariants`](../packages/runtime-diagnostics/invariants) | `runtime-diagnostics` | — |
+| [`local-container-runtime`](../packages/sandbox/local-container-runtime) | `sandbox` | — |
 | [`sandbox-windows-acl`](../packages/sandbox/sandbox-windows-acl) | `sandbox` | — |
 | [`session-format`](../packages/session/session-format) | `session` | — |
 | [`session-format-v0-to-v1`](../packages/session/session-format-v0-to-v1) | `session` | — |
@@ -1392,6 +1400,7 @@ flowchart TD
 | [`subprocess-e2b`](../packages/e2b/subprocess-e2b) | `e2b` | [`e2b`](../packages/e2b/e2b), [`subprocess`](../packages/subprocess/subprocess), [`timeout`](../packages/util/timeout) |
 | [`memory-sqlite`](../packages/memory/memory-sqlite) | `memory` | [`memory`](../packages/memory/memory) |
 | [`subprocess-local`](../packages/subprocess/subprocess-local) | `subprocess` | [`subprocess`](../packages/subprocess/subprocess), [`timeout`](../packages/util/timeout) |
+| [`subprocess-local-container`](../packages/subprocess/subprocess-local-container) | `subprocess` | [`local-container-runtime`](../packages/sandbox/local-container-runtime), [`subprocess`](../packages/subprocess/subprocess) |
 | [`skill-badge`](../packages/skill/skill-badge) | `skill` | [`skill`](../packages/skill/skill) |
 | [`spill`](../packages/spill/spill) | `spill` | [`brand`](../packages/util/brand), [`llm`](../packages/llm/llm), [`session`](../packages/core/session) |
 | [`api-gateway`](../packages/api/gateway) | `api` | [`client-connection`](../packages/client/connection) |
@@ -1426,6 +1435,7 @@ flowchart TD
 | [`agent-default-model`](../packages/core/agent-default-model) | `core` | [`agent`](../packages/core/agent), [`brand`](../packages/util/brand), [`llm`](../packages/llm/llm), [`settings`](../packages/settings/settings), [`typert-protocol`](../packages/typert/protocol) |
 | [`goal`](../packages/goal/goal) | `goal` | [`agent`](../packages/core/agent), [`brand`](../packages/util/brand), [`invariants`](../packages/runtime-diagnostics/invariants), [`llm`](../packages/llm/llm), [`scope`](../packages/core/scope), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`typert-protocol`](../packages/typert/protocol) |
 | [`fs-local`](../packages/fs/fs-local) | `fs` | [`fs`](../packages/fs/fs) |
+| [`fs-local-container`](../packages/fs/fs-local-container) | `fs` | [`fs`](../packages/fs/fs), [`local-container-runtime`](../packages/sandbox/local-container-runtime) |
 | [`fs-observation-policy`](../packages/fs/fs-observation-policy) | `fs` | [`fs`](../packages/fs/fs) |
 | [`skill-filesystem`](../packages/skill/skill-filesystem) | `skill` | [`fs`](../packages/fs/fs), [`home-paths`](../packages/util/home-paths), [`skill`](../packages/skill/skill) |
 | [`web-search-openrouter`](../packages/web/web-search-openrouter) | `web` | [`agent`](../packages/core/agent), [`credentials`](../packages/credentials/credentials), [`launch-environment`](../packages/util/launch-environment), [`session`](../packages/core/session), [`settings`](../packages/settings/settings), [`web`](../packages/web/web) |

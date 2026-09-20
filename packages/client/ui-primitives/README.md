@@ -32,6 +32,9 @@ The scroll-owner helpers resolve `[data-conversation-scroll]` against its enclos
 <a id="component-catalog"></a>
 ### Component catalog
 
+`DaedalMark` renders the companion vector identity at the requested square size in `currentColor`; owners provide accessible text.
+
+
 Check this table before writing a control in a feature package. A plugin cannot import another plugin's component, so this package is the only place a control can be shared: reuse what fits, and lift a deliberate visual difference into a prop rather than starting a second copy.
 
 | Export | What it is |

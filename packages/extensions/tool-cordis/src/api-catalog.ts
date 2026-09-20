@@ -800,6 +800,37 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'conversationWorkspaces',
+    summary: 'Owns private workspace storage, live agent bindings, and automatic branch return.',
+    description: 'Owns private workspace storage, live agent bindings, and automatic branch return.',
+    methods: [
+      {
+        signature: 'runForSession<T>(sessionId: SessionId, operation: () => T): T',
+        description: 'Run a user-facing workspace operation with the selected live conversation.',
+        parameters: [{ name: 'sessionId', description: 'selected conversation identity from the host request.' }, { name: 'operation', description: 'operation whose filesystem and process calls share that owner.' }],
+        returns: 'the operation result; cold conversations must be opened first.',
+      },
+      {
+        signature: 'capture(): LocalContainerRuntime',
+        description: 'Capture the exact initiating conversation\'s world for one operation.',
+        parameters: [],
+        returns: 'an operation-local runtime; missing ownership rejects rather than using another workspace.',
+      },
+      {
+        signature: 'resolveToolchain(): LocalContainerRuntime',
+        description: 'Resolve the executable lookup world before launching a process.',
+        parameters: [],
+        returns: 'the conversation world when attributed, otherwise the verified boot toolchain.',
+      },
+      {
+        signature: 'executionPath(path: string): string',
+        description: 'Resolve source path aliases only for the initiating conversation.',
+        parameters: [{ name: 'path', description: 'source or execution path.' }],
+        returns: 'the corresponding execution path, or the unchanged non-source path.',
+      },
+    ],
+  },
+  {
     key: 'credentials',
     summary: 'Abstract credential service over two key spaces that answer two questions.',
     description: 'Abstract credential service over two key spaces that answer two questions.\n\nA CredentialRef answers "what is behind this environment-variable name", layered over the process environment, the provider-managed store, and `.env` files. One seam-wide rule binds that half: an empty stored value is absent everywhere — `resolve` skips it, `describe` reports it unconfigured — so a blank never masquerades as a configured secret.\n\nA CredentialKey answers "what credential does this plugin hold for this id". Nothing can layer here — an authorization grant has no environment to be read from — so presence of the record is the whole fact, and modifyRecord is the only write path because a correct write depends on the current value (a token refresh is read-decide-replace under one lock).',
@@ -1437,6 +1468,28 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Create one independently removable process container in this execution world.',
         parameters: [{ name: 'request', description: 'exact process, environment, terminal, and allocation cancellation facts.' }],
         returns: 'an attached started handle whose removal proves descendant quiescence.',
+      },
+      {
+        signature: 'async createWorkspace(directory: string): Promise<{ runtime: LocalContainerRuntime; dispose(): Promise<void> }>',
+        description: 'Bind a separately owned workspace to a new isolated world on the same engine.',
+        parameters: [{ name: 'directory', description: 'trusted supervisor-owned private backing directory.' }],
+        returns: 'the verified world and its quiescent container disposer; storage is retained.',
+      },
+      {
+        signature: 'async settle<T>( timeoutMs: number, operation: (control: ( request: PodmanControllerExecRequest & { readonly deadlineMs: number }, ) => Promise<PodmanControllerExecResult>) => Promise<T>, quiesce?: () => Promise<void>, ): Promise<T>',
+        description: 'Revoke new writes and wait for all existing processes and controllers before capture.',
+        parameters: [{ name: 'timeoutMs', description: 'bounded wait for existing writers; expiry leaves them running.' }, { name: 'operation', description: 'trusted capture operation with exclusive controller access.' }, { name: 'quiesce', description: 'release managed idle processes before waiting for all writers.' }],
+        returns: 'the capture result, with admission restored only after successful settlement.',
+      },
+      {
+        signature: 'async cancelProcesses(): Promise<void>',
+        description: 'Stop every owned subprocess before cancellation or shutdown recovery capture.',
+        parameters: [],
+      },
+      {
+        signature: 'async recoverWorkspace(directory: string): Promise<void>',
+        description: 'Stop stale process owners before restoring a supervisor-owned directory.',
+        parameters: [{ name: 'directory', description: 'exact private bind source whose storage must be quiescent.' }],
       },
     ],
   },
@@ -3380,6 +3433,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [{ name: 'payload', description: '.signal - the current turn\'s cancellation signal. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.' }],
   },
   {
+    name: 'agent/prepare',
+    mode: 'serial',
+    signature: '\'agent/prepare\'(this: Scoped<Agent>, payload: { agent: Agent; origin: { parentAgent: Agent | undefined; source: SessionStartSource }; signal: AbortSignal }): Promise<void> | void',
+    summary: 'Prepare an unpublished agent after caller composition and before publication.',
+    description: 'Prepare an unpublished agent after caller composition and before publication.',
+    parameters: [{ name: 'payload', description: '.signal - creation cancellation signal. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.' }],
+  },
+  {
     name: 'agent/request',
     mode: 'waterfall',
     signature: '\'agent/request\'(this: Scoped<Agent>, payload: { agent: Agent; turn: number; step: number; signal: AbortSignal }, next: () => Promise<LlmCallConfig>): Promise<LlmCallConfig>',
@@ -3410,6 +3471,22 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'Agent status changed (`idle` ⇄ `running`).',
     description: 'Agent status changed (`idle` ⇄ `running`). A waking delivery enters `running` synchronously after reserving cancellation; `idle` means no driver remains scheduled or active.',
     parameters: [{ name: 'payload', description: '.status - the status just entered (the transition\'s destination). Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.' }],
+  },
+  {
+    name: 'agent/turn-settled',
+    mode: 'serial',
+    signature: '\'agent/turn-settled\'(this: Scoped<Agent>, payload: { agent: Agent; turn: number; reason: TurnEndReason }): Promise<void> | void',
+    summary: 'Settle external resources after turn/end is appended and before another turn can start.',
+    description: 'Settle external resources after turn/end is appended and before another turn can start. Listeners own durability flushes and bounded cancellation-independent cleanup.',
+    parameters: [{ name: 'payload', description: '.reason - recorded model outcome, independent of settlement results. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.' }],
+  },
+  {
+    name: 'agent/turn-starting',
+    mode: 'waterfall',
+    signature: '\'agent/turn-starting\'(this: Scoped<Agent>, payload: { agent: Agent; signal: AbortSignal }, next: () => Promise<void> | void): Promise<void> | void',
+    summary: 'Await resource recovery before opening a new turn or assembling model context.',
+    description: 'Await resource recovery before opening a new turn or assembling model context.',
+    parameters: [{ name: 'payload', description: '.signal - cancellation of the pending turn. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.' }, { name: 'next', description: 'remaining admission checks.' }],
   },
   {
     name: 'agent/turn-stopping',
@@ -3842,6 +3919,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'A workflow run started — the script\'s meta block validated, the body about to execute.',
     description: 'A workflow run started — the script\'s meta block validated, the body about to execute. Paired with Events[\'workflow/end\'].',
     parameters: [{ name: 'info', description: 'the run\'s identity snapshot (id + meta).' }],
+  },
+  {
+    name: 'workspace/quiesce',
+    mode: 'serial',
+    signature: '\'workspace/quiesce\'(payload: { executionWorld: object }): Promise<void> | void',
+    summary: 'Release idle managed processes before capturing a workspace with mutation admission closed.',
+    description: 'Release idle managed processes before capturing a workspace with mutation admission closed.',
+    parameters: [{ name: 'payload', description: '.executionWorld - exact world whose process owners must drain.' }],
   },
 ]
 
@@ -4385,7 +4470,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'DeepSeekLlmApiExtensionRequest',
-    declaration: 'export interface DeepSeekLlmApiExtensionRequest {\n    readonly body: Readonly<Record<string, DeepSeekLlmApiJson>>;\n    readonly sessionId?: string;\n    readonly purpose?: \'compaction\' | \'session-title\';\n    readonly signal: AbortSignal;\n}',
+    declaration: 'export interface DeepSeekLlmApiExtensionRequest {\n    readonly body: Readonly<Record<string, DeepSeekLlmApiJson>>;\n    readonly sessionId?: string;\n    readonly purpose?: \'compaction\' | \'session-title\' | \'workspace-commit\';\n    readonly signal: AbortSignal;\n}',
   },
   {
     name: 'DeepSeekLlmApiJson',
@@ -4605,7 +4690,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'GenerateOptions',
-    declaration: 'export interface GenerateOptions {\n    provider: string;\n    model: string;\n    reasoningEffort?: ReasoningEffortId;\n    messages: Message[];\n    system?: string;\n    tools?: ToolSchema[];\n    temperature?: number;\n    maxTokens?: number;\n    stop?: string[];\n    signal?: AbortSignal;\n    sessionId?: Branded<\'SessionId\'>;\n    purpose?: \'compaction\' | \'session-title\';\n}',
+    declaration: 'export interface GenerateOptions {\n    provider: string;\n    model: string;\n    reasoningEffort?: ReasoningEffortId;\n    messages: Message[];\n    system?: string;\n    tools?: ToolSchema[];\n    temperature?: number;\n    maxTokens?: number;\n    stop?: string[];\n    signal?: AbortSignal;\n    sessionId?: Branded<\'SessionId\'>;\n    purpose?: \'compaction\' | \'session-title\' | \'workspace-commit\';\n}',
   },
   {
     name: 'GenericCallView',
@@ -4880,6 +4965,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    @Remote(\'discoverModels\')\n    async remoteDiscoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | undefined;\n    fileRequestText(ref: FileAttachmentRef): string;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async resolveCallConfig(config: LlmCallConfig, signal?: AbortSignal): Promise<LlmCallConfig>;\n    async prepareCall(config: LlmCallConfig, signal?: AbortSignal): Promise<PreparedLlmCall>;\n    stream(options: GenerateOptions) /* …truncated — full shape in source */',
   },
   {
+    name: 'LocalContainerDiagnostics',
+    declaration: 'export interface LocalContainerDiagnostics {\n    readonly containerName: string;\n    readonly containerId: string | undefined;\n}',
+  },
+  {
     name: 'LocalContainerHandle',
     declaration: 'export interface LocalContainerHandle {\n    readonly id: string;\n    readonly workspacePath: \'/workspace\';\n}',
   },
@@ -4890,6 +4979,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'LocalContainerProcessRequest',
     declaration: 'export interface LocalContainerProcessRequest {\n    readonly argv: readonly [\n        string,\n        ...string[]\n    ];\n    readonly cwd: \'/workspace\' | `/workspace/${string}`;\n    readonly environment: Readonly<Record<string, string | undefined>>;\n    readonly tty: boolean;\n    readonly stdin: boolean;\n    readonly rows?: number;\n    readonly cols?: number;\n    readonly signal?: AbortSignal;\n}',
+  },
+  {
+    name: 'LocalContainerRuntime',
+    declaration: 'export class LocalContainerRuntime extends Service {\n    static Config: z<LocalContainerRuntimeConfig>;\n    readonly executionWorld: object;\n    readonly workspacePath: \'/workspace\';\n    readonly containerName: string;\n    constructor(ctx: Context, config: LocalContainerRuntimeConfig, private readonly retainedDirectory?: string);\n    async getContainer(): Promise<LocalContainerHandle>;\n    async executeController(request: PodmanControllerExecRequest & {\n        readonly deadlineMs: number;\n    }): Promise<PodmanControllerExecResult>;\n    async createProcess(request: LocalContainerProcessRequest): Promise<LocalContainerProcessHandle>;\n    async createWorkspace(directory: string): Promise<{\n        runtime: LocalContainerRuntime;\n        dispose(): Promise<void>;\n    }>;\n    async settle<T>(timeoutMs: number, operation: (control: (request: PodmanControllerExecRequest & {\n        readonly deadlineMs: number;\n    }) => Promise<PodmanControllerExecResult>) => Promise<T>, quiesce?: () => Promise<void>): Promise<T>;\n    async cancelProcesses(): Promise<void>;\n    async recoverWorkspace(directory: string): Promise<void>;\n    get diagnostics(): LocalContainerDiagnostics;\n}',
+  },
+  {
+    name: 'LocalContainerRuntimeConfig',
+    declaration: 'export interface LocalContainerRuntimeConfig {\n    socketPath: string;\n    manageService: boolean;\n    podmanCommand?: string;\n    serviceStartupTimeoutMs: number;\n    image: string;\n    user: string;\n    environment: Record<string, string>;\n    memoryBytes: number;\n    nanoCpus: number;\n    pidsLimit: number;\n    tmpfsBytes: number;\n    engineRequestTimeoutMs: number;\n    maxLiveProcesses: number;\n    lifetimeMs: number;\n    stopTimeoutSeconds: number;\n}',
   },
   {
     name: 'LspHover',

@@ -1262,3 +1262,27 @@ Source: [`packages/core/session/src/types.ts:299`](../packages/core/session/src/
 ```
 
 Source: [`packages/web/web-search-openrouter/src/provider.ts:74`](../packages/web/web-search-openrouter/src/provider.ts)
+
+### `workspace/*`
+
+<a id="workspacecommit-message-request--log-only"></a>
+
+#### `workspace/commit-message-request` — log-only
+
+```ts persistence-catalog
+/** Exact bounded auxiliary request recorded before dispatch. */
+'workspace/commit-message-request': { turn: number; system: string; messages: Message[]; provider: string; model: string; maxTokens: number }
+```
+
+Source: [`packages/sandbox/local-container-runtime/src/workspace-types.ts:26`](../packages/sandbox/local-container-runtime/src/workspace-types.ts)
+
+<a id="workspacestate--log-only"></a>
+
+#### `workspace/state` — log-only
+
+```ts persistence-catalog
+/** Workspace identity and synchronization facts; never inserts agent messages. */
+'workspace/state': WorkspaceState
+```
+
+Source: [`packages/sandbox/local-container-runtime/src/workspace-types.ts:24`](../packages/sandbox/local-container-runtime/src/workspace-types.ts)

@@ -25,6 +25,12 @@
     },
     {
       "path": "../file-reference"
+    },
+    {
+      "path": "../../sandbox/local-container-runtime"
+    },
+    {
+      "path": "../../fs/fs"
     }
   ]
 }

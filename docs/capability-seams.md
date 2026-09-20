@@ -8,9 +8,12 @@ A service can be a core spine service, a swappable capability seam, or a bundle/
 ```mermaid
 flowchart LR
   pkg_local_container_runtime["local-container-runtime"]
-  svc_localContainerRuntime["ctx.localContainerRuntime<br/>Disposable local container execution world"]
+  svc_conversationWorkspaces["ctx.conversationWorkspaces<br/>Conversation Git workspace lifecycle"]
   pkg_fs_local_container["fs-local-container"]
   pkg_subprocess_local_container["subprocess-local-container"]
+  pkg_workspace_files["workspace-files"]
+  pkg_file_reference_local["file-reference-local"]
+  svc_localContainerRuntime["ctx.localContainerRuntime<br/>Disposable local container execution world"]
   pkg_attachment["attachment"]
   svc_attachments["ctx.attachments<br/>Durable binary attachment storage"]
   pkg_attachment_local["attachment-local"]
@@ -95,7 +98,6 @@ flowchart LR
   pkg_tool_session_query["tool-session-query"]
   pkg_file_reference["file-reference"]
   svc_fileReferences["ctx.fileReferences<br/>File reference discovery"]
-  pkg_file_reference_local["file-reference-local"]
   svc_sessionReferenceResolver["ctx.sessionReferenceResolver<br/>Cross-session snapshot preparation"]
   pkg_session_title["session-title"]
   svc_sessionTitle["ctx.sessionTitle<br/>Log-backed session titles"]
@@ -301,6 +303,7 @@ flowchart LR
   pkg_llm_deepseek --> svc_llm
   pkg_llm_pi_ai --> svc_llm
   pkg_llm_replay --> svc_llm
+  pkg_local_container_runtime --> svc_conversationWorkspaces
   pkg_local_container_runtime --> svc_localContainerRuntime
   pkg_lsp --> svc_lsp
   pkg_lsp_stdio --> svc_lsp
@@ -392,6 +395,10 @@ flowchart LR
   svc_clientModules --> pkg_client_hmr
   svc_codeRuntime --> pkg_tools
   svc_compaction --> pkg_compaction_basic
+  svc_conversationWorkspaces --> pkg_file_reference_local
+  svc_conversationWorkspaces --> pkg_fs_local_container
+  svc_conversationWorkspaces --> pkg_subprocess_local_container
+  svc_conversationWorkspaces --> pkg_workspace_files
   svc_cordisInspect --> pkg_tool_cordis
   svc_credentials --> pkg_api_settings_controller
   svc_credentials --> pkg_llm_deepseek
@@ -509,6 +516,7 @@ flowchart LR
 
 | ctx key | Role | Owner | Implementations | Direct consumers | Companion plugins | Note |
 | --- | --- | --- | --- | --- | --- | --- |
+| `ctx.conversationWorkspaces` | `core` | [`local-container-runtime`](../packages/sandbox/local-container-runtime) | - | [`fs-local-container`](../packages/fs/fs-local-container), [`subprocess-local-container`](../packages/subprocess/subprocess-local-container), `workspace-files`, [`file-reference-local`](../packages/context/file-reference-local) | - | Opt-in ownership, recovery, and automatic branch return for conversation repositories. |
 | `ctx.localContainerRuntime` | `core` | [`local-container-runtime`](../packages/sandbox/local-container-runtime) | - | [`fs-local-container`](../packages/fs/fs-local-container), [`subprocess-local-container`](../packages/subprocess/subprocess-local-container) | - | Owns one verified rootless container world and removable process ranges shared by the filesystem and subprocess providers. |
 | `ctx.attachments` | `seam` | [`attachment`](../packages/attachment/attachment) | [`attachment-local`](../packages/attachment/attachment-local) | [`api-session-controller`](../packages/api/session-controller), [`tool-fs`](../packages/fs/tool-fs), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-deepseek`](../packages/llm/llm-deepseek) | - | The host commits accepted images before session events; provider adapters resolve authorized durable references into provider-native content. |
 | `ctx.fileUploads` | `core` | [`client-file-upload`](../packages/client/file-upload) | - | [`api-session-controller`](../packages/api/session-controller) | - | Owns streaming intake, durable storage, and staged receipt lifetime; the Session controller binds receipts to accepted submissions. |

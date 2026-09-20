@@ -16,6 +16,27 @@
     },
     {
       "path": "../../../vendor/schemastery"
+    },
+    {
+      "path": "../../core/agent"
+    },
+    {
+      "path": "../../core/session"
+    },
+    {
+      "path": "../../llm/llm"
+    },
+    {
+      "path": "../../core/system-prompt"
+    },
+    {
+      "path": "../../../native/system/packages/entry"
+    },
+    {
+      "path": "../../session/session-persistence"
+    },
+    {
+      "path": "../../util/brand"
     }
   ]
 }

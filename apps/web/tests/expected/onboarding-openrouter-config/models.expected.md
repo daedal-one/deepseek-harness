@@ -29,7 +29,10 @@
     - listitem:
       - text: OpenRouter API key configured
       - button "Edit OpenRouter (openrouter)": Edit
-      - text: OpenRouter openrouter API key
+      - text: OpenRouter openrouter Account
+      - status: Not signed in
+      - button "Sign in with OpenRouter"
+      - text: API key
       - textbox "API key":
         - /placeholder: Configured — enter a new value to replace
       - group:

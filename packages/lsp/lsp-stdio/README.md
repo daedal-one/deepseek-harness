@@ -77,6 +77,8 @@ This provider trusts its configured server and adds no sandbox confinement; the 
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
+Conversation workspace settlement releases language servers in that execution world before capture. Their workspace keys remain isolated between conversations; the next query starts a fresh server against the same repository.
+
 <details>
 <summary>Implementation internals — click to expand</summary>
 

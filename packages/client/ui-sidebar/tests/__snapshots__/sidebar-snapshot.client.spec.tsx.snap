@@ -6,42 +6,76 @@ exports[`sidebar shell snapshots > renders the collapsed rail after the crossfad
   style="display: contents;"
 >
   <div
-    class="root collapsed railIn quietBars"
-    style=""
+    class="root fading quietBars"
+    style="width: 300px;"
   >
     <div
       class="logoRow"
     >
       <button
-        aria-label="Open sidebar"
-        class="iconButton toggle"
+        aria-haspopup="dialog"
+        aria-label="About Daedal Harness"
+        class="brand wide"
         type="button"
       >
         <span
           aria-hidden="true"
-          class="railMark"
+          class="brandIdentity"
         >
-          <div
-            data-slot="sidebar.brand.mark"
-            style="display: contents;"
+          <span
+            class="brandMark"
           >
-            <svg
-              aria-hidden="true"
-              data-content="965fe321"
-              fill="none"
-              height="17.6580310880829"
-              viewBox="0 0 23.16 17.04"
-              width="24"
-            />
-          </div>
+            <div
+              data-slot="sidebar.brand.mark"
+              style="display: contents;"
+            >
+              <svg
+                aria-hidden="true"
+                data-content="5ec39be3"
+                fill="currentColor"
+                height="24"
+                viewBox="0 0 12.7 12.7"
+                width="24"
+              />
+            </div>
+          </span>
+          <span
+            class="brandName"
+          >
+            <div
+              data-slot="sidebar.brand.name"
+              style="display: contents;"
+            >
+              <span
+                class="localBuildBrand"
+              >
+                <span
+                  class="localBuildTitle"
+                >
+                  Daedal Harness
+                </span>
+                <span
+                  class="buildVersion"
+                >
+                  1.2.3-rc.4-abc1234-dirty
+                </span>
+              </span>
+            </div>
+          </span>
         </span>
+      </button>
+      <button
+        aria-label="Open sidebar"
+        class="iconButton toggle"
+        type="button"
+      >
         <svg
           class="panelIcon"
           data-content="35f95b0c"
           fill="none"
-          height="18"
+          height="16"
           viewBox="0 0 16 16"
-          width="18"
+          width="16"
           xmlns="http://www.w3.org/2000/svg"
         />
       </button>
@@ -54,11 +88,16 @@ exports[`sidebar shell snapshots > renders the collapsed rail after the crossfad
       <svg
         data-content="c0ce4dcc"
         fill="none"
-        height="18"
+        height="14"
         viewBox="0 0 16 16"
-        width="18"
+        width="14"
         xmlns="http://www.w3.org/2000/svg"
       />
+      <span
+        class="newSessionLabel wide"
+      >
+        New Session
+      </span>
     </button>
     <div
       class="regionArea"
@@ -105,7 +144,8 @@ exports[`sidebar shell snapshots > renders the expanded column (wordmark, capsul
       class="logoRow"
     >
       <button
-        aria-label="New session"
+        aria-haspopup="dialog"
+        aria-label="About Daedal Harness"
         class="brand wide"
         type="button"
       >
@@ -122,10 +162,10 @@ exports[`sidebar shell snapshots > renders the expanded column (wordmark, capsul
             >
               <svg
                 aria-hidden="true"
-                data-content="965fe321"
-                fill="none"
-                height="17.6580310880829"
-                viewBox="0 0 23.16 17.04"
+                data-content="5ec39be3"
+                fill="currentColor"
+                height="24"
+                viewBox="0 0 12.7 12.7"
                 width="24"
               />
             </div>
@@ -143,7 +183,7 @@ exports[`sidebar shell snapshots > renders the expanded column (wordmark, capsul
                 <span
                   class="localBuildTitle"
                 >
-                  DSH Local Build
+                  Daedal Harness
                 </span>
                 <span
                   class="buildVersion"
@@ -235,7 +275,8 @@ exports[`sidebar shell snapshots > renders the expanded column in the default En
       class="logoRow"
     >
       <button
-        aria-label="New session"
+        aria-haspopup="dialog"
+        aria-label="About Daedal Harness"
         class="brand wide"
         type="button"
       >
@@ -252,10 +293,10 @@ exports[`sidebar shell snapshots > renders the expanded column in the default En
             >
               <svg
                 aria-hidden="true"
-                data-content="965fe321"
-                fill="none"
-                height="17.6580310880829"
-                viewBox="0 0 23.16 17.04"
+                data-content="5ec39be3"
+                fill="currentColor"
+                height="24"
+                viewBox="0 0 12.7 12.7"
                 width="24"
               />
             </div>
@@ -273,7 +314,7 @@ exports[`sidebar shell snapshots > renders the expanded column in the default En
                 <span
                   class="localBuildTitle"
                 >
-                  DSH Local Build
+                  Daedal Harness
                 </span>
                 <span
                   class="buildVersion"

@@ -163,6 +163,41 @@ Provider selection, probing, caching, and backend-specific enforcement reports b
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxconversationworkspaces--conversationworkspaces"></a>
+
+### `ctx.conversationWorkspaces` — `ConversationWorkspaces`
+
+Owns private workspace storage, live agent bindings, and automatic branch return.
+
+```ts cordis-catalog
+/** Run a user-facing workspace operation with the selected live conversation.
+ * @param sessionId - selected conversation identity from the host request.
+ * @param operation - operation whose filesystem and process calls share that owner.
+ * @returns the operation result; cold conversations must be opened first.
+ */
+runForSession<T>(sessionId: SessionId, operation: () => T): T
+
+/** Capture the exact initiating conversation's world for one operation.
+ * @returns an operation-local runtime; missing ownership rejects rather than using another workspace.
+ */
+capture(): LocalContainerRuntime
+
+/** Resolve the executable lookup world before launching a process.
+ * @returns the conversation world when attributed, otherwise the verified boot toolchain.
+ */
+resolveToolchain(): LocalContainerRuntime
+
+/** Resolve source path aliases only for the initiating conversation.
+ * @param path - source or execution path.
+ * @returns the corresponding execution path, or the unchanged non-source path.
+ */
+executionPath(path: string): string
+```
+
+Types: [SessionId](core.md)
+
+Source: [`packages/sandbox/local-container-runtime/src/workspaces.ts`](../../packages/sandbox/local-container-runtime/src/workspaces.ts)
+
 <a id="ctxlocalcontainerruntime--localcontainerruntime"></a>
 
 ### `ctx.localContainerRuntime` — `LocalContainerRuntime`
@@ -192,6 +227,30 @@ async executeController(request: PodmanControllerExecRequest & { readonly deadli
  * @returns an attached started handle whose removal proves descendant quiescence.
  */
 async createProcess(request: LocalContainerProcessRequest): Promise<LocalContainerProcessHandle>
+
+/**
+ * Bind a separately owned workspace to a new isolated world on the same engine.
+ * @param directory - trusted supervisor-owned private backing directory.
+ * @returns the verified world and its quiescent container disposer; storage is retained.
+ */
+async createWorkspace(directory: string): Promise<{ runtime: LocalContainerRuntime; dispose(): Promise<void> }>
+
+/**
+ * Revoke new writes and wait for all existing processes and controllers before capture.
+ * @param timeoutMs - bounded wait for existing writers; expiry leaves them running.
+ * @param operation - trusted capture operation with exclusive controller access.
+ * @param quiesce - release managed idle processes before waiting for all writers.
+ * @returns the capture result, with admission restored only after successful settlement.
+ */
+async settle<T>( timeoutMs: number, operation: (control: ( request: PodmanControllerExecRequest & { readonly deadlineMs: number }, ) => Promise<PodmanControllerExecResult>) => Promise<T>, quiesce?: () => Promise<void>, ): Promise<T>
+
+/** Stop every owned subprocess before cancellation or shutdown recovery capture. */
+async cancelProcesses(): Promise<void>
+
+/** Stop stale process owners before restoring a supervisor-owned directory.
+ * @param directory - exact private bind source whose storage must be quiescent.
+ */
+async recoverWorkspace(directory: string): Promise<void>
 ```
 
 Source: [`packages/sandbox/local-container-runtime/src/index.ts`](../../packages/sandbox/local-container-runtime/src/index.ts)
@@ -248,8 +307,30 @@ overrideOf(session: Session): SandboxMode | undefined
 Types: [Session](session.md)
 
 Source: [`packages/sandbox/sandbox-policy/src/index.ts`](../../packages/sandbox/sandbox-policy/src/index.ts)
+
+<a id="workspace-events"></a>
+
+### `workspace/*` events
+
+<a id="workspacequiesce--serial"></a>
+
+#### `workspace/quiesce` — serial
+
+Release idle managed processes before capturing a workspace with mutation admission closed.
+
+```ts cordis-catalog
+/** Release idle managed processes before capturing a workspace with mutation admission closed.
+ * @param payload.executionWorld - exact world whose process owners must drain.
+ * @mode serial
+ */
+'workspace/quiesce'(payload: { executionWorld: object }): Promise<void> | void
+```
+
+Source: [`packages/sandbox/local-container-runtime/src/index.ts`](../../packages/sandbox/local-container-runtime/src/index.ts)
 <!-- END GENERATED cordis-surface -->
 
 ## Local container execution world
 
 The optional [runtime owner](../../packages/sandbox/local-container-runtime/README.md) supplies a verified process-owned workspace to matching filesystem and subprocess providers. `LocalContainerHandle` identifies the owner and canonical workspace; `PodmanControllerExecRequest` and `PodmanControllerExecResult` define bounded controller input, output, cancellation, and deadlines. `LocalContainerProcessRequest` supplies an explicit process, environment, cwd, and terminal dimensions, while `LocalContainerProcessHandle` owns its streams, exit observation, signalling, and removal. The [type declarations](../../packages/sandbox/local-container-runtime/src/types.ts) define these provider-facing values.
+
+The optional conversation-workspace service owns import, recovery, residual commits, and branch return. `ConversationWorkspaceId` identifies one private repository; `WorkspaceState` records its save phase, acknowledged checkpoint, baseline commit, and returned refs independently of `turn/end`. The [shared declarations](../../packages/sandbox/local-container-runtime/src/workspace-types.ts) define the durable receipt; the [configuration and lifecycle](../../packages/sandbox/local-container-runtime/README.md#conversation-repositories) define ownership and limits.

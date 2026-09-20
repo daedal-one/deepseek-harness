@@ -4,6 +4,7 @@
  * @module @deepseek-ai/dsh-subprocess-local-container
  */
 
+import type {} from '@deepseek-ai/dsh-local-container-runtime/workspaces'
 import { randomUUID } from 'node:crypto'
 import { posix } from 'node:path'
 import { PassThrough, type Readable, type Writable } from 'node:stream'
@@ -147,13 +148,13 @@ class ContainerSubprocessHandle implements SubprocessHandle {
   private terminateRequested = false
 
   constructor(
-    private readonly ctx: Context,
+    private readonly runtime: Context['localContainerRuntime'],
     private readonly spec: SubprocessSpawnSpec,
     config: Config,
   ) {
     const stdin = spec.stdio.stdin === 'pipe' ? new PassThrough() : undefined
-    const stdout = outputBinding(spec.stdio.stdout, process.stdout, ctx.localContainerRuntime, 'stdout', config.controlTimeoutMs)
-    const stderr = outputBinding(spec.stdio.stderr, process.stderr, ctx.localContainerRuntime, 'stderr', config.controlTimeoutMs)
+    const stdout = outputBinding(spec.stdio.stdout, process.stdout, runtime, 'stdout', config.controlTimeoutMs)
+    const stderr = outputBinding(spec.stdio.stderr, process.stderr, runtime, 'stderr', config.controlTimeoutMs)
     this.stdin = stdin
     this.stdout = stdout.exposed
     this.stderr = stderr.exposed
@@ -195,7 +196,7 @@ class ContainerSubprocessHandle implements SubprocessHandle {
       : AbortSignal.any([this.spec.signal, this.allocation.signal])
     let processHandle: LocalContainerProcessHandle | undefined
     try {
-      processHandle = await this.ctx.localContainerRuntime.createProcess({
+      processHandle = await this.runtime.createProcess({
         argv: this.spec.argv as [string, ...string[]],
         cwd: this.spec.cwd as LocalContainerProcessRequest['cwd'],
         environment: this.spec.env ?? {},
@@ -301,10 +302,16 @@ export class LocalContainerSubprocessRuntime extends SubprocessRuntime {
   }
 
   override get executionWorld(): object {
-    return this.ctx.localContainerRuntime.executionWorld
+    return this.ctx.get('conversationWorkspaces')?.executionWorld ?? this.ctx.localContainerRuntime.executionWorld
   }
 
   override resolveWorkingDirectory(path: string): string {
+    const workspaces = this.ctx.get('conversationWorkspaces')
+    if (workspaces !== undefined) {
+      path = workspaces.executionPath(path)
+      if (path !== WORKSPACE_PATH && (!path.startsWith(`${WORKSPACE_PATH}/`) || posix.normalize(path) !== path)) throw new Error('subprocess cwd is outside the conversation workspace')
+      return path
+    }
     if (path === WORKSPACE_PATH || this.config.cwdAliases.includes(path)) return WORKSPACE_PATH
     if (path.startsWith(`${WORKSPACE_PATH}/`) && posix.normalize(path) === path) return path
     throw new Error('subprocess-local-container: cwd is not a configured workspace path')
@@ -319,7 +326,7 @@ export class LocalContainerSubprocessRuntime extends SubprocessRuntime {
     const script = posix.isAbsolute(command)
       ? 'test -f "$1" -a -x "$1" && printf "%s" "$1"'
       : 'command -v -- "$1"'
-    const result = await this.ctx.localContainerRuntime.executeController({
+    const result = await (this.ctx.get('conversationWorkspaces')?.resolveToolchain() ?? this.ctx.localContainerRuntime).executeController({
       argv: ['/usr/bin/env', '-i', `PATH=${path}`, '/bin/sh', '-c', script, 'dsh', command],
       stdin: new Uint8Array(),
       maxOutputBytes: this.config.controlOutputBytes,
@@ -335,7 +342,7 @@ export class LocalContainerSubprocessRuntime extends SubprocessRuntime {
 
   override spawn(spec: SubprocessSpawnSpec): SubprocessHandle {
     this.validateSpawn(spec)
-    const handle = new ContainerSubprocessHandle(this.ctx, { ...spec, cwd: this.resolveWorkingDirectory(spec.cwd) }, this.config)
+    const handle = new ContainerSubprocessHandle(this.ctx.get('conversationWorkspaces')?.capture() ?? this.ctx.localContainerRuntime, { ...spec, cwd: this.resolveWorkingDirectory(spec.cwd) }, this.config)
     this.live.add(handle)
     const release = async (): Promise<void> => { await handle.waitForExit(); this.live.delete(handle) }
     void handle.done.then(release, release).catch(() => undefined)
@@ -344,7 +351,7 @@ export class LocalContainerSubprocessRuntime extends SubprocessRuntime {
 
   override async spawnTerminal(spec: SubprocessTerminalSpawnSpec): Promise<SubprocessTerminalHandle> {
     this.validateTerminal(spec)
-    const processHandle = await this.ctx.localContainerRuntime.createProcess({
+    const processHandle = await (this.ctx.get('conversationWorkspaces')?.capture() ?? this.ctx.localContainerRuntime).createProcess({
       argv: spec.argv as [string, ...string[]],
       cwd: this.resolveWorkingDirectory(spec.cwd) as LocalContainerProcessRequest['cwd'],
       environment: { ...(spec.env ?? {}), TERM: spec.env?.TERM ?? 'xterm-256color' },

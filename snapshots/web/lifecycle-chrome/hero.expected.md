@@ -1,4 +1,4 @@
-- button "New session"
+- button "About Daedal Harness"
 - button "Collapse sidebar":
   - img
 - button "New session":
@@ -29,14 +29,13 @@
   - img
   - text: Standard mode
   - img
-- textbox "Describe what you want to build, / commands, @ files or sessions":
-  - paragraph
+- textbox "Describe what you want to build, / commands, @ files or sessions"
 - button "Commands":
   - img
 - button "Add attachment":
   - img
 - 'button "Access mode, current: Workspace Write"': Workspace Write
-- button "Select model, current DeepSeek-V4.1-Flash":
-  - text: DeepSeek-V4.1-Flash
+- button "Select model, current DeepSeek V4.1 Flash, reasoning effort high":
+  - text: DeepSeek V4.1 Flash high
   - img
 - button "Send message" [disabled]

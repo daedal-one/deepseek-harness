@@ -4,6 +4,8 @@
  * @module @deepseek-ai/dsh-file-reference-local
  */
 
+import type {} from '@deepseek-ai/dsh-local-container-runtime/workspaces'
+import type {} from '@deepseek-ai/dsh-fs'
 import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -115,6 +117,17 @@ export class LocalFileReferenceService extends FileReferenceService {
     query: string,
     signal: AbortSignal,
   ): Promise<FileReferenceCandidate[]> {
+    const workspaces = this.ctx.get('conversationWorkspaces')
+    if (workspaces !== undefined) return workspaces.runForSession(agent.id, () => {
+      let search = this.searches.get(agent)
+      if (search === undefined) {
+        const fs = this.ctx.get('fs')
+        if (fs === undefined) throw new Error('conversation workspace file completion requires the filesystem provider')
+        search = new WorkspaceFileSearch('/workspace', this.config, fs)
+        this.searches.set(agent, search)
+      }
+      return search.list(query, signal)
+    })
     let search = this.searches.get(agent)
     if (search === undefined) {
       search = new WorkspaceFileSearch(agent.session.header.cwd ?? process.cwd(), this.config)

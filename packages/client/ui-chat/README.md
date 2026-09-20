@@ -25,7 +25,7 @@ File-mention providers receive the viewed Session ID with the closing-turn owner
 
 ## Portable Chat target
 
-The ordinary ESM `./client/portable` entry exposes `registerChatConversation`, the empty Chat snapshot and its renderer-independent data types. Supply effect-owned Conversation event/view registries and the shared request/system-prompt inspectors. The caller owns the registration Context and rebuilds live bindings when registry contributions change. The browser plugin installs the same business Definitions and snapshot builder. This entry owns neither a transport nor a renderer; it interprets the shared Session event window through [Conversation assembly](../../../docs/subsystems/conversation.md#portable-binding).
+The ordinary ESM `./client/portable` entry exposes `registerChatConversation`, the empty Chat snapshot and its renderer-independent data types. Supply effect-owned Conversation event/view registries and the shared request/system-prompt inspectors. The caller owns the registration Context and rebuilds live bindings when registry contributions change. The browser plugin installs the same business Definitions and snapshot builder. Workspace save receipts use the same keyed business Definition in both faces; pending and returned outcomes remain separate from the model turn result. This entry owns neither a transport nor a renderer; it interprets the shared Session event window through [Conversation assembly](../../../docs/subsystems/conversation.md#portable-binding).
 
 <a id="system-prompt-row"></a>
 ## System prompt row

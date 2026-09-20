@@ -129,7 +129,7 @@ export interface Config {
 
 Depends on: [`AgentOptions`](subsystems/core.md) · [`SessionId`](subsystems/core.md)
 
-Source: [`packages/core/agent-loop/src/index.ts:318`](../packages/core/agent-loop/src/index.ts)
+Source: [`packages/core/agent-loop/src/index.ts:319`](../packages/core/agent-loop/src/index.ts)
 
 <a id="deepseek-aidsh-agent-presets"></a>
 
@@ -279,7 +279,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/api/workspace-files/src/index.ts:69`](../packages/api/workspace-files/src/index.ts)
+Source: [`packages/api/workspace-files/src/index.ts:70`](../packages/api/workspace-files/src/index.ts)
 
 <a id="deepseek-aidsh-attachment-local"></a>
 
@@ -857,7 +857,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/context/file-reference-local/src/index.ts:34`](../packages/context/file-reference-local/src/index.ts)
+Source: [`packages/context/file-reference-local/src/index.ts:36`](../packages/context/file-reference-local/src/index.ts)
 
 <a id="deepseek-aidsh-forge-project-workspaces"></a>
 
@@ -966,7 +966,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/fs/fs-local-container/src/index.ts:49`](../packages/fs/fs-local-container/src/index.ts)
+Source: [`packages/fs/fs-local-container/src/index.ts:51`](../packages/fs/fs-local-container/src/index.ts)
 
 <a id="deepseek-aidsh-fs-sandbox"></a>
 
@@ -1718,7 +1718,7 @@ export interface LocalContainerRuntimeConfig {
 }
 ```
 
-Source: [`packages/sandbox/local-container-runtime/src/types.ts:284`](../packages/sandbox/local-container-runtime/src/types.ts)
+Source: [`packages/sandbox/local-container-runtime/src/types.ts:290`](../packages/sandbox/local-container-runtime/src/types.ts)
 
 <a id="deepseek-aidsh-lsp-stdio"></a>
 
@@ -1760,7 +1760,7 @@ export interface LspLocalServerConfig {
 }
 ```
 
-Source: [`packages/lsp/lsp-stdio/src/index.ts:82`](../packages/lsp/lsp-stdio/src/index.ts)
+Source: [`packages/lsp/lsp-stdio/src/index.ts:83`](../packages/lsp/lsp-stdio/src/index.ts)
 
 <a id="deepseek-aidsh-mcp-client"></a>
 
@@ -2949,7 +2949,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/subprocess/subprocess-local-container/src/index.ts:36`](../packages/subprocess/subprocess-local-container/src/index.ts)
+Source: [`packages/subprocess/subprocess-local-container/src/index.ts:37`](../packages/subprocess/subprocess-local-container/src/index.ts)
 
 <a id="deepseek-aidsh-system-prompt"></a>
 

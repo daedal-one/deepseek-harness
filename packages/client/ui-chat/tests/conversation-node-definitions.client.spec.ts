@@ -15,6 +15,7 @@ import { inspectSystemPrompt } from '../../ui-conversation/src/client/contract/s
 import { AssistantStreamAccumulator } from '@deepseek-ai/dsh-llm/assistant-stream'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import { hasAssistantReplyContent } from '../src/client/contract/assistant-content.ts'
+import { workspaceDefinition } from '../src/client/conversation-nodes/workspace.ts'
 import { assistantDefinition } from '../src/client/conversation-nodes/assistant.ts'
 import { chatViewDefinition } from '../src/client/conversation-nodes/chat-snapshot-builder.ts'
 import { commandDefinition } from '../src/client/conversation-nodes/command.ts'
@@ -35,6 +36,7 @@ import type {
 } from '../src/client/contract/chat-nodes.ts'
 
 const DEFINITIONS: readonly ConversationNodeDefinition[] = [
+  workspaceDefinition,
   nextStepInboxDefinition,
   messageDefinition,
   systemMessageDefinition(inspectSystemPrompt),
@@ -2460,5 +2462,30 @@ describe('built-in conversation node Definitions', () => {
       command: { commandId: 'command-1', name: 'compact', outcome: { kind: 'success' } },
       compaction: { summary: 'manual summary', summaryEventSeq: 20 },
     })
+  })
+})
+
+
+describe('workspace return receipts', () => {
+  it('keeps model completion separate from pending return and replaces progress on retry', () => {
+    const base = { workspaceId: 'a'.repeat(32), turn: 1, baseline: 'b'.repeat(40), checkpoint: 1, branches: {} }
+    const value = assembler([
+      at(0, 'turn/start', { turn: 1 }),
+      at(1, 'turn/end', { turn: 1, reason: { kind: 'completed' } }),
+      at(2, 'workspace/state', { ...base, phase: 'saving' }),
+      at(3, 'workspace/state', { ...base, phase: 'pending', error: 'Destination unavailable' }),
+    ])
+    expect(node(snapshot(value), 'workspace-state')?.data).toMatchObject({ phase: 'pending', error: 'Destination unavailable' })
+    value.replaceWindow([
+      at(0, 'turn/start', { turn: 1 }),
+      at(1, 'turn/end', { turn: 1, reason: { kind: 'completed' } }),
+      at(2, 'workspace/state', { ...base, phase: 'saving' }),
+      at(3, 'workspace/state', { ...base, phase: 'pending' }),
+      at(4, 'workspace/state', { ...base, phase: 'saving' }),
+      at(5, 'workspace/state', { ...base, phase: 'returned', branches: { 'refs/heads/dsh/result': 'c'.repeat(40) } }),
+    ], false)
+    value.flush()
+    expect(node(snapshot(value), 'workspace-state')?.data).toMatchObject({ phase: 'returned', branches: { 'refs/heads/dsh/result': 'c'.repeat(40) } })
+    expect([...snapshot(value).nodes.values()].filter(item => item.kind === 'workspace-state')).toHaveLength(1)
   })
 })

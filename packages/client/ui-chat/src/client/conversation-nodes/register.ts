@@ -15,6 +15,7 @@ import { turnErrorDefinition } from './turn-error.ts'
 import { turnMaxTokensDefinition } from './turn-max-tokens.ts'
 import { turnProcessDefinition } from './turn-process.ts'
 import { turnTailDefinition } from './turn-tail.ts'
+import { workspaceDefinition } from './workspace.ts'
 
 /** Effect-owned registration and pure prompt inspection required by the Chat target. */
 export interface ChatConversationRegistration {
@@ -44,6 +45,7 @@ export function registerConversationNodes(conversation: ChatConversationRegistra
     turnErrorDefinition,
     turnMaxTokensDefinition,
     turnTailDefinition,
+    workspaceDefinition,
   ]
   for (const definition of definitions) conversation.events.register(definition)
   conversation.events.registerFallback(unknownFallbackDefinition)

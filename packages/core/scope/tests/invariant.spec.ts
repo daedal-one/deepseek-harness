@@ -45,6 +45,9 @@ describe('scoped-dispatch invariants', () => {
       source: { kind: 'user' },
     })
     const agentRows = {
+      'agent/prepare': [{ agent, origin: { parentAgent: undefined, source: 'startup' }, signal }],
+      'agent/turn-starting': [{ agent, signal }, () => undefined],
+      'agent/turn-settled': [{ agent, turn: 1, reason: { kind: 'completed' } }],
       'agent/created': [{ agent }],
       'agent/disposed': [{ agent }],
       'agent/status': [{ agent, status: 'idle' }],

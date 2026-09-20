@@ -1,0 +1,20 @@
+- dialog "About Daedal Harness":
+  - heading "About Daedal Harness" [level=2]
+  - button "Close overview":
+    - img
+  - text: THE DAEDAL FORK
+  - heading "Your agents. Your infrastructure." [level=3]
+  - paragraph: A Daedal fork of DeepSeek Harness, the open-source, plugin-based agent harness by DeepSeek AI.
+  - heading "What this fork adds" [level=4]
+  - term: Models on your terms
+  - definition: OpenRouter model routing and web search, Codex account sign-in, and model and reasoning controls for each agent role.
+  - term: Reviewed actions and memory
+  - definition: Independent reviews of tool intent and effects, scoped MCP access, and durable project and global memory with review and approval controls.
+  - term: Connected workspaces
+  - definition: Forge-managed sessions and Code workspaces, with attributable actions through Forge Intellect.
+  - term: A consistent working environment
+  - definition: English product copy and documentation, an optional English-output guard, searchable plugin details, and output rates measured over the full request.
+  - link "Explore this fork":
+    - /url: https://github.com/daedal-one/deepseek-harness#changes-in-this-fork
+  - link "DeepSeek upstream":
+    - /url: https://github.com/deepseek-ai/deepseek-harness

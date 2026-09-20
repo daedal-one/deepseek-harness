@@ -10,7 +10,7 @@ import type { Scoped } from '@deepseek-ai/dsh-scope'
 import type {
   LlmAttemptId, LlmCallConfig, LlmFailure, MessageId, ReasoningEffortId, ResolvedRetryPolicy, StreamChunk,
 } from '@deepseek-ai/dsh-llm'
-import type { AgentCancelCause, Session, SessionSeq, UserMessage } from '@deepseek-ai/dsh-session'
+import type { AgentCancelCause, Session, SessionSeq, UserMessage, TurnEndReason } from '@deepseek-ai/dsh-session'
 export type { AgentCancelCause } from '@deepseek-ai/dsh-session'
 import type { Agent, InboxTarget } from './types.ts'
 export type { Agent } from './types.ts'
@@ -314,6 +314,35 @@ declare module '@deepseek-ai/cordis' {
      * @mode emit
      */
     'agent/session-start'(this: Scoped<Agent>, payload: { agent: Agent; source: SessionStartSource }): void
+
+    /**
+     * Prepare an unpublished agent after caller composition and before publication.
+     * @param payload.agent - unpublished agent whose workspace is being prepared.
+     * @param payload.origin - session origin and live parent for shared child resources.
+     * @param payload.signal - creation cancellation signal.
+     * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.
+     * @mode serial
+     */
+    'agent/prepare'(this: Scoped<Agent>, payload: { agent: Agent; origin: { parentAgent: Agent | undefined; source: SessionStartSource }; signal: AbortSignal }): Promise<void> | void
+    /**
+     * Settle external resources after turn/end is appended and before another turn can start.
+     * Listeners own durability flushes and bounded cancellation-independent cleanup.
+     * @param payload.agent - agent whose turn closed.
+     * @param payload.turn - closed turn number.
+     * @param payload.reason - recorded model outcome, independent of settlement results.
+     * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.
+     * @mode serial
+     */
+    'agent/turn-settled'(this: Scoped<Agent>, payload: { agent: Agent; turn: number; reason: TurnEndReason }): Promise<void> | void
+
+    /** Await resource recovery before opening a new turn or assembling model context.
+     * @param payload.agent - agent preparing to consume queued input.
+     * @param payload.signal - cancellation of the pending turn.
+     * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.
+     * @param next - remaining admission checks.
+     * @mode waterfall
+     */
+    'agent/turn-starting'(this: Scoped<Agent>, payload: { agent: Agent; signal: AbortSignal }, next: () => Promise<void> | void): Promise<void> | void
 
     // ---- the machine's extension points ----
     /**

@@ -99,6 +99,14 @@ const GROUP_ORDER = [
 
 const SERVICE_ROLES: ServiceRole[] = [
   {
+    key: 'conversationWorkspaces',
+    pkg: 'local-container-runtime',
+    title: 'Conversation Git workspace lifecycle',
+    mode: 'core',
+    consumers: ['fs-local-container', 'subprocess-local-container', 'workspace-files', 'file-reference-local'],
+    note: 'Opt-in ownership, recovery, and automatic branch return for conversation repositories.',
+  },
+  {
     key: 'localContainerRuntime',
     pkg: 'local-container-runtime',
     title: 'Disposable local container execution world',

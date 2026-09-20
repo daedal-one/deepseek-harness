@@ -788,7 +788,9 @@ class ShellPolicyProvider implements ToolPolicyProvider {
 }
 
 function verifyContainedWorld(ctx: Context): void {
-  const verified = ctx.get('localContainerExecutionWorld') as object | undefined
+  const workspaces = ctx.get('conversationWorkspaces') as { executionWorld: object } | undefined
+  const bootWorld = ctx.get('localContainerExecutionWorld') as object | undefined
+  const verified = bootWorld === undefined ? undefined : workspaces?.executionWorld ?? bootWorld
   const fs = ctx.get('fs') as { executionWorld: symbol | object } | undefined
   const subprocess = ctx.get('subprocess') as { executionWorld: symbol | object } | undefined
   if (verified === undefined || fs?.executionWorld !== verified || subprocess?.executionWorld !== verified) {

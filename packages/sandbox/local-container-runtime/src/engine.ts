@@ -19,6 +19,7 @@ import type {
 /** Dockerode-backed Podman API client that never falls back to a CLI or TCP host. */
 export class DockerodePodmanEngine implements PodmanEngine {
   private readonly docker: Dockerode
+  private readonly waitDocker: Dockerode
 
   /**
    * Connect Dockerode to one explicit Unix socket.
@@ -27,6 +28,9 @@ export class DockerodePodmanEngine implements PodmanEngine {
    */
   constructor(socketPath: string, timeoutMs: number) {
     this.docker = new Dockerode({ socketPath, timeout: timeoutMs })
+    // Process lifetime is owned by the runtime; an idle HTTP timeout must not end its wait.
+    const waitOptions = { socketPath, timeout: 0, connectionTimeout: timeoutMs }
+    this.waitDocker = new Dockerode(waitOptions)
   }
 
   /** @returns Docker-compatible engine info used by the owner verification. */
@@ -78,7 +82,13 @@ export class DockerodePodmanEngine implements PodmanEngine {
    * @returns a lifecycle adapter that resolves when used.
    */
   getContainer(name: string): PodmanContainer {
-    return new DockerodePodmanContainer(this.docker.getContainer(name))
+    return new DockerodePodmanContainer(this.docker.getContainer(name), this.waitDocker.getContainer(name))
+  }
+
+  async containersUsing(directory: string): Promise<PodmanContainer[]> {
+    const containers = await this.docker.listContainers({ all: true })
+    return containers.filter(container => container.Mounts.some(mount => mount.Source === directory))
+      .map(container => new DockerodePodmanContainer(this.docker.getContainer(container.Id), this.waitDocker.getContainer(container.Id)))
   }
 
   async createContainer(request: PodmanContainerCreate): Promise<PodmanContainer> {
@@ -112,7 +122,7 @@ export class DockerodePodmanEngine implements PodmanEngine {
         resolve(created)
       })
     })
-    return new DockerodePodmanContainer(container)
+    return new DockerodePodmanContainer(container, this.waitDocker.getContainer(container.id))
   }
 }
 
@@ -144,7 +154,7 @@ class DockerodePodmanContainer implements PodmanContainer {
   /** Engine-assigned id retained by the runtime owner. */
   readonly id: string
 
-  constructor(private readonly container: Dockerode.Container) {
+  constructor(private readonly container: Dockerode.Container, private readonly waitContainer: Dockerode.Container) {
     this.id = container.id
   }
 
@@ -173,7 +183,7 @@ class DockerodePodmanContainer implements PodmanContainer {
   /** Wait for the configured process to stop. */
   async wait(signal?: AbortSignal): Promise<{ statusCode: number; error?: string }> {
     const options = signal === undefined ? { condition: 'not-running' as const } : { condition: 'not-running' as const, abortSignal: signal }
-    const value = await this.container.wait(options) as unknown
+    const value = await this.waitContainer.wait(options) as unknown
     if (!isRecord(value) || typeof value.StatusCode !== 'number') {
       throw new Error('local-container-runtime: Engine wait response omitted the process status')
     }

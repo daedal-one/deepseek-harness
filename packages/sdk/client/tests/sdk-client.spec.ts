@@ -63,6 +63,16 @@ async function tempDir(prefix: string): Promise<string> {
 }
 
 describe('DeepSeekHarness', () => {
+  it.each(['returned', 'pending', 'checkpointed'])('retains %s workspace receipts separately from completed model turns', async (phase) => {
+    const harness = harnessWith({ FAKE_WORKSPACE_PHASE: phase })
+    const result = await harness.run('finish')
+    expect(result.events.find(event => event.type === 'turn/end')).toMatchObject({ data: { reason: { kind: 'completed' } } })
+    expect(result.events.at(-1)).toMatchObject({ type: 'workspace/state', data: { phase, checkpoint: 2 } })
+    expect(result.events.map(event => event.type)).toEqual([
+      'agent/inbox/spliced', 'turn/start', 'assistant/message', 'turn/end', 'workspace/state',
+    ])
+  })
+
   it('defaults SDK-created agents to the OpenRouter V4.1 Flash route', async () => {
     const dir = await tempDir('sdk-client-default-route-')
     const recordFile = join(dir, 'init.jsonl')

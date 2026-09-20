@@ -1149,6 +1149,28 @@ Types: [Scoped](scope.md) · [UserMessage](session.md)
 
 Source: [`packages/core/agent/src/runtime-types.ts`](../../packages/core/agent/src/runtime-types.ts)
 
+<a id="agentprepare--serial"></a>
+
+#### `agent/prepare` — serial
+
+Prepare an unpublished agent after caller composition and before publication.
+
+```ts cordis-catalog
+/**
+ * Prepare an unpublished agent after caller composition and before publication.
+ * @param payload.agent - unpublished agent whose workspace is being prepared.
+ * @param payload.origin - session origin and live parent for shared child resources.
+ * @param payload.signal - creation cancellation signal.
+ * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.
+ * @mode serial
+ */
+'agent/prepare'(this: Scoped<Agent>, payload: { agent: Agent; origin: { parentAgent: Agent | undefined; source: SessionStartSource }; signal: AbortSignal }): Promise<void> | void
+```
+
+Types: [Scoped](scope.md)
+
+Source: [`packages/core/agent/src/runtime-types.ts`](../../packages/core/agent/src/runtime-types.ts)
+
 <a id="agentrequest--waterfall"></a>
 
 #### `agent/request` — waterfall
@@ -1249,6 +1271,50 @@ Agent status changed (`idle` ⇄ `running`). A waking delivery enters `running` 
  * @mode emit
  */
 'agent/status'(this: Scoped<Agent>, payload: { agent: Agent; status: AgentStatus }): void
+```
+
+Types: [Scoped](scope.md)
+
+Source: [`packages/core/agent/src/runtime-types.ts`](../../packages/core/agent/src/runtime-types.ts)
+
+<a id="agentturn-settled--serial"></a>
+
+#### `agent/turn-settled` — serial
+
+Settle external resources after turn/end is appended and before another turn can start. Listeners own durability flushes and bounded cancellation-independent cleanup.
+
+```ts cordis-catalog
+/**
+ * Settle external resources after turn/end is appended and before another turn can start.
+ * Listeners own durability flushes and bounded cancellation-independent cleanup.
+ * @param payload.agent - agent whose turn closed.
+ * @param payload.turn - closed turn number.
+ * @param payload.reason - recorded model outcome, independent of settlement results.
+ * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.
+ * @mode serial
+ */
+'agent/turn-settled'(this: Scoped<Agent>, payload: { agent: Agent; turn: number; reason: TurnEndReason }): Promise<void> | void
+```
+
+Types: [Scoped](scope.md) · [TurnEndReason](session.md)
+
+Source: [`packages/core/agent/src/runtime-types.ts`](../../packages/core/agent/src/runtime-types.ts)
+
+<a id="agentturn-starting--waterfall"></a>
+
+#### `agent/turn-starting` — waterfall
+
+Await resource recovery before opening a new turn or assembling model context.
+
+```ts cordis-catalog
+/** Await resource recovery before opening a new turn or assembling model context.
+ * @param payload.agent - agent preparing to consume queued input.
+ * @param payload.signal - cancellation of the pending turn.
+ * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.
+ * @param next - remaining admission checks.
+ * @mode waterfall
+ */
+'agent/turn-starting'(this: Scoped<Agent>, payload: { agent: Agent; signal: AbortSignal }, next: () => Promise<void> | void): Promise<void> | void
 ```
 
 Types: [Scoped](scope.md)

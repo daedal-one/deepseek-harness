@@ -1,0 +1,325 @@
+import { execFile } from 'node:child_process'
+import { cp, mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { Context, Service } from '@deepseek-ai/cordis'
+import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
+import AgentLoop from '@deepseek-ai/dsh-agent-loop'
+import SessionStore, { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import ProjectionRegistry from '@deepseek-ai/dsh-session-projection'
+import Persistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import LlmRuntime, { createUserMessage } from '@deepseek-ai/dsh-llm'
+import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import Tools from '@deepseek-ai/dsh-tools'
+import type { LocalContainerRuntime } from '../src/index.ts'
+import Workspaces, { type ConversationWorkspaceConfig } from '../src/workspaces.ts'
+import type { PodmanControllerExecRequest, PodmanControllerExecResult } from '../src/types.ts'
+import { workspaceGit } from '../src/workspace-git.ts'
+import * as broker from '../src/workspace-git.ts'
+import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+// These tests exercise persistence and transaction ordering with a local controller.
+// Only workspaces.e2e.ts establishes container isolation and physical tmpfs limits.
+class LocalStorageWorkspaces extends Workspaces {
+  override [Service.init](): Promise<void> { return Promise.resolve() }
+}
+
+const disposers: Array<() => Promise<void>> = []
+afterEach(async () => {
+  vi.restoreAllMocks()
+  const results = await Promise.allSettled(disposers.splice(0).reverse().map(dispose => dispose()))
+  const failures = results.flatMap(result => result.status === 'rejected' ? [result.reason as unknown] : [])
+  if (failures.length > 0) throw new AggregateError(failures, 'workspace fixture cleanup failed')
+})
+
+async function fixture(options: {
+  message?: boolean
+  failAfterCommit?: boolean
+  retryDelayMs?: number
+  script?: ConstructorParameters<typeof MockAdapter>[0]
+} = {}) {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'dsh-workspaces-')))
+  const source = join(root, 'source'); const pool = join(root, 'slot'); const secondPool = join(root, 'second-slot'); const recovery = join(root, 'recovery')
+  await Promise.all([source, pool, secondPool, recovery].map(path => mkdir(path, { mode: 0o700 })))
+  const config: ConversationWorkspaceConfig = {
+    poolPaths: [pool, secondPool], slotBytes: 67108864, slotInodes: 20000, recoveryRoot: recovery,
+    gitCommand: '/usr/bin/git', authorName: 'DSH', authorEmail: 'dsh@localhost', resourceLimitCommand: '/usr/bin/prlimit', gitMemoryBytes: 536870912,
+    maxBytes: 4194304, maxEntries: 1000, timeoutMs: 30000, maxOutputBytes: 8388608,
+    settleTimeoutMs: 1000, retryDelayMs: options.retryDelayMs ?? 10000,
+    messageInputBytes: 4096, messageOutputTokens: 64, messageTimeoutMs: 1000,
+    ...options.message === true ? { messageProvider: 'mock', messageModel: 'cheap' } : {},
+  }
+  await workspaceGit(source, ['init', '--template=', '--initial-branch=main'], config)
+  await writeFile(join(source, 'input.txt'), 'initial\n')
+  await workspaceGit(source, ['add', '.'], config); await workspaceGit(source, ['commit', '-m', 'initial'], config)
+  const ctx = new Context()
+  const worlds = new Map<object, string>()
+  let failAfterCommit = options.failAfterCommit === true
+  const execute = async (directory: string, request: PodmanControllerExecRequest): Promise<PodmanControllerExecResult> => {
+    return await new Promise((resolve, reject) => {
+      const script = String(request.argv[2]).replace("ROOT='/workspace'", `ROOT=${JSON.stringify(directory)}`)
+      const child = execFile('/usr/bin/python3', ['-c', script], {
+        maxBuffer: request.maxOutputBytes, timeout: config.timeoutMs, encoding: 'buffer',
+      }, (error, stdout, stderr) => {
+        if (error !== null) reject(new Error('local test controller failed', { cause: error }))
+        else {
+          const input = JSON.parse(Buffer.from(request.stdin ?? []).toString()) as { operation: string }
+          if (input.operation === 'commit' && failAfterCommit) {
+            failAfterCommit = false
+            reject(new Error('injected lost commit acknowledgement'))
+          } else resolve({ exitCode: 0, stdout, stderr })
+        }
+      })
+      child.stdin?.end(request.stdin)
+    })
+  }
+  const runtime = {
+    async recoverWorkspace() {},
+    async createWorkspace(directory: string) {
+      const world = {
+        executionWorld: {},
+        executeController: (request: PodmanControllerExecRequest) => execute(directory, request),
+        async cancelProcesses() {},
+        async settle<T>(_timeout: number, operation: (
+          control: (request: PodmanControllerExecRequest) => Promise<PodmanControllerExecResult>,
+        ) => Promise<T>) {
+          return await operation(world.executeController)
+        },
+      }
+      worlds.set(world, directory)
+      return { runtime: world, async dispose() {} }
+    },
+  }
+  ctx.provide('localContainerRuntime', runtime as unknown as LocalContainerRuntime)
+  await ctx.plugin(SessionStore); await ctx.plugin(ProjectionRegistry)
+  await ctx.plugin(Persistence, { root: join(root, 'sessions'), compression: 'none' })
+  await ctx.plugin(LlmRuntime); await ctx.plugin(AgentRegistry); await ctx.plugin(SystemPrompt); await ctx.plugin(Tools)
+  await ctx.plugin(LocalStorageWorkspaces, config); await ctx.plugin(AgentLoop, { agents: [] })
+  disposers.push(async () => { await ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) })
+  const adapter = new MockAdapter(options.script ?? [textResponse('Done.'), textResponse('feat: retain changes'), textResponse('No further changes.')])
+  ctx.llm.registerAdapter(['mock'], adapter)
+  const handle = await ctx.agents.create({ sessionId: SessionId(`test-${root.split('/').at(-1)}`), meta: { cwd: source }, agentOptions: { provider: 'mock', model: 'main' } })
+  const runtimeForAgent = ctx.agents.withInitiator(handle.agent, () => ctx.conversationWorkspaces.capture())
+  const execution = worlds.get(runtimeForAgent)
+  if (execution === undefined) throw new Error('missing fixture workspace')
+  const turn = async () => {
+    handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Finish the task.' }], source: { kind: 'user' } }))
+    await handle.agent.whenIdle()
+    return handle.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')
+  }
+  const executionFor = (agent: Agent) => worlds.get(ctx.agents.withInitiator(agent, () => ctx.conversationWorkspaces.capture()))
+  return { ctx, root, source, pool, recovery, execution, config, handle, turn, adapter, executionFor }
+}
+
+describe.skipIf(process.platform === 'win32')('conversation workspace transaction lifecycle', () => {
+  it('uses the fixed residual commit when no message route exists and preserves source state', async () => {
+    const f = await fixture()
+    const sourceHead = await workspaceGit(f.source, ['rev-parse', 'HEAD'], f.config)
+    await writeFile(join(f.execution, 'result.txt'), 'result\n')
+    expect((await f.turn())?.data).toMatchObject({ phase: 'returned', turn: 1 })
+    expect((await workspaceGit(f.execution, ['log', '-1', '--format=%s'], f.config)).toString().trim())
+      .toBe('chore: save remaining changes for turn 1')
+    expect(await workspaceGit(f.source, ['rev-parse', 'HEAD'], f.config)).toEqual(sourceHead)
+    await expect(readFile(join(f.source, 'result.txt'))).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(f.handle.agent.session.snapshotEvents().some(event => event.type === 'workspace/commit-message-request')).toBe(false)
+  })
+
+  it('calls the optional subject model once, then makes no commit or auxiliary request for a clean turn', async () => {
+    const f = await fixture({ message: true })
+    await writeFile(join(f.execution, 'result.txt'), 'result\n')
+    expect((await f.turn())?.data).toMatchObject({ phase: 'returned' })
+    const committed = await workspaceGit(f.execution, ['rev-parse', 'HEAD'], f.config)
+    expect((await workspaceGit(f.execution, ['log', '-1', '--format=%s'], f.config)).toString().trim()).toBe('feat: retain changes')
+    expect((await f.turn())?.data).toMatchObject({ phase: 'returned', turn: 2 })
+    expect(await workspaceGit(f.execution, ['rev-parse', 'HEAD'], f.config)).toEqual(committed)
+    expect(f.handle.agent.session.snapshotEvents().filter(event => event.type === 'workspace/commit-message-request')).toHaveLength(1)
+  })
+
+  it('retries a lost commit acknowledgement without repeating the subject model or creating another commit', async () => {
+    const f = await fixture({ message: true, failAfterCommit: true, retryDelayMs: 25 })
+    await writeFile(join(f.execution, 'result.txt'), 'result\n')
+    expect((await f.turn())?.data).toMatchObject({ phase: 'pending' })
+    const committed = await workspaceGit(f.execution, ['rev-parse', 'HEAD'], f.config)
+    await expect.poll(() => f.handle.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')?.data,
+      { timeout: 5000 }).toMatchObject({ phase: 'returned' })
+    expect(await workspaceGit(f.execution, ['rev-parse', 'HEAD'], f.config)).toEqual(committed)
+    expect(f.adapter.requests.filter(request => request.purpose === 'workspace-commit')).toHaveLength(1)
+  })
+
+
+  it.each(['candidate', 'message', 'committed', 'returned'].flatMap(phase => ['before', 'after'].map(edge => ({ phase, edge }))))(
+    'recovers a restart $edge $phase publication without duplicate commits or subject calls', async ({ phase, edge }) => {
+      const f = await fixture({ message: true, retryDelayMs: 2_147_483_647 })
+      const publish = broker.publishWorkspaceJson
+      let interrupted = false
+      const failure = vi.spyOn(broker, 'publishWorkspaceJson').mockImplementation(async (path, value, maxBytes) => {
+        const record = value as { lastTurn: number; transaction?: { message?: string; oid?: string } }
+        const transaction = record.transaction
+        const matches = path.endsWith('/state.json') && !interrupted && (phase === 'candidate'
+          ? transaction !== undefined && transaction.message === undefined
+          : phase === 'message' ? transaction?.message !== undefined && transaction.oid === undefined
+            : phase === 'committed' ? transaction?.oid !== undefined
+              : record.lastTurn === 1 && transaction === undefined)
+        if (matches && edge === 'before') { interrupted = true; throw new Error('injected crash before publication') }
+        await publish(path, value, maxBytes)
+        if (matches) { interrupted = true; throw new Error('injected crash after publication') }
+      })
+      await writeFile(join(f.execution, 'result.txt'), 'result\n')
+      const pending = await f.turn()
+      expect(pending?.data).toMatchObject({ phase: 'pending' })
+      expect(interrupted).toBe(true)
+      if (pending?.type !== 'workspace/state') throw new Error('missing workspace receipt')
+      const directory = join(f.recovery, pending.data.workspaceId)
+      const crashImage = join(f.root, 'crash-image')
+      await cp(directory, crashImage, { recursive: true })
+      const committed = await workspaceGit(f.execution, ['rev-parse', 'HEAD'], f.config)
+      failure.mockRestore()
+      await f.handle.dispose()
+      // Reconstruct the exact durable bytes at the interruption, excluding orderly-shutdown publications.
+      await rm(directory, { recursive: true }); await cp(crashImage, directory, { recursive: true })
+      const resumed = await f.ctx.agents.resume({ resumeSessionId: f.handle.agent.id,
+        agentOptions: { provider: 'mock', model: 'main' } })
+      try {
+        await expect.poll(() => resumed.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')?.data,
+          { timeout: 5000 }).toMatchObject({ phase: 'returned' })
+        expect((await workspaceGit(f.execution, ['rev-list', '--count', 'HEAD'], f.config)).toString().trim()).toBe('2')
+        if (phase === 'committed' || phase === 'returned') {
+          expect(await workspaceGit(f.execution, ['rev-parse', 'HEAD'], f.config)).toEqual(committed)
+        }
+        expect(f.adapter.requests.filter(request => request.purpose === 'workspace-commit'))
+          .toHaveLength(phase === 'candidate' && edge === 'after' ? 0 : 1)
+        const receipt = resumed.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')
+        if (receipt?.type !== 'workspace/state') throw new Error('missing resumed receipt')
+        for (const [ref, oid] of Object.entries(receipt.data.branches)) {
+          expect((await workspaceGit(f.source, ['rev-parse', ref], f.config)).toString().trim()).toBe(oid)
+        }
+      } finally { await resumed.dispose() }
+    },
+  )
+
+  it('retains the last checkpoint and dirty RAM when a recovery payload exceeds the configured bound', async () => {
+    const f = await fixture({ retryDelayMs: 25 })
+    const ready = f.handle.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')
+    if (ready?.type !== 'workspace/state') throw new Error('missing prepared workspace')
+    const statePath = join(f.recovery, ready.data.workspaceId, 'state.json')
+    const before = JSON.parse(await readFile(statePath, 'utf8')) as { checkpoint: number }
+    await writeFile(join(f.execution, 'oversized'), Buffer.alloc(f.config.maxBytes + 1))
+    expect((await f.turn())?.data).toMatchObject({ phase: 'pending' })
+    expect((JSON.parse(await readFile(statePath, 'utf8')) as { checkpoint: number }).checkpoint).toBe(before.checkpoint)
+    expect((await readFile(join(f.execution, 'oversized'))).length).toBe(f.config.maxBytes + 1)
+    await rm(join(f.execution, 'oversized'))
+    await expect.poll(() => f.handle.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')?.data,
+      { timeout: 5000 }).toMatchObject({ phase: 'returned' })
+  })
+
+  it('retains dirty RAM and releases stopped-world leases when shutdown checkpointing fails', async () => {
+    const f = await fixture()
+    await writeFile(join(f.execution, 'unfinished.txt'), 'recover me')
+    const publish = broker.publishWorkspaceJson
+    const failure = vi.spyOn(broker, 'publishWorkspaceJson').mockImplementation(async (path, value, maxBytes) => {
+      if (path.includes('/checkpoint-')) throw new Error('injected full recovery disk')
+      await publish(path, value, maxBytes)
+    })
+    await f.handle.dispose()
+    expect(failure).toHaveBeenCalled()
+    failure.mockRestore()
+    const resumed = await f.ctx.agents.resume({ resumeSessionId: f.handle.agent.id, agentOptions: { provider: 'mock', model: 'main' } })
+    const execution = f.executionFor(resumed.agent)
+    if (execution === undefined) throw new Error('missing recovered workspace')
+    expect(await readFile(join(execution, 'unfinished.txt'), 'utf8')).toBe('recover me')
+    await resumed.dispose()
+  })
+
+  it('refuses a corrupt acknowledged checkpoint instead of reimporting the source', async () => {
+    const f = await fixture()
+    await f.turn(); await f.handle.dispose()
+    const stateEvent = f.handle.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')
+    if (stateEvent?.type !== 'workspace/state') throw new Error('missing workspace state')
+    const directory = join(f.recovery, stateEvent.data.workspaceId)
+    const state = JSON.parse(await readFile(join(directory, 'state.json'), 'utf8')) as { checkpoint: number }
+    await writeFile(join(directory, `checkpoint-${state.checkpoint}.json`), JSON.stringify({ entries: [] }))
+    await expect(f.ctx.agents.resume({ resumeSessionId: f.handle.agent.id,
+      agentOptions: { provider: 'mock', model: 'main' } })).rejects.toThrow('integrity')
+  })
+
+  it('checkpoints an unfinished merge before reporting blocked finalization', async () => {
+    const f = await fixture({ message: true })
+    const head = await workspaceGit(f.execution, ['rev-parse', 'HEAD'], f.config)
+    await writeFile(join(f.execution, '.git/MERGE_HEAD'), head)
+    await writeFile(join(f.execution, 'unfinished.txt'), 'merge work')
+    const pending = await f.turn()
+    expect(pending?.data).toMatchObject({ phase: 'pending', turn: 1 })
+    if (pending?.type !== 'workspace/state') throw new Error('missing pending workspace receipt')
+    const snapshot = JSON.parse(await readFile(join(f.recovery, pending.data.workspaceId,
+      `checkpoint-${pending.data.checkpoint}.json`), 'utf8')) as { entries: Array<{ path: string; data: string }> }
+    expect(snapshot.entries.find(entry => entry.path === 'unfinished.txt')?.data).toBe(Buffer.from('merge work').toString('base64'))
+    expect(snapshot.entries.some(entry => entry.path === '.git/MERGE_HEAD')).toBe(true)
+    expect(await workspaceGit(f.execution, ['rev-parse', 'HEAD'], f.config)).toEqual(head)
+    expect(f.adapter.requests.filter(request => request.purpose === 'workspace-commit')).toHaveLength(0)
+    expect((await workspaceGit(f.source, ['for-each-ref', 'refs/heads/dsh/'], f.config)).length).toBe(0)
+  })
+
+  it('checkpoints cancelled work without an automatic commit, branch return, or subject request', async () => {
+    const f = await fixture({ message: true, script: ['hang'] })
+    const started = Promise.withResolvers<undefined>()
+    f.ctx.on('agent/assistant-stream', ({ frame }) => { if (frame.type === 'chunk') started.resolve(undefined) })
+    await writeFile(join(f.execution, 'unfinished.txt'), 'partial work\n')
+    const head = await workspaceGit(f.execution, ['rev-parse', 'HEAD'], f.config)
+    const turn = f.turn()
+    await started.promise
+    f.handle.agent.cancel({ kind: 'user' })
+    expect((await turn)?.data).toMatchObject({ phase: 'checkpointed' })
+    expect(await workspaceGit(f.execution, ['rev-parse', 'HEAD'], f.config)).toEqual(head)
+    expect((await workspaceGit(f.source, ['for-each-ref', 'refs/heads/dsh/'], f.config)).length).toBe(0)
+    expect(f.adapter.requests.filter(request => request.purpose === 'workspace-commit')).toHaveLength(0)
+    await f.handle.dispose()
+    await rm(f.pool, { recursive: true }); await mkdir(f.pool, { mode: 0o700 })
+    const resumed = await f.ctx.agents.resume({ resumeSessionId: f.handle.agent.id,
+      agentOptions: { provider: 'mock', model: 'main' } })
+    expect(await readFile(join(f.pool, 'workspace', 'unfinished.txt'), 'utf8')).toBe('partial work\n')
+    await resumed.dispose()
+  })
+
+  it('shares the parent repository with a child but returns branches only when the parent settles', async () => {
+    const f = await fixture()
+    const child = await f.ctx.agents.create({ sessionId: SessionId('child'), parentAgent: f.handle.agent,
+      meta: { cwd: f.source }, agentOptions: { provider: 'mock', model: 'main' } })
+    expect(f.executionFor(child.agent)).toBe(f.execution)
+    await writeFile(join(f.execution, 'child.txt'), 'child result\n')
+    child.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Finish.' }], source: { kind: 'user' } }))
+    await child.agent.whenIdle()
+    expect((await workspaceGit(f.source, ['for-each-ref', 'refs/heads/dsh/'], f.config)).length).toBe(0)
+    expect((await f.turn())?.data).toMatchObject({ phase: 'returned' })
+    await child.dispose()
+  })
+
+  it('forks the recorded checkpoint into an independent repository instead of reimporting host files', async () => {
+    const f = await fixture()
+    await writeFile(join(f.execution, 'result.txt'), 'parent result\n'); await f.turn()
+    const seed = f.handle.agent.session.snapshotEvents()
+    await writeFile(join(f.source, 'host-only.txt'), 'new host input\n')
+    const fork = await f.ctx.agents.create({ sessionId: SessionId('fork'), seed, inheritedEventCount: SessionLogOffset(seed.length),
+      meta: { cwd: f.source, parentSession: f.handle.agent.id, isSeeded: true }, agentOptions: { provider: 'mock', model: 'main' } })
+    const path = f.executionFor(fork.agent)
+    if (path === undefined) throw new Error('fork workspace absent')
+    expect(path).not.toBe(f.execution)
+    expect(await readFile(join(path, 'result.txt'), 'utf8')).toBe('parent result\n')
+    await expect(readFile(join(path, 'host-only.txt'))).rejects.toMatchObject({ code: 'ENOENT' })
+    await writeFile(join(path, 'result.txt'), 'fork result\n')
+    expect(await readFile(join(f.execution, 'result.txt'), 'utf8')).toBe('parent result\n')
+    await fork.dispose()
+  })
+
+  it('restores the acknowledged repository after RAM loss without reading new host edits', async () => {
+    const f = await fixture()
+    await writeFile(join(f.execution, 'result.txt'), 'result\n'); await f.turn()
+    await f.handle.dispose()
+    await rm(f.pool, { recursive: true }); await mkdir(f.pool, { mode: 0o700 })
+    await writeFile(join(f.source, 'input.txt'), 'changed on host after conversation\n')
+    const resumed = await f.ctx.agents.resume({ resumeSessionId: f.handle.agent.id, agentOptions: { provider: 'mock', model: 'main' } })
+    expect(await readFile(join(f.pool, 'workspace', 'result.txt'), 'utf8')).toBe('result\n')
+    expect(await readFile(join(f.pool, 'workspace', 'input.txt'), 'utf8')).toBe('initial\n')
+    await resumed.dispose()
+  })
+})

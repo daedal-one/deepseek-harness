@@ -1,0 +1,30 @@
+---
+id: REQ:sandbox/conversation-git-workspace
+type: requirement
+status: accepted
+level: MUST
+summary: Automatically import, recover, commit, and return conversation-owned Git workspaces without coding-agent orchestration.
+owners: [carlo]
+refines: []
+categorized_under: []
+---
+
+# Conversation Git workspace
+
+## Context
+
+This opt-in lifecycle extends the disposable local container world with conversation-owned storage and automatic Git return. It replaces the initial process-wide empty-workspace lifecycle only in compositions that select it. The coding agent uses ordinary filesystem, shell, and Git operations; the Harness owns transport and recovery.
+
+:::{requirement id="conversation-git-workspace" level="MUST"}
+- {#c-ownership} Each top-level conversation MUST own one durable workspace identity and one exclusive mutation lease. Independent conversations MUST have different workspaces. Child agents MUST inherit their parent's identity unless an explicit isolated child workspace is allocated. All filesystem, subprocess, search, terminal, job, LSP, instruction, and workspace-view consumers MUST resolve the same identity before access; missing identity MUST fail rather than fall back to host or another conversation.
+- {#c-import} Before the first model request, the Harness MUST capture the selected Git base, tracked working-file changes, and non-ignored untracked files without modifying the source checkout or index. It MUST record source index state and a verifiable input manifest. It MUST create an independent repository with a labelled input-baseline commit when imported local changes exist, and expose a clean task branch to the coding agent. Source changes during capture MUST cause bounded retry or explicit failure.
+- {#c-boundary} Import and recovery MUST apply byte, file-count, time, and path limits; reject special files, escaping paths, and unsafe links; and never copy host Git configuration, hooks, credential helpers, object alternates, sockets, or private Harness state. Supported relative symlinks MUST remain confined after complete-tree resolution and MUST never be followed during copying. Unsupported submodule, LFS, sparse, partial, or conflicted repository states MUST fail before work starts rather than silently omit data.
+- {#c-storage} Workspace data MUST live on explicitly configured, capacity-bounded memory-backed storage shared by its owned process containers. Per-workspace and deployment-wide limits MUST be enforced. Container replacement MUST NOT delete recoverable workspace data. The model MUST see execution paths such as `/workspace`; host origin paths remain host metadata.
+- {#c-agent} The Harness MUST give the coding agent ordinary Git state plus concise, logged guidance to make granular commits and preserve task authorization. It MUST NOT require import, export, checkpoint, migration, lease, or recovery tool calls from the agent. The agent MUST NOT receive remote credentials or direct host repository access.
+- {#c-finalize} Every successful durable turn completion MUST schedule exactly one idempotent finalization transaction. That transaction MUST establish workspace quiescence, retain existing agent commits, commit remaining eligible changes when present, durably checkpoint, and automatically return committed branch tips to host-owned result refs. It MUST finish local settlement before another turn mutates that workspace. Background writers MUST participate in the barrier; a timeout MUST preserve work and report pending finalization, not silently kill jobs or claim synchronization.
+- {#c-message} An optional configured low-cost LLM MUST be used only to summarize the frozen leftover diff into commit-message text. Deterministic code MUST select paths, tree, parents, identity, timestamp, validation policy, and destination refs. The message call MUST have bounded input, output, duration, and cost; no tools or credentials; and a deterministic non-model fallback. The chosen message and commit inputs MUST be persisted once and reused on retries. Empty diffs MUST cause neither message calls nor empty commits.
+- {#c-recovery} Private recovery checkpoints MUST atomically preserve repository objects, refs, index, workspace content, and ownership metadata sufficient to recover the acknowledged generation. Active writers MUST be stopped at a proven barrier before a checkpoint is declared consistent. Failed, cancelled, and interrupted turns MUST preserve recoverable dirty state without being finalized as successful work. Disk, memory, timeout, and validation failures MUST retain the last valid generation and MUST NOT permit cleanup to erase newer unacknowledged work.
+- {#c-return} The host MUST validate a bounded Git bundle and its pinned refs before atomically importing results into conversation-owned refs in the source repository. It MUST leave source working files, index, checked-out branches, unrelated refs, and remote state unchanged. Repeated return of the same generation MUST be a no-op; concurrent destination movement MUST preserve the moved ref and use a fresh deterministic result ref or a reported conflict. Automatic return MUST NOT run repository code or push, merge, cherry-pick, reset, or check out results.
+- {#c-outcomes} Durable records MUST distinguish model-turn outcome, local finalization, recovery checkpoint, and host return outcome. Host return failure MUST retain a durable pending receipt and retry without another coding turn or duplicate message call. Client presentation and both SDKs MUST expose these outcomes without asking the coding agent to repair lifecycle state.
+- {#c-evidence} Acceptance MUST include real rootless-Podman conversation isolation, dirty-input capture, granular and fallback commits, no-op turns, background-writer barriers, cancelled turns, concurrent host edits, hostile imports and bundles, crash injection at every publication boundary, branch rewrites, restart recovery, resource exhaustion, keyless Session replay, and both SDK projections. No implementation or real-provider success MUST be claimed from specification validation alone.
+:::

@@ -5,6 +5,7 @@
  * @module @deepseek-ai/dsh-agent-loop
  */
 
+import { agentEvents } from '@deepseek-ai/dsh-agent'
 import { Context, FiberState, Service } from '@deepseek-ai/cordis'
 import { randomUUID } from 'node:crypto'
 import z from '@deepseek-ai/schemastery'
@@ -707,6 +708,8 @@ export class AgentLoop extends Service implements AgentFactory {
       throw error
     }
     try {
+      await agentEvents(prepared.agent.ctx, prepared.agent).serial('agent/prepare', { origin: { parentAgent: undefined, source: 'startup' }, signal: prepared.signal })
+      prepared.signal.throwIfAborted()
       await this.appendUnstoredSuffix(stored, preparation.session)
       return prepared.publish('startup').agent
     } catch (error: unknown) {
@@ -823,6 +826,8 @@ export class AgentLoop extends Service implements AgentFactory {
     }
     try {
       const setupCommit = await raceAbort(setup?.(prepared.agent.ctx, prepared.agent), prepared.signal, id)
+      await agentEvents(prepared.agent.ctx, prepared.agent).serial('agent/prepare', { origin: { parentAgent, source }, signal: prepared.signal })
+      prepared.signal.throwIfAborted()
       setupCommit?.commit()
       await this.appendUnstoredSuffix(stored, session)
       return prepared.publish(source)

@@ -6,6 +6,7 @@
  * @module @deepseek-ai/dsh-file-reference-local/search
  */
 
+import type { FileSystem } from '@deepseek-ai/dsh-fs'
 import { lstat, readdir } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { FileReferenceCandidate } from '@deepseek-ai/dsh-file-reference'
@@ -92,6 +93,7 @@ export class WorkspaceFileSearch {
   constructor(
     private readonly root: string,
     private readonly config: FileSearchConfig,
+    private readonly fileSystem?: FileSystem,
   ) {
     if (!Number.isSafeInteger(config.maxResults) || config.maxResults <= 0) {
       throw new Error('file search maxResults must be a positive safe integer')
@@ -213,8 +215,8 @@ export class WorkspaceFileSearch {
       // nothing. Letting that settle would publish an empty index over
       // entries that are still good and leave no invalidation to retry from.
       const entries = cursor === 0
-        ? await readWorkspaceRoot(directory.absolute, signal)
-        : await readDirectory(directory.absolute, signal)
+        ? await readWorkspaceRoot(directory.absolute, signal, this.fileSystem)
+        : await readDirectory(directory.absolute, signal, this.fileSystem)
       for (const entry of entries) {
         signal.throwIfAborted()
         const path = directory.relative === '' ? entry.name : `${directory.relative}/${entry.name}`
@@ -237,9 +239,9 @@ export class WorkspaceFileSearch {
     signal: AbortSignal,
   ): Promise<FileReferenceCandidate[]> {
     if (displayDirectory.split('/').some(segment => this.excludedDirectories.has(segment))) return []
-    const absolute = await resolveDisplayDirectory(this.root, displayDirectory, signal)
+    const absolute = await resolveDisplayDirectory(this.root, displayDirectory, signal, this.fileSystem)
     if (absolute === undefined) return []
-    const entries = await readDirectory(absolute, signal)
+    const entries = await readDirectory(absolute, signal, this.fileSystem)
     const candidates: FileReferenceCandidate[] = []
     for (const entry of entries) {
       if (entry.name.startsWith('.') && !fragment.startsWith('.')) continue
@@ -258,6 +260,7 @@ async function resolveDisplayDirectory(
   root: string,
   displayDirectory: string,
   signal: AbortSignal,
+  fileSystem?: FileSystem,
 ): Promise<string | undefined> {
   const resolvedRoot = resolve(root)
   const absolute = resolve(resolvedRoot, displayDirectory === '' ? '.' : displayDirectory)
@@ -270,9 +273,13 @@ async function resolveDisplayDirectory(
     signal.throwIfAborted()
     current = join(current, segment)
     try {
-      const status = await lstat(current)
+      if (fileSystem !== undefined) {
+        if ((await fileSystem.lstat(current, {}, signal))?.type !== 'directory') return undefined
+      } else {
+        const status = await lstat(current)
+        if (status.isSymbolicLink() || !status.isDirectory()) return undefined
+      }
       signal.throwIfAborted()
-      if (status.isSymbolicLink() || !status.isDirectory()) return undefined
     } catch (_error: unknown) {
       signal.throwIfAborted()
       return undefined
@@ -281,17 +288,17 @@ async function resolveDisplayDirectory(
   return absolute
 }
 
-async function readWorkspaceRoot(absolute: string, signal: AbortSignal) {
+async function readWorkspaceRoot(absolute: string, signal: AbortSignal, fileSystem?: FileSystem) {
   signal.throwIfAborted()
-  const entries = await readdir(absolute, { withFileTypes: true })
+  const entries = await readEntries(absolute, signal, fileSystem)
   signal.throwIfAborted()
   return entries.sort((left, right) => compareText(left.name, right.name))
 }
 
-async function readDirectory(absolute: string, signal: AbortSignal) {
+async function readDirectory(absolute: string, signal: AbortSignal, fileSystem?: FileSystem) {
   signal.throwIfAborted()
   try {
-    const entries = await readdir(absolute, { withFileTypes: true })
+    const entries = await readEntries(absolute, signal, fileSystem)
     signal.throwIfAborted()
     return entries.sort((left, right) => compareText(left.name, right.name))
   } catch (_error: unknown) {
@@ -384,4 +391,15 @@ function waitForPromise<T>(promise: Promise<T>, signal: AbortSignal): Promise<T>
 
 function errorReason(reason: unknown, fallback: string): Error {
   return reason instanceof Error ? reason : new Error(fallback, { cause: reason })
+}
+
+async function readEntries(absolute: string, signal: AbortSignal, fileSystem?: FileSystem) {
+  if (fileSystem === undefined) return await readdir(absolute, { withFileTypes: true })
+  const target = await fileSystem.resolve(absolute, { signal })
+  return (await fileSystem.listDir(target, signal)).map(entry => ({
+    name: entry.name,
+    isFile: () => entry.type === 'file',
+    isDirectory: () => entry.type === 'directory',
+    isSymbolicLink: () => false,
+  }))
 }
