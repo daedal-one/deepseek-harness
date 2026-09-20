@@ -170,6 +170,8 @@ Reading titles, lists, and projections does not require an Agent. An observation
 
 #### Session journal
 
+The Session object owns one pending paging operation and publishes its activity and structured failure independently of the accepted event window. A settled read promise does not establish success. This keeps retry decisions with the caller instead of silently treating a failed page as an empty page or reissuing user-requested history after reconnect. Replacement and disposal withdraw the prior operation, cancel its journal, and join its completion before the history owner is reused; late finalizers cannot clear a successor's state.
+
 `session.page` returns a history window clipped on message boundaries with contiguous internal sequence numbers. Every request must carry an explicit `throughSeq`; this value comes from the corresponding `session.follow` generation's opening cursor and fixes the read at the same log cut. A tail page without `beforeSeq` must end exactly at `throughSeq`, where `-1` denotes an empty log. `beforeSeq` only selects an older page before that cut and cannot replace the synchronization cursor. `maxMessages` limits user/assistant message count without dropping chunks, tools, or state events between those messages.
 
 The tail page also carries a projection baseline no later than `throughSeq`; older pages carry only historical entries. The Client merges pages and subsequent live control updates by projection watermark.

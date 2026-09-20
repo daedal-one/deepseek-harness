@@ -95,11 +95,10 @@ export class Session implements SessionFace {
   /** Bumped by stream replacement to invalidate an in-flight doOpen. Stale
    *  passes drop all writes once the generation moves on. */
   private openGeneration = 0
-  private loadingOlder = false
+  private paging: Promise<void> | null = null
+  private olderError: RemoteFailure | null = null
   /** Shared low-water target of the running jump loop; null when no jump is paging. */
   private jumpTargetSeq: SessionSeq | null = null
-  /** The running jump loop's completion, shared by retargeting callers. */
-  private jumpPromise: Promise<void> | null = null
   /** Authoritative stream-only inbox snapshot; pending work never hits history. */
   private readonly queueMirror = new SessionQueueMirror()
   private readonly assistantStream = new ClientAssistantStream()
@@ -413,68 +412,64 @@ export class Session implements SessionFace {
   retryOpen(): Promise<void> { return this.open() }
 
   /** Page up: pull one earlier page with the window's first seq as beforeSeq and prepend. */
-  async loadOlder(): Promise<void> {
-    if (this.openState !== 'open' || !this.hasMore || this.loadingOlder) return
+  loadOlder(): Promise<void> {
+    if (this.paging !== null) return this.paging
     const events = this.events
-    if (events === undefined) return
-    this.loadingOlder = true
-    this.notifier.markDirty()
-    try {
-      await events.prepend({ beforeSeq: this.baseSeq, maxMessages: PAGE_MESSAGES })
-    } catch (error) {
-      if (!isRemoteFailure(error)) {
-        console.error('[session-controller] loadOlder failed:', error)
-      }
-    } finally {
-      this.loadingOlder = false
-      this.notifier.markDirty()
-    }
+    if (this.openState !== 'open' || !this.hasMore || events === undefined) return Promise.resolve()
+    return this.startPaging(() => events.prepend({ beforeSeq: this.baseSeq, maxMessages: PAGE_MESSAGES }))
   }
 
   /** Jump loader: page backwards until the window covers seq (see ISession.loadThrough). */
   loadThrough(seq: SessionSeq): Promise<void> {
     if (this.openState !== 'open' || !this.hasMore || this.baseSeq <= seq) return Promise.resolve()
-    if (this.jumpPromise !== null) {
-      // Retarget the running loop to the lowest requested seq.
-      this.jumpTargetSeq = SessionSeq(Math.min(this.jumpTargetSeq ?? seq, seq))
-      return this.jumpPromise
+    if (this.paging !== null) {
+      if (this.jumpTargetSeq === null) return Promise.resolve()
+      this.jumpTargetSeq = SessionSeq(Math.min(this.jumpTargetSeq, seq))
+      return this.paging
     }
-    // A plain single-page pull owns the busy flag; the jump does not queue
-    // behind it (the caller retries once it settles) and must leave no
-    // target behind — only the loop's finally clears that field, and no
-    // loop starts here.
-    if (this.loadingOlder) return Promise.resolve()
+    const events = this.events
+    if (events === undefined) return Promise.resolve()
     this.jumpTargetSeq = seq
-    this.loadingOlder = true
-    this.notifier.markDirty()
-    // Stale-pass guard (the doOpen pattern): a resync mid-loop replaces the
-    // stream generation; this pass then stops instead of paging the new
-    // generation toward its old target.
     const generation = this.openGeneration
-    this.jumpPromise = (async () => {
-      try {
-        while (this.hasMore && this.jumpTargetSeq !== null && this.baseSeq > this.jumpTargetSeq) {
-          if (generation !== this.openGeneration) return
-          const events = this.events
-          if (events === undefined) return
-          const before = this.baseSeq
-          await events.prepend({ beforeSeq: this.baseSeq, maxMessages: JUMP_PAGE_MESSAGES })
-          // No-progress guard: an empty or dropped page that still claims more
-          // history must end the loop, not spin it.
-          if (this.baseSeq >= before) return
-        }
-      } catch (error) {
-        if (!isRemoteFailure(error)) {
-          console.error('[session-controller] loadThrough failed:', error)
-        }
-      } finally {
-        this.jumpTargetSeq = null
-        this.jumpPromise = null
-        this.loadingOlder = false
-        this.notifier.markDirty()
+    return this.startPaging(async () => {
+      while (this.hasMore && this.jumpTargetSeq !== null && this.baseSeq > this.jumpTargetSeq) {
+        if (generation !== this.openGeneration) return
+        const before = this.baseSeq
+        await events.prepend({ beforeSeq: before, maxMessages: JUMP_PAGE_MESSAGES })
+        if (generation !== this.openGeneration || this.baseSeq >= before) return
       }
-    })()
-    return this.jumpPromise
+    })
+  }
+
+  /** One operation owns paging activity, retry state, and completion for both page gestures. */
+  private startPaging(read: () => Promise<void>): Promise<void> {
+    const generation = this.openGeneration
+    this.olderError = null
+    const task = read().catch((error: unknown) => {
+      if (generation !== this.openGeneration) return
+      if (!isRemoteFailure(error)) console.error('[session-controller] history paging failed:', error)
+      this.olderError = isRemoteFailure(error)
+        ? error
+        : new RemoteError('gateway/internal', error instanceof Error ? error.message : String(error), {})
+    }).finally(() => {
+      if (this.paging !== task) return
+      this.paging = null
+      this.jumpTargetSeq = null
+      this.notifier.markDirty()
+    })
+    this.paging = task
+    this.notifier.markDirty()
+    return task
+  }
+
+  /** Withdraw the prior owner's read state before its stream is canceled and joined. */
+  private releasePaging(): Promise<void> | null {
+    const paging = this.paging
+    this.paging = null
+    this.jumpTargetSeq = null
+    this.olderError = null
+    this.notifier.markDirty()
+    return paging
   }
 
   /** Rebuild an opened history source after address replacement.
@@ -482,10 +477,12 @@ export class Session implements SessionFace {
    *  reconnecting control stream and remains untouched. */
   async resync(): Promise<void> {
     if (this.openState === 'cold') return // never opened: no window to rebuild (doOpen flips to 'loading' synchronously, so cold implies no in-flight open)
-    this.openGeneration++
+    const generation = ++this.openGeneration
+    const paging = this.releasePaging()
     const events = this.events
     this.events = undefined
-    await events?.dispose()
+    await Promise.all([events?.dispose(), paging])
+    if (generation !== this.openGeneration) return
     this.openPromise = null
     this.openState = 'cold'
     this.openError = null
@@ -620,9 +617,10 @@ export class Session implements SessionFace {
       this.retireFailedSubmission(requestId)
     }
     this.openGeneration++
+    const paging = this.releasePaging()
     const events = this.events
     this.events = undefined
-    await events?.dispose()
+    await Promise.all([events?.dispose(), paging])
   }
 
   /** Keep an open transcript readable while its Host generation is unavailable. */
@@ -822,12 +820,13 @@ export class Session implements SessionFace {
     if (generation !== this.openGeneration || this.events !== events) return
     if (!isRemoteFailure(error)) throw error
     this.openGeneration++
+    const paging = this.releasePaging()
     this.events = undefined
     this.openPromise = null
     this.openState = 'error'
     this.syncing = false
     this.openError = error
-    void events.dispose()
+    void Promise.all([events.dispose(), paging])
     this.notifier.markDirty()
   }
 
@@ -848,7 +847,8 @@ export class Session implements SessionFace {
       syncing: this.syncing,
       openError: this.openError,
       hasMore: this.hasMore,
-      loadingOlder: this.loadingOlder,
+      loadingOlder: this.paging !== null,
+      olderError: this.olderError,
       promptError: this.promptError,
       blank: this.blankBit,
       lastAgentError: this.lastAgentError,

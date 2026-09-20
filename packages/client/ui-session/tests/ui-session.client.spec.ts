@@ -82,6 +82,7 @@ function createSessionsBench(_ctx: Context): SessionsBench {
         openError: null,
         hasMore: false,
         loadingOlder: false,
+        olderError: null,
         promptError: null,
         blank: false,
         lastAgentError: null,

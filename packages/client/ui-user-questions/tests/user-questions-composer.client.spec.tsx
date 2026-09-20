@@ -41,7 +41,7 @@ const sessionState: SessionState = {
   openState: 'open',
   openError: null,
   hasMore: false,
-  loadingOlder: false,
+  loadingOlder: false, olderError: null,
   promptError: null,
   blank: false,
   lastAgentError: null,

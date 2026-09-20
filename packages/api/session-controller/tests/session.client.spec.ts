@@ -198,6 +198,116 @@ describe('live event path', () => {
 })
 
 describe('paging', () => {
+  it.each(['page', 'jump'] as const)('retains %s failure and cursor until an explicit retry', async (kind) => {
+    const { api, session } = makeSession()
+    api.onHistory = () => histResponse(plainTurn(SessionSeq(6), 1, 'new', 'tail'), true)
+    const read = () => kind === 'page' ? session.loadOlder() : session.loadThrough(SessionSeq(0))
+    const retry = deferred<Awaited<ReturnType<FakeApiClient['onHistory']>>>()
+    try {
+      await session.open()
+      const accepted = windowEntries(session)
+      const failure = new RemoteError('gateway/internal', 'page unavailable', {})
+      api.onHistory = () => Promise.resolve(err(failure))
+      await read()
+      expect(session.getSnapshot()).toMatchObject({ openState: 'open', hasMore: true, loadingOlder: false, olderError: failure })
+      expect(windowEntries(session)).toBe(accepted)
+      expect(api.callsOf('session.history')).toHaveLength(1)
+
+      api.onHistory = () => retry.promise
+      const retried = read()
+      expect(session.getSnapshot()).toMatchObject({ loadingOlder: true, olderError: null })
+      retry.resolve(ok(historyValue(plainTurn(SessionSeq(0), 0, 'old', 'head'), false)))
+      await retried
+      expect(session.getSnapshot()).toMatchObject({ loadingOlder: false, olderError: null, hasMore: false })
+      expect(eventSeqs(session)).toEqual(Array.from({ length: 12 }, (_, seq) => seq))
+      expect(api.callsOf('session.history').map(value => (value as { beforeSeq: number }).beforeSeq)).toEqual([6, 6])
+    } finally {
+      retry.resolve(ok(historyValue([], false)))
+      await session.dispose()
+    }
+  })
+
+  it.each(['page', 'jump'] as const)('disposal joins a pending %s without publishing its late failure', async (kind) => {
+    const { api, session } = makeSession()
+    api.onHistory = () => histResponse(plainTurn(SessionSeq(6), 1, 'new', 'tail'), true)
+    const gate = deferred<Awaited<ReturnType<FakeApiClient['onHistory']>>>()
+    try {
+      await session.open()
+      const accepted = windowEntries(session)
+      api.onHistory = () => gate.promise
+      const pending = kind === 'page' ? session.loadOlder() : session.loadThrough(SessionSeq(0))
+      const closing = session.dispose()
+      let closed = false
+      void closing.then(() => { closed = true })
+      await Promise.resolve()
+      expect(closed).toBe(false)
+      const stopped = session.getSnapshot()
+      expect(stopped).toMatchObject({ loadingOlder: false, olderError: null })
+      gate.resolve(err(new RemoteError('gateway/internal', 'obsolete read failure', {})))
+      await Promise.all([closing, pending])
+      expect(closed).toBe(true)
+      expect(session.getSnapshot()).toBe(stopped)
+      expect(windowEntries(session)).toBe(accepted)
+    } finally {
+      gate.resolve(ok(historyValue([], false)))
+      await session.dispose()
+    }
+  })
+
+  it('replacement joins the old page and starts the new window without its error or jump target', async () => {
+    const { api, session } = makeSession()
+    const page = plainTurn(SessionSeq(6), 1, 'new', 'tail')
+    api.onHistory = () => histResponse(page, true)
+    const gate = deferred<Awaited<ReturnType<FakeApiClient['onHistory']>>>()
+    const retry = deferred<Awaited<ReturnType<FakeApiClient['onHistory']>>>()
+    try {
+      await session.open()
+      api.onHistory = () => gate.promise
+      const old = session.loadThrough(SessionSeq(0))
+      const replacement = session.resync()
+      api.onHistory = () => histResponse(page, true)
+      gate.resolve(err(new RemoteError('gateway/internal', 'old owner', {})))
+      await Promise.all([old, replacement])
+      expect(session.getSnapshot()).toMatchObject({ openState: 'open', loadingOlder: false, olderError: null })
+      expect(api.callsOf('session.history')).toHaveLength(1)
+      api.onHistory = () => retry.promise
+      const fresh = session.loadOlder()
+      expect(session.getSnapshot().loadingOlder).toBe(true)
+      retry.resolve(ok(historyValue(plainTurn(SessionSeq(0), 0, 'old', 'head'), false)))
+      await fresh
+      expect(session.getSnapshot()).toMatchObject({ loadingOlder: false, olderError: null, hasMore: false })
+    } finally {
+      gate.resolve(ok(historyValue([], false)))
+      retry.resolve(ok(historyValue([], false)))
+      await session.dispose()
+    }
+  })
+
+  it('does not reopen from a superseded resync after its pending page settles', async () => {
+    const { api, session } = makeSession()
+    const page = plainTurn(SessionSeq(6), 1, 'new', 'tail')
+    const gate = deferred<Awaited<ReturnType<FakeApiClient['onHistory']>>>()
+    api.onHistory = () => histResponse(page, true)
+    try {
+      await session.open()
+      api.onHistory = () => gate.promise
+      const pending = session.loadOlder()
+      const obsolete = session.resync()
+      api.onHistory = () => histResponse(page, true)
+      await session.resync()
+      const replacement = session.getSnapshot()
+      const starts = api.callsOf('session.follow').length
+      gate.resolve(ok(historyValue(plainTurn(SessionSeq(0), 0, 'old', 'head'), false)))
+      await Promise.all([pending, obsolete])
+      expect(api.callsOf('session.follow')).toHaveLength(starts)
+      expect(session.getSnapshot()).toBe(replacement)
+      expect(eventSeqs(session)).toEqual(page.map(event => event.seq))
+    } finally {
+      gate.resolve(ok(historyValue([], false)))
+      await session.dispose()
+    }
+  })
+
   it('prepends an older page and keeps seq continuity', async () => {
     const older = plainTurn(SessionSeq(0), 0, '旧问', '旧答')
     const newer = plainTurn(SessionSeq(6), 1, '新问', '新答')
@@ -389,13 +499,13 @@ describe('paging', () => {
     try {
       await session.loadThrough(SessionSeq(0))
       expect(errorSpy).toHaveBeenCalled()
-      expect(session.getSnapshot().loadingOlder).toBe(false)
+      expect(session.getSnapshot()).toMatchObject({ loadingOlder: false, olderError: { code: 'gateway/internal', message: 'page wire down' } })
     } finally {
       errorSpy.mockRestore()
     }
   })
 
-  it('ignores loadOlder while one is in flight (single request)', async () => {
+  it('shares loadOlder completion while one is in flight (single request)', async () => {
     const { api, session } = makeSession()
     api.onHistory = () => histResponse(plainTurn(SessionSeq(6), 1, 'x', 'y'), true)
     await session.open()
@@ -403,6 +513,7 @@ describe('paging', () => {
     api.onHistory = () => gate.promise
     const first = session.loadOlder()
     const second = session.loadOlder()
+    expect(second).toBe(first)
     gate.resolve(ok({
       records: entries(plainTurn(SessionSeq(0), 0, 'a', 'b')) as never[],
       hasMore: false,
@@ -715,7 +826,7 @@ describe('remaining branches', () => {
       api.onHistory = () => Promise.reject(new Error('page wire down'))
       await session.loadOlder()
       expect(errorSpy).toHaveBeenCalled()
-      expect(session.getSnapshot().loadingOlder).toBe(false)
+      expect(session.getSnapshot()).toMatchObject({ loadingOlder: false, olderError: { code: 'gateway/internal', message: 'page wire down' } })
     } finally {
       errorSpy.mockRestore()
     }

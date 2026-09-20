@@ -119,7 +119,8 @@ export interface ISession {
   rename(title: string): Promise<RemoteResult<{ title: string; seq: SessionSeq }>>
   /**
    * Extend the history window backwards (older messages pagination).
-   * @returns completion; failures land in snapshot.openState/loadingOlder.
+   * Repeated calls share one completion. Failures retain the accepted window and cursor.
+   * @returns completion; inspect snapshot.olderError for a failed read.
    */
   loadOlder(): Promise<void>
   /** Retry a failed history load. @returns completion of the new load. */
@@ -132,7 +133,7 @@ export interface ISession {
    * target and return the in-flight completion; `snapshot.loadingOlder` is
    * the busy signal for the whole jump.
    * @param seq - durable event seq the window must reach (a turn's `turn/start` seq).
-   * @returns completion once covered, exhausted, superseded, or failed soft.
+   * @returns completion once covered, exhausted, superseded, or failed; inspect snapshot.olderError.
    */
   loadThrough(seq: SessionSeq): Promise<void>
   /**

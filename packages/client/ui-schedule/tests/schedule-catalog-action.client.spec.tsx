@@ -59,7 +59,7 @@ function sessionSnapshot(openState: SessionSnapshot['openState']): SessionSnapsh
     openState,
     openError: null,
     hasMore: false,
-    loadingOlder: false,
+    loadingOlder: false, olderError: null,
     promptError: null,
     blank: false,
     lastAgentError: null,

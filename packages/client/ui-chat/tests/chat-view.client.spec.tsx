@@ -70,7 +70,7 @@ function sessionSnapshot(overrides: Partial<SessionSnapshot> = {}): SessionSnaps
     openState: 'open',
     openError: null,
     hasMore: false,
-    loadingOlder: false,
+    loadingOlder: false, olderError: null,
     promptError: null,
     blank: false,
     subagent: null,
