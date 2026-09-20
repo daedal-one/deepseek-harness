@@ -24,7 +24,7 @@ The trusted computing base is the digest-pinned image, rootless Podman Engine, t
 
 A later optional runtime can move the complete agent-facing desktop, browser, external tools, and child-agent processes into one isolated environment. That design requires a versioned host/sandbox control protocol for model calls, sessions, credentials, user interaction, artifacts, and UI streaming; explicit network egress mediation; and a secret broker that does not materialize host credentials in the sandbox. It is a deployment model rather than an extension of the filesystem/subprocess providers and remains outside this implementation.
 
-Per-Session local containers also remain separate work. The current filesystem and subprocess services are process-global, and agent presets share one standing composition. Per-Session worlds require one durable execution-environment selection plus atomic initiator-aware routing across both services and every agentless caller; permission presets cannot truthfully encode that selection.
+The [conversation-owned Git workspace proposal](2026-09-20-conversation-git-workspace.md) defines per-conversation routing, imported repository state, private recovery, and automatic branch return. The current filesystem and subprocess services are process-global, and agent presets share one standing composition. Per-Session worlds require one durable execution-environment selection plus atomic initiator-aware routing across both services and every agentless caller; permission presets cannot truthfully encode that selection.
 
 ## Performance evidence
 
