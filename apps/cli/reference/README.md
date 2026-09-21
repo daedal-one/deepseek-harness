@@ -19,6 +19,24 @@ dsh --profile rescue --from-default-profile web
 dsh --profile rescue
 ```
 
+### Host maintenance
+
+Set `dsh.profile.sandbox` to `false` in a separate host-backed profile's `package.json` to select `danger-full-access` sandbox and permission defaults with approval policy `never`. Omission and `true` preserve the authored composition. This setting applies after all patch layers in config dumps, initial boot, and live reload; changing the manifest requires relaunch. It changes defaults: saved user permission preferences and existing Session permission events remain authoritative, and the user can select a narrower permission preset.
+
+Create the profile without starting an agent:
+
+```sh
+dsh --profile host-maintenance --from-default-profile headless --dump-config
+```
+
+In `$DSH_HOME/profiles/host-maintenance/package.json`, add `"sandbox": false` inside `dsh.profile`, alongside `bundles` and `patchReload`. Inspect the result with `dsh --profile host-maintenance --dump-config`; the final policy layer is labelled `profile sandbox: false`. Launch tasks with `dsh --profile host-maintenance "task"`. The profile uses the invoking host directory and the host account's existing operating-system permissions; full access does not grant root. The same option works on a custom profile initialized from `web`.
+
+The option requires the enabled standard host filesystem, subprocess, and policy rows. A profile replacing those rows with container or remote providers rejects it before boot. Create the maintenance profile from a shipped template instead of copying a container profile's patches. A home-level container override also applies to the maintenance profile; keep container configuration in its own profile or use a separate Harness home. External tools retain their own policy enforcement.
+
+Agents have no tool that switches the running launch profile. An agent can request a handoff through the existing user-question tool or ask for a one-call wider permission through supported tool escalation. Escalation changes file policy within the current execution world; it cannot leave a container. Conversation presets are a separate tool-and-prompt choice and can change only before the session produces messages or tool calls. Host maintenance therefore starts a new session in the host profile with a task summary and any committed work to inspect.
+
+For self-updates, a systemd service outside the maintained harness owns build activation and restart. Keep the working release available, qualify the candidate on an alternate loopback port with separate state, and verify authenticated readiness after activation. Treat Session-data compatibility separately from process health when selecting a rollback release; never overwrite newer Session data with an older backup.
+
 ### App arguments
 
 The launcher's flags come first and end at the first token it does not recognize; everything from there on is handed to the booted profile verbatim through `ctx.cmdlineArgs`, where any injected app plugin may parse it ([`dsh-cmdline`](../../../packages/boot/cmdline/README.md)). `dsh --profile rescue --from-default-profile web --no-open` therefore initializes before handing `--no-open` to Web, `dsh --profile web --port 8080` reaches the web app's `--port`, `dsh --profile web --help` prints that app's help and boots nothing, and `dsh --help` (no profile to hand it to) prints the launcher's own. `-V`/`--version` prints the launcher's version when it appears before the app-argument boundary.

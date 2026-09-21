@@ -5,3 +5,6 @@ composition: default
 recording: live
 header:
   class: default
+permission: read-only
+workspace:
+  setup: host-maintenance-profile

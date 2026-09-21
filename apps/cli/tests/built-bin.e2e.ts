@@ -636,6 +636,32 @@ describe.skipIf(!existsSync(dshBin))('dsh BUILT bin (node lib/bin.js, no tsx)', 
     }
   })
 
+  it('dumps host-maintenance defaults and refuses a container profile through the published CLI', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'dsh-host-maintenance-'))
+    try {
+      const env = { DSH_HOME: home, DSH_TELEMETRY_DISABLED: '1' }
+      const args = ['--profile', 'host-maintenance', '--dump-config']
+      const created = await runBuiltBin([...args, '--from-default-profile', 'headless'], env)
+      expect(created.code).toBe(0)
+      const manifestPath = join(home, 'profiles', 'host-maintenance', 'package.json')
+      const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { dsh: { profile: { sandbox?: boolean } } }
+      manifest.dsh.profile.sandbox = false
+      writeFileSync(manifestPath, JSON.stringify(manifest))
+      const dumped = await runBuiltBin(args, env)
+      expect(dumped.code).toBe(0)
+      expect(dumped.stdout).toContain('profile sandbox: false')
+      const rows = yaml.load(dumped.stdout, { schema: entryListSchema }) as Array<{ id: string; config?: unknown }>
+      expect(rows.find(row => row.id === 'sandbox-policy')?.config).toMatchObject({ mode: 'danger-full-access' })
+      expect(rows.find(row => row.id === 'permission')?.config).toMatchObject({ defaultPreset: 'danger-full-access' })
+      writeFileSync(join(home, 'profiles', 'host-maintenance', 'cordis.patch.yml'), '- id: subprocess\n  disabled: true\n')
+      const refused = await runBuiltBin(args, env)
+      expect(refused.code).toBe(1)
+      expect(refused.stderr).toContain('launch a separate host profile')
+    } finally {
+      rmSync(home, { recursive: true, force: true })
+    }
+  }, SPAWN_TIMEOUT_MS * 3 + 30_000)
+
   it('fails loud on a nonexistent profile with the plugin-command hint', async () => {
     const home = mkdtempSync(join(tmpdir(), 'dsh-missing-profile-'))
     try {

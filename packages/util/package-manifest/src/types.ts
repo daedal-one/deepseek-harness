@@ -35,6 +35,8 @@ export interface DshProfileManifest {
   bundles?: string[]
   /** User patch lifecycle; omitted means `live` for custom profiles. */
   patchReload?: ProfilePatchReload
+  /** False selects full-access defaults on host-backed profiles; omitted or true preserves composition policy. */
+  sandbox?: boolean
 }
 
 /** Whether user patch files reload while a profile remains active or apply only at startup. */
