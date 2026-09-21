@@ -37,6 +37,8 @@ const dsh: DshManifest = {
 
 `DshManifest` describes `bundle`, `profile`, `client`, `configTrees`, `sessionFormatMigration`, and `moduleFallback`, not the surrounding npm manifest. `moduleFallback` is launcher-generated metadata and is not an author configuration entry. TypeScript checks this object and erases `import type` during compilation; JSON files cannot import types, and this example does not write a `package.json`. See [`src/types.ts`](src/types.ts) for the declarations.
 
+`DshProfileManifest.sandbox` is an optional boolean interpreted by the [CLI host-maintenance policy](../../../apps/cli/reference/README.md#host-maintenance). Profile readers validate it when loading JSON.
+
 -----
 
 <a id="understand-the-implementation"></a>

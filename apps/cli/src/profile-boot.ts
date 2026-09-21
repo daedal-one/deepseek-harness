@@ -37,6 +37,7 @@ import { installProxyFromEnvironment } from '@deepseek-ai/dsh-http-proxy'
 import { DSH_LAUNCH_ENVIRONMENT_KEY, type LaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import { provideCmdline, type AppReady } from '@deepseek-ai/dsh-cmdline'
 import { createProcessShutdown, type ProcessShutdown } from './process-shutdown.ts'
+import { profileSandboxPatches } from './profile-sandbox.ts'
 
 const NAME = 'dsh'
 
@@ -204,12 +205,13 @@ interface ComposedProfile {
 
 /** The full patch stack of one composed profile, in application order. */
 function allPatches(composed: ComposedProfile): PatchOptions[] {
-  return [
+  const patches = [
     ...composed.bundlePatches,
     ...composed.profile.patches,
     ...composed.homePatches,
     ...composed.overlays,
   ]
+  return [...patches, ...profileSandboxPatches(composed.profile.sandbox, patches)]
 }
 
 /**
@@ -325,12 +327,15 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
   // objects in place. Reusing one parsed patch object across applications
   // would bake a user override into the bundle's in-memory insert row, so
   // removing the override could never revert the row to the bundle default.
-  const composeLive = (): PatchOptions[] => structuredClone([
-    ...composed.bundlePatches,
-    ...loadOptionalPatches(NAME, composed.profile.patchPath) ?? [],
-    ...loadOptionalPatches(NAME, homePatchPath()) ?? [],
-    ...composed.overlays,
-  ])
+  const composeLive = (): PatchOptions[] => {
+    const patches = [
+      ...composed.bundlePatches,
+      ...loadOptionalPatches(NAME, composed.profile.patchPath) ?? [],
+      ...loadOptionalPatches(NAME, homePatchPath()) ?? [],
+      ...composed.overlays,
+    ]
+    return structuredClone([...patches, ...profileSandboxPatches(composed.profile.sandbox, patches)])
+  }
   // Cloned for the same insert-aliasing reason as composeLive: the boot
   // application must not mutate the objects later reloads recompose from.
   const ctx = await boot(NAME, rootConfig, structuredClone(allPatches(composed)), (hostCtx) => {

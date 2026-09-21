@@ -77,6 +77,8 @@ export interface ProfileLayer {
 
 /** A loaded profile: resolved bundle layers plus the user's own patch layer. */
 export interface Profile {
+  /** False selects host full-access defaults at launch; absent preserves the configured policy. */
+  sandbox?: boolean
   /** The profile name (its directory basename). */
   name: string
   /** Absolute profile directory. */
@@ -785,6 +787,10 @@ export function loadProfileDirectory(
 ): Profile {
   const manifest = readProfileManifest(binName, dir)
   const bundles = manifest.dsh?.profile?.bundles ?? []
+  const sandbox: unknown = manifest.dsh?.profile?.sandbox
+  if (sandbox !== undefined && typeof sandbox !== 'boolean') {
+    throw new Error(`${binName}: profile manifest ${join(dir, 'package.json')} dsh.profile.sandbox must be a boolean`)
+  }
   const rawPatchReload: unknown = manifest.dsh?.profile?.patchReload
   if (rawPatchReload !== undefined && rawPatchReload !== 'live' && rawPatchReload !== 'startup') {
     throw new Error(
@@ -806,7 +812,7 @@ export function loadProfileDirectory(
   const patches = options.userLayer !== false && existsSync(patchPath)
     ? loadOverlayPatches(binName, patchPath)
     : []
-  return { name: basename(dir), dir, layers, patchPath, patches, patchReload }
+  return { name: basename(dir), dir, layers, patchPath, patches, patchReload, ...sandbox === undefined ? {} : { sandbox } }
 }
 
 /**

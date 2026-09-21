@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import ts from 'typescript'
 import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
+import { initProfile, PROFILE_TEMPLATES, readProfileManifest, writeProfileManifest } from '@deepseek-ai/dsh-app-boot'
 import { releasedV0SessionFormatCodec } from '@deepseek-ai/dsh-session-format-v0-to-v1'
 import type { SessionFormatEvent, SessionFormatMigrationContext } from '@deepseek-ai/dsh-session-format'
 import { assertWorkspaceOutsideTemp, outsideTempWorkspaceParent } from '../../scripts/snapshot-workspace-parent.ts'
@@ -459,6 +460,13 @@ async function seedWorkspace(scenario: HeadlessScenario, cwd: string): Promise<v
 }
 
 const workspaceSetups: Record<string, (cwd: string) => Promise<void>> = {
+  async 'host-maintenance-profile'(cwd) {
+    const dir = join(cwd, '.dsh', 'profiles', 'headless')
+    const template = PROFILE_TEMPLATES['headless']!
+    initProfile(dir, template.bundles, template.patchReload)
+    const manifest = readProfileManifest('snapshot', dir)
+    writeProfileManifest(dir, { ...manifest, dsh: { ...manifest.dsh, profile: { ...manifest.dsh?.profile, sandbox: false } } })
+  },
   async 'editing-cordis-skill'(cwd) {
     const target = join(cwd, '.dsh', 'skills', 'editing-cordis-compositions', 'SKILL.md')
     await mkdir(dirname(target), { recursive: true })

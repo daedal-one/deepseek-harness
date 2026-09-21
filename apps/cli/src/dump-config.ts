@@ -15,6 +15,7 @@ import {
   type ConfigDumpLayer,
 } from '@deepseek-ai/dsh-app-boot'
 import { homePatchPath, prepareProfile, PROFILE_ROOT_FILENAME } from './profile-boot.ts'
+import { profileSandboxPatches } from './profile-sandbox.ts'
 
 const NAME = 'dsh'
 
@@ -54,6 +55,8 @@ export function runDumpConfig(
     }
   }
   // The dump anchors on the same empty root file the boot includes.
+  const sandboxPatches = profileSandboxPatches(loaded.sandbox, layers.flatMap(layer => layer.patches))
+  if (sandboxPatches.length > 0) layers.push({ label: 'profile sandbox: false', patches: sandboxPatches })
   process.stdout.write(renderConfigDump(NAME, join(loaded.dir, PROFILE_ROOT_FILENAME), layers))
 }
 /* v8 ignore stop */

@@ -43,6 +43,8 @@ Bundles named in `dsh.profile.bundles` resolve from the dsh installation first (
 
 Use `--dump-default-config` and `--dump-config` to inspect the composed tree without booting it.
 
+For deliberate host operations, set `dsh.profile.sandbox: false` in a separate host-backed profile. This selects full-access defaults without changing other profiles or moving container execution onto the host. See [host maintenance](reference/README.md#host-maintenance) for setup, permission precedence, and agent handoff.
+
 The [CLI behavior reference](reference/README.md) owns exact layer precedence, flags, shutdown behavior, deployment defaults, and source execution.
 
 ## Optional overlays

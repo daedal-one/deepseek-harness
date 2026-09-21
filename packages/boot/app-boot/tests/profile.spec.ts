@@ -164,6 +164,19 @@ describe('resolveBundleDir', () => {
 })
 
 describe('loadProfile', () => {
+  it.each([undefined, true, false])('loads the optional sandbox setting %s', (sandbox) => {
+    const anchor = stageInstallation({ 'bundle-a': { patch: '[]\n' } })
+    const dir = tmp()
+    writeProfileManifest(dir, { dsh: { profile: { bundles: ['bundle-a'], ...sandbox === undefined ? {} : { sandbox } } } })
+    expect(loadProfileDirectory('test', dir, anchor).sandbox).toBe(sandbox)
+  })
+
+  it.each(['false', null, 0, {}])('rejects a non-boolean sandbox setting %j', (sandbox) => {
+    const dir = tmp()
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ dsh: { profile: { sandbox } } }))
+    expect(() => loadProfileDirectory('test', dir, join(dir, 'package.json'))).toThrow('dsh.profile.sandbox must be a boolean')
+  })
+
   it('loads an explicitly owned profile directory outside CLI discovery', () => {
     const anchor = stageInstallation({ 'bundle-a': { patch: '[]\n' } })
     const dir = join(tmp(), 'managed', 'desktop')
