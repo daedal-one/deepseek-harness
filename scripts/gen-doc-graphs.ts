@@ -99,6 +99,14 @@ const GROUP_ORDER = [
 
 const SERVICE_ROLES: ServiceRole[] = [
   {
+    key: 'developmentVms',
+    pkg: 'local-container-runtime',
+    title: 'Conversation development VM lifecycle',
+    mode: 'core',
+    consumers: ['local-container-runtime'],
+    note: 'Opt-in guest execution, source writer barriers, and durable Docker storage for conversation workspaces.',
+  },
+  {
     key: 'conversationWorkspaces',
     pkg: 'local-container-runtime',
     title: 'Conversation Git workspace lifecycle',

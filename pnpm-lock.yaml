@@ -8033,10 +8033,19 @@ importers:
       dockerode:
         specifier: ^5.0.1
         version: 5.0.1(supports-color@9.4.0)
+      tldts:
+        specifier: ^7.4.5
+        version: 7.4.5
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:^
         version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-client-connection':
+        specifier: workspace:^
+        version: link:../../client/connection
+      '@deepseek-ai/dsh-host-webserver':
+        specifier: workspace:^
+        version: link:../../host/webserver
       '@deepseek-ai/dsh-session-persistence':
         specifier: workspace:^
         version: link:../../session/session-persistence

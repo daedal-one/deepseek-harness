@@ -44,6 +44,7 @@ export { REGION_BEGIN, REGION_END }
 export const SERVICE_PAGE: Record<string, string> = {
   localContainerRuntime: 'sandbox.md',
   conversationWorkspaces: 'sandbox.md',
+  developmentVms: 'sandbox.md',
   agentLoop: 'core.md',
   agentModels: 'core.md',
   agentPresets: 'core.md',
@@ -400,6 +401,8 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   SubprocessTerminalSpawnSpec: 'subprocess.md',
   LocalContainerHandle: 'sandbox.md',
   LocalContainerRuntime: 'sandbox.md',
+  WorkspaceExecutionRuntime: 'sandbox.md',
+  ConversationWorkspaceId: 'sandbox.md',
   PodmanControllerExecRequest: 'sandbox.md',
   PodmanControllerExecResult: 'sandbox.md',
   LocalContainerProcessHandle: 'sandbox.md',

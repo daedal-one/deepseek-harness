@@ -238,6 +238,10 @@ export interface LocalContainerProcessHandle {
   signal(signal: string): Promise<void>
   /** Idempotently stop and remove the complete process container. */
   terminate(): Promise<void>
+  /** Guest terminal inspection when the entry process is not namespace PID 1. */
+  inspectTerminalForeground?(): Promise<{ processGroupId: number; inputWaiting: boolean } | undefined>
+  /** Signal the current guest foreground group without exposing a host PID. */
+  signalTerminalForeground?(signal: string): Promise<number>
   /** Wait for complete container removal, optionally bounded by a caller signal. */
   waitForRemoval(signal?: AbortSignal): Promise<boolean>
 }
@@ -334,4 +338,32 @@ export interface LocalContainerDiagnostics {
   readonly containerName: string
   /** Engine-assigned id after creation. */
   readonly containerId: string | undefined
+}
+
+/** Execution operations consumed by conversation filesystem and subprocess adapters. */
+export interface WorkspaceExecutionRuntime {
+  /** Opaque world identity shared by its consumers. */
+  readonly executionWorld: object
+  /** Owner-generated namespace used by filesystem targets. */
+  readonly containerName: string
+  /** Execute a bounded controller in this world's filesystem. */
+  executeController(request: PodmanControllerExecRequest & { readonly deadlineMs: number }): Promise<PodmanControllerExecResult>
+  /** Allocate an attached process in this world. */
+  createProcess(request: LocalContainerProcessRequest): Promise<LocalContainerProcessHandle>
+  /** Establish exclusive source maintenance; reopen only after success. */
+  settle<T>(
+    timeoutMs: number,
+    operation: (control: (
+      request: PodmanControllerExecRequest & { readonly deadlineMs: number },
+    ) => Promise<PodmanControllerExecResult>) => Promise<T>,
+    quiesce?: () => Promise<void>,
+  ): Promise<T>
+  /** Stop active writers before shutdown checkpointing. */
+  cancelProcesses(): Promise<void>
+  /** Connect a user preview to one validated guest-loopback port. */
+  connectPreview?(port: number): Promise<Duplex>
+  /** Retain development data associated with a source checkpoint, if present. */
+  checkpoint?(generation: number): Promise<void>
+  /** Prune superseded development data only after durable source acknowledgement. */
+  pruneCheckpoints?(generation: number): Promise<void>
 }

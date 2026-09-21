@@ -180,12 +180,12 @@ runForSession<T>(sessionId: SessionId, operation: () => T): T
 /** Capture the exact initiating conversation's world for one operation.
  * @returns an operation-local runtime; missing ownership rejects rather than using another workspace.
  */
-capture(): LocalContainerRuntime
+capture(): WorkspaceExecutionRuntime
 
 /** Resolve the executable lookup world before launching a process.
  * @returns the conversation world when attributed, otherwise the verified boot toolchain.
  */
-resolveToolchain(): LocalContainerRuntime
+resolveToolchain(): WorkspaceExecutionRuntime
 
 /** Resolve source path aliases only for the initiating conversation.
  * @param path - source or execution path.
@@ -197,6 +197,32 @@ executionPath(path: string): string
 Types: [SessionId](core.md)
 
 Source: [`packages/sandbox/local-container-runtime/src/workspaces.ts`](../../packages/sandbox/local-container-runtime/src/workspaces.ts)
+
+<a id="ctxdevelopmentvms--developmentvms"></a>
+
+### `ctx.developmentVms` — `DevelopmentVms`
+
+Adds durable VM execution to supervisor-owned conversation workspaces.
+
+```ts cordis-catalog
+/** Quiesce a retained guest before the workspace owner touches its RAM slot.
+ * @param id - workspace identity derived by the trusted supervisor.
+ */
+async recover(id: ConversationWorkspaceId): Promise<void>
+
+/** Bind a prepared repository to its conversation's retained development VM.
+ * @param base - isolated maintenance controller for the private source directory.
+ * @param id - supervisor-derived workspace identity.
+ * @param directory - prepared, private memory-backed source directory.
+ * @param generation - acknowledged source recovery generation.
+ * @param retained - whether unacknowledged RAM source survived and is still owned.
+ * @param required - whether durable recovery already acknowledges this VM.
+ * @returns runtime and disposer; disposal retains durable guest storage.
+ */
+async open( base: WorkspaceExecutionRuntime, id: ConversationWorkspaceId, directory: string, generation: number, retained: boolean, required: boolean, ): Promise<{ runtime: WorkspaceExecutionRuntime; dispose(): Promise<void> }>
+```
+
+Source: [`packages/sandbox/local-container-runtime/src/vm.ts`](../../packages/sandbox/local-container-runtime/src/vm.ts)
 
 <a id="ctxlocalcontainerruntime--localcontainerruntime"></a>
 
@@ -334,3 +360,5 @@ Source: [`packages/sandbox/local-container-runtime/src/index.ts`](../../packages
 The optional [runtime owner](../../packages/sandbox/local-container-runtime/README.md) supplies a verified process-owned workspace to matching filesystem and subprocess providers. `LocalContainerHandle` identifies the owner and canonical workspace; `PodmanControllerExecRequest` and `PodmanControllerExecResult` define bounded controller input, output, cancellation, and deadlines. `LocalContainerProcessRequest` supplies an explicit process, environment, cwd, and terminal dimensions, while `LocalContainerProcessHandle` owns its streams, exit observation, signalling, and removal. The [type declarations](../../packages/sandbox/local-container-runtime/src/types.ts) define these provider-facing values.
 
 The optional conversation-workspace service owns import, recovery, residual commits, and branch return. `ConversationWorkspaceId` identifies one private repository; `WorkspaceState` records its save phase, acknowledged checkpoint, baseline commit, and returned refs independently of `turn/end`. The [shared declarations](../../packages/sandbox/local-container-runtime/src/workspace-types.ts) define the durable receipt; the [configuration and lifecycle](../../packages/sandbox/local-container-runtime/README.md#conversation-repositories) define ownership and limits.
+
+The opt-in development VM provider implements `WorkspaceExecutionRuntime` for conversation-owned Linux guests. Filesystem, subprocess, terminal, and preview operations share its execution-world identity. Its optional checkpoint methods pair durable VM disks with source recovery generations; the [runtime declarations](../../packages/sandbox/local-container-runtime/src/types.ts) own this interface. The [development VM reference](../../packages/sandbox/local-container-runtime/README.md#development-vms) defines host configuration, save barriers, networking, and preview authentication.

@@ -25,6 +25,7 @@ import type {
 } from '@deepseek-ai/dsh-subprocess'
 import type {
   LocalContainerProcessHandle,
+  WorkspaceExecutionRuntime,
   LocalContainerProcessRequest,
 } from '@deepseek-ai/dsh-local-container-runtime'
 import { WORKSPACE_PATH } from '@deepseek-ai/dsh-local-container-runtime'
@@ -87,7 +88,7 @@ class TailCollector implements SubprocessOutputReader {
     return { text, nextOffset: this.total, lossy, ...this.spillPath === undefined ? {} : { spillPath: this.spillPath } }
   }
 
-  async seal(runtime: Context['localContainerRuntime'], label: 'stdout' | 'stderr', timeoutMs: number): Promise<void> {
+  async seal(runtime: WorkspaceExecutionRuntime, label: 'stdout' | 'stderr', timeoutMs: number): Promise<void> {
     if (this.full === undefined || this.total <= this.mode.maxBytes) return
     const path = `${WORKSPACE_PATH}/.dsh-spill/${randomUUID()}-${label}.log`
     const result = await runtime.executeController({
@@ -113,7 +114,7 @@ interface OutputBinding {
 function outputBinding(
   mode: SubprocessSpawnSpec['stdio']['stdout'],
   inherited: NodeJS.WriteStream,
-  runtime: Context['localContainerRuntime'],
+  runtime: WorkspaceExecutionRuntime,
   label: 'stdout' | 'stderr',
   timeoutMs: number,
 ): OutputBinding {
@@ -148,7 +149,7 @@ class ContainerSubprocessHandle implements SubprocessHandle {
   private terminateRequested = false
 
   constructor(
-    private readonly runtime: Context['localContainerRuntime'],
+    private readonly runtime: WorkspaceExecutionRuntime,
     private readonly spec: SubprocessSpawnSpec,
     config: Config,
   ) {
@@ -240,6 +241,7 @@ class ContainerTerminalHandle implements SubprocessTerminalHandle {
   }
 
   async inspectForeground(): Promise<SubprocessTerminalForeground | undefined> {
+    if (this.process.inspectTerminalForeground !== undefined) return await this.process.inspectTerminalForeground()
     const result = await this.process.inspect([
       '/bin/sh', '-c', 'p=$(ps -o tpgid= -p 1 | tr -d " "); test -n "$p" && printf "%s %s" "$p" "1"',
     ], this.controlOutputBytes)
@@ -250,6 +252,7 @@ class ContainerTerminalHandle implements SubprocessTerminalHandle {
   }
 
   async signalForeground(signal: SubprocessTerminalSignal): Promise<number> {
+    if (this.process.signalTerminalForeground !== undefined) return await this.process.signalTerminalForeground(signal)
     const foreground = await this.inspectForeground()
     if (foreground === undefined) throw new Error('subprocess-local-container: terminal foreground process group is unavailable')
     if (foreground.processGroupId === 1) {

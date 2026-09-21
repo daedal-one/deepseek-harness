@@ -12,7 +12,8 @@ import type {} from '@deepseek-ai/dsh-session-persistence'
 import type { Session, SessionId, TurnEndReason } from '@deepseek-ai/dsh-session'
 import { BlockAssembler, createUserMessage } from '@deepseek-ai/dsh-llm'
 import { tryLockExclusive } from '@deepseek-ai/node-addon-system/flock'
-import type { LocalContainerRuntime } from './index.ts'
+import type { WorkspaceExecutionRuntime } from './types.ts'
+import type {} from './vm.ts'
 import type { PodmanControllerExecRequest, PodmanControllerExecResult } from './types.ts'
 import { WORKSPACE_CONTROLLER } from './workspace-controller.ts'
 import { installWorkspaceGuidance } from './workspace-guidance.ts'
@@ -76,6 +77,7 @@ interface RecordState {
   checkpoint: number
   checkpointHash: string
   slot?: string
+  developmentVm?: string
   transaction?: Transaction
   lastTurn: number
   branches: Record<string, string>
@@ -86,7 +88,7 @@ interface Workspace {
   record: RecordState
   directory: string
   slot: string
-  runtime: LocalContainerRuntime
+  runtime: WorkspaceExecutionRuntime
   dispose(): Promise<void>
   leases: FileHandle[]
   pending: boolean
@@ -191,12 +193,12 @@ export class ConversationWorkspaces extends Service {
   /** Capture the exact initiating conversation's world for one operation.
    * @returns an operation-local runtime; missing ownership rejects rather than using another workspace.
    */
-  capture(): LocalContainerRuntime { return this.forAgent(this.ctx.agents.requireInitiator()).runtime }
+  capture(): WorkspaceExecutionRuntime { return this.forAgent(this.ctx.agents.requireInitiator()).runtime }
 
   /** Resolve the executable lookup world before launching a process.
    * @returns the conversation world when attributed, otherwise the verified boot toolchain.
    */
-  resolveToolchain(): LocalContainerRuntime {
+  resolveToolchain(): WorkspaceExecutionRuntime {
     return this.ctx.agents.currentInitiator() === undefined ? this.ctx.localContainerRuntime : this.capture()
   }
 
@@ -252,11 +254,13 @@ export class ConversationWorkspaces extends Service {
     const workspaceId = brandString<ConversationWorkspaceId>(createHash('sha256').update(agent.id).digest('hex').slice(0, 32))
     const directory = join(this.config.recoveryRoot, workspaceId); await mkdir(directory, { mode: 0o700, recursive: true })
     const leases: FileHandle[] = [await this.lease(join(directory, 'lease'))]
-    let owned: Awaited<ReturnType<LocalContainerRuntime['createWorkspace']>> | undefined
+    let owned: { runtime: WorkspaceExecutionRuntime; dispose(): Promise<void> } | undefined
     try {
       let record: RecordState | undefined
       try { record = parseRecord(await readWorkspaceJson(join(directory, 'state.json'), this.config.maxOutputBytes), workspaceId, agent.id) }
       catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
+      const vms = this.ctx.get('developmentVms')
+      if (record?.developmentVm !== undefined && record.developmentVm !== vms?.identity) throw new Error('workspace requires its recorded development VM provider')
       const recorded = agent.session.snapshotEvents().some(event => event.type === 'workspace/state' && event.data.workspaceId === workspaceId)
       if (record === undefined && recorded) throw new Error('workspace recovery is missing; refusing to import a replacement')
       let slot: string | undefined
@@ -279,6 +283,7 @@ export class ConversationWorkspaces extends Service {
       }
       if (slot === undefined) throw new Error('all configured RAM workspace slots are in use')
       const backing = join(slot, 'workspace')
+      await vms?.recover(workspaceId)
       await this.ctx.localContainerRuntime.recoverWorkspace(backing)
       let entries: WorkspaceEntry[]
       if (record === undefined) {
@@ -313,6 +318,13 @@ export class ConversationWorkspaces extends Service {
       if (!retained) {
         await this.control(owned.runtime.executeController.bind(owned.runtime), 'restore', { entries })
         await this.publish(join(slot, 'owner.json'), { workspaceId, clean: false, initialized: true })
+      }
+      if (vms !== undefined) {
+        const base = owned
+        const guest = await vms.open(base.runtime, workspaceId, backing, record.checkpoint, retained, record.developmentVm !== undefined)
+        owned = { runtime: guest.runtime, dispose: async () => { await guest.dispose(); await base.dispose() } }
+        record.developmentVm = vms.identity
+        await this.publish(join(directory, 'state.json'), record)
       }
       const workspace: Workspace = { owner: agent,
         users: new Set([agent]),
@@ -403,9 +415,11 @@ export class ConversationWorkspaces extends Service {
     const entries = validateWorkspaceEntries(captured.entries, this.config)
     const generation = workspace.record.checkpoint + 1
     await this.publish(join(workspace.directory, `checkpoint-${generation}.json`), { entries })
+    await workspace.runtime.checkpoint?.(generation)
     workspace.record.checkpoint = generation
     workspace.record.checkpointHash = checkpointHash(entries)
     await this.saveRecord(workspace)
+    await workspace.runtime.pruneCheckpoints?.(generation)
     for (const name of await readdir(workspace.directory)) {
       const match = /^checkpoint-(\d+)\.json$/u.exec(name)
       if (match !== null && Number(match[1]) < generation - 1) await rm(join(workspace.directory, name))
@@ -548,6 +562,7 @@ function parseRecord(value: unknown, workspaceId: ConversationWorkspaceId, sessi
   if (!isObject(value) || value.version !== 1 || value.workspaceId !== workspaceId || value.sessionId !== sessionId || typeof value.source !== 'string' || !isAbsolute(value.source)
     || typeof value.checkpoint !== 'number' || !Number.isSafeInteger(value.checkpoint) || value.checkpoint < 1 || typeof value.lastTurn !== 'number' || !Number.isSafeInteger(value.lastTurn) || value.lastTurn < 0
     || typeof value.sourceStatus !== 'string' || typeof value.stagedPatch !== 'string' || !isObject(value.branches)) throw new Error('corrupt workspace recovery manifest')
+  if (value.developmentVm !== undefined && (typeof value.developmentVm !== 'string' || !/^[a-z][a-z0-9-]{0,62}\/[a-z][a-z0-9-]{0,62}$/u.test(value.developmentVm))) throw new Error('corrupt workspace VM identity')
   requireOid(value.sourceHead); requireOid(value.baseline)
   if (typeof value.checkpointHash !== 'string' || !/^[a-f0-9]{64}$/u.test(value.checkpointHash)) throw new Error('corrupt workspace checkpoint digest')
   for (const hash of Object.values(value.branches)) requireOid(hash)

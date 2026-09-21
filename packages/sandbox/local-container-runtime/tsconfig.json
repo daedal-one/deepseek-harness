@@ -37,6 +37,9 @@
     },
     {
       "path": "../../util/brand"
+    },
+    {
+      "path": "../../client/connection/tsconfig.host.json"
     }
   ]
 }

@@ -14,6 +14,8 @@ The opt-in `/workspaces` plugin implements [conversation Git workspace intent](.
 
 This decision extends the [local container execution-world proposal](../../proposed/architecture/2026-09-18-local-container-execution-world.md). Its container isolation, replacement environment, process-range ownership, and external-effect authorization remain applicable. Conversation routing and recoverable storage replace its initial single-world, empty-volume lifecycle only when this new composition is selected. The older proposal remains active because those isolation decisions are not superseded.
 
+The [development VM decision](2026-09-21-conversation-development-vm.md) extends execution and service lifetime while retaining this Git transaction owner.
+
 ## Coding-agent experience
 
 The agent starts in `/workspace` with repository contents, usable Git history, a normal task branch, and an explicitly configured non-secret commit identity. All reported working directories, tool paths, project instruction discovery, and repository inspection refer to that execution namespace. The host retains the source repository identity separately. Global instruction configuration points inside `/workspace/.dsh`; the host home is never mounted. Project instructions are read from the imported workspace so edits and nested discovery stay coherent.

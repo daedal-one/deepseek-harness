@@ -30,6 +30,14 @@
     },
     "./workspace-types": {
       "types": "./lib/types/workspace-types.d.ts"
+    },
+    "./vm": {
+      "types": "./lib/types/vm.d.ts",
+      "default": "./lib/vm.js"
+    },
+    "./vm-previews": {
+      "types": "./lib/types/vm-previews.d.ts",
+      "default": "./lib/vm-previews.js"
     }
   },
   "files": [
@@ -37,6 +45,8 @@
     "lib/startup.js",
     "Containerfile",
     "lib/workspaces.js",
+    "lib/vm.js",
+    "lib/vm-previews.js",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
@@ -52,10 +62,13 @@
     "@deepseek-ai/dsh-llm": "workspace:^",
     "@deepseek-ai/dsh-system-prompt": "workspace:^",
     "@deepseek-ai/node-addon-system": "workspace:^",
-    "@deepseek-ai/dsh-brand": "workspace:^"
+    "@deepseek-ai/dsh-brand": "workspace:^",
+    "tldts": "^7.4.5"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
-    "@deepseek-ai/dsh-session-persistence": "workspace:^"
+    "@deepseek-ai/dsh-session-persistence": "workspace:^",
+    "@deepseek-ai/dsh-client-connection": "workspace:^",
+    "@deepseek-ai/dsh-host-webserver": "workspace:^"
   }
 }

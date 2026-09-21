@@ -811,13 +811,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the operation result; cold conversations must be opened first.',
       },
       {
-        signature: 'capture(): LocalContainerRuntime',
+        signature: 'capture(): WorkspaceExecutionRuntime',
         description: 'Capture the exact initiating conversation\'s world for one operation.',
         parameters: [],
         returns: 'an operation-local runtime; missing ownership rejects rather than using another workspace.',
       },
       {
-        signature: 'resolveToolchain(): LocalContainerRuntime',
+        signature: 'resolveToolchain(): WorkspaceExecutionRuntime',
         description: 'Resolve the executable lookup world before launching a process.',
         parameters: [],
         returns: 'the conversation world when attributed, otherwise the verified boot toolchain.',
@@ -936,6 +936,24 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Prepare every currently registered field from one immutable base request. Preparation failures reject before HTTP dispatch. Field values are cloned and frozen; providers retain no mutable alias to the outgoing request.',
         parameters: [{ name: 'request', description: 'exact serialized request facts before extension fields.' }],
         returns: 'detached fields and their idempotent joint acceptance transaction.',
+      },
+    ],
+  },
+  {
+    key: 'developmentVms',
+    summary: 'Adds durable VM execution to supervisor-owned conversation workspaces.',
+    description: 'Adds durable VM execution to supervisor-owned conversation workspaces.',
+    methods: [
+      {
+        signature: 'async recover(id: ConversationWorkspaceId): Promise<void>',
+        description: 'Quiesce a retained guest before the workspace owner touches its RAM slot.',
+        parameters: [{ name: 'id', description: 'workspace identity derived by the trusted supervisor.' }],
+      },
+      {
+        signature: 'async open( base: WorkspaceExecutionRuntime, id: ConversationWorkspaceId, directory: string, generation: number, retained: boolean, required: boolean, ): Promise<{ runtime: WorkspaceExecutionRuntime; dispose(): Promise<void> }>',
+        description: 'Bind a prepared repository to its conversation\'s retained development VM.',
+        parameters: [{ name: 'base', description: 'isolated maintenance controller for the private source directory.' }, { name: 'id', description: 'supervisor-derived workspace identity.' }, { name: 'directory', description: 'prepared, private memory-backed source directory.' }, { name: 'generation', description: 'acknowledged source recovery generation.' }, { name: 'retained', description: 'whether unacknowledged RAM source survived and is still owned.' }, { name: 'required', description: 'whether durable recovery already acknowledges this VM.' }],
+        returns: 'runtime and disposer; disposal retains durable guest storage.',
       },
     ],
   },
@@ -4349,6 +4367,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ContinuableSubagentDescriptorData extends SubagentDescriptorBase {\n    readonly mode: \'continuable\';\n    readonly label: string;\n    readonly agentProvider?: string;\n    readonly agentModel?: string;\n    readonly agentReasoningEffort?: ReasoningEffortId;\n    readonly persona?: string;\n    readonly toolFilter?: ToolRestriction;\n}',
   },
   {
+    name: 'ConversationWorkspaceId',
+    declaration: 'export type ConversationWorkspaceId = Branded<\'ConversationWorkspaceId\'>;',
+  },
+  {
     name: 'CordisDynamicPackageId',
     declaration: 'export type CordisDynamicPackageId = Branded<\'CordisDynamicPackageId\'>;',
   },
@@ -4974,7 +4996,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LocalContainerProcessHandle',
-    declaration: 'export interface LocalContainerProcessHandle {\n    readonly id: string;\n    readonly stream: Duplex;\n    readonly tty: boolean;\n    readonly done: Promise<{\n        exitCode: number | null;\n        error?: string;\n    }>;\n    resize(rows: number, cols: number): Promise<void>;\n    inspect(argv: readonly string[], maxOutputBytes: number): Promise<{\n        exitCode: number;\n        output: string;\n    }>;\n    signal(signal: string): Promise<void>;\n    terminate(): Promise<void>;\n    waitForRemoval(signal?: AbortSignal): Promise<boolean>;\n}',
+    declaration: 'export interface LocalContainerProcessHandle {\n    readonly id: string;\n    readonly stream: Duplex;\n    readonly tty: boolean;\n    readonly done: Promise<{\n        exitCode: number | null;\n        error?: string;\n    }>;\n    resize(rows: number, cols: number): Promise<void>;\n    inspect(argv: readonly string[], maxOutputBytes: number): Promise<{\n        exitCode: number;\n        output: string;\n    }>;\n    signal(signal: string): Promise<void>;\n    terminate(): Promise<void>;\n    inspectTerminalForeground?(): Promise<{\n        processGroupId: number;\n        inputWaiting: boolean;\n    } | undefined>;\n    signalTerminalForeground?(signal: string): Promise<number>;\n    waitForRemoval(signal?: AbortSignal): Promise<boolean>;\n}',
   },
   {
     name: 'LocalContainerProcessRequest',
@@ -7023,6 +7045,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'WorkspaceDirectoryListing',
     declaration: 'export interface WorkspaceDirectoryListing {\n    readonly path: string;\n    readonly entries: readonly WorkspaceDirectoryEntry[];\n    readonly truncated: boolean;\n}',
+  },
+  {
+    name: 'WorkspaceExecutionRuntime',
+    declaration: 'export interface WorkspaceExecutionRuntime {\n    readonly executionWorld: object;\n    readonly containerName: string;\n    executeController(request: PodmanControllerExecRequest & {\n        readonly deadlineMs: number;\n    }): Promise<PodmanControllerExecResult>;\n    createProcess(request: LocalContainerProcessRequest): Promise<LocalContainerProcessHandle>;\n    settle<T>(timeoutMs: number, operation: (control: (request: PodmanControllerExecRequest & {\n        readonly deadlineMs: number;\n    }) => Promise<PodmanControllerExecResult>) => Promise<T>, quiesce?: () => Promise<void>): Promise<T>;\n    cancelProcesses(): Promise<void>;\n    connectPreview?(port: number): Promise<Duplex>;\n    checkpoint?(generation: number): Promise<void>;\n    pruneCheckpoints?(generation: number): Promise<void>;\n}',
   },
   {
     name: 'WorkspaceFileBytes',

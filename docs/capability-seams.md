@@ -8,6 +8,7 @@ A service can be a core spine service, a swappable capability seam, or a bundle/
 ```mermaid
 flowchart LR
   pkg_local_container_runtime["local-container-runtime"]
+  svc_developmentVms["ctx.developmentVms<br/>Conversation development VM lifecycle"]
   svc_conversationWorkspaces["ctx.conversationWorkspaces<br/>Conversation Git workspace lifecycle"]
   pkg_fs_local_container["fs-local-container"]
   pkg_subprocess_local_container["subprocess-local-container"]
@@ -304,6 +305,7 @@ flowchart LR
   pkg_llm_pi_ai --> svc_llm
   pkg_llm_replay --> svc_llm
   pkg_local_container_runtime --> svc_conversationWorkspaces
+  pkg_local_container_runtime --> svc_developmentVms
   pkg_local_container_runtime --> svc_localContainerRuntime
   pkg_lsp --> svc_lsp
   pkg_lsp_stdio --> svc_lsp
@@ -404,6 +406,7 @@ flowchart LR
   svc_credentials --> pkg_llm_deepseek
   svc_credentials --> pkg_llm_pi_ai
   svc_deepseekLlmApiExtensions --> pkg_llm_deepseek
+  svc_developmentVms --> pkg_local_container_runtime
   svc_directoryPicker --> pkg_api_workspace_controller
   svc_dynamicCordisRunner --> pkg_tool_cordis
   svc_e2b --> pkg_fs_e2b
@@ -516,6 +519,7 @@ flowchart LR
 
 | ctx key | Role | Owner | Implementations | Direct consumers | Companion plugins | Note |
 | --- | --- | --- | --- | --- | --- | --- |
+| `ctx.developmentVms` | `core` | [`local-container-runtime`](../packages/sandbox/local-container-runtime) | - | [`local-container-runtime`](../packages/sandbox/local-container-runtime) | - | Opt-in guest execution, source writer barriers, and durable Docker storage for conversation workspaces. |
 | `ctx.conversationWorkspaces` | `core` | [`local-container-runtime`](../packages/sandbox/local-container-runtime) | - | [`fs-local-container`](../packages/fs/fs-local-container), [`subprocess-local-container`](../packages/subprocess/subprocess-local-container), `workspace-files`, [`file-reference-local`](../packages/context/file-reference-local) | - | Opt-in ownership, recovery, and automatic branch return for conversation repositories. |
 | `ctx.localContainerRuntime` | `core` | [`local-container-runtime`](../packages/sandbox/local-container-runtime) | - | [`fs-local-container`](../packages/fs/fs-local-container), [`subprocess-local-container`](../packages/subprocess/subprocess-local-container) | - | Owns one verified rootless container world and removable process ranges shared by the filesystem and subprocess providers. |
 | `ctx.attachments` | `seam` | [`attachment`](../packages/attachment/attachment) | [`attachment-local`](../packages/attachment/attachment-local) | [`api-session-controller`](../packages/api/session-controller), [`tool-fs`](../packages/fs/tool-fs), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-deepseek`](../packages/llm/llm-deepseek) | - | The host commits accepted images before session events; provider adapters resolve authorized durable references into provider-native content. |

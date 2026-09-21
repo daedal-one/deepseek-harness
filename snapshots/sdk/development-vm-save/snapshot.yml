@@ -1,0 +1,10 @@
+version: 1
+scenario: development-vm-save
+profile: sdk
+composition: sdk-development-vm-save
+recording: authored
+header:
+  class: workspace-outcomes
+  pin: true
+  systemPromptSource: sdk/workspace-outcomes
+  toolSchemasSource: sdk/workspace-outcomes
