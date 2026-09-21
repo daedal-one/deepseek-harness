@@ -87,6 +87,8 @@ This section explains the design decisions behind the feature and points at the 
 
 The API is one small family with two owners: `WorkspaceRegistry` creates, orders, and deletes projects and manages their session accounting; the `Workspace` entity exposes the display title, directory status, and the session projection. Per-method contracts live in the code, not this README — see [src/index.ts](src/index.ts) and [src/entity.ts](src/entity.ts).
 
+`resolveByPath` reads only registrations in the committed registry order. A pending create can have an internal entity before its durable writes finish; that entity is not a successful lookup. Absence is a current observation, not a receipt proving that an earlier request failed.
+
 ### Source map
 
 | File | Role |

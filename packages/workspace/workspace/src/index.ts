@@ -268,17 +268,16 @@ export class WorkspaceRegistry extends Service {
 
   /**
    * Resolve by canonical directory path without creating or mutating a
-   * workspace. A missing path rejects during `realpath`; an existing unowned
+   * workspace. Only registrations in committed registry order are visible;
+   * unfinished create writes do not expose provisional entities. A missing path
+   * rejects during `realpath`; an existing unowned
    * directory returns `undefined`.
    * @param path - Existing directory path in a fully qualified spelling.
    * @returns the workspace owning the canonical path, when one exists.
    */
   async resolveByPath(path: string): Promise<Workspace | undefined> {
     const canonical = await realpathNormalize(path)
-    for (const entity of this.entities.values()) {
-      if (entity.path === canonical) return entity
-    }
-    return undefined
+    return this.list().find(entity => entity.path === canonical)
   }
 
   private async createCanonical(canonical: string, title?: string): Promise<WorkspaceEntity> {

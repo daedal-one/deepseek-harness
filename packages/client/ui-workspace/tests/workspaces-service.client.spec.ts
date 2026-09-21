@@ -135,6 +135,7 @@ class FakeWorkspaces implements IWorkspaces {
     }))
   }
 
+  declare readonly resolveByPath: IWorkspaces['resolveByPath']
   declare readonly create: IWorkspaces['create']
   declare readonly rename: IWorkspaces['rename']
   declare readonly delete: IWorkspaces['delete']

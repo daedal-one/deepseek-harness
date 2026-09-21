@@ -266,6 +266,7 @@ export class FakeApiClient {
         ),
       },
       workspace: {
+        resolveByPath: payload => this.record('workspace.resolveByPath', payload, Promise.resolve(ok({ workspace: null }))),
         create: payload => this.record('workspace.create', payload, this.onWorkspaceCreate(payload)),
         rename: payload => this.record('workspace.rename', payload, this.onWorkspaceRename(payload)),
         delete: payload => this.record('workspace.delete', payload, this.onWorkspaceDelete(payload)),

@@ -3205,6 +3205,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the Workspace and whether this call created it.',
       },
       {
+        signature: '@Remote(\'resolveByPath\') async resolveByPath(request: WorkspaceResolveRequest, signal: AbortSignal): Promise<WorkspaceResolveValue>',
+        description: 'Read the current registration without creating or changing a Workspace.',
+        parameters: [{ name: 'request', description: 'fully qualified Host path to resolve.' }, { name: 'signal', description: 'caller cancellation before and after the filesystem lookup.' }],
+        returns: 'the current registration or absence, not a prior mutation receipt.',
+      },
+      {
         signature: '@Remote(\'rename\') rename(request: WorkspaceRenameRequest): Promise<WorkspaceValue>',
         description: 'Rename one Workspace to a unique non-blank title.',
         parameters: [{ name: 'request', description: 'Workspace identity and proposed title.' }],
@@ -3334,7 +3340,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'async resolveByPath(path: string): Promise<Workspace | undefined>',
-        description: 'Resolve by canonical directory path without creating or mutating a workspace. A missing path rejects during `realpath`; an existing unowned directory returns `undefined`.',
+        description: 'Resolve by canonical directory path without creating or mutating a workspace. Only registrations in committed registry order are visible; unfinished create writes do not expose provisional entities. A missing path rejects during `realpath`; an existing unowned directory returns `undefined`.',
         parameters: [{ name: 'path', description: 'Existing directory path in a fully qualified spelling.' }],
         returns: 'the workspace owning the canonical path, when one exists.',
       },
@@ -7079,6 +7085,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'WorkspaceRenameRequest',
     declaration: 'export interface WorkspaceRenameRequest {\n    readonly workspaceId: WorkspaceId;\n    readonly title: string;\n}',
+  },
+  {
+    name: 'WorkspaceResolveRequest',
+    declaration: 'export interface WorkspaceResolveRequest {\n    readonly path: string;\n}',
+  },
+  {
+    name: 'WorkspaceResolveValue',
+    declaration: 'export interface WorkspaceResolveValue {\n    readonly workspace: WorkspaceView | null;\n}',
   },
   {
     name: 'WorkspaceValue',

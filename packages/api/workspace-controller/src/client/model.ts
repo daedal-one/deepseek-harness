@@ -10,6 +10,8 @@ import type {
   WorkspaceBaseline,
   WorkspaceCreateRequest,
   WorkspaceCreateValue,
+  WorkspaceResolveRequest,
+  WorkspaceResolveValue,
   WorkspaceDeleteValue,
   WorkspaceInsertSessionBeforeRequest,
   WorkspaceOrderValue,
@@ -86,6 +88,16 @@ export class ClientWorkspaceModel implements WorkspaceFollowSink {
     const result = await this.remote.create(input)
     if (result.ok) this.upsert(result.value.workspace)
     return result
+  }
+
+  /**
+   * Resolve a Host path without changing the followed Workspace projection.
+   * @param input - fully qualified Host path.
+   * @param signal - caller-owned cancellation.
+   * @returns generated Remote lookup result.
+   */
+  resolveByPath(input: WorkspaceResolveRequest, signal?: AbortSignal): Promise<RemoteResult<WorkspaceResolveValue>> {
+    return this.remote.resolveByPath(input, signal)
   }
 
   /**

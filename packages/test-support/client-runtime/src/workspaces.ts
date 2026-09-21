@@ -63,6 +63,19 @@ export class TestWorkspaces implements IWorkspaces {
   }
 
   /**
+   * Resolve a Host path (recorded); the inert default reports absence.
+   * @param input - Host lookup payload.
+   * @param signal - caller cancellation forwarded to a stub.
+   * @returns the stubbed Workspace or null.
+   */
+  async resolveByPath(input: { path: string }, signal?: AbortSignal): Promise<WorkspaceView | null> {
+    this.calls.push({ method: 'resolveByPath', args: [input, signal] })
+    const stub = this.stubs.get('resolveByPath')
+    if (stub !== undefined) return await (stub(input, signal) as Promise<WorkspaceView | null>)
+    return null
+  }
+
+  /**
    * Create a Workspace (recorded). The default echoes a view derived from
    * the input; stub for failure or list-coupled flows.
    * @param input - the Host create payload.

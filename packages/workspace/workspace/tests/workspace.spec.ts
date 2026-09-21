@@ -98,7 +98,7 @@ async function storageContext(pool: MemoryMediaPool, backend: StorageBackend = n
 /** Backend wrapper that injects one selected bootstrap write failure. */
 function selectiveFailureBackend(
   pool: MemoryMediaPool,
-  failure: { putAt?: number; deleteAt?: number; globalAt?: number | readonly number[] },
+  failure: { putAt?: number; deleteAt?: number; globalAt?: number | readonly number[]; beforeGlobal?: () => Promise<void> },
 ): StorageBackend {
   const inner = new MemoryStorageBackend(pool)
   let puts = 0
@@ -121,6 +121,7 @@ function selectiveFailureBackend(
             await unit.deleteRecord(table, key)
           },
           setGlobal: async (value) => {
+            await failure.beforeGlobal?.()
             globals += 1
             const failAt = Array.isArray(failure.globalAt) ? failure.globalAt : [failure.globalAt]
             if (failAt.includes(globals)) throw new Error('selected bootstrap marker failure')
@@ -390,6 +391,43 @@ describe('WorkspaceRegistry create and lookup', () => {
     expect(storedState(pool).workspaceIds).toEqual([second.id, first.id])
     expect(await registry.resolveByPath(alias)).toBe(first)
     expect(await registry.resolveByPath(await makeDir('unowned'))).toBeUndefined()
+  })
+
+  it.each([false, true])('keeps provisional registration invisible during a held write (failure: %s)', async (fail) => {
+    const dir = await makeDir('held-registration')
+    const pool = new MemoryMediaPool()
+    const failure: Parameters<typeof selectiveFailureBackend>[1] = {}
+    const { registry } = await harness({ pool, backend: selectiveFailureBackend(pool, failure) })
+    let entered!: () => void
+    let release!: () => void
+    const started = new Promise<void>((resolve) => { entered = resolve })
+    const held = new Promise<void>((resolve) => { release = resolve })
+    failure.beforeGlobal = async () => {
+      delete failure.beforeGlobal
+      entered()
+      await held
+    }
+    if (fail) failure.putAt = 1
+    const creation = registry.create(dir).then(
+      workspace => ({ workspace, error: undefined }),
+      (error: unknown) => ({ workspace: undefined, error }),
+    )
+    try {
+      await started
+      expect(await registry.resolveByPath(dir)).toBeUndefined()
+      expect(registry.list()).toEqual([])
+    } finally {
+      release()
+      await creation
+    }
+    const result = await creation
+    if (fail) {
+      expect(result.error).toBeInstanceOf(Error)
+      expect(await registry.resolveByPath(dir)).toBeUndefined()
+    } else {
+      expect(result.workspace).toBeDefined()
+      expect(await registry.resolveByPath(dir)).toBe(result.workspace)
+    }
   })
 
   it('serializes concurrent same-path creates into one entity', async () => {

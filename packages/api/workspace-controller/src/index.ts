@@ -10,6 +10,8 @@ import type {
   WorkspaceArchiveValue,
   WorkspaceCreateRequest,
   WorkspaceCreateValue,
+  WorkspaceResolveRequest,
+  WorkspaceResolveValue,
   WorkspaceDeleteRequest,
   WorkspaceDeleteValue,
   WorkspaceFollowFrame,
@@ -57,6 +59,20 @@ export class WorkspaceController extends TypertRemoteService {
   @Remote('create')
   create(request: WorkspaceCreateRequest): Promise<WorkspaceCreateValue> {
     return this.commands.create(request)
+  }
+
+  /**
+   * Read the current registration without creating or changing a Workspace.
+   * @param request - fully qualified Host path to resolve.
+   * @param signal - caller cancellation before and after the filesystem lookup.
+   * @returns the current registration or absence, not a prior mutation receipt.
+   */
+  @Remote('resolveByPath')
+  async resolveByPath(request: WorkspaceResolveRequest, signal: AbortSignal): Promise<WorkspaceResolveValue> {
+    signal.throwIfAborted()
+    const value = await this.commands.resolveByPath(request)
+    signal.throwIfAborted()
+    return value
   }
 
   /**

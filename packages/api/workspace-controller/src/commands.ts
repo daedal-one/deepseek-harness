@@ -15,6 +15,8 @@ import type {
   WorkspaceArchiveValue,
   WorkspaceCreateRequest,
   WorkspaceCreateValue,
+  WorkspaceResolveRequest,
+  WorkspaceResolveValue,
   WorkspaceDeleteRequest,
   WorkspaceDeleteValue,
   WorkspaceInsertBeforeRequest,
@@ -55,6 +57,26 @@ export class WorkspaceCommands {
         )
       }
     })
+  }
+
+  /**
+   * Read the current registration using Host path canonicalization.
+   * @param request - fully qualified Host path to resolve.
+   * @returns the current Workspace or absence, without registering a directory.
+   */
+  async resolveByPath(request: WorkspaceResolveRequest): Promise<WorkspaceResolveValue> {
+    try {
+      const workspace = await this.ctx.workspaceRegistry.resolveByPath(request.path)
+      return { workspace: workspace === undefined ? null : workspaceView(workspace) }
+    } catch (error) {
+      if (remoteErrorOf(error) !== undefined) throw error
+      throw new RemoteError(
+        'workspace/lookup-failed',
+        `cannot resolve a Workspace at "${request.path}": ${errorMessage(error)}`,
+        { path: request.path },
+        { cause: error },
+      )
+    }
   }
 
   /**

@@ -212,6 +212,14 @@ Host service backing the generated `ctx.remote.workspace` namespace.
 @Remote('create') create(request: WorkspaceCreateRequest): Promise<WorkspaceCreateValue>
 
 /**
+ * Read the current registration without creating or changing a Workspace.
+ * @param request - fully qualified Host path to resolve.
+ * @param signal - caller cancellation before and after the filesystem lookup.
+ * @returns the current registration or absence, not a prior mutation receipt.
+ */
+@Remote('resolveByPath') async resolveByPath(request: WorkspaceResolveRequest, signal: AbortSignal): Promise<WorkspaceResolveValue>
+
+/**
  * Rename one Workspace to a unique non-blank title.
  * @param request - Workspace identity and proposed title.
  * @returns the updated Workspace projection.
@@ -400,7 +408,9 @@ archiveSession(sessionId: SessionId): Promise<void>
 
 /**
  * Resolve by canonical directory path without creating or mutating a
- * workspace. A missing path rejects during `realpath`; an existing unowned
+ * workspace. Only registrations in committed registry order are visible;
+ * unfinished create writes do not expose provisional entities. A missing path
+ * rejects during `realpath`; an existing unowned
  * directory returns `undefined`.
  * @param path - Existing directory path in a fully qualified spelling.
  * @returns the workspace owning the canonical path, when one exists.

@@ -35,7 +35,7 @@ export { apply as applyRegistry, inject as registryInject } from '@deepseek-ai/d
  */
 export const apply: (ctx: Parameters<typeof applyClient>[0]) => Promise<() => Promise<void>> = applyClient.bind(undefined)
 
-export { inject as workspaceInject, ClientWorkspaceModel, WorkspaceController, WorkspaceCreateError,
+export { inject as workspaceInject, ClientWorkspaceModel, WorkspaceController, WorkspaceCreateError, WorkspaceResolveError,
   createWorkspaceStateStream } from '@deepseek-ai/dsh-api-workspace-controller/client'
 export type { IWorkspaces, WorkspaceSource, WorkspaceSnapshot, WorkspaceListPhase,
   WorkspaceFollowSink, WorkspaceRemote, WorkspaceStateStream, WorkspaceStateStreamOptions,
