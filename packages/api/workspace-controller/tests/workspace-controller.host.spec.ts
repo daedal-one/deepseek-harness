@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -140,6 +140,45 @@ describe('WorkspaceController commands', () => {
     } finally { read.mockRestore() }
   })
 
+  it('rejects invalid directories before writing and accepts an explicit corrected request', async () => {
+    const { controller, ctx, root } = await harness()
+    const file = join(root, 'file')
+    writeFileSync(file, 'file')
+    const changes: unknown[] = []
+    ctx.on('domain/changed', (change) => { changes.push(change) })
+    for (const path of [join(root, 'missing'), 'relative', file]) {
+      await expect(controller.create({ path })).rejects.toMatchObject({
+        code: 'workspace/create-rejected', details: { path },
+      })
+    }
+    expect(changes).toEqual([])
+    expect(ctx.workspaceRegistry.list()).toEqual([])
+    const accepted = await controller.create({ path: stageDir(root, 'corrected') })
+    expect(accepted.created).toBe(true)
+    expect(ctx.workspaceRegistry.list().map(workspace => workspace.id)).toEqual([accepted.workspace.workspaceId])
+  })
+
+  it('keeps failure after durable registration distinct from pre-write rejection', async () => {
+    const { controller, ctx, root } = await harness()
+    const path = stageDir(root, 'published')
+    const originalCreate = ctx.workspaceRegistry.create.bind(ctx.workspaceRegistry)
+    const mapped = new RemoteError('fixture/failure', 'already mapped', {})
+    const create = vi.spyOn(ctx.workspaceRegistry, 'create')
+      .mockRejectedValueOnce(mapped)
+      .mockImplementationOnce(async (...args) => {
+        await originalCreate(...args)
+        throw new Error('reply failed after publication')
+      })
+    try {
+      await expect(controller.create({ path })).rejects.toBe(mapped)
+      await expect(controller.create({ path })).rejects.toMatchObject({ code: 'workspace/invalid-path' })
+      expect(ctx.workspaceRegistry.list()).toHaveLength(1)
+      expect(ctx.workspaceRegistry.list()[0]?.path).toBe(path)
+      const current = await resolvePath(controller, { path })
+      expect(current.workspace?.workspaceId).toBe(ctx.workspaceRegistry.list()[0]?.id)
+    } finally { create.mockRestore() }
+  })
+
   it('serializes concurrent path adoption and preserves an existing title', async () => {
     const { controller, root } = await harness()
     const path = stageDir(root, 'alpha')
@@ -167,7 +206,7 @@ describe('WorkspaceController commands', () => {
     const second = await controller.create({ path: stageDir(root, 'second') })
 
     await expect(controller.create({ path: join(root, 'missing') })).rejects.toMatchObject({
-      code: 'workspace/invalid-path',
+      code: 'workspace/create-rejected',
       details: { path: join(root, 'missing') },
     })
     expect(existsSync(join(root, 'missing'))).toBe(false)
@@ -189,7 +228,7 @@ describe('WorkspaceController commands', () => {
     await expect(controller.create({ path: stageDir(root, 'remote-failure') }))
       .rejects.toBe(remoteFailure)
     const plainFailure = controller.create({ path: stageDir(root, 'plain-failure') })
-    await expect(plainFailure).rejects.toMatchObject({ code: 'workspace/invalid-path' })
+    await expect(plainFailure).rejects.toMatchObject({ code: 'workspace/create-rejected' })
     await expect(plainFailure).rejects.toThrow('plain failure')
     resolveByPath.mockRestore()
 

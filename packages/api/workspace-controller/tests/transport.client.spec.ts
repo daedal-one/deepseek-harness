@@ -498,6 +498,15 @@ describe('WorkspaceController', () => {
     await expect(create).rejects.toBeInstanceOf(WorkspaceCreateError)
     await expect(create).rejects.toThrow('workspace/invalid-path: missing path')
 
+    const before = controller.list.getSnapshot()
+    const rejection = remoteFailure(new RemoteError('workspace/create-rejected', 'invalid directory', { path: '/missing' }))
+    remote.create.mockResolvedValueOnce(rejection)
+    const rejected = controller.create({ path: '/missing' })
+    await expect(rejected).rejects.toBeInstanceOf(WorkspaceCreateError)
+    if (rejection.ok) throw new Error('fixture must be a failure')
+    await expect(rejected).rejects.toMatchObject({ rpcError: rejection.error })
+    expect(controller.list.getSnapshot()).toBe(before)
+
     remote.rename.mockResolvedValueOnce(remoteFailure(missingWorkspace))
     await expect(controller.rename(wid('missing'), 'name')).rejects.toThrow('workspace rename failed: workspace/not-found: gone')
     remote.delete.mockResolvedValueOnce(remoteFailure(missingWorkspace))

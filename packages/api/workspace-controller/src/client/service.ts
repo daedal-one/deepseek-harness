@@ -7,7 +7,10 @@ import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import type { WorkspaceResolveRequest, WorkspaceView } from '../types.ts'
 import type { ClientWorkspaceModel, WorkspaceSnapshot } from './model.ts'
 
-/** Structured create failure for callers that distinguish Host business errors. */
+/**
+ * Structured create failure. `workspace/create-rejected` confirms that this
+ * request began no registration write; other codes do not prove that outcome.
+ */
 export class WorkspaceCreateError extends Error {
   override readonly name = 'WorkspaceCreateError'
 

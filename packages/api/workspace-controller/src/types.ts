@@ -28,7 +28,9 @@ export interface WorkspaceView {
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface RemoteErrorDetailsMap {
-    /** The requested directory cannot back a Workspace. */
+    /** This request failed before starting any registration write. */
+    'workspace/create-rejected': { readonly path: string }
+    /** Registration failed; a durable record may still exist. */
     'workspace/invalid-path': { readonly path: string }
     /** The Host could not determine the current registration at this path. */
     'workspace/lookup-failed': { readonly path: string }

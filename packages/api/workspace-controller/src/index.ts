@@ -53,6 +53,9 @@ export class WorkspaceController extends TypertRemoteService {
 
   /**
    * Create or idempotently resolve one Workspace over an existing directory.
+   * `workspace/create-rejected` means this request began no registration write.
+   * Other failures may leave a durable registration.
+   * @remoteRevision 2
    * @param request - directory path to register.
    * @returns the Workspace and whether this call created it.
    */

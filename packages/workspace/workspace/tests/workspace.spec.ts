@@ -16,6 +16,7 @@ import WorkspaceRegistry, {
   WorkspaceId,
   WorkspaceMoveInvalidError,
   WorkspaceOrderInvalidError,
+  WorkspacePathInvalidError,
 } from '../src/index.ts'
 import type { WorkspaceDomainState, WorkspaceRecord } from '../src/index.ts'
 import { defaultWorkspaceTitle, fullyQualifiedWorkspacePath } from '../src/paths.ts'
@@ -457,9 +458,16 @@ describe('WorkspaceRegistry create and lookup', () => {
     const parent = await makeDir('invalid')
     const file = join(parent, 'plain.txt')
     await writeFile(file, 'file')
-    const { registry } = await harness()
-    await expect(registry.create(join(parent, 'missing'))).rejects.toMatchObject({ code: 'ENOENT' })
-    await expect(registry.create(file)).rejects.toThrow(/not a directory/)
+    const { registry, changes } = await harness()
+    const before = changes.length
+    const missing = registry.create(join(parent, 'missing'))
+    await expect(missing).rejects.toBeInstanceOf(WorkspacePathInvalidError)
+    await expect(missing).rejects.toMatchObject({ path: join(parent, 'missing'), cause: { code: 'ENOENT' } })
+    const nonDirectory = registry.create(file)
+    await expect(nonDirectory).rejects.toBeInstanceOf(WorkspacePathInvalidError)
+    await expect(nonDirectory).rejects.toHaveProperty('path', file)
+    await expect(nonDirectory).rejects.toHaveProperty('cause.message', `cannot create a workspace at '${file}': path is not a directory`)
+    expect(changes).toHaveLength(before)
     await expect(registry.resolveByPath(join(parent, 'missing'))).rejects.toMatchObject({ code: 'ENOENT' })
     expect(registry.list()).toEqual([])
   })
@@ -467,7 +475,10 @@ describe('WorkspaceRegistry create and lookup', () => {
   it('rejects a resolvable relative path instead of adopting it from the Host cwd', async () => {
     const { registry } = await harness()
     const fromHostCwd = '.'
-    await expect(registry.create(fromHostCwd)).rejects.toThrow(/fully qualified/)
+    const rejected = registry.create(fromHostCwd)
+    await expect(rejected).rejects.toBeInstanceOf(WorkspacePathInvalidError)
+    await expect(rejected).rejects.toHaveProperty('path', fromHostCwd)
+    await expect(rejected).rejects.toHaveProperty('cause.name', 'TypeError')
     await expect(registry.resolveByPath(fromHostCwd)).rejects.toThrow(/fully qualified/)
     expect(registry.list()).toEqual([])
   })
@@ -479,7 +490,9 @@ describe('WorkspaceRegistry create and lookup', () => {
       pool,
       backend: selectiveFailureBackend(pool, { putAt: 1 }),
     })
-    await expect(result.registry.create(dir)).rejects.toThrow(/selected bootstrap put failure/)
+    const failed = result.registry.create(dir)
+    await expect(failed).rejects.toThrow(/selected bootstrap put failure/)
+    await expect(failed).rejects.not.toBeInstanceOf(WorkspacePathInvalidError)
     expect(result.registry.list()).toEqual([])
     expect(await result.registry.create(dir)).toBeDefined()
   })
