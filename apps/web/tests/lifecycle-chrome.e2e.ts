@@ -23,7 +23,7 @@ import {
   launchWebScaffold, recordFixture, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import {
-  connectFreshWorkspace, newEnglishPage, saveFailureShot, writeComposerDraft, EN_BROWSER_LOCALE,
+  connectFreshWorkspace, newEnglishPage, saveFailureShot, writeComposerDraft,
 } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/lifecycle-chrome', import.meta.url))
@@ -31,7 +31,6 @@ const FIXTURE = join(SNAPSHOT_DIR, 'session.v3.jsonl')
 const REPLAY_OVERRIDE = join(SNAPSHOT_DIR, 'replay.override.json')
 const HERO_EXPECTED = join(SNAPSHOT_DIR, 'hero.expected.md')
 const COMMAND_MENU_EXPECTED = join(SNAPSHOT_DIR, 'command-menu.expected.md')
-const COMMAND_MENU_ZH_EXPECTED = join(SNAPSHOT_DIR, 'command-menu-zh.expected.md')
 const FUZZY_COMMAND_MENU_EXPECTED = join(SNAPSHOT_DIR, 'command-menu-fuzzy.expected.md')
 const PLAN_ACTIVE_EXPECTED = join(SNAPSHOT_DIR, 'plan-active.expected.md')
 const CONNECTION_ERROR_EXPECTED = join(SNAPSHOT_DIR, 'connection-error.expected.md')
@@ -39,6 +38,7 @@ const CONNECTION_ERROR_EXPECTED = join(SNAPSHOT_DIR, 'connection-error.expected.
 // persistence + history — byte-equal rendering is exactly the recovery claim.
 const RELOADED_EXPECTED = join(SNAPSHOT_DIR, 'reloaded.expected.md')
 const RELOADED_EXPANDED_EXPECTED = join(SNAPSHOT_DIR, 'reloaded-expanded.expected.md')
+const MODEL_OVERLAY = fileURLToPath(new URL('./lifecycle-chrome.overlay.yml', import.meta.url))
 const MODE = webSnapshotMode()
 
 const PROMPT = 'Reply with the single word LIGHTHOUSE and stop.'
@@ -54,7 +54,14 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
   beforeAll(async () => {
     scaffold = await launchWebScaffold(MODE === 'record'
       ? {}
-      : { replayFixture: FIXTURE, replayOverride: REPLAY_OVERRIDE, paceMs: REPLAY_PACE_MS })
+      : {
+        replayFixture: FIXTURE, replayOverride: REPLAY_OVERRIDE, paceMs: REPLAY_PACE_MS,
+        extraOverlayPath: MODEL_OVERLAY,
+        replayProviders: [{
+          id: 'deepseek-official', name: 'DeepSeek',
+          models: [{ id: 'deepseek-flash', name: 'DeepSeek-V4.1-Flash', contextWindow: 128_000 }],
+        }],
+      })
     scaffold.ctx.on('session/event', (_session, event: SessionEvent) => { sessionEvents.push(event) })
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
@@ -111,8 +118,8 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
     await expect.poll(() => menu.count()).toBe(0)
   })
 
-  it.skipIf(MODE === 'record')('localizes slash-command descriptions from the browser language', async () => {
-    const zhPage = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: EN_BROWSER_LOCALE })
+  it.skipIf(MODE === 'record')('falls back to English commands for an unsupported browser language', async () => {
+    const zhPage = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: 'zh-CN' })
     const zhTripwire = watchConsole(zhPage)
     onTestFailed(() => saveFailureShot(zhPage, 'web-e2e-command-menu-zh'))
     try {
@@ -124,7 +131,7 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
       await menu.getByRole('option').first().waitFor({ timeout: 10_000 })
       await menu.getByRole('status').waitFor({ state: 'hidden', timeout: 10_000 })
       const snapshot = await captureStableAria(zhPage, '[role="listbox"]', scaffold.workspaceCwd)
-      await compareOrRefreshGolden(COMMAND_MENU_ZH_EXPECTED, snapshot, MODE)
+      await compareOrRefreshGolden(COMMAND_MENU_EXPECTED, snapshot, MODE)
       expect(zhTripwire.pageErrors).toEqual([])
       expect(zhTripwire.warnings).toEqual([])
     } finally {
@@ -212,7 +219,7 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
     await writeComposerDraft(page, input, PROMPT)
     const observeTurn = async () => {
       const originalViewport = page.viewportSize() ?? { width: 1680, height: 1000 }
-      if (MODE !== 'record') await page.setViewportSize({ width: 480, height: 1000 })
+      if (MODE !== 'record') await page.setViewportSize({ width: 390, height: 1000 })
       const observedReasoning = Promise.withResolvers<undefined>()
       const releaseStream = MODE === 'record' ? undefined : scaffold.ctx.on('llm/stream', async function* (_options, next) {
         let reasoning = false
@@ -289,6 +296,7 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
       await page.evaluate(() => { document.scrollingElement!.scrollTop = 0 })
       await expect.poll(() => header.getAttribute('data-scroll-hidden')).toBeNull()
       await expect.poll(() => header.evaluate(element => getComputedStyle(element).transform)).toBe('none')
+      await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), { timeout: 5_000 }).toBe(true)
       const geometry = await page.evaluate(() => {
         const phoneFrame = document.querySelector<HTMLElement>('[data-phone="true"]')
         const conversation = document.querySelector<HTMLElement>('[data-conversation-scroll]')
@@ -310,6 +318,7 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
           headerBackground: headerStyle.backgroundColor,
           headerBottom: headerBox.bottom,
           firstRowTop: firstRow.getBoundingClientRect().top,
+          cornerRight: document.querySelector<HTMLElement>('[data-conversation-header-corner]')!.getBoundingClientRect().right,
           htmlOverscroll: getComputedStyle(document.documentElement).overscrollBehavior,
           bodyOverscroll: getComputedStyle(document.body).overscrollBehavior,
         }
@@ -317,6 +326,7 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
       expect(geometry.documentWidth).toBeLessThanOrEqual(geometry.viewportWidth)
       expect(geometry.frameWidth).toBe(390)
       expect(geometry.conversationWidth).toBe(390)
+      expect(geometry.cornerRight).toBeLessThanOrEqual(geometry.viewportWidth)
       expect(geometry.headerPosition).toBe('sticky')
       expect(geometry.headerBackground).not.toBe('rgba(0, 0, 0, 0)')
       expect(geometry.firstRowTop).toBeGreaterThanOrEqual(geometry.headerBottom)
@@ -333,6 +343,17 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
         firstRow.parentElement.append(probe)
       })
       await expect.poll(() => page.evaluate(() => document.scrollingElement!.scrollHeight > window.innerHeight)).toBe(true)
+      // The height probe follows the end; start the direction check at the top.
+      await expect.poll(() => page.evaluate(() => {
+        const scroller = document.scrollingElement!
+        return Math.abs(scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop)
+      })).toBeLessThanOrEqual(1)
+      await page.evaluate(() => new Promise<void>((resolve) => {
+        document.addEventListener('scroll', () => { resolve() }, { once: true })
+        document.scrollingElement!.scrollTop = 0
+      }))
+      await expect.poll(() => page.evaluate(() => document.scrollingElement!.scrollTop)).toBe(0)
+      await expect.poll(() => header.getAttribute('data-scroll-hidden')).toBeNull()
       await page.evaluate(() => { document.scrollingElement!.scrollTop = 300 })
       await expect.poll(() => page.evaluate(() => document.scrollingElement!.scrollTop)).toBeGreaterThan(0)
       await expect.poll(() => header.getAttribute('data-scroll-hidden')).toBe('true')
@@ -576,7 +597,7 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
     expect(tripwire.warnings).toEqual([])
     await assertFixtureInventory(SNAPSHOT_DIR, [
       'session.v3.jsonl', 'replay.override.json', 'command-menu.expected.md',
-      'command-menu-fuzzy.expected.md', 'command-menu-zh.expected.md', 'connection-error.expected.md',
+      'command-menu-fuzzy.expected.md', 'connection-error.expected.md',
       'hero.expected.md', 'plan-active.expected.md',
       'reloaded.expected.md', 'reloaded-expanded.expected.md',
     ])

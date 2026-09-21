@@ -110,7 +110,8 @@
   grid-template-rows: minmax(100dvh, auto);
   min-height: 100dvh;
   height: auto;
-  overflow: visible;
+  overflow-x: clip;
+  overflow-y: visible;
 }
 
 .frame[data-phone] .centerCol {
