@@ -10,7 +10,9 @@
     "src/remote-error-codes.ts",
     "src/stream-protocol.ts",
     "src/stream-server.ts",
-    "src/types.ts"
+    "src/types.ts",
+    "src/capabilities-protocol.ts",
+    "src/compatibility-protocol.ts"
   ],
   "references": [
     {

@@ -1,5 +1,7 @@
 // Standalone browser fixture for UI development without a server.
 
+import type { ConnectionIdentity } from '../host-identity-protocol.ts'
+
 import {
   createAssistantMessage,
   createSystemMessage,
@@ -45,6 +47,8 @@ import { randomUuid } from './random-uuid.ts'
 import type {
   ClientConnectionRpc, ConnectionRpcFailure, ConnectionRpcResult,
 } from '../rpc.ts'
+
+const FIXTURE_HOST_IDENTITY = { version: 1, hostId: '26e99520-f2d3-4874-84b5-07c5ef24775d', activationId: 'f5292bdb-ebda-41ba-b473-6c587a3c1d02' } as ConnectionIdentity
 
 const FIXTURE_SESSION_SEARCH_RESULT_LIMIT = 20
 
@@ -242,8 +246,9 @@ interface FixtureRemoteEventResult {
 
 interface FixtureRemoteEventReadyFrame {
   readonly type: 'ready'
+  readonly protocolVersion: 1
   readonly clientId: string
-  readonly host: { readonly home: string }
+  readonly host: { readonly home: string; readonly identity: ConnectionIdentity }
 }
 
 interface FixtureProjectionFrame {
@@ -3552,7 +3557,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       if (gamma !== undefined) setRunning(gamma.sessionId, !gamma.running)
     }, 5000)
     try {
-      yield { type: 'ready', clientId, host: { home: FIXTURE_HOME } }
+      yield { type: 'ready', protocolVersion: 1, clientId, host: { home: FIXTURE_HOME, identity: FIXTURE_HOST_IDENTITY } }
       if (approvalPending) yield approvalInvocation()
       if (questionPending) yield questionInvocation()
       yield* conn.drain(signal)

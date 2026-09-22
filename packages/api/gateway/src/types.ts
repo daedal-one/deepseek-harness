@@ -3,8 +3,10 @@
  * @module @deepseek-ai/dsh-api-gateway/types
  */
 
+export type { HostCapabilities, HostCapability } from './capabilities-protocol.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import type { RemoteEventHostInfo } from './stream-protocol.ts'
+import type { RemoteCompatibility } from './compatibility-protocol.ts'
 
 /** One Remote method request after a carrier has decoded its envelope. */
 export interface InvokeRemoteRequest {
@@ -14,6 +16,8 @@ export interface InvokeRemoteRequest {
   readonly method: string
   /** Named wire values; fields must exactly match the descriptor. */
   readonly args: Readonly<Record<string, unknown>>
+  /** Generated schema and business expectations; omitted by unnegotiated callers. */
+  readonly compatibility?: RemoteCompatibility
   /** Carrier or direct-caller cancellation injected only into cancellation-aware methods. */
   readonly signal?: AbortSignal
 }
@@ -101,6 +105,7 @@ export interface TypertGatewayWireStream {
 
 /** Stable infrastructure and boundary failures emitted before or after business execution. */
 export type TypertGatewayErrorCode =
+  | 'gateway/api-incompatible'
   | 'gateway/ambiguous-endpoint'
   | 'gateway/arguments-invalid'
   | 'gateway/binding-invalid'

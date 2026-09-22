@@ -36,20 +36,30 @@ describe('web e2e: settings modal and General preferences', () => {
   let browser: Browser
   let page: Page
   let tripwire: ReturnType<typeof watchConsole>
+  let starting: Promise<void> | undefined
+  const lifetime = new AbortController()
 
-  beforeAll(async () => {
+  beforeAll(() => {
+    starting = openPage()
+    return starting
+  }, 120_000)
+
+  async function openPage(): Promise<void> {
     scaffold = await launchWebScaffold({})
+    lifetime.signal.throwIfAborted()
     browser = await chromium.launch()
+    lifetime.signal.throwIfAborted()
     // Pin English so the shared page and its snapshots use the shipped copy.
     page = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: EN_BROWSER_LOCALE })
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
-  }, 120_000)
+  }
 
   afterAll(async () => {
-    await browser?.close()
-    await scaffold?.close()
+    lifetime.abort()
+    try { await starting } catch { /* beforeAll reports the startup failure. */ }
+    try { await browser?.close() } finally { await scaffold?.close() }
   })
 
   it('opens the settings dialog, switches sections, and closes by every path', async () => {
@@ -69,12 +79,13 @@ describe('web e2e: settings modal and General preferences', () => {
     const openDocument = dialog.getByRole('button', { name: 'Open configuration file' })
     await openDocument.waitFor({ timeout: 10_000 })
     let openRequests = 0
+    let openPayload: unknown
     await page.route('**/api/settings/openSettingsDocument', async (route) => {
       const envelope = route.request().postDataJSON() as {
         rpcId: string
         payload: { args: Record<string, never> }
       }
-      expect(envelope.payload).toEqual({ args: {} })
+      openPayload = envelope.payload
       openRequests += 1
       await route.fulfill({
         status: 200,
@@ -86,10 +97,16 @@ describe('web e2e: settings modal and General preferences', () => {
         }),
       })
     })
-    await openDocument.click()
-    await expect.poll(() => openRequests, { timeout: 5_000 }).toBe(1)
-    await expect.poll(() => openDocument.isEnabled(), { timeout: 5_000 }).toBe(true)
-    await page.unroute('**/api/settings/openSettingsDocument')
+    try {
+      await openDocument.click()
+      await expect.poll(() => openRequests, { timeout: 5_000 }).toBe(1)
+      expect(openPayload).toEqual({ args: {}, compatibility: {
+        wireFingerprint: expect.stringMatching(/^typert-wire-v1:[0-9a-f]{64}$/) as unknown, semanticRevision: 1,
+      } })
+      await expect.poll(() => openDocument.isEnabled(), { timeout: 5_000 }).toBe(true)
+    } finally {
+      await page.unroute('**/api/settings/openSettingsDocument')
+    }
     // Golden of the freshly opened dialog (English, General active).
     const snapshot = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(DIALOG_EXPECTED, snapshot, MODE)
@@ -551,8 +568,8 @@ describe('web e2e: settings modal and General preferences', () => {
     const dialog = page.getByRole('dialog', { name: 'Settings' })
     await dialog.waitFor({ timeout: 10_000 })
     await dialog.getByRole('button', { name: 'Queue' }).click()
-    await page.getByRole('menuitem', { name: 'Steer queued message' }).click()
-    await dialog.getByRole('button', { name: 'Steer queued message' }).waitFor({ timeout: 10_000 })
+    await page.getByRole('menuitem', { name: 'Steer' }).click()
+    await dialog.getByRole('button', { name: 'Steer' }).waitFor({ timeout: 10_000 })
     expect(await page.evaluate(() => localStorage.getItem('dsh.conversation.busyEnter'))).toBeNull()
     await expect.poll(async () => readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8'), { timeout: 5_000 })
       .toMatch(/ui-conversation:\n\s+busyEnter: steer/)
@@ -564,7 +581,7 @@ describe('web e2e: settings modal and General preferences', () => {
     acknowledgeReloadConnectionLoss(tripwire, warningStart)
     await page.getByRole('button', { name: 'Settings', exact: true }).click()
     const reloaded = page.getByRole('dialog', { name: 'Settings' })
-    await reloaded.getByRole('button', { name: 'Steer queued message' }).waitFor({ timeout: 10_000 })
+    await reloaded.getByRole('button', { name: 'Steer' }).waitFor({ timeout: 10_000 })
 
     const second = await launchWebScaffold({ harnessHome: scaffold.harnessHome })
     const secondPage = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: EN_BROWSER_LOCALE })
@@ -575,7 +592,7 @@ describe('web e2e: settings modal and General preferences', () => {
       await secondPage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
       await secondPage.getByRole('button', { name: 'Settings', exact: true }).click()
       await secondPage.getByRole('dialog', { name: 'Settings' })
-        .getByRole('button', { name: 'Steer queued message' }).waitFor({ timeout: 10_000 })
+        .getByRole('button', { name: 'Steer' }).waitFor({ timeout: 10_000 })
       expect(await secondPage.evaluate(() => localStorage.getItem('dsh.conversation.busyEnter'))).toBeNull()
       expect(secondTripwire.pageErrors).toEqual([])
       expect(secondTripwire.warnings).toEqual([])
@@ -584,7 +601,7 @@ describe('web e2e: settings modal and General preferences', () => {
       await second.close()
     }
 
-    await reloaded.getByRole('button', { name: 'Steer queued message' }).click()
+    await reloaded.getByRole('button', { name: 'Steer' }).click()
     await page.getByRole('menuitem', { name: 'Queue' }).click()
     await reloaded.getByRole('button', { name: 'Queue' }).waitFor({ timeout: 10_000 })
     expect(await page.evaluate(() => localStorage.getItem('dsh.conversation.busyEnter'))).toBeNull()

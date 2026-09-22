@@ -30,7 +30,7 @@ afterEach(async () => {
 })
 
 /** Write a dist fixture and the authenticated Web rows, then boot them through the real Loader. */
-async function loadComposition(): Promise<Context> {
+async function loadComposition(mounted = false): Promise<Context> {
   root = await mkdtemp(join(tmpdir(), 'dsh-frontend-static-'))
   const dist = join(root, 'dist')
   await mkdir(dist)
@@ -40,6 +40,10 @@ async function loadComposition(): Promise<Context> {
   await writeFile(join(dist, 'blob.bin'), 'BLOB')
   await writeFile(join(dist, 'manifest.webmanifest'), '{}')
   await mkdir(join(dist, 'empty'))
+  const preview = join(root, 'preview')
+  await mkdir(preview)
+  await writeFile(join(preview, 'index.html'), '<head></head><body>preview</body>')
+  await writeFile(join(preview, 'app.js'), 'export const preview = true')
   const configPath = join(root, 'cordis.yml')
   await writeFile(configPath, [
     "- name: '@deepseek-ai/dsh-credentials-local'",
@@ -55,6 +59,14 @@ async function loadComposition(): Promise<Context> {
     "  name: '@deepseek-ai/dsh-host-frontend-static'",
     '  config:',
     `    distIndex: '${distIndex}'`,
+    ...(mounted ? [
+      '- id: preview',
+      "  name: '@deepseek-ai/dsh-host-frontend-static'",
+      '  config:',
+      `    distIndex: '${join(preview, 'index.html')}'`,
+      '    mountPath: /daedal',
+      '    indexPaths: [/dsh-hosts]',
+    ] : []),
     '',
   ].join('\n'))
 
@@ -202,5 +214,49 @@ describe('real Loader composition', () => {
     await frontendEntry!.fiber?.dispose()
     expect((await request(port, '/no/such/route')).status).toBe(404)
     expect(() => server.registerFallback(() => {})).not.toThrow()
+  })
+})
+
+
+describe('mounted frontend', () => {
+  it('rejects ambiguous route configuration before activation', () => {
+    for (const value of ['/daedal/', 'daedal', '//daedal', '/a/../b', '/a%2fb', '/a?x', '/a#x', '/a"b']) {
+      expect(() => FrontendStatic.Config({ distIndex: '/dist/index.html', mountPath: value })).toThrow()
+      expect(() => FrontendStatic.Config({ distIndex: '/dist/index.html', indexPaths: [value] })).toThrow()
+    }
+  })
+
+  it('shares authentication while preserving independent bootstrap, root UI and route ownership', { timeout: 60_000 }, async () => {
+    const loaded = await loadComposition(true)
+    const port = loaded.webServer.port
+    loaded.webServer.tapIndex(html => html.replace('<head>', '<head><script>window.__ROOT__=1</script>'))
+    for (const path of ['/daedal', '/daedal/', '/daedal/index.html', '/daedal/dsh-hosts']) {
+      expect((await request(port, path)).status).toBe(401)
+    }
+    const exchange = await fetch(loaded.connection.authenticatedUrl(`http://127.0.0.1:${String(port)}`), { redirect: 'manual' })
+    expect(exchange.status).toBe(303)
+    const cookie = exchange.headers.get('set-cookie')?.split(';', 1)[0]
+    expect(cookie).toBeDefined()
+    const auth = { headers: { cookie: cookie! } }
+    for (const path of ['/daedal', '/daedal/', '/daedal/index.html', '/daedal/dsh-hosts']) {
+      expect(await request(port, path, auth)).toEqual({ status: 200, type: 'text/html; charset=utf-8', body: '<head><base href="/daedal/"></head><body>preview</body>' })
+    }
+    expect((await request(port, '/', auth)).body).toContain('__ROOT__')
+    expect((await request(port, '/', auth)).body).toContain('shell')
+    expect(await request(port, '/daedal/dsh-hosts', { ...auth, method: 'HEAD' })).toEqual({ status: 200, type: 'text/html; charset=utf-8', body: '' })
+    expect(await request(port, '/daedal/app.js')).toMatchObject({ status: 200, type: 'text/javascript; charset=utf-8', body: 'export const preview = true' })
+    for (const path of ['/daedal/missing.js', '/daedal/unknown', '/daedalish/app.js']) {
+      expect((await request(port, path, auth)).status).toBe(404)
+    }
+    expect((await request(port, '/daedal/dsh-hosts', { ...auth, method: 'POST' })).status).toBe(405)
+    expect((await request(port, '/daedal/..%2fdist%2fapp.js', auth)).status).toBe(403)
+    expect((await request(port, '/daedal/bad%00path', auth)).status).toBe(400)
+    const entry = [...loaded.loader.entries()].find(item => item.options.id === 'preview')!
+    await entry.fiber?.dispose()
+    expect((await request(port, '/daedal/dsh-hosts', auth)).status).toBe(404)
+    expect((await request(port, '/', auth)).body).toContain('shell')
+    const release = loaded.webServer.register({ kind: 'prefix', path: '/daedal', handler: (_req, res) => { res.end('replacement') } })
+    expect((await request(port, '/daedal')).body).toBe('replacement')
+    release()
   })
 })

@@ -15,6 +15,7 @@ const artifact = (path: string): string => join(root, path)
 const artifactUrl = (path: string): string => pathToFileURL(artifact(path)).href
 
 const requiredArtifacts = [
+  'packages/client/store/lib/index.js',
   'packages/client/connection/lib/client.js',
   'packages/client/connection/lib/index.js',
   'packages/api/remotes/lib/client.js',
@@ -35,6 +36,7 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
       agent: 'packages/core/agent/lib/index.js',
       apiGatewayClient: 'packages/api/gateway/lib/client.js',
       apiGatewayHost: 'packages/api/gateway/lib/index.js',
+      clientStore: 'packages/client/store/lib/index.js',
       connectionClient: 'packages/client/connection/lib/client.js',
       connectionHost: 'packages/client/connection/lib/index.js',
       goal: 'packages/goal/goal/lib/index.js',
@@ -51,6 +53,7 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
       import * as zod from 'zod'
 
       const urls = ${JSON.stringify(urls)}
+      const clientStore = await import(urls.clientStore)
       const { Context } = cordis
       const { default: AgentRegistry } = await import(urls.agent)
       const connectionHost = await import(urls.connectionHost)
@@ -159,6 +162,7 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
         return handoff.factory(specifier => {
           if (specifier === '@deepseek-ai/cordis') return cordis
           if (specifier === 'zod') return zod
+          if (specifier === '@deepseek-ai/dsh-client-store') return clientStore
           throw new Error('unexpected Client external ' + specifier)
         })
       }

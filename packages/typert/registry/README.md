@@ -23,7 +23,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the registry in any Host or Client composition that stores or consumes generated Typert artifacts; it provides `ctx.typert`. There is no configuration.
+Mount the registry in any Host or Client composition that stores or consumes generated Typert artifacts; it provides `ctx.typert`. There is no configuration. The `@deepseek-ai/dsh-typert-registry/client/portable` entry exports the Client plugin as normal ESM for native or shell-owned compositions. It keeps Cordis and Zod external so the registry shares their runtime identities with its consumers; its declarations enter through the Client face.
 
 ### Minimal setup
 

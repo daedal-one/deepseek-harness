@@ -56,7 +56,7 @@ function sessionState(
     ids: summaries.map(item => item.id),
     byId: Object.fromEntries(summaries.map(item => [item.id, item])),
     current,
-    phase,
+    state: 'idle', error: null, phase,
     subagentsByParent: {},
     jobsBySession: {},
     currentAddress: undefined,
@@ -135,6 +135,7 @@ class FakeWorkspaces implements IWorkspaces {
     }))
   }
 
+  declare readonly resolveByPath: IWorkspaces['resolveByPath']
   declare readonly create: IWorkspaces['create']
   declare readonly rename: IWorkspaces['rename']
   declare readonly delete: IWorkspaces['delete']

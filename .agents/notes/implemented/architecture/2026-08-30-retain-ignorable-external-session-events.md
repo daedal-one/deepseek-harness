@@ -10,7 +10,7 @@ That producer inventory did not cover a third-party plugin that currently depend
 
 ## Decision
 
-The canonical `SessionEvent` envelope retains `ignorable?: true`, and every representation preserves it: seed validation, JSONL, API transport, generated catalogs, and test fixtures. The persistence seam's stored-event validation (`validateStoredEvents`) continues to refuse an unknown event unless its stored envelope explicitly carries `ignorable: true`; absent remains required-on-read.
+The canonical `SessionEvent` envelope retains `ignorable?: true`, and every representation preserves it: seed validation, JSONL, API transport, generated catalogs, and test fixtures. The persistence seam's stored-event validation (`validateStoredEvents`) continues to refuse an unknown event unless its stored envelope explicitly carries `ignorable: true`; absent remains required-on-read. Client journal readers first refuse an opening header whose logical Session format differs from their build. They enforce the same event rule against their own generated event list before publishing a follow snapshot, live entry or history page. Host acceptance is insufficient when a newer Host knows a required event that an installed Client does not. Unknown ignorable records retain their original opaque fields and do not gain surface semantics.
 
 The field is removable only after a replacement supports the current third-party plugin across event production, persistence, reload, and transport, with an explicit cutover for sessions already containing the marker. The [session log versioning decision](2026-08-10-session-log-version-mechanism.md) continues to own the default-required safety rule and format-version policy.
 
@@ -23,6 +23,8 @@ Historical format migration is deliberately stricter in the alpha implementation
 **Delete the field and design a replacement later.** Rejected because that ordering creates an immediate compatibility gap with no migration or cutover path for the plugin or its stored sessions.
 
 **Treat every repository-external event as ignorable.** Rejected because a reader cannot infer that an unknown durable event is informational. An external event may change later reconstruction or plugin-owned state.
+
+**Trust the serving Host to validate Client compatibility.** A Host validates against its own build. Its successful read cannot establish that a different Client build understands a required event; API and Session format versions alone do not enumerate those event types.
 
 **Register mounted plugin event names as known.** Not adopted as the removal mechanism because event-name registration alone does not classify whether absence is safe, and acceptance would depend on the reader's current composition rather than the stored record.
 

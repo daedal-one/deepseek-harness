@@ -1,10 +1,13 @@
 /** Connection generation readiness, cancellation, and continuous recovery. */
+import type { ConnectionIdentity } from '../host-identity-protocol.ts'
 import { resolveConnectionConfig, type ConnectionRecoveryConfig } from '../recovery-config.ts'
 
 export type { ConnectionRecoveryConfig } from '../recovery-config.ts'
 
 /** Stable Host facts delivered by one established Remote event generation. */
 export interface ConnectionHostInfo {
+  /** Validated identity on Gateway generations; synthetic sources may omit it. */
+  readonly identity?: ConnectionIdentity
   /** Host account home used only to abbreviate displayed filesystem paths. */
   readonly home: string
 }
@@ -89,6 +92,7 @@ export class ConnectionController {
     private readonly source: ConnectionGenerationSource,
     private readonly sinks: ConnectionSinks = {},
     config: ConnectionRecoveryConfig = {},
+    private readonly createAbortController: () => AbortController = () => new AbortController(),
   ) {
     this.config = resolveConnectionConfig(config)
   }
@@ -165,7 +169,7 @@ export class ConnectionController {
     let retry = false
     while (this.running) {
       if (!this.networkAvailable && !this.immediateRetry) {
-        const retryDelay = new AbortController()
+        const retryDelay = this.createAbortController()
         this.retryDelay = retryDelay
         this.emitState('disconnected')
         await waitForAbort(retryDelay.signal)
@@ -186,7 +190,7 @@ export class ConnectionController {
         if (!this.isRunning()) return
         if (this.isRetryInterrupted(immediate)) continue
         if (!immediate) {
-          const retryDelay = new AbortController()
+          const retryDelay = this.createAbortController()
           this.retryDelay = retryDelay
           await sleep(this.backoffDelay(attempt), retryDelay.signal)
           if (this.retryDelay === retryDelay) this.retryDelay = null
@@ -199,7 +203,7 @@ export class ConnectionController {
       }
 
       const gen = ++this.generation
-      const ac = new AbortController()
+      const ac = this.createAbortController()
       this.current = ac
 
       let sourceReady = false

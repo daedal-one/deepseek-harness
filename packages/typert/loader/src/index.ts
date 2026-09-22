@@ -250,6 +250,16 @@ function requireInvocation(pkgName: string, value: unknown): void {
     throw new Error(`typert-loader: ${pkgName} invocation "${id}" repeats Context wire field "${receiver.wire as string}"`)
   }
   requireStrictCodec(pkgName, invocation.result, `invocation "${id}" result codec`)
+  if (invocation.wireFingerprint !== undefined) {
+    requireString(pkgName, invocation, 'wireFingerprint', `invocation "${id}"`)
+    if (!/^typert-wire-v[1-9][0-9]*:[0-9a-f]{64}$/.test(invocation.wireFingerprint as string)) {
+      throw new Error(`typert-loader: ${pkgName} invocation "${id}" wireFingerprint must be a versioned SHA-256 checksum`)
+    }
+  }
+  if (invocation.semanticRevision !== undefined
+    && (!Number.isSafeInteger(invocation.semanticRevision) || (invocation.semanticRevision as number) < 1)) {
+    throw new Error(`typert-loader: ${pkgName} invocation "${id}" semanticRevision must be a positive safe integer`)
+  }
   if (invocation.sourceLocation !== undefined) {
     const location = requireObject(pkgName, invocation.sourceLocation, `invocation "${id}" sourceLocation`)
     requireString(pkgName, location, 'file', `invocation "${id}" sourceLocation`)

@@ -15,6 +15,8 @@ import type {
 } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 
+export { KNOWN_SESSION_EVENT_TYPES } from './known-event-types.ts'
+
 /** Identifies one session in the store (and its persistence artifacts). */
 export type SessionId = Branded<'SessionId'>
 

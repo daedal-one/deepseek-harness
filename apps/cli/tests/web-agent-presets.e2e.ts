@@ -22,8 +22,9 @@ import type {} from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-token-meter'
 
 const REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url))
-/** The shipped Web surface: the dsh-base and dsh-web-app bundle patches over an empty preset root. */
+/** The shipped Web surface: the base, agent-plane and Web bundle patches over an empty preset root. */
 const BASE_PATCH = join(REPO_ROOT, 'packages/bundle/base/cordis.patch.yml')
+const AGENT_PLANE_PATCH = join(REPO_ROOT, 'packages/bundle/agent-plane/cordis.patch.yml')
 const WEB_PATCH = join(REPO_ROOT, 'packages/bundle/web-app/cordis.patch.yml')
 const CODEX_PACKAGE_DIR = join(REPO_ROOT, 'packages/subagent/subagent-codex')
 const CLAUDE_CODE_PACKAGE_DIR = join(REPO_ROOT, 'packages/subagent/subagent-claude-code')
@@ -132,6 +133,7 @@ async function bootWeb(
   }
   let bundlePatches: PatchOptions[] = [
     ...loadOverlayPatches('dsh-test', BASE_PATCH),
+    ...loadOverlayPatches('dsh-test', AGENT_PLANE_PATCH),
     ...loadOverlayPatches('dsh-test', WEB_PATCH),
   ]
   if (profileBundles !== undefined) {
@@ -148,7 +150,7 @@ async function bootWeb(
   return await boot('dsh-test', rootConfig, [...bundlePatches, ...overrides], (bootCtx) => {
     bootCtx.provide('connection', {
       fetch: { register: () => () => {} },
-      rpc: { intercept: () => () => {} },
+      rpc: { intercept: () => () => {}, handleRoute: () => () => {} },
     } as never)
     provideCmdline(bootCtx, { args: [], exit: () => {} })
   })
@@ -544,6 +546,7 @@ describe('product Bundle and user-preset intersection', () => {
       },
     ], installed.map(packageDir), [
       '@deepseek-ai/dsh-base',
+      '@deepseek-ai/dsh-agent-plane',
       '@deepseek-ai/dsh-web-app',
       ...installed.map(packageName),
     ])

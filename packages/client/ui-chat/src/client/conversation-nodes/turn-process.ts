@@ -1,7 +1,6 @@
-import type { Context } from '@deepseek-ai/cordis'
 import type {
   ConversationLocation, ConversationNodeContext, ConversationNodeDefinition, TurnLocation,
-} from '@deepseek-ai/dsh-client-ui-conversation/client'
+} from '@deepseek-ai/dsh-client-ui-conversation/client/portable'
 import type {} from '@deepseek-ai/dsh-llm-retry/types'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-tools/types'
@@ -20,7 +19,7 @@ declare module '../contract/chat-nodes.ts' {
   }
 }
 
-declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
+declare module '@deepseek-ai/dsh-client-ui-conversation/client/types' {
   interface ConversationTurnDataMap {
     /** Process range and finalized answer boundary for this Turn. */
     'turn-process': TurnProcessSpec
@@ -298,12 +297,4 @@ export const turnProcessDefinition: ConversationNodeDefinition<TurnProcessState>
       data,
     )
   },
-}
-
-/**
- * Register the Turn-scoped process disclosure projection.
- * @param ctx - owning UI Conversation context.
- */
-export function registerTurnProcess(ctx: Context): void {
-  ctx.uiConversation.events.register(turnProcessDefinition)
 }

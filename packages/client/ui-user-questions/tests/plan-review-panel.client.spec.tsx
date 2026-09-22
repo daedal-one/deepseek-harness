@@ -3,9 +3,8 @@ import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import {
-  PendingQuestion, planReviewOf, type QuestionComposerProps, type QuestionWait,
-} from '../src/client/contract/slots.ts'
+import { PendingQuestion, planReviewOf } from '../src/client/pending-question.ts'
+import type { QuestionComposerProps, QuestionWait } from '../src/client/contract/slots.ts'
 import { createQuestionDraftStore } from '../src/client/draft-store.ts'
 import { QuestionComposer } from '../src/client/QuestionComposer.tsx'
 import { en, en as copy } from '../src/client/locales.ts'
@@ -41,7 +40,7 @@ const sessionState: SessionState = {
   openState: 'open',
   openError: null,
   hasMore: false,
-  loadingOlder: false,
+  loadingOlder: false, olderError: null,
   promptError: null,
   blank: false,
   lastAgentError: null,
@@ -52,7 +51,7 @@ const sessionList = {
   ids: [SID],
   byId: { [SID]: { id: SID, displayTitle: 'Session', running: false, blank: false, updatedAt: 0 } },
   current: SID,
-  phase: 'ready' as const,
+  state: 'idle' as const, error: null, phase: 'ready' as const,
   subagentsByParent: {},
   jobsBySession: {},
   currentAddress: undefined,

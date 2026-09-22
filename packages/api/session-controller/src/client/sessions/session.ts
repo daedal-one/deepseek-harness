@@ -1,7 +1,6 @@
 // Sessions remain resident after creation so their open Remote sources keep running off-screen.
 
 import type { Context } from '@deepseek-ai/cordis'
-import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import type { AttachmentIdType, FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
@@ -29,13 +28,14 @@ import type {
   SessionEventLikeEntry, SessionLiveEventEntry,
 } from '../contract/events.ts'
 import { Notifier } from './notifier.ts'
+import type { HistoryDetailRetention } from '../history-detail-retention.ts'
 import { isRemoteFailure } from '@deepseek-ai/dsh-api-gateway/client'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import type { RemoteFailure, RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { SessionRemotes } from './remotes.ts'
 import { ProjectionValueStore } from './projection-store.ts'
 import type { ProjectionsBaseline } from './projection-store.ts'
-import { resolvedClientTimeZone } from '../time-zone.ts'
+import type { SessionPlatform } from '../platform.ts'
 import { SessionQueueMirror } from './queue-mirror.ts'
 import {
   ClientAssistantStream,
@@ -76,6 +76,8 @@ export interface SessionOptions {
    * private store (bare object-layer construction).
    */
   projections?: ProjectionValueStore
+  /** Shared Host-wide hydration accounting; omitted by unbounded compositions. */
+  historyDetailRetention?: HistoryDetailRetention
 }
 
 /**
@@ -88,7 +90,14 @@ export class Session implements SessionFace {
   // ---- Window and derived state (all private; the snapshot is the only read API) ----
   private baseSeq = SessionLogOffset(0)
   private hasMore = false
-  private readonly detailLoads = new Map<number, Promise<void>>()
+  private readonly detailLoads = new Map<number, { abort: AbortController; promise: Promise<void> }>()
+  /** Canceled reads remain owned until settlement, after their coalescing slots are released. */
+  private readonly detailReads = new Set<Promise<void>>()
+  private readonly retainedDetails = new Map<number, {
+    compact: SessionLiveEventEntry
+    hydrated: SessionLiveEventEntry
+    release: () => void
+  }>()
   private syncing = false
   private openState: OpenState = 'cold'
   private openError: RemoteFailure | null = null
@@ -96,11 +105,12 @@ export class Session implements SessionFace {
   /** Bumped by stream replacement to invalidate an in-flight doOpen. Stale
    *  passes drop all writes once the generation moves on. */
   private openGeneration = 0
-  private loadingOlder = false
+  private paging: Promise<void> | null = null
+  private pagingAbort: AbortController | null = null
+  private readonly pagingReads = new Set<Promise<void>>()
+  private olderError: RemoteFailure | null = null
   /** Shared low-water target of the running jump loop; null when no jump is paging. */
   private jumpTargetSeq: SessionSeq | null = null
-  /** The running jump loop's completion, shared by retargeting callers. */
-  private jumpPromise: Promise<void> | null = null
   /** Authoritative stream-only inbox snapshot; pending work never hits history. */
   private readonly queueMirror = new SessionQueueMirror()
   private readonly assistantStream = new ClientAssistantStream()
@@ -161,11 +171,13 @@ export class Session implements SessionFace {
   /**
    * @param sessionId - Host session identity (client sessions are always Host-born).
    * @param remote - generated Remote namespaces this session calls.
+   * @param platform - request identity and client time zone supplied by the host connection owner.
    * @param options - optional manager-owned state observers.
    */
   constructor(
     readonly sessionId: SessionId,
     private readonly remote: SessionRemotes,
+    private readonly platform: SessionPlatform,
     private readonly options: SessionOptions = {},
   ) {
     this.projections = options.projections ?? new ProjectionValueStore()
@@ -205,7 +217,7 @@ export class Session implements SessionFace {
    * @returns the minted identity for {@link prompt} plus the pre-prompt abandon path.
    */
   beginSubmission(input: BeginSubmissionInput): SubmissionHandle {
-    const requestId = randomUUID() as SessionRequestId
+    const requestId = this.platform.createRequestId()
     this.pendingSubmissions = [...this.pendingSubmissions, {
       requestId,
       placement: this.running
@@ -228,7 +240,7 @@ export class Session implements SessionFace {
    * @param content - text, browser-owned temporary image uploads, and staged-file receipts.
    * @param mode - queue appends after the current turn; steer interrupts it.
    * @param signal - optional caller cancellation for the complete admission round-trip.
-   * @param requestId - identity from {@link beginSubmission}; a failed identified prompt retires its echo.
+   * @param requestId - caller-owned identity, optionally from {@link beginSubmission}; failure retires any matching echo.
    * @returns the prompt result (also mirrored into promptError on failure).
    */
   async prompt(
@@ -247,9 +259,9 @@ export class Session implements SessionFace {
     this.notifier.markDirty()
     let result: RemoteResult<{ accepted: true }>
     if (this.address === undefined) {
-      const clientTimeZone = resolvedClientTimeZone()
+      const clientTimeZone = this.platform.timeZone()
       result = await this.remote.session.prompt({
-        requestId: requestId ?? randomUUID() as SessionRequestId,
+        requestId: requestId ?? this.platform.createRequestId(),
         sessionId: this.sessionId,
         mode,
         content,
@@ -269,13 +281,13 @@ export class Session implements SessionFace {
       // wire type is used; this array is not filtered or reordered.
       const routedContent = content as Exclude<PromptContentPart, { readonly type: 'file' }>[]
       const routed = await this.remote.subagents.prompt({
-        requestId: randomUUID() as SessionRequestId,
+        requestId: this.platform.createRequestId(),
         parentSessionId: this.address.parentSessionId,
         childSessionId: this.address.childSessionId,
         mode: 'continuable',
         delivery: mode,
         content: routedContent,
-        clientTimeZone: resolvedClientTimeZone(),
+        clientTimeZone: this.platform.timeZone(),
       }, signal)
       result = routed.ok ? { ok: true, value: { accepted: true } } : routed
     }
@@ -390,90 +402,160 @@ export class Session implements SessionFace {
   }
 
   /** Fetch an exact result and replace only its still-deferred entry. */
-  loadHistoryDetail(seq: number): Promise<void> {
+  loadHistoryDetail(seq: number, signal?: AbortSignal): Promise<void> {
+    if (signal?.aborted === true) return Promise.resolve()
     const pending = this.detailLoads.get(seq)
-    if (pending !== undefined) return pending
+    if (pending !== undefined) return pending.promise
+    const entry = this.eventSource.getSnapshot().entries.find(value => value.event.seq === seq)
+    if (this.events === undefined || this.openState !== 'open' || entry?.type !== 'event' || entry.detail === undefined) return Promise.resolve()
     const generation = this.openGeneration
+    const abort = new AbortController()
+    const current = (): boolean => !abort.signal.aborted && generation === this.openGeneration
+    const cancel = (): void => {
+      if (this.detailLoads.get(seq)?.abort === abort) this.detailLoads.delete(seq)
+      abort.abort(signal?.reason)
+    }
+    signal?.addEventListener('abort', cancel, { once: true })
     const task = (async () => {
-      const result = await this.remote.session.historyDetail({ address: this.sessionAddress(), seq })
+      const result = await this.remote.session.historyDetail({ address: this.sessionAddress(), seq }, abort.signal)
+      if (!current()) return
       if (!result.ok) throw result.error
-      if (generation !== this.openGeneration) return
       const window = this.eventSource.getSnapshot()
-      const entry = window.entries.find(value => value.event.seq === seq)
-      if (entry?.type !== 'event' || entry.detail === undefined) return
+      if (!window.entries.includes(entry)) return
       const replacement = result.value as unknown as SessionLiveEventEntry
-      this.eventSource.replace(window.entries.map(value => value === entry ? replacement : value), window.hasMore)
-    })().finally(() => { this.detailLoads.delete(seq) })
-    this.detailLoads.set(seq, task)
+      const retention = this.options.historyDetailRetention
+      if (retention !== undefined) {
+        const release = retention.retain(JSON.stringify(replacement).length, () => {
+          this.retainedDetails.delete(seq)
+          this.replaceDetail(replacement, entry)
+        })
+        // Evicting another Session publishes synchronously and may replace this generation.
+        if (!current() || !this.eventSource.getSnapshot().entries.includes(entry)) {
+          release()
+          return
+        }
+        this.retainedDetails.set(seq, { compact: entry, hydrated: replacement, release })
+      }
+      this.replaceDetail(entry, replacement)
+    })().catch((error: unknown) => {
+      if (current()) throw error
+    }).finally(() => {
+      signal?.removeEventListener('abort', cancel)
+      if (this.detailLoads.get(seq)?.promise === task) this.detailLoads.delete(seq)
+      this.detailReads.delete(task)
+    })
+    if (!abort.signal.aborted) this.detailLoads.set(seq, { abort, promise: task })
+    this.detailReads.add(task)
     return task
+  }
+
+  private replaceDetail(previous: SessionLiveEventEntry, replacement: SessionLiveEventEntry): void {
+    const window = this.eventSource.getSnapshot()
+    if (!window.entries.includes(previous)) return
+    this.eventSource.replace(window.entries.map(value => value === previous ? replacement : value), window.hasMore)
+  }
+
+  private clearRetainedDetails(restore: boolean): void {
+    const retained = [...this.retainedDetails.values()]
+    this.retainedDetails.clear()
+    for (const entry of retained) entry.release()
+    if (!restore || retained.length === 0) return
+    const replacements = new Map(retained.map(entry => [entry.hydrated, entry.compact]))
+    const window = this.eventSource.getSnapshot()
+    this.eventSource.replace(window.entries.map(entry => entry.type === 'event' ? replacements.get(entry) ?? entry : entry), window.hasMore)
+  }
+
+  /** Invalidate coalescing before aborting reads so replacement requests have independent owners. */
+  private releaseDetails(): Promise<PromiseSettledResult<void>[]> {
+    const reads = [...this.detailLoads.values()]
+    this.detailLoads.clear()
+    this.clearRetainedDetails(true)
+    for (const read of reads) read.abort.abort()
+    return Promise.allSettled([...this.detailReads])
   }
 
   /** Retry a failed initial history load. */
   retryOpen(): Promise<void> { return this.open() }
 
   /** Page up: pull one earlier page with the window's first seq as beforeSeq and prepend. */
-  async loadOlder(): Promise<void> {
-    if (this.openState !== 'open' || !this.hasMore || this.loadingOlder) return
+  loadOlder(signal?: AbortSignal): Promise<void> {
+    if (signal?.aborted === true) return Promise.resolve()
+    if (this.paging !== null) return this.paging
     const events = this.events
-    if (events === undefined) return
-    this.loadingOlder = true
-    this.notifier.markDirty()
-    try {
-      await events.prepend({ beforeSeq: this.baseSeq, maxMessages: PAGE_MESSAGES })
-    } catch (error) {
-      if (!isRemoteFailure(error)) {
-        console.error('[session-controller] loadOlder failed:', error)
-      }
-    } finally {
-      this.loadingOlder = false
-      this.notifier.markDirty()
-    }
+    if (this.openState !== 'open' || !this.hasMore || events === undefined) return Promise.resolve()
+    return this.startPaging(lifetime => events.prepend({ beforeSeq: this.baseSeq, maxMessages: PAGE_MESSAGES }, lifetime), signal)
   }
 
   /** Jump loader: page backwards until the window covers seq (see ISession.loadThrough). */
   loadThrough(seq: SessionSeq): Promise<void> {
     if (this.openState !== 'open' || !this.hasMore || this.baseSeq <= seq) return Promise.resolve()
-    if (this.jumpPromise !== null) {
-      // Retarget the running loop to the lowest requested seq.
-      this.jumpTargetSeq = SessionSeq(Math.min(this.jumpTargetSeq ?? seq, seq))
-      return this.jumpPromise
+    if (this.paging !== null) {
+      if (this.jumpTargetSeq === null) return Promise.resolve()
+      this.jumpTargetSeq = SessionSeq(Math.min(this.jumpTargetSeq, seq))
+      return this.paging
     }
-    // A plain single-page pull owns the busy flag; the jump does not queue
-    // behind it (the caller retries once it settles) and must leave no
-    // target behind — only the loop's finally clears that field, and no
-    // loop starts here.
-    if (this.loadingOlder) return Promise.resolve()
+    const events = this.events
+    if (events === undefined) return Promise.resolve()
     this.jumpTargetSeq = seq
-    this.loadingOlder = true
-    this.notifier.markDirty()
-    // Stale-pass guard (the doOpen pattern): a resync mid-loop replaces the
-    // stream generation; this pass then stops instead of paging the new
-    // generation toward its old target.
     const generation = this.openGeneration
-    this.jumpPromise = (async () => {
-      try {
-        while (this.hasMore && this.jumpTargetSeq !== null && this.baseSeq > this.jumpTargetSeq) {
-          if (generation !== this.openGeneration) return
-          const events = this.events
-          if (events === undefined) return
-          const before = this.baseSeq
-          await events.prepend({ beforeSeq: this.baseSeq, maxMessages: JUMP_PAGE_MESSAGES })
-          // No-progress guard: an empty or dropped page that still claims more
-          // history must end the loop, not spin it.
-          if (this.baseSeq >= before) return
-        }
-      } catch (error) {
-        if (!isRemoteFailure(error)) {
-          console.error('[session-controller] loadThrough failed:', error)
-        }
-      } finally {
-        this.jumpTargetSeq = null
-        this.jumpPromise = null
-        this.loadingOlder = false
-        this.notifier.markDirty()
+    return this.startPaging(async (signal) => {
+      while (this.hasMore && this.jumpTargetSeq !== null && this.baseSeq > this.jumpTargetSeq) {
+        if (generation !== this.openGeneration) return
+        const before = this.baseSeq
+        await events.prepend({ beforeSeq: before, maxMessages: JUMP_PAGE_MESSAGES }, signal)
+        if (generation !== this.openGeneration || this.baseSeq >= before) return
       }
-    })()
-    return this.jumpPromise
+    })
+  }
+
+  /** One operation owns paging activity, retry state, and completion for both page gestures. */
+  private startPaging(read: (signal: AbortSignal) => Promise<void>, signal?: AbortSignal): Promise<void> {
+    const generation = this.openGeneration
+    const abort = new AbortController()
+    const cancel = (): void => {
+      if (this.pagingAbort === abort) this.withdrawPaging()
+      abort.abort(signal?.reason)
+    }
+    signal?.addEventListener('abort', cancel, { once: true })
+    this.olderError = null
+    const task = read(abort.signal).catch((error: unknown) => {
+      if (abort.signal.aborted || generation !== this.openGeneration) return
+      if (!isRemoteFailure(error)) console.error('[session-controller] history paging failed:', error)
+      this.olderError = isRemoteFailure(error)
+        ? error
+        : new RemoteError('gateway/internal', error instanceof Error ? error.message : String(error), {})
+    }).finally(() => {
+      signal?.removeEventListener('abort', cancel)
+      this.pagingReads.delete(task)
+      if (this.paging !== task) return
+      this.paging = null
+      this.pagingAbort = null
+      this.jumpTargetSeq = null
+      this.notifier.markDirty()
+    })
+    if (!abort.signal.aborted) {
+      this.paging = task
+      this.pagingAbort = abort
+    }
+    this.pagingReads.add(task)
+    this.notifier.markDirty()
+    return task
+  }
+
+  private withdrawPaging(): void {
+    this.paging = null
+    this.pagingAbort = null
+    this.jumpTargetSeq = null
+    this.olderError = null
+    this.notifier.markDirty()
+  }
+
+  /** Withdraw read state before aborting; canceled transports remain owned until settlement. */
+  private releasePaging(): Promise<PromiseSettledResult<void>[]> {
+    const abort = this.pagingAbort
+    this.withdrawPaging()
+    abort?.abort()
+    return Promise.allSettled([...this.pagingReads])
   }
 
   /** Rebuild an opened history source after address replacement.
@@ -481,10 +563,13 @@ export class Session implements SessionFace {
    *  reconnecting control stream and remains untouched. */
   async resync(): Promise<void> {
     if (this.openState === 'cold') return // never opened: no window to rebuild (doOpen flips to 'loading' synchronously, so cold implies no in-flight open)
-    this.openGeneration++
+    const generation = ++this.openGeneration
+    const paging = this.releasePaging()
     const events = this.events
     this.events = undefined
-    await events?.dispose()
+    const details = this.releaseDetails()
+    await Promise.all([events?.dispose(), paging, details])
+    if (generation !== this.openGeneration) return
     this.openPromise = null
     this.openState = 'cold'
     this.openError = null
@@ -619,9 +704,11 @@ export class Session implements SessionFace {
       this.retireFailedSubmission(requestId)
     }
     this.openGeneration++
+    const paging = this.releasePaging()
     const events = this.events
     this.events = undefined
-    await events?.dispose()
+    const details = this.releaseDetails()
+    await Promise.all([events?.dispose(), paging, details])
   }
 
   /** Keep an open transcript readable while its Host generation is unavailable. */
@@ -701,6 +788,7 @@ export class Session implements SessionFace {
     // A durable gap-repair page has no assistant baseline. Clearing transient
     // attempts makes a held notification reopen follow once for an atomic
     // page/baseline pair instead of applying it to an unrelated repair cut.
+    this.clearRetainedDetails(false)
     const visible = this.assistantStream.replace(entries, assistantStream)
     this.baseSeq = SessionLogOffset(entries[0]?.event.seq ?? 0)
     this.hasMore = hasMore
@@ -821,12 +909,14 @@ export class Session implements SessionFace {
     if (generation !== this.openGeneration || this.events !== events) return
     if (!isRemoteFailure(error)) throw error
     this.openGeneration++
+    const paging = this.releasePaging()
     this.events = undefined
+    const details = this.releaseDetails()
     this.openPromise = null
     this.openState = 'error'
     this.syncing = false
     this.openError = error
-    void events.dispose()
+    void Promise.all([events.dispose(), paging, details])
     this.notifier.markDirty()
   }
 
@@ -847,7 +937,8 @@ export class Session implements SessionFace {
       syncing: this.syncing,
       openError: this.openError,
       hasMore: this.hasMore,
-      loadingOlder: this.loadingOlder,
+      loadingOlder: this.paging !== null,
+      olderError: this.olderError,
       promptError: this.promptError,
       blank: this.blankBit,
       lastAgentError: this.lastAgentError,

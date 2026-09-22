@@ -1,4 +1,22 @@
 # Keyless model and isolated-path patch over the shipped headless profile.
+- id: agent-presets
+  disabled: true
+
+- id: tool-bash
+  disabled: false
+
+- id: tool-pwsh
+  disabled: false
+
+- id: tool-fs
+  disabled: false
+
+- id: tool-fs-search
+  disabled: false
+
+- id: tool-web
+  disabled: false
+
 - id: headless-startup
   disabled: true
 

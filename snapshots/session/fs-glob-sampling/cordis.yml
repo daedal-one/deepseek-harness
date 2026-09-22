@@ -20,6 +20,55 @@
     root: !!js dshHomePath('sessions')
     compression: !!js 'process.env.DSH_SNAPSHOT === undefined ? ''zstd'' : ''none'''
 
+- id: tool-bash
+  disabled: false
+
+- id: tool-fs
+  disabled: false
+
+- id: plan-mode
+  disabled: false
+
+- id: compaction-basic
+  disabled: false
+
+- id: command-compact
+  disabled: false
+
+- id: tool-result-pruner
+  disabled: false
+
+- id: tool-subagent-control
+  disabled: false
+
+- id: tool-subagent-list-agents
+  disabled: false
+
+- id: tool-subagent
+  disabled: false
+
+- id: tool-subagent-fork
+  disabled: false
+
+- id: workflow-worker-thread
+  disabled: false
+
+- id: tool-workflow
+  disabled: false
+
+- id: tool-ralph
+  disabled: false
+
+- id: tool-todo
+  disabled: false
+
+- id: tool-web
+  disabled: false
+
+- id: agent-presets
+  name: '@deepseek-ai/dsh-agent-presets'
+  disabled: true
+
 - id: agent-instructions
   name: '@deepseek-ai/dsh-agent-instructions'
   disabled: true
@@ -63,6 +112,7 @@
 
 - id: tool-fs-search
   name: '@deepseek-ai/dsh-tool-fs-search'
+  disabled: false
   config:
     sampleOverCapGlobResults: true
     globMaxResults: 4

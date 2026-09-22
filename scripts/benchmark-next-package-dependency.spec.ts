@@ -74,6 +74,7 @@ describe('next package benchmark graph', () => {
       }],
       peerRequiredHostDependencies: new Set(),
       configurationOnlyDevDependencies: new Set(),
+      portableClientDependencies: new Set(),
       clientInject: new Set(),
     }
     const index = new Map<string, Map<string, MutableRegistryManifest>>([

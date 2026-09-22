@@ -24,7 +24,7 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { CHAT_SETTINGS_NAMESPACE, type ChatSettings } from '../src/chat-settings.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
+declare module '@deepseek-ai/dsh-client-ui-conversation/client/types' {
   interface ConversationTurnDataMap {
     metric: number
   }
@@ -78,6 +78,18 @@ function storeOf(runtime: SlotTestRuntime, key: 'conversation.session' | 'conver
 }
 
 describe('Chat apply wiring', () => {
+  it('releases shared business registration when the Chat plugin leaves the browser service', async () => {
+    const b = await bench()
+    try {
+      expect(b.runtime.ctx.uiConversation.events.entries()).toHaveLength(13)
+      expect(b.runtime.ctx.uiConversation.events.fallbackEntry()?.kind).toBe('unknown-surface')
+      await b.chat.dispose()
+      expect(b.runtime.ctx.uiConversation.events.entries()).toEqual([])
+      expect(b.runtime.ctx.uiConversation.events.fallbackEntry()).toBeUndefined()
+      expect(b.runtime.ctx.uiConversation.views.entries()).toEqual([])
+    } finally { await b.runtime.dispose() }
+  })
+
   it('contributes Chat View, node renderers, and stats', async () => {
     const b = await bench()
     const views = b.runtime.slots.entries('conversation.view')

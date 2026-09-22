@@ -75,7 +75,7 @@ export interface TrajectorySnapshot {
 /** Selector hook over the current Conversation binding's Trajectory target. */
 export type UseTrajectory = SnapshotSelectorHook<TrajectorySnapshot>
 
-declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
+declare module '@deepseek-ai/dsh-client-ui-conversation/client/types' {
   interface ConversationViewSnapshotMap {
     /** Independently assembled data consumed by the Trajectory view. */
     trajectory: TrajectorySnapshot

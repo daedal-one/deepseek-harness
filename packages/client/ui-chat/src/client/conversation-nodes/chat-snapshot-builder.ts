@@ -1,9 +1,8 @@
-import type { Context } from '@deepseek-ai/cordis'
 import { notifySubscribers } from '@deepseek-ai/dsh-client-store'
 import type {
   ConversationLocation, ConversationNode, ConversationTimelineSnapshot, ConversationViewBuilder,
   ConversationViewDefinition, PartialAssistant, RunningToolCall,
-} from '@deepseek-ai/dsh-client-ui-conversation/client'
+} from '@deepseek-ai/dsh-client-ui-conversation/client/portable'
 import type { ChatConversationViewNode, ChatNode } from '../contract/chat-nodes.ts'
 import { isRunningTool } from '../contract/chat-nodes.ts'
 import type {
@@ -1069,12 +1068,4 @@ export const chatViewDefinition: ConversationViewDefinition<ChatConversationView
   target: 'chat',
   create: () => new ChatSnapshotBuilder(),
   isActive: snapshot => snapshot.order.some(key => snapshot.nodes.get(key)?.kind !== 'command'),
-}
-
-/**
- * Register the incremental Chat target builder.
- * @param ctx - owning UI Conversation context.
- */
-export function registerChatConversationView(ctx: Context): void {
-  ctx.uiConversation.views.register(chatViewDefinition)
 }

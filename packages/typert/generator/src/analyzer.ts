@@ -1199,6 +1199,7 @@ class FaceAnalyzer {
     const mode = invocation.kind === 'direct' ? invocation.mode : undefined
     const resultType = this.remoteResultType(method, mode)
     return {
+      semanticRevision: this.remoteRevision(method),
       id: `${registration.name}#${binding.namespace}/${exportedMethod}`,
       service: binding.service,
       namespace: binding.namespace,
@@ -1217,6 +1218,17 @@ class FaceAnalyzer {
       ),
       location: this.location(method.name),
     }
+  }
+
+  private remoteRevision(method: ts.MethodDeclaration): number {
+    const tags = ts.getJSDocTags(method).filter(tag => tag.tagName.text === 'remoteRevision')
+    const [tag] = tags
+    if (tag === undefined) return 1
+    const text = ts.getTextOfJSDocComment(tag.comment)?.trim() ?? ''
+    if (tags.length !== 1 || !/^[1-9][0-9]*$/.test(text) || !Number.isSafeInteger(Number(text))) {
+      this.fail(method, '@remoteRevision requires exactly one positive safe integer literal')
+    }
+    return Number(text)
   }
 
   private gatewayBinding(declaration: ts.ClassDeclaration): GatewayBinding | undefined {

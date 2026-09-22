@@ -51,6 +51,12 @@ The package is one ownership rule: rendering a question is a host UI capability,
 
 The card claims a request only when it can send every answer that request allows: one question, the intent declared, the plan present as `detail`, the named approve label offered, and a binary single choice (at most one option besides approve, not multi-select). Anything else stays on the generic flow, which can express it. An intent changes the layout, never which answers are reachable.
 
+### Portable requests
+
+The `@deepseek-ai/dsh-client-ui-user-questions/client/portable` entry exposes `PendingQuestion`, plan-review narrowing and `registerQuestionRequests` without React, Slots or draft storage. The generated Remote service, Session scope lookup and pending-domain registrar belong to the same caller-owned Cordis fiber. The shared consumer publishes ordinary questions at precedence one and valid plan reviews at precedence two. Answering returns the complete batch; cancellation retains the Host's `ASK_CANCELLED` or `ASK_ABORTED` error code.
+
+Disposal withdraws pending requests, delegates them and waits for the next listener. Failed publication settles and observes its carrier before returning the error. Browser presentation uses the same handler and carrier as portable applications; viewing drafts and controls remain renderer-owned. Pending carriers and completion barriers require only the baseline Promise constructor; native consumers do not need `Promise.withResolvers` or a global Promise polyfill.
+
 ### Copy and locale
 
 Composer chrome copy (pager, buttons, placeholders, validation feedback) is English: the plugin registers its dictionary under the `question` namespace of `dsh-client-locale` and hands the entry its bound translator plus the locale snapshot source through the inject face, so a locale switch re-renders a mounted composer. Question and option text arrives from the model and renders verbatim; carrier failure messages also display untranslated.

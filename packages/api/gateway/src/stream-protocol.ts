@@ -1,6 +1,7 @@
 /** Wire messages for Gateway-owned Remote streams and event-result RPCs. */
 
 import type { Branded } from '@deepseek-ai/dsh-brand'
+import type { ConnectionIdentity } from '@deepseek-ai/dsh-client-connection/types'
 
 /** Exact WebSocket route carrying every Typert Remote stream. */
 export const REMOTE_STREAM_MUX_PATH = '/api/remote.mux'
@@ -15,7 +16,7 @@ export const REMOTE_EVENT_RESULT_ENDPOINT = '$events/result'
 export const REMOTE_EVENT_STREAM_PAYLOAD = { args: {} } as const
 
 /** Discriminator for the first item proving the Host event source is ready. */
-export const REMOTE_EVENT_STREAM_READY = { type: 'ready' } as const
+export const REMOTE_EVENT_STREAM_READY = { type: 'ready', protocolVersion: 1 } as const
 
 /** Opaque identity for one active Client Remote Event generation. */
 export type RemoteEventClientId = Branded<'RemoteEventClientId'>
@@ -25,6 +26,8 @@ export type RemoteEventId = Branded<'RemoteEventId'>
 
 /** Stable Host facts published with every established Client event generation. */
 export interface RemoteEventHostInfo {
+  /** Connection-owned identity of the Host emitting this stream. */
+  readonly identity: ConnectionIdentity
   /** Host account home used only to abbreviate displayed filesystem paths. */
   readonly home: string
 }
@@ -32,6 +35,8 @@ export interface RemoteEventHostInfo {
 /** Opening item that binds later HTTP results to this active event stream. */
 export interface RemoteEventReadyFrame {
   readonly type: 'ready'
+  /** Opening-frame protocol, independent of Session and domain API compatibility. */
+  readonly protocolVersion: typeof REMOTE_EVENT_STREAM_READY.protocolVersion
   readonly clientId: RemoteEventClientId
   /** Stable Host facts attached to this connection generation. */
   readonly host: RemoteEventHostInfo

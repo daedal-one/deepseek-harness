@@ -23,7 +23,7 @@ interface ScopeProbeTurnData {
   readonly valueSeenFromStep: number
 }
 
-declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
+declare module '@deepseek-ai/dsh-client-ui-conversation/client/types' {
   interface ConversationStepDataMap {
     'scope-probe': ScopeProbeStepData
   }

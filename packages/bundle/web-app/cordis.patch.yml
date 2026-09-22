@@ -185,6 +185,10 @@
         # A deployment adding authorities keeps this expression and concatenates
         # its literals, for example: ['app.internal', ...ctx.webRuntime.trustedHosts].
         trustedHosts: !!js ctx.webRuntime.trustedHosts
+        deviceAccess:
+          enrollmentTtlMs: 300000
+          maxPendingEnrollments: 4
+          maxDevices: 16
 
     # Raw Blob and ReadableStream uploads run independently of Connection's
     # RPC and generation service.
@@ -238,6 +242,9 @@
 
     - id: ui-settings-general
       name: '@deepseek-ai/dsh-client-ui-settings-general'
+
+    - id: ui-device-access
+      name: '@deepseek-ai/dsh-client-ui-device-access'
 
     - id: ui-settings-models
       name: '@deepseek-ai/dsh-client-ui-settings-models'

@@ -4,7 +4,8 @@ import { join, resolve } from 'node:path'
 import ts from 'typescript'
 import { afterEach, describe, expect, it } from 'vitest'
 import { WorkspaceAnalyzer } from '../src/analyzer.ts'
-import type { InvocationModel } from '../src/model.ts'
+import { FaceModelEmitter } from '../src/emitter.ts'
+import type { FaceModel, InvocationModel } from '../src/model.ts'
 import { WorkspaceTypertGenerator } from '../src/workspace.ts'
 
 const fixtureRoot = resolve(import.meta.dirname, 'fixtures/remote-model')
@@ -19,6 +20,8 @@ interface RuntimeSchema {
 }
 
 interface RuntimeDescriptor {
+  readonly wireFingerprint: string
+  readonly semanticRevision: number
   readonly id: string
   readonly mode?: 'stream'
   readonly cancellation?: { readonly parameter: 'signal' }
@@ -48,6 +51,34 @@ afterEach(() => {
 })
 
 describe('Remote model generation', { timeout: 60_000 }, () => {
+  it('keeps authored business revisions independent of schemas on both generated faces', async () => {
+    const root = copyFixture()
+    const before = await generatedRemote(root)
+    expect(before.TYPERT_REMOTE.descriptors.map(value => value.semanticRevision)).toEqual([1, 1, 1])
+    editFile(root, 'packages/remote/src/index.ts', source => source
+      .replace('  @Remote\n', '  /** @remoteRevision 2 */\n  @Remote\n')
+      .replace("  @RemoteScope('agent')", "  /** @remoteRevision 3 */\n  @RemoteScope('agent')")
+      .replace("  @Remote({ mode: 'stream' })", "  /** @remoteRevision 4 */\n  @Remote({ mode: 'stream' })"))
+    const [artifact] = new WorkspaceTypertGenerator(root).generate()
+    const host = await loadGenerated(artifact!.js) as { TYPERT: { invocations: readonly RuntimeDescriptor[] } }
+    const client = await generatedRemote(root)
+    expect(client.TYPERT_REMOTE.descriptors.map(value => value.semanticRevision)).toEqual([2, 3, 4])
+    expect(host.TYPERT.invocations.map(value => value.semanticRevision)).toEqual([2, 3, 4])
+    expect(fingerprints(client.TYPERT_REMOTE.descriptors)).toEqual(fingerprints(before.TYPERT_REMOTE.descriptors))
+  })
+
+  it.each(['0', '-1', '1.5', '2 extra', '9007199254740992', '01', ''])('refuses invalid authored revisions %s', (revision) => {
+    const root = copyFixture()
+    editFile(root, 'packages/remote/src/index.ts', source => source.replace('  @Remote\n', `  /** @remoteRevision ${revision} */\n  @Remote\n`))
+    expect(() => analyzeRemote(root)).toThrow('@remoteRevision requires exactly one positive safe integer literal')
+  })
+
+  it('refuses duplicate business revision annotations', () => {
+    const root = copyFixture()
+    editFile(root, 'packages/remote/src/index.ts', source => source.replace('  @Remote\n', '  /**\n   * @remoteRevision 2\n   * @remoteRevision 2\n   */\n  @Remote\n'))
+    expect(() => analyzeRemote(root)).toThrow('@remoteRevision requires exactly one positive safe integer literal')
+  })
+
   it('discovers a Remote-only package and emits strict direct and Context descriptors', async () => {
     const generator = new WorkspaceTypertGenerator(fixtureRoot)
 
@@ -166,6 +197,90 @@ describe('Remote model generation', { timeout: 60_000 }, () => {
     expect(declarationMap.names).toContain('create')
 
     assertRemoteConsumerTypechecks(artifact?.remote?.dts, artifact?.remote?.dtsMap)
+  })
+
+  it('emits identical versioned wire fingerprints in Host and Client artifacts', async () => {
+    const [artifact] = new WorkspaceTypertGenerator(fixtureRoot).generate()
+    if (artifact === undefined || artifact.remote === undefined) throw new Error('Remote artifact missing')
+    const host = await loadGenerated(artifact.js) as { TYPERT: { invocations: readonly RuntimeDescriptor[] } }
+    const client = await loadGenerated(artifact.remote.js) as RuntimeRemoteModule
+    expect(fingerprints(host.TYPERT.invocations)).toEqual(fingerprints(client.TYPERT_REMOTE.descriptors))
+    expect(client.TYPERT_REMOTE.descriptors.every(
+      descriptor => /^typert-wire-v1:[0-9a-f]{64}$/.test(descriptor.wireFingerprint),
+    )).toBe(true)
+    expect(fingerprints(client.TYPERT_REMOTE.descriptors)).toMatchInlineSnapshot(`
+      {
+        "@fixture/remote#goals/create": "typert-wire-v1:0edf359f4a55221a4dfeae2b4b1aeab067af065776ba18442517543605223cd9",
+        "@fixture/remote#goals/rename": "typert-wire-v1:94e3592ba0091b145d1cc28b63aa74060bb7945fe3b492f1c262606567ebbed4",
+        "@fixture/remote#goals/watch": "typert-wire-v1:642e48be2d6e0b0fc748b1fab4eace574a041585fb2d76d0b0feebf1c070421d",
+      }
+    `)
+  })
+
+  it('ignores source locations, declaration names, prose and unrelated endpoints', async () => {
+    const before = await generatedRemote(fixtureRoot)
+    const root = copyFixture()
+    for (const path of ['packages/remote/src/index.ts', 'packages/remote/src/types.ts']) {
+      editFile(root, path, source => '\n\n/** Different documentation. */\n' + source.replaceAll('CreateGoal', 'RenamedGoal'))
+    }
+    editFile(root, 'packages/remote/src/index.ts', source => source.replace('\n}\n\nexport type {', '\n  @Remote\n  unrelated(): number { return 1 }\n}\n\nexport type {'))
+    const after = await generatedRemote(root)
+    expect(fingerprints(after.TYPERT_REMOTE.descriptors.filter(value => !value.id.endsWith('/unrelated'))))
+      .toEqual(fingerprints(before.TYPERT_REMOTE.descriptors))
+  })
+
+  it('tracks transitive recursive generic codecs with unchanged public type symbols', async () => {
+    const root = copyFixture()
+    editFile(root, 'packages/remote/src/types.ts', source => source.replace(
+      'export interface CreateGoalRequest {', 'export interface CreateGoalRequest {\n  readonly tree?: WireTree',
+    ) + '\nexport interface WireTree<T = string> { readonly value: T; readonly children: readonly WireTree<T>[] }\n')
+    const before = await generatedRemote(root)
+    const changed = copyFixture(root)
+    editFile(changed, 'packages/remote/src/types.ts', source => source.replace('WireTree<T = string>', 'WireTree<T = boolean>'))
+    const after = await generatedRemote(changed)
+    const createBefore = before.TYPERT_REMOTE.descriptors[0]
+    const createAfter = after.TYPERT_REMOTE.descriptors[0]
+    expect(createBefore?.wireFingerprint).not.toBe(createAfter?.wireFingerprint)
+    expect(fingerprints(before.TYPERT_REMOTE.descriptors.slice(1))).toEqual(fingerprints(after.TYPERT_REMOTE.descriptors.slice(1)))
+    const value = { title: 'test', tree: { value: 'a', children: [{ value: 'b', children: [] }] } }
+    expect(createBefore?.parameters[1]?.codec.schema.safeParse(value).success).toBe(true)
+    expect(createAfter?.parameters[1]?.codec.schema.safeParse(value).success).toBe(false)
+    expect(createAfter?.parameters[1]?.codec.schema.safeParse({ title: 'test', tree: { value: true, children: [{ value: false, children: [] }] } }).success).toBe(true)
+  })
+
+  it('normalizes literal spelling in canonical schema emission', async () => {
+    const face = analyzeRemote(fixtureRoot).faces.find(value => value.face === 'host')
+    if (face === undefined) throw new Error('Host face missing')
+    const withLiteral = (value: bigint | string, text: string): FaceModel => ({ ...face,
+      graph: { ...face.graph, nodes: [...face.graph.nodes, { id: 'wire-literal', kind: 'literal', value, text }] },
+    })
+    const useLiteral = (value: InvocationModel): InvocationModel => ({ ...value, result: { ...value.result, codecType: 'wire-literal' } })
+    expect(await emittedFingerprint(withLiteral(12n, '0xCn'), useLiteral)).toBe(await emittedFingerprint(withLiteral(12n, '12n'), useLiteral))
+    expect(await emittedFingerprint(withLiteral('value', "'value'"), useLiteral)).toBe(await emittedFingerprint(withLiteral('value', '"value"'), useLiteral))
+  })
+
+  it('includes invocation wire fields and ignores internal implementation spelling', async () => {
+    const face = analyzeRemote(fixtureRoot).faces.find(value => value.face === 'host')
+    if (face === undefined) throw new Error('Host face missing')
+    const original = await emittedFingerprint(face, value => value)
+    const changes: readonly ((value: InvocationModel) => InvocationModel)[] = [
+      value => ({ ...value, mode: 'stream' }),
+      (value) => { const { cancellation, ...without } = value; expect(cancellation).toBeDefined(); return without },
+      (value) => { const { scope, ...without } = value; expect(scope).toBeDefined(); return without },
+      value => ({ ...value, scope: { context: 'different', wire: 'agentId' } }),
+      value => ({ ...value, parameters: [...value.parameters].reverse() }),
+      value => ({ ...value, parameters: value.parameters.map((parameter, index) => index === 1 ? { ...parameter, wire: 'other' } : parameter) }),
+      value => ({ ...value, parameters: value.parameters.map((parameter, index) => index === 0 ? { ...parameter, lookup: 'other' } : parameter) }),
+      value => ({ ...value, parameters: value.parameters.map((parameter, index) => index === 1
+        ? { ...parameter, boundary: { ...parameter.boundary, acceptsUndefined: true } }
+        : parameter) }),
+      value => ({ ...value, result: value.parameters[1]?.boundary ?? value.result }),
+    ]
+    for (const change of changes) expect(await emittedFingerprint(face, change)).not.toBe(original)
+    expect(await emittedFingerprint(face, value => ({ ...value, implementation: 'renamedImplementation' }))).toBe(original)
+    expect(await emittedFingerprint(face, value => ({ ...value, scope: { wire: 'agentId', context: 'agent' } }))).toBe(original)
+    const reversed: FaceModel = { ...face, graph: { ...face.graph, declarations: [...face.graph.declarations].reverse() } }
+    expect(await emittedFingerprint(reversed, value => value)).toBe(original)
   })
 
   it('projects authored optionality and absence onto consumers and codecs', async () => {
@@ -604,6 +719,32 @@ export class DuplicateGoalService extends TypertRemoteService {
     expect(() => analyzeRemote(root, false)).toThrow(/Remote endpoint goals\/create conflicts/)
   })
 })
+
+async function loadGenerated(source: string): Promise<unknown> {
+  const executable = source.replace("from 'zod'", `from ${JSON.stringify(import.meta.resolve('zod'))}`)
+  return await import(`data:text/javascript,${encodeURIComponent(executable)}`) as unknown
+}
+
+async function generatedRemote(root: string): Promise<RuntimeRemoteModule> {
+  const [artifact] = new WorkspaceTypertGenerator(root).generate()
+  if (artifact?.remote === undefined) throw new Error('Remote artifact missing')
+  return await loadGenerated(artifact.remote.js) as RuntimeRemoteModule
+}
+
+function fingerprints(descriptors: readonly RuntimeDescriptor[]): Record<string, string> {
+  return Object.fromEntries(descriptors.map(descriptor => [descriptor.id, descriptor.wireFingerprint]))
+}
+
+async function emittedFingerprint(face: FaceModel, change: (value: InvocationModel) => InvocationModel): Promise<string> {
+  const changed: FaceModel = { ...face, packages: face.packages.map(pkg => pkg.name === '@fixture/remote'
+    ? { ...pkg, invocations: pkg.invocations.map((value, index) => index === 0 ? change(value) : value) } : pkg) }
+  const artifact = new FaceModelEmitter(changed).emit('@fixture/remote')
+  if (artifact.remote === undefined) throw new Error('Remote artifact missing')
+  const loaded = await loadGenerated(artifact.remote.js) as RuntimeRemoteModule
+  const descriptor = loaded.TYPERT_REMOTE.descriptors[0]
+  if (descriptor === undefined) throw new Error('Remote descriptor missing')
+  return descriptor.wireFingerprint
+}
 
 function analyzeRemote(root: string, checkDiagnostics = true): ReturnType<WorkspaceAnalyzer['analyze']> {
   return new WorkspaceAnalyzer({ root, checkDiagnostics }).analyze()

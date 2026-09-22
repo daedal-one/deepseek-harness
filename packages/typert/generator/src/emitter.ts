@@ -5,6 +5,7 @@
  */
 
 import { Buffer } from 'node:buffer'
+import { createHash } from 'node:crypto'
 import { posix } from 'node:path'
 import { GenMapping, addMapping, toEncodedMap } from '@jridgewell/gen-mapping'
 import type {
@@ -274,6 +275,8 @@ export class FaceModelEmitter {
   private invocationLiteral(invocation: InvocationModel, schemas: SchemaArtifact): string {
     const lines = [
       '{',
+      `  wireFingerprint: ${quote(this.wireFingerprint(invocation))},`,
+      `  semanticRevision: ${invocation.semanticRevision ?? 1},`,
       `  id: ${quote(invocation.id)},`,
       `  service: ${quote(invocation.service)},`,
       `  namespace: ${quote(invocation.namespace)},`,
@@ -327,6 +330,25 @@ export class FaceModelEmitter {
     lines.push(`  sourceLocation: ${JSON.stringify(invocation.location)},`)
     lines.push('}')
     return lines.join('\n')
+  }
+
+  private wireFingerprint(invocation: InvocationModel): string {
+    const schemas = new SchemaEmitter(this.renderer, [], invocationBoundaryRoots([invocation]), true).emit()
+    const fields = {
+      endpoint: `${invocation.namespace}/${invocation.method}`,
+      mode: invocation.mode ?? 'unary',
+      invocation: invocation.invocation.kind === 'direct'
+        ? { kind: 'direct' }
+        : { kind: 'context', context: invocation.invocation.context, wire: invocation.invocation.wire },
+      scope: invocation.scope === undefined ? undefined : { context: invocation.scope.context, wire: invocation.scope.wire },
+      parameters: invocation.parameters.map(parameter => ({
+        wire: parameter.wire, source: parameter.source, lookup: parameter.lookup,
+        acceptsUndefined: parameter.boundary.acceptsUndefined,
+      })),
+      cancellation: invocation.cancellation !== undefined,
+      schemas: schemas.definitions,
+    }
+    return `typert-wire-v1:${createHash('sha256').update(JSON.stringify(fields)).digest('hex')}`
   }
 
   private renderRemoteDts(packageModel: PackageModel): Pick<RemoteModelEmitResult, 'dts' | 'dtsMap'> {
@@ -521,7 +543,13 @@ class SchemaEmitter {
     private readonly renderer: TypeGraphRenderer,
     private readonly schemas: readonly SchemaModel[],
     private readonly boundaries: readonly BoundarySchemaRoot[],
+    private readonly canonical = false,
   ) {
+    if (canonical) {
+      this.declarations = []
+      boundaries.forEach((boundary, index) => this.boundaryNames.set(boundary.key, `root${String(index)}$schema`))
+      return
+    }
     const declarations = new Map<SymbolId, TypeDeclarationModel>()
     for (const schema of schemas) {
       for (const declaration of renderer.declarationClosureForTypes([schema.type])) {
@@ -554,9 +582,18 @@ class SchemaEmitter {
   }
 
   emit(): SchemaArtifact {
-    const definitions = this.declarations.map(declaration => this.declarationDefinition(declaration))
-    for (const boundary of this.boundaries) {
-      definitions.push(`const ${this.boundaryName(boundary.key)} = ${this.typeSchema(boundary.type)}`)
+    const definitions: string[] = []
+    if (this.canonical) {
+      const roots = this.boundaries.map(boundary =>
+        `const ${this.boundaryName(boundary.key)} = ${this.typeSchema(boundary.type)}`)
+      // First-use names keep recursive references independent of source declaration order.
+      for (const [symbol] of this.names) definitions.push(this.declarationDefinition(this.renderer.declaration(symbol)))
+      definitions.push(...roots)
+    } else {
+      definitions.push(...this.declarations.map(declaration => this.declarationDefinition(declaration)))
+      for (const boundary of this.boundaries) {
+        definitions.push(`const ${this.boundaryName(boundary.key)} = ${this.typeSchema(boundary.type)}`)
+      }
     }
     const exports = this.schemas.map((model): SchemaExport => ({
       model,
@@ -604,7 +641,9 @@ class SchemaEmitter {
     const node = this.renderer.node(id)
     switch (node.kind) {
       case 'keyword': return this.keywordSchema(node.name)
-      case 'literal': return `z.literal(${node.text})`
+      case 'literal': return `z.literal(${this.canonical
+        ? typeof node.value === 'bigint' ? `${String(node.value)}n` : JSON.stringify(node.value)
+        : node.text})`
       case 'parenthesized': return this.typeSchema(node.type, substitutions)
       case 'reference': return this.referenceSchema(node, substitutions)
       case 'union': {
@@ -801,6 +840,7 @@ class SchemaEmitter {
   }
 
   private schemaName(symbol: SymbolId): string {
+    if (this.canonical && !this.names.has(symbol)) this.names.set(symbol, `type${String(this.names.size)}$schema`)
     const name = this.names.get(symbol)
     if (name === undefined) this.fail(symbol, 'referenced declaration is outside the selected schema closure')
     return name
@@ -813,7 +853,7 @@ class SchemaEmitter {
   }
 
   private describe(schema: string, documentation: DocumentationModel): string {
-    return documentation.description === undefined ? schema : `${schema}.describe(${quote(documentation.description)})`
+    return this.canonical || documentation.description === undefined ? schema : `${schema}.describe(${quote(documentation.description)})`
   }
 
   private optional(schema: string, optional: boolean): string {

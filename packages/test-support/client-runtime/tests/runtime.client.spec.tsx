@@ -474,6 +474,7 @@ describe('workspaces action face', () => {
   it('records every IWorkspaces verb with inert defaults and honors stubs', async () => {
     const runtime = await SlotTestRuntime.create()
     const ws = runtime.workspaces
+    await expect(ws.resolveByPath({ path: '/tmp/alpha' })).resolves.toBeNull()
     const created = await ws.create({ path: '/tmp/alpha' })
     expect(created.title).toBe('/tmp/alpha')
     const registered = await ws.create({ path: '/tmp/beta' })
@@ -489,8 +490,13 @@ describe('workspaces action face', () => {
     await ws.archiveSession('s1' as SessionId)
     expect(ws.list.getSnapshot().archivedSessionIds).toEqual(['s1'])
     expect(ws.calls.map(c => c.method)).toEqual(
-      ['create', 'create', 'rename', 'delete', 'insertBefore', 'insertSessionBefore', 'archiveSession'])
+      ['resolveByPath', 'create', 'create', 'rename', 'delete', 'insertBefore', 'insertSessionBefore', 'archiveSession'])
 
+    const lookup = vi.fn(async () => created)
+    ws.stub('resolveByPath', lookup)
+    const signal = new AbortController().signal
+    await expect(ws.resolveByPath({ path: '/alias' }, signal)).resolves.toBe(created)
+    expect(lookup).toHaveBeenCalledWith({ path: '/alias' }, signal)
     ws.stub('create', () => Promise.resolve({ workspaceId: 'ws-x', title: 'X', path: '/x', sessionIds: [] } as never))
     ws.stub('rename', () => Promise.resolve({ workspaceId: 'w1', title: 'S', path: '/s', sessionIds: [] } as never))
     ws.stub('delete', () => Promise.resolve())

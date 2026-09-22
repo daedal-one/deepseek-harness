@@ -1,5 +1,4 @@
-import type { Context } from '@deepseek-ai/cordis'
-import type { ConversationNodeDefinition } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { ConversationNodeDefinition } from '@deepseek-ai/dsh-client-ui-conversation/client/portable'
 import type { WorkspaceState } from '@deepseek-ai/dsh-local-container-runtime/workspace-types'
 import { chatNode } from './common.ts'
 
@@ -28,11 +27,4 @@ export const workspaceDefinition: ConversationNodeDefinition<WorkspaceState | nu
     if (last?.event.type !== 'workspace/state') return null
     return chatNode(context, 'workspace-state', last.event.seq, last.event.data)
   },
-}
-
-/** Register the workspace save receipt in the conversation timeline.
- * @param ctx - owning conversation UI context.
- */
-export function registerWorkspaceConversationNode(ctx: Context): void {
-  ctx.uiConversation.events.register(workspaceDefinition)
 }

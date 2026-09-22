@@ -234,13 +234,14 @@ export default defineConfig({
         'packages/api/session-controller/src/client/sessions/!(assistant-stream).ts',
         'packages/api/session-controller/src/client/ordered-baseline.ts',
         'packages/api/session-controller/src/client/time-zone.ts',
-        // Keep the browser conversation tree under its existing GUI debt
-        // exemption while gating the newly stateful Host half and vocabulary.
-        'packages/client/ui-conversation/src/client/*',
+        // Browser presentation retains GUI debt; portable binding and scheduling are gated.
+        'packages/client/ui-conversation/src/client/*.{ts,tsx}',
+        'packages/client/ui-conversation/src/client/{contract,input,queue,settings,skeleton}/**',
+        'packages/client/ui-conversation/src/client/conversation/!(binding|browser-scheduler).ts',
         // Chat presentation and assembly retain the same GUI debt exemption;
         // package wiring and the new approval-detail adapter remain gated.
         'packages/client/ui-chat/src/client/chat/!(ApprovalCommand).{ts,tsx}',
-        'packages/client/ui-chat/src/client/conversation-nodes/*',
+        'packages/client/ui-chat/src/client/conversation-nodes/!(register).ts',
         'packages/client/ui-chat/src/client/details/*',
         'packages/client/ui-chat/src/client/model/*',
         'packages/client/ui-chat/src/client/contract/context-provenance.ts',

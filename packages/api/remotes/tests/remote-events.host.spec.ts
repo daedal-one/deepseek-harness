@@ -25,6 +25,7 @@ async function setup(): Promise<{
   readonly fiber: Fiber
 }> {
   const ctx = new Context()
+  ctx.provide('connection', { identity: { version: 1, hostId: '26e99520-f2d3-4874-84b5-07c5ef24775d', activationId: 'f5292bdb-ebda-41ba-b473-6c587a3c1d02' } } as never)
   const gateway: GatewayProbe = {
     source: undefined,
     host: undefined,
@@ -81,6 +82,7 @@ function invocationOf(value: unknown): TypertRemoteEventInvocation {
 describe('Remote event Host source', () => {
   it('registers the Host home used by Client connection generations', async () => {
     const { gateway, fiber } = await setup()
+    expect(gateway.host?.identity).toEqual({ version: 1, hostId: '26e99520-f2d3-4874-84b5-07c5ef24775d', activationId: 'f5292bdb-ebda-41ba-b473-6c587a3c1d02' })
     expect(gateway.host?.home).toBeTypeOf('string')
     expect(gateway.host?.home.length).toBeGreaterThan(0)
     await fiber.dispose()

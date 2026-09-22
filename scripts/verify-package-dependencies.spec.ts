@@ -86,6 +86,7 @@ function facts(manifest: PackageDependencyManifest): PackageDependencyFacts {
     }],
     peerRequiredHostDependencies: new Set(),
     configurationOnlyDevDependencies: new Set(),
+    portableClientDependencies: new Set(),
     clientInject: new Set(),
   }
 }
@@ -175,6 +176,7 @@ function hostRuntimeFixture(): {
     }],
     peerRequiredHostDependencies: new Set(),
     configurationOnlyDevDependencies: new Set(),
+    portableClientDependencies: new Set(),
     clientInject: new Set(),
   }
   return { provider, workspaceNames, consumerFacts }
@@ -977,4 +979,30 @@ describe('dependency sections', () => {
     expect(manifest.dependencies).toEqual({ '@deepseek-ai/dsh-runtime': 'workspace:^' })
     expect(manifest.peerDependencies).toEqual({ [CORDIS]: 'workspace:^' })
   })
+})
+
+it('retains portable Client externals as installed dependencies', () => {
+  const subject = facts({
+    name: '@deepseek-ai/dsh-probe', dependencies: { zod: '^4.0.0' },
+    devDependencies: { '@deepseek-ai/dsh-types': 'workspace:^' },
+  })
+  const portable = { ...subject, role: 'client-only' as const, hostRuntimeSourceUses: new Map(),
+    portableClientDependencies: new Set(['zod', '@deepseek-ai/dsh-types']) }
+  expect(expectedPackageDependencies(portable).get('zod')?.section).toBe('dependencies')
+  expect(expectedPackageDependencies(portable).get('@deepseek-ai/dsh-types')?.section).toBe('dependencies')
+  expect(expectedPackageDependencies({ ...portable, portableClientDependencies: new Set() }).get('zod')?.section)
+    .toBe('devDependencies')
+})
+
+it('rejects portable dependency declarations without a managed portable export', () => {
+  const { root, manifestPath } = generatedHostFixture('schema')
+  const configured = policy({ portableClientDependencies: { '@fixture/generated': ['zod'], '@fixture/missing': ['zod'] } })
+  expect(readPackageDependencyState(root, configured).policyViolations).toEqual(expect.arrayContaining([
+    'portableClientDependencies requires a managed portable Client export in @fixture/generated',
+    'portableClientDependencies requires a managed portable Client export in @fixture/missing',
+  ]))
+  const manifest = JSON.parse(readFileSync(join(root, manifestPath), 'utf8')) as { exports: Record<string, unknown> }
+  manifest.exports['./client/portable'] = { types: './lib/client/portable.d.ts', default: './lib/portable.js' }
+  writeFileSync(join(root, manifestPath), JSON.stringify(manifest))
+  expect(readPackageDependencyState(root, policy({ portableClientDependencies: { '@fixture/generated': ['zod'] } })).policyViolations).toEqual([])
 })

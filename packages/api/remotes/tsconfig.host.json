@@ -70,6 +70,9 @@
     },
     {
       "path": "../../typert/protocol"
+    },
+    {
+      "path": "../../client/connection/tsconfig.host.json"
     }
   ]
 }

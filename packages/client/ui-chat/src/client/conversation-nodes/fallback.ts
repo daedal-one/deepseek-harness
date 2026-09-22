@@ -1,7 +1,6 @@
-import type { Context } from '@deepseek-ai/cordis'
 import type {
   ConversationNodeDefinition, UnknownSurfaceNode,
-} from '@deepseek-ai/dsh-client-ui-conversation/client'
+} from '@deepseek-ai/dsh-client-ui-conversation/client/portable'
 import { isAppendSurfaceEvent } from '@deepseek-ai/dsh-session/surface'
 import { chatNode } from './common.ts'
 
@@ -30,12 +29,4 @@ export const unknownFallbackDefinition: ConversationNodeDefinition<UnknownSurfac
   buildViewNode: context => context.state === undefined
     ? null
     : chatNode(context, 'unknown', context.state.seq, context.state),
-}
-
-/**
- * Register the unmatched append-surface fallback contribution.
- * @param ctx - owning UI Conversation context.
- */
-export function registerUnknownConversationFallback(ctx: Context): void {
-  ctx.uiConversation.events.registerFallback(unknownFallbackDefinition)
 }

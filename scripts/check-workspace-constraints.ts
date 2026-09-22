@@ -216,6 +216,9 @@ export function expectedDshPackageFiles(manifest: PackageManifest): readonly str
     // Keyed on the artifact path, not the subpath name: a package's ./client is
     // a browser-safe source channel, not a bundle.
     ...exportDefault(manifest, './client') === './lib/client.js' ? ['lib/client.js'] : [],
+    ...exportDefault(manifest, './client/portable') === './lib/portable.js' ? ['lib/portable.js'] : [],
+    ...hasExportPair(manifest, './client/portable', './lib/client/portable.d.ts', './lib/portable.js')
+      ? ['lib/client/portable.d.ts'] : [],
     // runtime's shell-held loader subpath ships as its own bundle beside the client half.
     ...exportDefault(manifest, './loader') === './lib/loader.js' ? ['lib/loader.js'] : [],
     // A store subpath ships its own bundle (single-entry builds; no shared chunk).

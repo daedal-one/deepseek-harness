@@ -17,9 +17,17 @@ import type {
   PodmanInfo,
 } from '@deepseek-ai/dsh-local-container-runtime'
 
+// Fake-engine tests control Linux namespace observations while retaining real temporary-directory ownership.
 vi.mock('node:fs/promises', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:fs/promises')>()
-  return { ...actual, readlink: async (path: string) => path === '/proc/self/ns/pid' ? 'pid:[host]' : path === '/proc/self/ns/ipc' ? 'ipc:[host]' : actual.readlink(path) }
+  const original = await importOriginal<typeof import('node:fs/promises')>()
+  return {
+    ...original,
+    readlink: async (path: Parameters<typeof original.readlink>[0], options?: Parameters<typeof original.readlink>[1]) => {
+      if (path === '/proc/self/ns/pid') return 'pid:[1000]'
+      if (path === '/proc/self/ns/ipc') return 'ipc:[1001]'
+      return await original.readlink(path, options)
+    },
+  }
 })
 
 const IMAGE = 'docker.io/example/dsh-runtime@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
@@ -476,6 +484,19 @@ describe('LocalContainerRuntime', () => {
 
     await expect(ctx.localContainerRuntime.getContainer()).rejects.toThrow(message)
     expect(engine.createContainer).not.toHaveBeenCalled()
+    await dispose(fiber)
+  })
+
+  it.each([
+    ['pidns', 'pid:[1]', 'pid:[1000]'],
+    ['ipcns', 'ipc:[2]', 'ipc:[1001]'],
+  ])('rejects a container sharing the host %s namespace', async (field, isolated, shared) => {
+    const engine = new FakeEngine()
+    engine.controlResponse.output = engine.controlResponse.output.replace(`${field}=${isolated}`, `${field}=${shared}`)
+    const { ctx, fiber } = await mount(engine)
+
+    await expect(ctx.localContainerRuntime.getContainer()).rejects.toThrow(/namespace/)
+    expect(engine.container?.remove).toHaveBeenCalledWith(true)
     await dispose(fiber)
   })
 

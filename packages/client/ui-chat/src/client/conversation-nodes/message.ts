@@ -1,7 +1,6 @@
-import type { Context } from '@deepseek-ai/cordis'
 import type {
   ContextMessageNode, ConversationNodeDefinition, SteeringMessageNode, UserMessageNode,
-} from '@deepseek-ai/dsh-client-ui-conversation/client'
+} from '@deepseek-ai/dsh-client-ui-conversation/client/portable'
 import { isAppendSurfaceEvent, isReplacementSurfaceEvent } from '@deepseek-ai/dsh-session/surface'
 import type { InboxState } from './inbox.ts'
 import { chatNode } from './common.ts'
@@ -87,12 +86,4 @@ export const messageDefinition: ConversationNodeDefinition<MessageNode> = {
     if (context.state === undefined) return null
     return chatNode(context, context.state.kind, context.state.seq, context.state)
   },
-}
-
-/**
- * Register the user, steering, and injected-context message contribution.
- * @param ctx - owning UI Conversation context.
- */
-export function registerMessageConversationNode(ctx: Context): void {
-  ctx.uiConversation.events.register(messageDefinition)
 }

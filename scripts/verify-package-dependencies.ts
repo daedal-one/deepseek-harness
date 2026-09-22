@@ -63,6 +63,7 @@ export interface PackageDependencyFacts {
   readonly hostRuntimeExportUses: readonly HostRuntimeExportUse[]
   readonly peerRequiredHostDependencies: ReadonlySet<string>
   readonly configurationOnlyDevDependencies: ReadonlySet<string>
+  readonly portableClientDependencies: ReadonlySet<string>
   readonly clientInject: ReadonlySet<string>
 }
 
@@ -458,6 +459,7 @@ export function readPackageDependencyFacts(
     configurationOnlyDevDependencies: new Set(
       policy.configurationOnlyDevDependencies[pkg.manifest.name ?? ''] ?? [],
     ),
+    portableClientDependencies: new Set(policy.portableClientDependencies?.[pkg.manifest.name ?? ''] ?? []),
     clientInject: new Set(inject.map(packageNameOf).filter(name => name !== undefined)),
   }
 }
@@ -547,6 +549,11 @@ export function readPackageDependencyState(
     policyViolations: [
       ...discovered.violations,
       ...collectHostDependencyExportPolicyViolations(facts, workspaceNames, policy),
+      ...Object.keys(policy.portableClientDependencies ?? {})
+        .filter(name => !selectedNames.has(name)
+          || !facts.some(fact => fact.manifest.name === name && typeof fact.manifest.exports === 'object'
+            && fact.manifest.exports !== null && Object.hasOwn(fact.manifest.exports, './client/portable')))
+        .map(name => `portableClientDependencies requires a managed portable Client export in ${name}`),
       ...Object.keys(policy.configurationOnlyDevDependencies)
         .filter(name => !selectedNames.has(name))
         .map(name => `configurationOnlyDevDependencies names unmanaged package ${name}`),
@@ -581,6 +588,9 @@ export function expectedPackageDependencies(
         if (!facts.workspaceNames.has(name)) add(name, 'devDependencies', 'declared browser build input')
       }
     }
+  }
+  for (const name of facts.portableClientDependencies) {
+    add(name, 'dependencies', 'published portable Client runtime or declarations')
   }
   for (const name of facts.clientInject) {
     if (facts.workspaceNames.has(name)) add(name, 'devDependencies', 'dsh.client.inject')

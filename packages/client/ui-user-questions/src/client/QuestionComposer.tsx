@@ -5,10 +5,8 @@ import {
   IconChevronRightOutline14, IconChevronUpOutline14, IconCloseOutline16,
   IconEditOutline16, MarkdownText,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import {
-  planReviewOf,
-  type QuestionAnswer, type QuestionComposerProps,
-} from './contract/slots.ts'
+import { planReviewOf } from './pending-question.ts'
+import type { QuestionAnswer, QuestionComposerProps } from './contract/slots.ts'
 import type { PendingQuestion } from './contract/slots.ts'
 import type { QuestionDraftAnswer, QuestionDraftProgress } from './draft-store.ts'
 import { PlanReviewPanel } from './PlanReviewPanel.tsx'

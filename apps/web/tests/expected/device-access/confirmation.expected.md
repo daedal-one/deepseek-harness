@@ -1,0 +1,19 @@
+- region "Devices":
+  - heading "Devices" [level=2]
+  - paragraph: Pair Daedal DSH on your iPhone with this Host, or revoke a device’s access.
+  - paragraph: {{host-origin}}
+  - paragraph: "Host identity: {{host-id}}"
+  - note: A physical phone cannot reach this local address. Open this page using the Host’s private-network address before pairing your phone.
+  - button "Create pairing QR"
+  - button "Refresh devices"
+  - heading "Enrolled devices" [level=3]
+  - list:
+    - listitem:
+      - strong: Browser test iPhone
+      - text: {{device-id}}
+      - button "Revoke access…"
+  - group "Revoke device access?":
+    - strong: Revoke device access? Browser test iPhone
+    - paragraph: This closes the device’s authenticated connections and prevents it from reconnecting. Sessions keep running. Pair the device again to restore access.
+    - button "Revoke device access"
+    - button "Cancel"

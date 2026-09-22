@@ -12,6 +12,8 @@ Two-sided BFF for Host Remote capabilities selected by this application. The Hos
 ## Table of Contents
 
 - [Use this package](#use-this-package)
+- [Portable Client](#portable-client)
+- [Installable Client distribution](#installable-client-distribution)
 - [Forwarded Host events](#forwarded-host-events)
 - [Build boundary](#build-boundary)
 - [Model Experience](#model-experience)
@@ -31,7 +33,23 @@ This facade is also the front door for the wire type vocabulary a Client package
 
 This package owns no physical transport or Host service discovery. It projects the application selection into generated Remote contributions and an independent Host event source per Client; API Gateway owns endpoints, carriers, cancellation, and reconnection. Its Client face can be reused by Web or a future TUI that provides the same React-free `ctx.remote` contract.
 
+## Portable Client
+
+`@deepseek-ai/dsh-api-remotes/client/portable` is the portable application facade. It exports the shared Connection factories, Gateway installers and stream models, generated API types, and the Client registry installer (`applyRegistry` and `registryInject`). Applications compose these exports with one Cordis root per host. The Gateway installer requires the paired Host id; see [native Host admission](../gateway/README.md#portable-client) for readiness, cancellation and uncertain command outcomes. Its bundled declarations retain one identity for the selected Client types and do not require the Host implementation packages in the application typecheck.
+
+`@deepseek-ai/dsh-api-remotes/client/portable` exports the same `inject`, `apply` and Client type vocabulary as the Web assembly through normal ESM. Mount it after the portable Typert registry and Gateway service. Cordis invokes its bound callback as a function after native async transforms and waits for every namespace to mount before reporting readiness. Its generated `/remote` contributions are bundled from the existing owner artifacts; Zod stays a declared runtime dependency shared by the composition. The entry has no browser loader or Host implementation dependency.
+
+The namespace selection is a compiled application selection, not proof that a connected Host provides every method. The Host remains authoritative for configured capabilities and permission. Unloading the assembly withdraws its generated namespaces; a retained method cannot send another request after withdrawal. Mount `applyWorkspaces` with `workspaceInject` after the generated assembly to expose the shared `ctx.workspaces` model, command results and reconnecting Workspace projection. The Workspace model remains owned by [Workspace Controller](../workspace-controller/README.md); portable callers receive the same Host ordering and race resolution as Web callers. Mount `applySessions` with `sessionInject` and `SessionClientOptions` to expose the shared `ctx.sessions` object layer. Its caller supplies request IDs, the current device time zone and a hydrated selection store dedicated to this host. The facade also exports Connection's `claimDeviceEnrollment` and device grant types; [Connection](../../client/connection/README.md#device-enrollment) owns enrollment validation and Host authorization, while the application owns QR presentation and secure storage.
+
+`selectRemoteCapabilities(endpoints)` derives a sorted, deduplicated admission requirement list from the same generated contributions that `apply` mounts. It runs before plugin installation and throws when a selected endpoint lacks a descriptor or schema/business evidence. Pass it as `requiredCapabilities` to `applyRemoteClient`; select the endpoints essential to the composition, while optional feature availability comes from `ctx.remote.$host.capabilities`. An explicit empty selection supports metadata-only compositions. The [Gateway admission rules](../gateway/README.md#portable-client) own readiness, activation checks and cancellation.
+
 -----
+
+## Installable Client distribution
+
+`pnpm run pack:portable-client --out /absolute/new/directory` produces `@deepseek-ai/dsh-api-remotes-client` and five shared dependency archives from a clean committed checkout. The command clears repository build outputs and rebuilds both compiler faces before packing. Run it in a dedicated build checkout; the destination must be new and outside that checkout. Failed builds remove their owned output directory. The completed `manifest.json` records the source revision and SHA-256 of each archive. Add `--application` to produce `@deepseek-ai/dsh-client`, which also exposes the existing portable Conversation, Chat, pending-interaction registry and approval/question request consumers. This application package retains one compiled declaration graph, including Chat and pending-interaction type augmentations, with explicit shared dependencies. Approval and question carriers retain their original class identities and share the generated Remote and Session types. Install one distribution per application; independently bundled declaration copies can disagree about nominal service identities.
+
+Install all six archives as direct file dependencies, retain the package-manager lockfile, and import from the selected package named by `manifest.json`'s `entry`. Registry dependencies remain Zod and Standard Schema. The distribution retains shared Cordis, Brand, Typert and value identities and carries no Host implementation dependency. Its JavaScript and declarations are the existing portable outputs without a second source implementation. The full Remotes package still declares its Host dependencies for its other entry points.
 
 <a id="forwarded-host-events"></a>
 ## Forwarded Host events
@@ -40,7 +58,7 @@ This package owns no physical transport or Host service discovery. It projects t
 
 The listener signature is not restated here. Each allowlisted event's Cordis `Events` declaration lives in its owner package's client-safe `./types` export, and both faces of this package pull those declarations in. The Host face additionally asserts every entry against `TypertForwardableEventEntry`: an `emit` entry must be a declared one-way event, while a `waterfall` entry must be a declared Agent-scoped waterfall whose final parameter is its same-result `next()` callback.
 
-The Host entry registers an independent allowlist listener set and queue for each Client stream. It rejects non-JSON ordinary-event arguments before enqueueing. For a waterfall, it projects only the top-level Agent identity and JSON request fields; a Client result must also be lossless JSON, while `next()` delegates to the following Host listener. Each scoped waterfall request must carry its routed Agent directly as `request.agent`; the Host rejects a missing or mismatched identity before forwarding. The source attaches all listeners synchronously before `ctx.typertGateway.registerRemoteEvents()` exposes Gateway's internal `$events` logical stream, so its first `ready` item proves that incremental delivery is active and carries the Host home for Client path display. Withdrawing the registration aborts active streams.
+The Host entry registers an independent allowlist listener set and queue for each Client stream. It rejects non-JSON ordinary-event arguments before enqueueing. For a waterfall, it projects only the top-level Agent identity and JSON request fields; a Client result must also be lossless JSON, while `next()` delegates to the following Host listener. Each scoped waterfall request must carry its routed Agent directly as `request.agent`; the Host rejects a missing or mismatched identity before forwarding. The source attaches all listeners synchronously before `ctx.typertGateway.registerRemoteEvents()` exposes Gateway's internal `$events` logical stream, so its first `ready` item proves that incremental delivery is active and carries the Host home for Client path display plus `ctx.connection.identity`. The Host entry waits for both Gateway and Connection before registering the source. Withdrawing the registration aborts active streams.
 
 <a id="build-boundary"></a>
 ## Build boundary
@@ -51,7 +69,9 @@ This package's root `tsconfig.json` is only a solution that references `tsconfig
 
 That exception is not just a `files` entry. The root `tsconfig.base.json` maps `@deepseek-ai/dsh-api-remotes/types` to `src/types.ts` — the source plane, like every other workspace subpath and unlike the generated `/remote` artifacts, which have no `paths` entry and resolve through `exports` to built output. Both faces therefore admit the same allowlist and type projection into their own programs and emit byte-identical `remote-events` and `types` outputs into `lib/types`; the `.tsbuildinfo` files stay independent. No gate enforces the faces' source-file disjointness — `scripts/project-reference-faces.ts` only checks that a reference into a split project names the matching face — so this paragraph records why the double listing is intentional.
 
-The package-local `clientBundle(..., { hostPhase: true })` makes Host tsdown bundle the Host entry and the later Client tsdown bundle only the browser entry. Ordinary Client plugins remain single Client projects and produce both their Node loader entry and browser bundle during Client tsdown; split only when the two source sets require different compiler faces.
+The package-local `clientBundle(..., { hostPhase: true })` makes Host tsdown bundle the Host entry and the later Client tsdown bundle the browser entry plus its portable Client companion. Client companions run only after Client TypeScript output exists; they cannot be emitted during the earlier Host phase. Ordinary Client plugins remain single Client projects and produce both their Node loader entry and browser bundle during Client tsdown; split only when the two source sets require different compiler faces.
+
+The application facade also exports the shared [prompt admission observer](../session-controller/README.md#use-this-package) for correlating uncertain submissions with authoritative Session facts.
 
 <a id="model-experience"></a>
 ## Model Experience
@@ -66,10 +86,9 @@ No direct effect; mounted Host capabilities own any model-visible behavior they 
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- The capability set is fixed by explicit build-time value imports; the Client does not discover the Host's active Services or Remote definitions at runtime.
+- Generated Client methods are fixed by explicit build-time value imports. The portable facade exports `readHostCapabilities()` for advisory, identity-bound discovery of current strict Host endpoints; it does not mount new Client methods or establish domain schema compatibility. The capability envelope is version 3 and retains optional wire fingerprints and business revisions. Generated calls use the Gateway's [operation compatibility checks](../gateway/README.md#operation-compatibility); capability reads remain advisory and grant no authorization.
 - Additional capabilities require an explicit `/remote` value import and mount in this assembly.
 - Ordinary forwarded events are not replayed; state that requires reliable recovery needs an owner-provided query, cursor, or opening baseline.
-
 
 <a id="dev-note"></a>
 ### Dev Note

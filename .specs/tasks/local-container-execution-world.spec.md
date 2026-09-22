@@ -28,3 +28,7 @@ An optional local-container provider family owns exactly one disposable executio
 ## Runtime activation
 
 The remote Web composition selects the container permission preset explicitly, waits for verified provider identity before shell-policy activation, omits classifier prewarming and policy decisions for contained commands, and retains policy enforcement for external tools. Validation includes the actual rootless engine and authenticated tailnet startup.
+
+Source-based verification resolves the exported startup validator to its TypeScript source before any build; it must not load a second built module graph.
+
+Fake-engine tests supply controlled host namespace observations and reject a container sharing either the PID or IPC namespace. Actual Linux namespace isolation remains part of rootless Podman qualification.

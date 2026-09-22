@@ -1903,6 +1903,11 @@
     },
     {
       "doc": "docs/subsystems/typert.md",
+      "symbol": "RemoteCompatibility",
+      "source": "packages/api/gateway/src/compatibility-protocol.ts"
+    },
+    {
+      "doc": "docs/subsystems/typert.md",
       "symbol": "InvokeRemoteRequest",
       "source": "packages/api/gateway/src/types.ts"
     },

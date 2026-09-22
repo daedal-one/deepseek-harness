@@ -1,8 +1,7 @@
-import type { Context } from '@deepseek-ai/cordis'
 import type {
   ConversationMatch, ConversationNodeContext, ConversationNodeDefinition, RequestPromptInspector,
   SystemPromptState, SystemPromptInspector,
-} from '@deepseek-ai/dsh-client-ui-conversation/client'
+} from '@deepseek-ai/dsh-client-ui-conversation/client/portable'
 import type { ChatNode } from '../contract/chat-nodes.ts'
 import { chatNode } from './common.ts'
 
@@ -146,17 +145,4 @@ export function requestPromptDefinition(inspect: RequestPromptInspector): Conver
       )
     },
   }
-}
-
-/**
- * Register the system-prompt surface node and the model-request prompt card in the Chat flow.
- * @param ctx - Owning UI Conversation context.
- */
-export function registerRequestPromptConversationNode(ctx: Context): void {
-  ctx.uiConversation.events.register(systemMessageDefinition(
-    (previous, event) => ctx.uiConversation.inspectSystemPrompt(previous, event),
-  ))
-  ctx.uiConversation.events.register(requestPromptDefinition(
-    (previous, event, system) => ctx.uiConversation.inspectRequestPrompt(previous, event, system),
-  ))
 }

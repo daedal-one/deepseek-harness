@@ -1,0 +1,5 @@
+# Pin the recorded Session model independently of the shipped default.
+- id: agent-default-model
+  config:
+    provider: deepseek-official
+    model: deepseek-flash

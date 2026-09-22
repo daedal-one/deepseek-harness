@@ -15,6 +15,7 @@ import {
   createWorkspaceStateStream,
   WorkspaceController,
   WorkspaceCreateError,
+  WorkspaceResolveError,
   type WorkspaceFollowSink,
   type WorkspaceRemote,
 } from '../src/client/index.ts'
@@ -111,6 +112,7 @@ function accepts(overrides: Partial<WorkspaceFollowSink> = {}): WorkspaceFollowS
 }
 
 class ScriptedWorkspaceRemote implements WorkspaceRemote {
+  readonly resolveByPath: WorkspaceRemote['resolveByPath'] = () => Promise.resolve(remoteOk({ workspace: null }))
   readonly signals: AbortSignal[] = []
   calls = 0
 
@@ -157,6 +159,7 @@ class ScriptedWorkspaceRemote implements WorkspaceRemote {
 }
 
 class CommandWorkspaceRemote implements WorkspaceRemote {
+  readonly resolveByPath = vi.fn<WorkspaceRemote['resolveByPath']>(() => Promise.resolve(remoteOk({ workspace: null })))
   readonly create = vi.fn<WorkspaceRemote['create']>(request => Promise.resolve(remoteOk({
     workspace: workspace('created', { path: request.path }),
     created: true,
@@ -448,6 +451,25 @@ describe('Workspace state stream', () => {
 })
 
 describe('WorkspaceController', () => {
+  it('returns lookup values, forwards cancellation and preserves structured failures', async () => {
+    const remote = new CommandWorkspaceRemote()
+    const controller = new WorkspaceController(new Context(), new ClientWorkspaceModel(remote))
+    const signal = new AbortController().signal
+    const input = { path: '/work/alias' }
+    await expect(controller.resolveByPath(input, signal)).resolves.toBeNull()
+    expect(remote.resolveByPath).toHaveBeenLastCalledWith(input, signal)
+    const found = workspace('registered')
+    remote.resolveByPath.mockResolvedValueOnce(remoteOk({ workspace: found }))
+    await expect(controller.resolveByPath(input)).resolves.toBe(found)
+    const failure = new RemoteError('workspace/lookup-failed', 'unreadable', input)
+    remote.resolveByPath.mockResolvedValueOnce(remoteFailure(failure))
+    const read = controller.resolveByPath(input)
+    await expect(read).rejects.toBeInstanceOf(WorkspaceResolveError)
+    await expect(read).rejects.toMatchObject({ rpcError: failure })
+    expect(remote.create).not.toHaveBeenCalled()
+    expect(controller.list.getSnapshot().items).toEqual([])
+  })
+
   it('publishes the model source and exposes successful Workspace commands', async () => {
     const remote = new CommandWorkspaceRemote()
     const model = new ClientWorkspaceModel(remote)
@@ -475,6 +497,15 @@ describe('WorkspaceController', () => {
     const create = controller.create({ path: '/missing' })
     await expect(create).rejects.toBeInstanceOf(WorkspaceCreateError)
     await expect(create).rejects.toThrow('workspace/invalid-path: missing path')
+
+    const before = controller.list.getSnapshot()
+    const rejection = remoteFailure(new RemoteError('workspace/create-rejected', 'invalid directory', { path: '/missing' }))
+    remote.create.mockResolvedValueOnce(rejection)
+    const rejected = controller.create({ path: '/missing' })
+    await expect(rejected).rejects.toBeInstanceOf(WorkspaceCreateError)
+    if (rejection.ok) throw new Error('fixture must be a failure')
+    await expect(rejected).rejects.toMatchObject({ rpcError: rejection.error })
+    expect(controller.list.getSnapshot()).toBe(before)
 
     remote.rename.mockResolvedValueOnce(remoteFailure(missingWorkspace))
     await expect(controller.rename(wid('missing'), 'name')).rejects.toThrow('workspace rename failed: workspace/not-found: gone')

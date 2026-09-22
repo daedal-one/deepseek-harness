@@ -8,7 +8,8 @@
   "files": [
     "src/client/index.ts",
     "src/remote-events.ts",
-    "src/types.ts"
+    "src/types.ts",
+    "src/client/portable.ts"
   ],
   "references": [
     {
@@ -85,6 +86,9 @@
     },
     {
       "path": "../../feedback/command-feedback"
+    },
+    {
+      "path": "../../typert/registry"
     }
   ]
 }

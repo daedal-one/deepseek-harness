@@ -1,5 +1,6 @@
 /** Session object lifecycle, event-window transport, commands, and resync behavior. */
 
+import { browserSessionPlatform } from '../src/client/browser.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session/types'
 import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
@@ -19,7 +20,7 @@ function makeSession(
   api = new FakeApiClient(),
   options: SessionOptions = {},
 ): { api: FakeApiClient; session: Session } {
-  return { api, session: new Session(SID, fakeRemote(api), options) }
+  return { api, session: new Session(SID, fakeRemote(api), browserSessionPlatform, options) }
 }
 
 function follow(
@@ -74,6 +75,28 @@ describe('Session open', () => {
     await session.open()
     expect(api.callsOf('session.follow')).toHaveLength(1)
     expect(api.callsOf('session.history')).toEqual([])
+  })
+
+  it.each(['opening', 'live'] as const)('keeps a required-event %s failure visible without changing the accepted window', async (path) => {
+    const { api, session } = makeSession()
+    // The fixture supplies decoded transport records from a newer Host build.
+    const unknown = { type: 'extension/required', seq: SessionSeq(0), time: 0, data: {} } as unknown as SessionEvent
+    try {
+      if (path === 'opening') api.onHistory = () => histResponse([unknown])
+      await session.open()
+      const before = windowEntries(session)
+      if (path === 'live') {
+        const seq = SessionSeq((before.at(-1)?.event.seq ?? -1) + 1)
+        await follow(api, { ...unknown, seq })
+      }
+      await vi.waitFor(() => { expect(session.getSnapshot().openState).toBe('error') })
+      expect(session.getSnapshot().openError?.message).toContain('unknown to this client')
+      expect(windowEntries(session)).toBe(before)
+      if (path === 'opening') expect(before).toEqual([])
+      expect(api.callsOf('session.follow')).toHaveLength(1)
+    } finally {
+      await session.dispose()
+    }
   })
 
   it('lands an error result in openState=error with the Remote failure kept', async () => {
@@ -174,7 +197,451 @@ describe('live event path', () => {
   })
 })
 
+describe('deferred history details', () => {
+  const compactEntry = { ...entries([ev.toolResult(SessionSeq(0), 0, 'call', 'preview')])[0]!, detail: { kind: 'tool-result' as const, bytes: 4096 } }
+  const completeEntry = entries([ev.toolResult(SessionSeq(0), 0, 'call', 'full result')])[0]!
+  const compact = () => compactEntry
+  const complete = () => completeEntry
+  const fixture = () => {
+    const { api, session } = makeSession()
+    api.onHistory = () => Promise.resolve(ok({ ...historyValue([], false), records: [compact()] }))
+    return { api, session }
+  }
+
+  it.each(['success', 'remote', 'thrown'] as const)('cancels a view detail while keeping follow and a replacement read after late %s', async (kind) => {
+    const { api, session } = fixture()
+    const old = deferred<Awaited<ReturnType<FakeApiClient['onHistoryDetail']>>>()
+    const fresh = deferred<Awaited<ReturnType<FakeApiClient['onHistoryDetail']>>>()
+    const view = new AbortController()
+    const observer = new AbortController()
+    let transport: AbortSignal | undefined
+    try {
+      await session.open()
+      const absent = new AbortController()
+      absent.abort()
+      await session.loadHistoryDetail(0, absent.signal)
+      expect(api.callsOf('session.historyDetail')).toHaveLength(0)
+      api.onHistoryDetail = (_, signal) => { transport = signal; return old.promise }
+      const pending = session.loadHistoryDetail(0, view.signal)
+      expect(session.loadHistoryDetail(0, observer.signal)).toBe(pending)
+      observer.abort()
+      expect(transport?.aborted).toBe(false)
+      view.abort()
+      expect(transport?.aborted).toBe(true)
+      await follow(api, ev.user(SessionSeq(1), 'still live'))
+      expect(eventSeqs(session)).toEqual([0, 1])
+      const before = windowEntries(session)
+      api.onHistoryDetail = () => fresh.promise
+      const replacement = session.loadHistoryDetail(0)
+      expect(replacement).not.toBe(pending)
+      const failure = new RemoteError('gateway/internal', 'closed view', {})
+      if (kind === 'thrown') old.reject(failure)
+      else old.resolve(kind === 'success' ? ok(complete()) : err(failure))
+      await pending
+      expect(windowEntries(session)).toBe(before)
+      expect(session.loadHistoryDetail(0)).toBe(replacement)
+      fresh.resolve(ok(complete()))
+      await replacement
+      expect(windowEntries(session)[0]).toEqual(complete())
+      expect(session.getSnapshot().openState).toBe('open')
+      expect(api.callsOf('session.follow')).toHaveLength(1)
+      expect(api.callsOf('session.historyDetail')).toHaveLength(2)
+    } finally {
+      old.resolve(ok(complete()))
+      fresh.resolve(ok(complete()))
+      await session.dispose()
+    }
+  })
+
+  it('joins a view-canceled detail during Session disposal and detaches the caller listener', async () => {
+    const { api, session } = fixture()
+    const gate = deferred<Awaited<ReturnType<FakeApiClient['onHistoryDetail']>>>()
+    const view = new AbortController()
+    const removed = vi.spyOn(view.signal, 'removeEventListener')
+    try {
+      await session.open()
+      api.onHistoryDetail = () => gate.promise
+      const pending = session.loadHistoryDetail(0, view.signal)
+      view.abort()
+      const closing = session.dispose()
+      let closed = false
+      void closing.then(() => { closed = true })
+      await Promise.resolve()
+      expect(closed).toBe(false)
+      gate.resolve(ok(complete()))
+      await Promise.all([pending, closing])
+      expect(closed).toBe(true)
+      expect(windowEntries(session)).toEqual([compact()])
+      expect(removed).toHaveBeenCalledWith('abort', expect.any(Function))
+    } finally {
+      gate.resolve(ok(complete()))
+      await session.dispose()
+      removed.mockRestore()
+    }
+  })
+
+  it('hydrates only on explicit demand, shares completion, and avoids repeat downloads', async () => {
+    const { api, session } = fixture()
+    const gate = deferred<Awaited<ReturnType<FakeApiClient['onHistoryDetail']>>>()
+    try {
+      await session.loadHistoryDetail(0)
+      await session.open()
+      await session.loadHistoryDetail(99)
+      expect(api.callsOf('session.historyDetail')).toEqual([])
+      api.onHistoryDetail = (request, signal) => {
+        expect(request).toEqual({ address: { kind: 'session', sessionId: SID }, seq: 0 })
+        expect(signal?.aborted).toBe(false)
+        return gate.promise
+      }
+      const pending = session.loadHistoryDetail(0)
+      expect(session.loadHistoryDetail(0)).toBe(pending)
+      expect(windowEntries(session)).toEqual([compact()])
+      gate.resolve(ok(complete()))
+      await pending
+      expect(windowEntries(session)).toEqual([complete()])
+      await session.loadHistoryDetail(0)
+      expect(api.callsOf('session.historyDetail')).toHaveLength(1)
+    } finally {
+      gate.resolve(ok(complete()))
+      await session.dispose()
+    }
+  })
+
+  it.each(['remote', 'thrown'] as const)('retains the compact event after an active %s failure and permits explicit retry', async (kind) => {
+    const { api, session } = fixture()
+    const failure = new RemoteError('gateway/internal', 'detail unavailable', {})
+    try {
+      await session.open()
+      const before = windowEntries(session)
+      api.onHistoryDetail = () => kind === 'remote' ? Promise.resolve(err(failure)) : Promise.reject(failure)
+      await expect(session.loadHistoryDetail(0)).rejects.toBe(failure)
+      expect(windowEntries(session)).toBe(before)
+      api.onHistoryDetail = () => Promise.resolve(ok(complete()))
+      await session.loadHistoryDetail(0)
+      expect(windowEntries(session)).toEqual([complete()])
+      expect(api.callsOf('session.historyDetail')).toHaveLength(2)
+    } finally {
+      await session.dispose()
+    }
+  })
+
+  it.each(['success', 'remote', 'thrown'] as const)('aborts and joins disposal while suppressing a late %s', async (kind) => {
+    const { api, session } = fixture()
+    const gate = deferred<Awaited<ReturnType<FakeApiClient['onHistoryDetail']>>>()
+    const started = deferred<AbortSignal | undefined>()
+    try {
+      await session.open()
+      const before = windowEntries(session)
+      api.onHistoryDetail = (_, signal) => { started.resolve(signal); return gate.promise }
+      const pending = session.loadHistoryDetail(0)
+      const signal = await started.promise
+      signal?.addEventListener('abort', () => { void session.loadHistoryDetail(0) }, { once: true })
+      const closing = session.dispose()
+      let closed = false
+      void closing.then(() => { closed = true })
+      expect(signal?.aborted).toBe(true)
+      await Promise.resolve()
+      expect(closed).toBe(false)
+      const failure = new RemoteError('gateway/internal', 'obsolete detail', {})
+      if (kind === 'thrown') gate.reject(failure)
+      else gate.resolve(kind === 'success' ? ok(complete()) : err(failure))
+      await Promise.all([pending, closing])
+      expect(closed).toBe(true)
+      expect(windowEntries(session)).toBe(before)
+      await session.loadHistoryDetail(0)
+      expect(api.callsOf('session.historyDetail')).toHaveLength(1)
+    } finally {
+      gate.resolve(ok(complete()))
+      await session.dispose()
+    }
+  })
+
+  it('joins detail cancellation before resync opens another history window', async () => {
+    const { api, session } = fixture()
+    const gate = deferred<Awaited<ReturnType<FakeApiClient['onHistoryDetail']>>>()
+    const started = deferred<AbortSignal | undefined>()
+    try {
+      await session.open()
+      api.onHistoryDetail = (_, signal) => { started.resolve(signal); return gate.promise }
+      const pending = session.loadHistoryDetail(0)
+      const signal = await started.promise
+      const replacing = session.resync()
+      let replaced = false
+      void replacing.then(() => { replaced = true })
+      expect(signal?.aborted).toBe(true)
+      await Promise.resolve()
+      expect(replaced).toBe(false)
+      gate.resolve(ok(complete()))
+      await Promise.all([pending, replacing])
+      expect(replaced).toBe(true)
+      expect(session.getSnapshot().openState).toBe('open')
+      expect(windowEntries(session)).toEqual([compact()])
+    } finally {
+      gate.resolve(ok(complete()))
+      await session.dispose()
+    }
+  })
+
+  it.each(['success', 'remote', 'thrown'] as const)('keeps a replacement detail request owned after an obsolete %s settles', async (kind) => {
+    const { api, session } = fixture()
+    const old = deferred<Awaited<ReturnType<FakeApiClient['onHistoryDetail']>>>()
+    const fresh = deferred<Awaited<ReturnType<FakeApiClient['onHistoryDetail']>>>()
+    const started = deferred<AbortSignal | undefined>()
+    try {
+      await session.open()
+      api.onHistoryDetail = (_, signal) => { started.resolve(signal); return old.promise }
+      const obsolete = session.loadHistoryDetail(0)
+      const signal = await started.promise
+      await follow(api, { type: 'extension/required', seq: SessionSeq(1), time: 0, data: {} } as unknown as SessionEvent)
+      await vi.waitFor(() => { expect(session.getSnapshot().openState).toBe('error') })
+      expect(signal?.aborted).toBe(true)
+      await session.retryOpen()
+      const before = windowEntries(session)
+      api.onHistoryDetail = () => fresh.promise
+      const pending = session.loadHistoryDetail(0)
+      expect(pending).not.toBe(obsolete)
+      const failure = new RemoteError('gateway/internal', 'old owner', {})
+      if (kind === 'thrown') old.reject(failure)
+      else old.resolve(kind === 'success' ? ok(complete()) : err(failure))
+      await obsolete
+      expect(windowEntries(session)).toBe(before)
+      expect(session.loadHistoryDetail(0)).toBe(pending)
+      expect(api.callsOf('session.historyDetail')).toHaveLength(2)
+      fresh.resolve(ok(complete()))
+      await pending
+      expect(windowEntries(session)).toEqual([complete()])
+    } finally {
+      old.resolve(ok(complete()))
+      fresh.resolve(ok(complete()))
+      await session.dispose()
+    }
+  })
+
+  it('joins previously canceled detail reads when disposing after a terminal stream failure', async () => {
+    const { api, session } = fixture()
+    const gate = deferred<Awaited<ReturnType<FakeApiClient['onHistoryDetail']>>>()
+    const started = deferred<AbortSignal | undefined>()
+    try {
+      await session.open()
+      api.onHistoryDetail = (_, signal) => { started.resolve(signal); return gate.promise }
+      const pending = session.loadHistoryDetail(0)
+      const signal = await started.promise
+      const before = windowEntries(session)
+      // An unknown required event is a protocol failure, not a retryable carrier loss.
+      await follow(api, { type: 'extension/required', seq: SessionSeq(1), time: 0, data: {} } as unknown as SessionEvent)
+      await vi.waitFor(() => { expect(session.getSnapshot().openState).toBe('error') })
+      expect(signal?.aborted).toBe(true)
+      const closing = session.dispose()
+      let closed = false
+      void closing.then(() => { closed = true })
+      await Promise.resolve()
+      expect(closed).toBe(false)
+      gate.resolve(ok(complete()))
+      await Promise.all([pending, closing])
+      expect(closed).toBe(true)
+      expect(windowEntries(session)).toBe(before)
+    } finally {
+      gate.resolve(ok(complete()))
+      await session.dispose()
+    }
+  })
+})
+
 describe('paging', () => {
+  it.each(['success', 'remote', 'thrown'] as const)('cancels a view page while preserving live follow and a fresh page after late %s', async (kind) => {
+    const { api, session } = makeSession()
+    const tail = plainTurn(SessionSeq(6), 1, 'new', 'tail')
+    const head = historyValue(plainTurn(SessionSeq(0), 0, 'old', 'head'), false)
+    api.onHistory = () => histResponse(tail, true)
+    const old = deferred<Awaited<ReturnType<FakeApiClient['onHistory']>>>()
+    const fresh = deferred<Awaited<ReturnType<FakeApiClient['onHistory']>>>()
+    const view = new AbortController()
+    const observer = new AbortController()
+    let transport: AbortSignal | undefined
+    try {
+      await session.open()
+      const absent = new AbortController()
+      absent.abort()
+      await session.loadOlder(absent.signal)
+      expect(api.callsOf('session.history')).toHaveLength(0)
+      api.onHistory = (_, signal) => { transport = signal; return old.promise }
+      const pending = session.loadOlder(view.signal)
+      expect(session.loadOlder(observer.signal)).toBe(pending)
+      observer.abort()
+      expect(transport?.aborted).toBe(false)
+      view.abort()
+      expect(transport?.aborted).toBe(true)
+      expect(session.getSnapshot()).toMatchObject({ loadingOlder: false, olderError: null, hasMore: true })
+      await follow(api, ev.user(SessionSeq(12), 'still live'))
+      const before = windowEntries(session)
+      api.onHistory = () => fresh.promise
+      const replacement = session.loadOlder()
+      expect(replacement).not.toBe(pending)
+      const failure = new RemoteError('gateway/internal', 'closed view', {})
+      if (kind === 'thrown') old.reject(failure)
+      else old.resolve(kind === 'success' ? ok(head) : err(failure))
+      await pending
+      expect(windowEntries(session)).toBe(before)
+      expect(session.getSnapshot()).toMatchObject({ loadingOlder: true, olderError: null })
+      expect(session.loadOlder()).toBe(replacement)
+      fresh.resolve(ok(head))
+      await replacement
+      expect(eventSeqs(session)).toEqual(Array.from({ length: 13 }, (_, seq) => seq))
+      expect(session.getSnapshot()).toMatchObject({ openState: 'open', loadingOlder: false, olderError: null })
+      expect(api.callsOf('session.follow')).toHaveLength(1)
+      expect(api.callsOf('session.history')).toHaveLength(2)
+    } finally {
+      old.resolve(ok(head))
+      fresh.resolve(ok(head))
+      await session.dispose()
+    }
+  })
+
+  it('joins previously view-canceled paging on disposal and detaches its caller listener', async () => {
+    const { api, session } = makeSession()
+    api.onHistory = () => histResponse(plainTurn(SessionSeq(6), 1, 'new', 'tail'), true)
+    const gate = deferred<Awaited<ReturnType<FakeApiClient['onHistory']>>>()
+    const view = new AbortController()
+    const removed = vi.spyOn(view.signal, 'removeEventListener')
+    try {
+      await session.open()
+      const before = windowEntries(session)
+      api.onHistory = () => gate.promise
+      const pending = session.loadOlder(view.signal)
+      view.abort()
+      const closing = session.dispose()
+      let closed = false
+      void closing.then(() => { closed = true })
+      await Promise.resolve()
+      expect(closed).toBe(false)
+      gate.resolve(ok(historyValue([], false)))
+      await Promise.all([pending, closing])
+      expect(closed).toBe(true)
+      expect(windowEntries(session)).toBe(before)
+      expect(removed).toHaveBeenCalledWith('abort', expect.any(Function))
+    } finally {
+      gate.resolve(ok(historyValue([], false)))
+      await session.dispose()
+      removed.mockRestore()
+    }
+  })
+
+  it.each(['page', 'jump'] as const)('retains %s failure and cursor until an explicit retry', async (kind) => {
+    const { api, session } = makeSession()
+    api.onHistory = () => histResponse(plainTurn(SessionSeq(6), 1, 'new', 'tail'), true)
+    const read = () => kind === 'page' ? session.loadOlder() : session.loadThrough(SessionSeq(0))
+    const retry = deferred<Awaited<ReturnType<FakeApiClient['onHistory']>>>()
+    try {
+      await session.open()
+      const accepted = windowEntries(session)
+      const failure = new RemoteError('gateway/internal', 'page unavailable', {})
+      api.onHistory = () => Promise.resolve(err(failure))
+      await read()
+      expect(session.getSnapshot()).toMatchObject({ openState: 'open', hasMore: true, loadingOlder: false, olderError: failure })
+      expect(windowEntries(session)).toBe(accepted)
+      expect(api.callsOf('session.history')).toHaveLength(1)
+
+      api.onHistory = () => retry.promise
+      const retried = read()
+      expect(session.getSnapshot()).toMatchObject({ loadingOlder: true, olderError: null })
+      retry.resolve(ok(historyValue(plainTurn(SessionSeq(0), 0, 'old', 'head'), false)))
+      await retried
+      expect(session.getSnapshot()).toMatchObject({ loadingOlder: false, olderError: null, hasMore: false })
+      expect(eventSeqs(session)).toEqual(Array.from({ length: 12 }, (_, seq) => seq))
+      expect(api.callsOf('session.history').map(value => (value as { beforeSeq: number }).beforeSeq)).toEqual([6, 6])
+    } finally {
+      retry.resolve(ok(historyValue([], false)))
+      await session.dispose()
+    }
+  })
+
+  it.each(['page', 'jump'] as const)('disposal joins a pending %s without publishing its late failure', async (kind) => {
+    const { api, session } = makeSession()
+    api.onHistory = () => histResponse(plainTurn(SessionSeq(6), 1, 'new', 'tail'), true)
+    const gate = deferred<Awaited<ReturnType<FakeApiClient['onHistory']>>>()
+    try {
+      await session.open()
+      const accepted = windowEntries(session)
+      api.onHistory = () => gate.promise
+      const pending = kind === 'page' ? session.loadOlder() : session.loadThrough(SessionSeq(0))
+      const closing = session.dispose()
+      let closed = false
+      void closing.then(() => { closed = true })
+      await Promise.resolve()
+      expect(closed).toBe(false)
+      const stopped = session.getSnapshot()
+      expect(stopped).toMatchObject({ loadingOlder: false, olderError: null })
+      gate.resolve(err(new RemoteError('gateway/internal', 'obsolete read failure', {})))
+      await Promise.all([closing, pending])
+      expect(closed).toBe(true)
+      expect(session.getSnapshot()).toBe(stopped)
+      expect(windowEntries(session)).toBe(accepted)
+    } finally {
+      gate.resolve(ok(historyValue([], false)))
+      await session.dispose()
+    }
+  })
+
+  it('replacement joins the old page and starts the new window without its error or jump target', async () => {
+    const { api, session } = makeSession()
+    const page = plainTurn(SessionSeq(6), 1, 'new', 'tail')
+    api.onHistory = () => histResponse(page, true)
+    const gate = deferred<Awaited<ReturnType<FakeApiClient['onHistory']>>>()
+    const retry = deferred<Awaited<ReturnType<FakeApiClient['onHistory']>>>()
+    try {
+      await session.open()
+      api.onHistory = () => gate.promise
+      const old = session.loadThrough(SessionSeq(0))
+      const replacement = session.resync()
+      api.onHistory = () => histResponse(page, true)
+      gate.resolve(err(new RemoteError('gateway/internal', 'old owner', {})))
+      await Promise.all([old, replacement])
+      expect(session.getSnapshot()).toMatchObject({ openState: 'open', loadingOlder: false, olderError: null })
+      expect(api.callsOf('session.history')).toHaveLength(1)
+      api.onHistory = () => retry.promise
+      const fresh = session.loadOlder()
+      expect(session.getSnapshot().loadingOlder).toBe(true)
+      retry.resolve(ok(historyValue(plainTurn(SessionSeq(0), 0, 'old', 'head'), false)))
+      await fresh
+      expect(session.getSnapshot()).toMatchObject({ loadingOlder: false, olderError: null, hasMore: false })
+    } finally {
+      gate.resolve(ok(historyValue([], false)))
+      retry.resolve(ok(historyValue([], false)))
+      await session.dispose()
+    }
+  })
+
+  it('does not reopen from a superseded resync after its pending page settles', async () => {
+    const { api, session } = makeSession()
+    const page = plainTurn(SessionSeq(6), 1, 'new', 'tail')
+    const gate = deferred<Awaited<ReturnType<FakeApiClient['onHistory']>>>()
+    api.onHistory = () => histResponse(page, true)
+    try {
+      await session.open()
+      api.onHistory = () => gate.promise
+      const pending = session.loadOlder()
+      const obsolete = session.resync()
+      api.onHistory = () => histResponse(page, true)
+      const current = session.resync()
+      let replaced = false
+      void current.then(() => { replaced = true })
+      await Promise.resolve()
+      expect(replaced).toBe(false)
+      gate.resolve(ok(historyValue(plainTurn(SessionSeq(0), 0, 'old', 'head'), false)))
+      await current
+      const replacement = session.getSnapshot()
+      const starts = api.callsOf('session.follow').length
+      gate.resolve(ok(historyValue(plainTurn(SessionSeq(0), 0, 'old', 'head'), false)))
+      await Promise.all([pending, obsolete])
+      expect(api.callsOf('session.follow')).toHaveLength(starts)
+      expect(session.getSnapshot()).toBe(replacement)
+      expect(eventSeqs(session)).toEqual(page.map(event => event.seq))
+    } finally {
+      gate.resolve(ok(historyValue([], false)))
+      await session.dispose()
+    }
+  })
+
   it('prepends an older page and keeps seq continuity', async () => {
     const older = plainTurn(SessionSeq(0), 0, '旧问', '旧答')
     const newer = plainTurn(SessionSeq(6), 1, '新问', '新答')
@@ -366,13 +833,13 @@ describe('paging', () => {
     try {
       await session.loadThrough(SessionSeq(0))
       expect(errorSpy).toHaveBeenCalled()
-      expect(session.getSnapshot().loadingOlder).toBe(false)
+      expect(session.getSnapshot()).toMatchObject({ loadingOlder: false, olderError: { code: 'gateway/internal', message: 'page wire down' } })
     } finally {
       errorSpy.mockRestore()
     }
   })
 
-  it('ignores loadOlder while one is in flight (single request)', async () => {
+  it('shares loadOlder completion while one is in flight (single request)', async () => {
     const { api, session } = makeSession()
     api.onHistory = () => histResponse(plainTurn(SessionSeq(6), 1, 'x', 'y'), true)
     await session.open()
@@ -380,6 +847,7 @@ describe('paging', () => {
     api.onHistory = () => gate.promise
     const first = session.loadOlder()
     const second = session.loadOlder()
+    expect(second).toBe(first)
     gate.resolve(ok({
       records: entries(plainTurn(SessionSeq(0), 0, 'a', 'b')) as never[],
       hasMore: false,
@@ -394,7 +862,7 @@ describe('paging', () => {
 describe('prompt and cancel errors', () => {
   it('routes an addressed child through non-activating history, continuation prompt, and interrupt only', async () => {
     const api = new FakeApiClient()
-    const session = new Session(SID, fakeRemote(api), {
+    const session = new Session(SID, fakeRemote(api), browserSessionPlatform, {
       address: { parentSessionId: PARENT, childSessionId: SID, mode: 'continuable' },
       parentAvailable: true,
     })
@@ -450,7 +918,7 @@ describe('prompt and cancel errors', () => {
 
   it('forwards continuation image parts to the subagent prompt Remote unstripped', async () => {
     const api = new FakeApiClient()
-    const session = new Session(SID, fakeRemote(api), {
+    const session = new Session(SID, fakeRemote(api), browserSessionPlatform, {
       address: { parentSessionId: PARENT, childSessionId: SID, mode: 'continuable' },
       parentAvailable: true,
     })
@@ -478,7 +946,7 @@ describe('prompt and cancel errors', () => {
   it('lands an interrupt business failure in promptError with op=stop', async () => {
     const api = new FakeApiClient()
     api.onSubagentInterrupt = () => Promise.resolve(err(new RemoteError('subagent/unauthorized', 'nope', { childSessionId: SID })))
-    const session = new Session(SID, fakeRemote(api), {
+    const session = new Session(SID, fakeRemote(api), browserSessionPlatform, {
       address: { parentSessionId: PARENT, childSessionId: SID, mode: 'continuable' },
       parentAvailable: true,
     })
@@ -492,7 +960,7 @@ describe('prompt and cancel errors', () => {
 
   it('rejects staged files instead of dropping them from subagent continuations', async () => {
     const api = new FakeApiClient()
-    const session = new Session(SID, fakeRemote(api), {
+    const session = new Session(SID, fakeRemote(api), browserSessionPlatform, {
       address: { parentSessionId: PARENT, childSessionId: SID, mode: 'continuable' },
       parentAvailable: true,
     })
@@ -518,7 +986,7 @@ describe('prompt and cancel errors', () => {
     api.onSubagentPrompt = () => Promise.resolve(err(new RemoteError(
       'subagent/not-resumable', 'subagent cannot be resumed', { childSessionId: SID },
     )))
-    const session = new Session(SID, fakeRemote(api), {
+    const session = new Session(SID, fakeRemote(api), browserSessionPlatform, {
       address: { parentSessionId: PARENT, childSessionId: SID, mode: 'one-shot' },
     })
     await session.open()
@@ -549,7 +1017,7 @@ describe('prompt and cancel errors', () => {
 
   it('delivers an image continuation to the Host without narrowing its upload parts', async () => {
     const api = new FakeApiClient()
-    const session = new Session(SID, fakeRemote(api), {
+    const session = new Session(SID, fakeRemote(api), browserSessionPlatform, {
       address: { parentSessionId: PARENT, childSessionId: SID, mode: 'continuable' },
     })
     await session.open()
@@ -692,7 +1160,7 @@ describe('remaining branches', () => {
       api.onHistory = () => Promise.reject(new Error('page wire down'))
       await session.loadOlder()
       expect(errorSpy).toHaveBeenCalled()
-      expect(session.getSnapshot().loadingOlder).toBe(false)
+      expect(session.getSnapshot()).toMatchObject({ loadingOlder: false, olderError: { code: 'gateway/internal', message: 'page wire down' } })
     } finally {
       errorSpy.mockRestore()
     }

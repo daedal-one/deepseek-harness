@@ -10,12 +10,24 @@
     "src/client/api.ts",
     "src/client/connection.ts",
     "src/client/fixture.ts",
+    "src/client/handle.ts",
+    "src/client/host-identity.ts",
     "src/client/index.ts",
+    "src/client/portable.ts",
     "src/client/random-uuid.ts",
+    "src/client/rpc-caller.ts",
     "src/client/rpc.ts",
+    "src/host-identity-protocol.ts",
     "src/loopback-hostname.ts",
     "src/recovery-config.ts",
-    "src/rpc.ts"
+    "src/rpc.ts",
+    "src/types.ts",
+    "src/device-protocol.ts",
+    "src/client/device-access.ts",
+    "src/client/device-api.ts",
+    "src/client/device-administration.ts",
+    "src/discovery-protocol.ts",
+    "src/client/host-discovery.ts"
   ],
   "references": [
     {
@@ -53,6 +65,9 @@
     },
     {
       "path": "../../util/brand"
+    },
+    {
+      "path": "../store"
     }
   ]
 }

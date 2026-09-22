@@ -2,172 +2,25 @@
 import { Service, type Context } from '@deepseek-ai/cordis'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type {
-  ISessions, SessionBinding, SessionEventSource, SessionEventWindow,
+  ISessions, SessionBinding,
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session/types'
-import {
-  createSnapshotStore, type ObservableSnapshot, type SnapshotStore,
-} from '@deepseek-ai/dsh-client-store'
-import type {
-  ConversationPublication, ConversationViewSnapshotMap,
-  ConversationViewSnapshotStore,
-} from '../contract/conversation.ts'
-import type { ConversationSnapshot } from '../contract/snapshot.ts'
 import type {
   ConversationPromptSnapshot, RequestPromptInspection, SystemPromptNode,
 } from '../contract/request-inspection.ts'
 import { inspectRequestPrompt } from '../contract/request-inspection.ts'
 import { inspectSystemPrompt, type SystemPromptState } from '../contract/system-prompt.ts'
 import { ConversationNodeAssembler } from './assembler.ts'
+import { ConversationBindingModel, type ConversationBinding } from './binding.ts'
+import { browserConversationScheduler } from './browser-scheduler.ts'
+export type { ConversationBinding } from './binding.ts'
 import { ConversationEventRegistry } from './event-registry.ts'
 import { HistoricalImageCache } from './historical-images.ts'
 import { ConversationViewRegistry } from './view-registry.ts'
 
-/** Observable faces published for one Session's Conversation assembly. */
-export interface ConversationBinding {
-  readonly snapshot: ObservableSnapshot<ConversationSnapshot>
-  /**
-   * Add one selected target to the Session's monotonic active set.
-   * @param target - registered or subsequently registered Conversation target.
-   */
-  activate(target: string): void
-  /**
-   * Resolve one target-owned snapshot source.
-   * The first subscriber activates the target unless shell selection already
-   * activated it; activation lasts for the remaining Session lifetime.
-   * @param target - registered Conversation target.
-   * @returns identity-stable source following the target.
-   */
-  target<Target extends Extract<keyof ConversationViewSnapshotMap, string>>(
-    target: Target,
-  ): ObservableSnapshot<ConversationViewSnapshotMap[Target] | undefined>
-}
-
-class BoundConversation implements ConversationBinding {
-  readonly snapshot: SnapshotStore<ConversationSnapshot>
-  private readonly viewStore: ConversationViewSnapshotStore
-  private readonly targetSources = new Map<string, ObservableSnapshot<unknown>>()
-  private revision = -1
-  private frame: number | undefined
-  private disposeFeed: () => void = () => {}
-
-  constructor(
-    feed: SessionEventSource,
-    private readonly assembler: ConversationNodeAssembler,
-  ) {
-    this.viewStore = assembler
-    this.snapshot = createSnapshotStore(this.currentSnapshot())
-    this.replace(feed.getSnapshot())
-    this.disposeFeed = feed.subscribe(() => {
-      this.accept(feed.getSnapshot())
-    })
-  }
-
-  target<Target extends Extract<keyof ConversationViewSnapshotMap, string>>(
-    target: Target,
-  ): ObservableSnapshot<ConversationViewSnapshotMap[Target] | undefined> {
-    let source = this.targetSources.get(target)
-    if (source === undefined) {
-      const views = this.viewStore as unknown as { get(key: string): unknown }
-      source = {
-        getSnapshot: () => views.get(target),
-        subscribe: (listener) => {
-          const unsubscribe = this.snapshot.subscribe(listener)
-          this.activate(target)
-          return unsubscribe
-        },
-      }
-      this.targetSources.set(target, source)
-    }
-    return source as ObservableSnapshot<ConversationViewSnapshotMap[Target] | undefined>
-  }
-
-  activate(target: string): void {
-    if (this.assembler.activateTarget(target)) this.snapshot.set(this.currentSnapshot())
-  }
-
-  rebuild(): void { this.publish(this.assembler.rebuildRegistry()) }
-
-  dispose(): void {
-    this.cancelFrame()
-    this.disposeFeed()
-  }
-
-  private replace(window: SessionEventWindow): void {
-    this.revision = window.revision
-    this.publish(this.assembler.replaceWindow(window.entries, window.hasMore))
-  }
-
-  private accept(window: SessionEventWindow): void {
-    if (window.revision === this.revision) return
-    if (window.revision !== this.revision + 1 || window.change.kind === 'replace') {
-      this.replace(window)
-      return
-    }
-    this.revision = window.revision
-    switch (window.change.kind) {
-      case 'prepend':
-        this.publish(this.assembler.prepend(window.change.entries, window.hasMore))
-        return
-      case 'append': {
-        let publication: ConversationPublication = 'none'
-        for (const event of window.change.entries) {
-          const next = this.assembler.append(event)
-          if (next === 'immediate' || publication === 'none') publication = next
-        }
-        this.publish(publication)
-        return
-      }
-      case 'settle-assistant':
-        this.publish(this.assembler.settleAssistant(
-          window.change.attemptId,
-          window.change.entry,
-        ))
-        return
-    }
-  }
-
-  private publish(publication: ConversationPublication): void {
-    if (publication === 'none') return
-    if (publication === 'animation-frame' && typeof requestAnimationFrame === 'function') {
-      if (this.frame !== undefined) return
-      // Cross three paint opportunities before publishing high-frequency stream updates.
-      this.frame = requestAnimationFrame(() => {
-        this.frame = requestAnimationFrame(() => {
-          this.frame = requestAnimationFrame(() => {
-            this.frame = undefined
-            this.flush()
-          })
-        })
-      })
-      return
-    }
-    this.cancelFrame()
-    this.flush()
-  }
-
-  private cancelFrame(): void {
-    if (this.frame !== undefined && typeof cancelAnimationFrame === 'function') {
-      cancelAnimationFrame(this.frame)
-    }
-    this.frame = undefined
-  }
-
-  private flush(): void {
-    if (this.assembler.flush()) this.snapshot.set(this.currentSnapshot())
-  }
-
-  private currentSnapshot(): ConversationSnapshot {
-    return {
-      views: this.viewStore,
-      activeTargets: this.assembler.activityTargets(),
-    }
-  }
-}
-
 interface BindingRecord {
   readonly source: SessionBinding
-  readonly binding: BoundConversation
+  readonly binding: ConversationBindingModel
   disposeScope: () => void
 }
 
@@ -224,9 +77,10 @@ export class UiConversation extends Service {
     const current = this.bindings.get(owner.sessionId)
     if (current?.source === owner) return current.binding
     if (current !== undefined) this.drop(current, true)
-    const binding = new BoundConversation(
+    const binding = new ConversationBindingModel(
       owner.eventSource,
       new ConversationNodeAssembler(this.events, this.views),
+      browserConversationScheduler(),
     )
     const record: BindingRecord = { source: owner, binding, disposeScope: () => {} }
     this.bindings.set(owner.sessionId, record)

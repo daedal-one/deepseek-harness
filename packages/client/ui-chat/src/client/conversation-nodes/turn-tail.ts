@@ -1,7 +1,6 @@
-import type { Context } from '@deepseek-ai/cordis'
 import type {
   ConversationMatch, ConversationNodeContext, ConversationNodeDefinition, TurnLocation,
-} from '@deepseek-ai/dsh-client-ui-conversation/client'
+} from '@deepseek-ai/dsh-client-ui-conversation/client/portable'
 import type {} from '@deepseek-ai/dsh-llm-retry/types'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
@@ -20,7 +19,7 @@ declare module '../contract/chat-nodes.ts' {
   }
 }
 
-declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
+declare module '@deepseek-ai/dsh-client-ui-conversation/client/types' {
   interface ConversationTurnDataMap {
     /** Closing Assistant and footer facts derived for this completed Turn. */
     'turn-tail': TurnTailChatData
@@ -199,12 +198,4 @@ export const turnTailDefinition: ConversationNodeDefinition<TurnTailState> = {
     const data = turn?.data.get('turn-tail')
     return data === undefined ? null : chatNode(context, 'turn-tail', closingAnchor(context), data)
   },
-}
-
-/**
- * Register completed-Turn footer data and its Chat node contribution.
- * @param ctx - owning UI Conversation context.
- */
-export function registerTurnTailConversationNode(ctx: Context): void {
-  ctx.uiConversation.events.register(turnTailDefinition)
 }
