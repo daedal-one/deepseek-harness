@@ -20,6 +20,8 @@ Remote-only repositories are cloned inside sandbox processes after the durable a
 
 Workspace supervisors register one coalesced shutdown with the engine owner. Pending repository requests are cancelled and joined before checkpointing and child-container disposal. The managed engine remains available until those operations finish. The CLI accepts an inherited `DSH_SHUTDOWN_TIMEOUT_MS` so deployments can accommodate bounded checkpoint work; an interrupted shutdown retains an unclean RAM receipt for recovery.
 
+Controller stdin is attached only for requests carrying bytes. Empty-input executable probes can finish before the Engine stream is attached; writing to that closed input can produce `EPIPE` and trigger world teardown. A missing executable is an ordinary exit result, and concurrent desktop-app probes must not close environment workspaces.
+
 ## Alternatives considered
 
 **Host networking or host checkout mounts.** These grant access beyond the requested remote and page access and invalidate the existing namespace or storage controls.

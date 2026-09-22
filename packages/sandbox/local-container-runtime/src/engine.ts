@@ -249,18 +249,19 @@ class DockerodePodmanContainer implements PodmanContainer {
     return { exitCode: inspection.ExitCode, output: Buffer.concat(chunks).toString('utf8') }
   }
 
-  /** Execute a provider-owned controller command through the multiplexed Engine stream. */
+  /** Execute a provider-owned controller through the multiplexed Engine stream; attach stdin only for nonempty input. */
   async runController(request: PodmanControllerExecRequest): Promise<PodmanControllerExecResult> {
+    const stdin = request.stdin.byteLength > 0
     const exec = await this.container.exec({
       Cmd: [...request.argv],
-      AttachStdin: true,
+      AttachStdin: stdin,
       AttachStdout: true,
       AttachStderr: true,
       Tty: false,
     })
     const startOptions = request.signal === undefined
-      ? { hijack: true, stdin: true }
-      : { hijack: true, stdin: true, abortSignal: request.signal }
+      ? { hijack: true, stdin }
+      : { hijack: true, stdin, abortSignal: request.signal }
     const stream = await new Promise<Duplex>((resolve, reject) => {
       exec.start(startOptions, (error, started) => {
         if (error !== null && error !== undefined) {
@@ -281,7 +282,7 @@ class DockerodePodmanContainer implements PodmanContainer {
     let buffered: Buffer = Buffer.from([])
     let bytes = 0
     try {
-      stream.end(Buffer.from(request.stdin))
+      if (stdin) stream.end(Buffer.from(request.stdin))
       for await (const chunk of stream as unknown as AsyncIterable<Uint8Array>) {
         const next = Buffer.from(chunk)
         buffered = buffered.length === 0 ? next : Buffer.concat([buffered, next])

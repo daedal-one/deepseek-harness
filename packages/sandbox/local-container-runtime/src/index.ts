@@ -216,7 +216,7 @@ export class LocalContainerRuntime extends Service {
    * @returns settled bounded standard streams and exit code.
    */
   async executeController(request: PodmanControllerExecRequest & { readonly deadlineMs: number }): Promise<PodmanControllerExecResult> {
-    if (this.admissionClosed) throw new Error('local-container-runtime: workspace is being saved')
+    this.assertAdmissionOpen()
     const operation = this.runController(request)
     this.controllers.add(operation)
     try { return await operation } finally { this.controllers.delete(operation) }
@@ -285,7 +285,7 @@ export class LocalContainerRuntime extends Service {
    * @returns an attached started handle whose removal proves descendant quiescence.
    */
   async createProcess(request: LocalContainerProcessRequest): Promise<LocalContainerProcessHandle> {
-    if (this.admissionClosed) throw new Error('local-container-runtime: workspace is being saved')
+    this.assertAdmissionOpen()
     this.validateProcessRequest(request)
     request.signal?.throwIfAborted()
     const prior = this.processAllocation
@@ -294,7 +294,7 @@ export class LocalContainerRuntime extends Service {
     await prior
     try {
       this.throwIfDisposing()
-      if (this.admissionClosed) throw new Error('local-container-runtime: workspace is being saved')
+      this.assertAdmissionOpen()
       if (this.processes.size >= this.config.maxLiveProcesses) {
         throw new Error(`local-container-runtime: process-container limit ${this.config.maxLiveProcesses} reached`)
       }
@@ -953,6 +953,10 @@ export class LocalContainerRuntime extends Service {
   /** Refuse readiness when disposal begins during setup. */
   private throwIfDisposing(): void {
     if (this.disposing) throw new Error('local-container-runtime: disposal began during setup')
+  }
+
+  private assertAdmissionOpen(): void {
+    if (this.admissionClosed) throw new Error('local-container-runtime: workspace is being saved')
   }
 
   /** Remove a known owner directory without following a replaced symlink. */

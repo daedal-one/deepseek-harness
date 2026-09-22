@@ -21,6 +21,36 @@ async function readAll(stream: NodeJS.ReadableStream): Promise<string> {
 }
 
 describe.skipIf(!enabled)('rootless Podman Engine API runtime owner', () => {
+  it('preserves the workspace owner after concurrent short-lived executable probes', async () => {
+    if (socketPath === undefined || image === undefined) throw new Error('Podman integration environment disappeared')
+    const ctx = new Context()
+    let shutdowns = 0
+    try {
+      await ctx.plugin(LocalContainerRuntime, {
+        socketPath, image, manageService: false, serviceStartupTimeoutMs: 10000,
+        user: 'dsh', environment: { HOME: '/home/dsh', LANG: 'C.UTF-8', PATH: '/usr/local/bin:/usr/bin:/bin' },
+        memoryBytes: 268435456, nanoCpus: 500000000, pidsLimit: 128, tmpfsBytes: 67108864,
+        engineRequestTimeoutMs: 10000, maxLiveProcesses: 4, lifetimeMs: 300000, stopTimeoutSeconds: 2,
+      })
+      const runtime = ctx.localContainerRuntime
+      await runtime.getContainer()
+      runtime.registerWorkspaceOwner(async () => { shutdowns++ })
+      const outcomes = await Promise.allSettled(Array.from({ length: 24 }, (_, index) => runtime.executeController({
+        argv: ['/bin/sh', '-c', 'command -v -- "$1"', 'dsh', `dsh-absent-editor-${index}`],
+        stdin: new Uint8Array(), maxOutputBytes: 1024, deadlineMs: 30000,
+      })))
+      expect(outcomes.map(outcome => outcome.status === 'fulfilled' ? outcome.value.exitCode : String(outcome.reason)))
+        .toEqual(Array.from({ length: 24 }, () => 127))
+      expect(shutdowns).toBe(0)
+      const result = await runtime.executeController({
+        argv: ['/bin/cat'], stdin: Buffer.from('workspace remains available'), maxOutputBytes: 1024, deadlineMs: 30000,
+      })
+      expect(result.exitCode).toBe(0)
+      expect(Buffer.from(result.stdout).toString()).toBe('workspace remains available')
+    } finally { await ctx.fiber.dispose() }
+    expect(shutdowns).toBe(1)
+  })
+
   it.skipIf(process.env.DSH_PODMAN_EGRESS !== '1')('clones an approved remote absent from the catalog through a sandbox process', async () => {
     if (socketPath === undefined || image === undefined) throw new Error('Podman integration environment disappeared')
     const root = await mkdtemp('/tmp/dsh-new-remote-e2e-')
