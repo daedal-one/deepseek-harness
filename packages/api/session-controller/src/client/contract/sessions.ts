@@ -72,6 +72,16 @@ export interface ISessions {
    */
   refresh(): Promise<void>
   /**
+   * Load one Host summary into the shared list without selecting or opening it.
+   * Only the requested row is admitted; list pagination and existing metadata stay intact.
+   * Live mutations during the read take precedence over its reply. Absence does not remove rows.
+   * @param id - Session identity, including a search hit outside the loaded list.
+   * @param signal - caller lifetime; Host disconnect and disposal also cancel the read.
+   * @returns whether the current reply contains the Session, or a structured failure.
+   *   A present result makes binding(id) addressable before this promise resolves.
+   */
+  loadSummary(id: SessionId, signal: AbortSignal): Promise<RemoteResult<boolean>>
+  /**
    * Search the Host's visible message-content index. Results stay
    * request-local; the list snapshot remains the metadata authority.
    * @param query - non-blank literal phrase.

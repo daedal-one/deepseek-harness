@@ -191,6 +191,23 @@ describe('sessions', () => {
     await runtime.dispose()
   })
 
+  it('resolves declared summary identities and cancellation without inventing fixture rows', async () => {
+    const runtime = await SlotTestRuntime.create()
+    try {
+      await runtime.sessions.add({ id: 'fixture-hit' })
+      const signal = new AbortController().signal
+      const before = runtime.sessions.list.getSnapshot()
+      await expect(runtime.sessions.loadSummary('fixture-hit' as SessionId, signal)).resolves.toEqual({ ok: true, value: true })
+      await expect(runtime.sessions.loadSummary('missing' as SessionId, signal)).resolves.toEqual({ ok: true, value: false })
+      const abort = new AbortController()
+      abort.abort()
+      await expect(runtime.sessions.loadSummary('fixture-hit' as SessionId, abort.signal)).resolves.toMatchObject({ ok: false, error: { code: 'gateway/cancelled' } })
+      expect(runtime.sessions.list.getSnapshot()).toBe(before)
+    } finally {
+      await runtime.dispose()
+    }
+  })
+
   it('answers search with an empty page until a scenario declares hits, recording every call', async () => {
     const runtime = await runtimeWithFrame()
     await runtime.sessions.add({ id: 's1' })

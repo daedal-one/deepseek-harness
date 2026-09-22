@@ -1,4 +1,5 @@
 /** Test-owned Session Controller faces over declarative fixtures. */
+import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import type { Context } from '@deepseek-ai/cordis'
 import type { AttachmentIdType } from '@deepseek-ai/dsh-attachment'
 import {
@@ -211,7 +212,7 @@ export class TestSessions implements ISessions {
   /** Calls observed on the service-level face, newest last. */
   readonly calls: {
     method: 'create' | 'open' | 'openSubagent' | 'setSubagentCatalogOpen' | 'refreshSubagents'
-      | 'clear' | 'refresh' | 'loadMore' | 'search' | 'fork'
+      | 'clear' | 'refresh' | 'loadMore' | 'loadSummary' | 'search' | 'fork'
     args: unknown[]
   }[] = []
 
@@ -502,6 +503,19 @@ export class TestSessions implements ISessions {
   refresh(): Promise<void> {
     this.calls.push({ method: 'refresh', args: [] })
     return Promise.resolve()
+  }
+
+  /**
+   * Resolve an already declared fixture row without creating metadata.
+   * @param id - requested fixture Session identity.
+   * @param signal - caller cancellation signal.
+   * @returns whether the fixture declares the Session, or a cancellation failure.
+   */
+  loadSummary(id: SessionId, signal: AbortSignal): ReturnType<ISessions['loadSummary']> {
+    this.calls.push({ method: 'loadSummary', args: [id, signal] })
+    return Promise.resolve(signal.aborted
+      ? { ok: false, error: new RemoteError('gateway/cancelled', 'Session summary read was cancelled', {}) }
+      : { ok: true, value: this.list.getSnapshot().byId[id] !== undefined })
   }
 
   /**

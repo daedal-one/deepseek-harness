@@ -45,6 +45,8 @@ Each API controller package owns a paired Host and Client face. The Host side ow
 - `SessionManager` owns the list baseline, live list/control updates, lazy Session instances, queues, projection stores, subagent catalogs, and conflict ordering between pulls and later updates.
 - Each `Session` owns one contiguous logical-event window represented by `SessionEventLikeEntry` values, paging, follow, prompt/control state, and the observable snapshot consumed by adapters.
 
+Content search returns request-local identities and snippets. `ctx.sessions.loadSummary(id, signal)` reads the requested Host summary into the shared list without selecting it or advancing pagination; a present result makes its existing Session binding addressable. Cancellation and later live mutations take precedence over the lookup reply.
+
 The durable event path opens `follow()`, whose first frame contains the current header, tail page, cursor, and complete projection baseline. History records have an explicit `event` or `chunks` discriminator and an aligned inner `event`; the journal validates each inclusive logical sequence range before the Client retains the records as `SessionEventLikeEntry` values without per-record conversion. Each physical generation atomically replaces the retained window from that snapshot; standard live events then append by sequence. `page()` is reserved for older history and gap repair. The transient control stream starts every generation with a complete baseline and then applies queue, job, and projection updates.
 
 ### Workspaces

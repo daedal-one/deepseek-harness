@@ -1221,3 +1221,214 @@ describe('coverage tails (branch duals)', () => {
   })
 
 })
+
+describe('off-page Session summaries', () => {
+  const contexts: Context[] = []
+  const releases: (() => void)[] = []
+  afterEach(async () => {
+    for (const release of releases.splice(0)) release()
+    await Promise.all(contexts.splice(0).map(ctx => ctx.fiber.dispose()))
+  })
+  const row = (id = 'hit') => ({
+    sessionId: sid(id), updatedAt: 1, running: false, blank: false, cwd: '/fixture',
+    projections: { asOfSeq: 1, values: { title: 'Host title' } },
+  })
+  const page = (items = [row()]) => ok({ items: items as never[], hasMore: false })
+  function heldReply() {
+    const reply = deferred<ReturnType<typeof page>>()
+    releases.push(() => { reply.resolve(page([])) })
+    return reply
+  }
+  function setup() {
+    const b = bench()
+    contexts.push(b.ctx)
+    return b
+  }
+
+  it('admits only the requested Host row before binding, leaving selection and pagination intact', async () => {
+    const b = setup()
+    const cursor = brandString<SessionListCursor>('continuation')
+    b.api.onList = async () => ok({ items: [row('first')] as never[], hasMore: true, nextCursor: cursor })
+    await b.svc.refresh()
+    b.svc.open(sid('first'))
+    const before = b.svc.list.getSnapshot()
+    expect(b.svc.binding(sid('hit'))).toBeUndefined()
+    b.api.onList = async (payload) => {
+      expect(payload).toEqual({ includeSessionId: 'hit' })
+      return page([row('unrelated'), row()])
+    }
+    expect(await b.svc.loadSummary(sid('hit'), new AbortController().signal)).toEqual(ok(true))
+    expect(b.svc.list.getSnapshot()).toMatchObject({ current: before.current, hasMore: true, loadingMore: false })
+    expect(b.svc.list.getSnapshot().ids).toEqual(['hit', 'first'])
+    expect(b.svc.list.getSnapshot().byId[sid('hit')]?.title).toBe('Host title')
+    const binding = b.svc.binding(sid('hit'))
+    expect(binding).toBeDefined()
+    expect(b.svc.binding(sid('hit'))).toBe(binding)
+    expect(binding?.session.getSnapshot().openState).toBe('cold')
+    b.api.onList = async (payload) => {
+      expect(payload).toEqual({ cursor })
+      return page([])
+    }
+    await b.svc.loadMore()
+    b.svc.open(sid('hit'))
+    expect(b.svc.list.getSnapshot().current).toBe('hit')
+  })
+
+  it('keeps absence, business failure and thrown transport failure distinct without erasing rows', async () => {
+    const b = setup()
+    await feedList(b, [{ id: 'hit' }])
+    const before = b.svc.list.getSnapshot()
+    b.api.onList = async () => page([])
+    expect(await b.svc.loadSummary(sid('hit'), new AbortController().signal)).toEqual(ok(false))
+    const failure = new RemoteError('gateway/internal', 'lookup failed', {})
+    b.api.onList = async () => err(failure)
+    expect(await b.svc.loadSummary(sid('hit'), new AbortController().signal)).toEqual(err(failure))
+    b.api.onList = async () => { throw failure }
+    expect(await b.svc.loadSummary(sid('hit'), new AbortController().signal)).toEqual(err(failure))
+    expect(b.svc.list.getSnapshot()).toBe(before)
+  })
+
+  it('replays removal over a held reply without resurrecting its title or binding', async () => {
+    const b = setup()
+    const reply = heldReply()
+    b.api.onList = () => reply.promise
+    const loading = b.svc.loadSummary(sid('hit'), new AbortController().signal)
+    await Promise.resolve()
+    b.svc.handleSessionRemoved(sid('hit'))
+    reply.resolve(page())
+    expect(await loading).toEqual(ok(false))
+    expect(b.svc.binding(sid('hit'))).toBeUndefined()
+    expect(b.svc.list.getSnapshot().ids).toEqual([])
+  })
+
+  it('replays activity and running frames and preserves newer projection values', async () => {
+    const b = setup()
+    const reply = heldReply()
+    b.api.onList = () => reply.promise
+    const loading = b.svc.loadSummary(sid('hit'), new AbortController().signal)
+    await Promise.resolve()
+    b.svc.handleSessionActivity(sid('hit'), 50)
+    b.svc.handleSessionStatus(sid('hit'), true)
+    b.svc.handleControlFrame({ type: 'projection', sessionId: sid('hit'), key: 'title', value: 'New title', seq: 3 })
+    reply.resolve(page())
+    expect(await loading).toEqual(ok(true))
+    expect(b.svc.list.getSnapshot().byId[sid('hit')]).toMatchObject({ updatedAt: 50, running: true, title: 'New title' })
+    expect(b.svc.binding(sid('hit'))?.session.getSnapshot().running).toBe(true)
+  })
+
+  it.each(['refresh', 'loadMore'] as const)('retains admission when an overlapping %s finishes later', async (method) => {
+    const b = setup()
+    b.api.onList = async () => ok({ items: [row('first')] as never[], hasMore: true, nextCursor: brandString<SessionListCursor>('cursor') })
+    await b.svc.refresh()
+    const reply = heldReply()
+    b.api.onList = () => reply.promise
+    const pending = b.svc[method]()
+    b.api.onList = async () => page()
+    expect(await b.svc.loadSummary(sid('hit'), new AbortController().signal)).toEqual(ok(true))
+    reply.resolve(page([row('first')]))
+    await pending
+    expect(b.svc.list.getSnapshot().ids).toContain('hit')
+  })
+
+  it('keeps newer established metadata when a list baseline finishes before the lookup', async () => {
+    const b = setup()
+    const reply = heldReply()
+    b.api.onList = () => reply.promise
+    const loading = b.svc.loadSummary(sid('hit'), new AbortController().signal)
+    await Promise.resolve()
+    await feedList(b, [{ id: 'hit', cwd: '/newer', running: true, projections: { title: 'Existing' } }])
+    reply.resolve(page())
+    expect(await loading).toEqual(ok(true))
+    expect(b.svc.list.getSnapshot().byId[sid('hit')]).toMatchObject({ cwd: '/newer', running: true })
+  })
+
+  it('cancels a pre-aborted caller before dispatch', async () => {
+    const b = setup()
+    const abort = new AbortController()
+    abort.abort()
+    expect(await b.svc.loadSummary(sid('hit'), abort.signal)).toMatchObject({ ok: false, error: { code: 'gateway/cancelled' } })
+    expect(b.api.callsOf('session.list')).toHaveLength(0)
+  })
+
+  it.each(['caller', 'disconnect', 'reconnect'] as const)('suppresses late success after %s cancellation', async (kind) => {
+    let carrierSignal: AbortSignal | undefined
+    const reply = heldReply()
+    const b = bench(remote => ({ ...remote, session: { ...remote.session, list: (request, signal) => {
+      if (request.includeSessionId === undefined) return Promise.resolve(page([]))
+      carrierSignal = signal
+      return reply.promise
+    } } }))
+    contexts.push(b.ctx)
+    const abort = new AbortController()
+    const loading = b.svc.loadSummary(sid('hit'), abort.signal)
+    await Promise.resolve()
+    if (kind === 'caller') abort.abort()
+    else if (kind === 'disconnect') b.svc.handleDisconnected()
+    else b.svc.handleConnected()
+    expect(carrierSignal?.aborted).toBe(true)
+    reply.resolve(page())
+    expect(await loading).toMatchObject({ ok: false, error: { code: 'gateway/cancelled' } })
+    expect(b.svc.list.getSnapshot().ids).toEqual([])
+  })
+
+  it('joins a cancelled carrier during disposal and refuses future dispatch', async () => {
+    let carrierSignal: AbortSignal | undefined
+    const b = bench(remote => ({ ...remote, session: { ...remote.session, list: (request, signal) => {
+      carrierSignal = signal
+      return remote.session.list(request, signal)
+    } } }))
+    contexts.push(b.ctx)
+    const reply = heldReply()
+    b.api.onList = () => reply.promise
+    const loading = b.svc.loadSummary(sid('hit'), new AbortController().signal)
+    await Promise.resolve()
+    let disposed = false
+    const disposal = b.ctx.fiber.dispose().then(() => { disposed = true })
+    await vi.waitFor(() => { expect(carrierSignal?.aborted).toBe(true) })
+    expect(disposed).toBe(false)
+    reply.resolve(page())
+    expect(await loading).toMatchObject({ ok: false, error: { code: 'gateway/cancelled' } })
+    await disposal
+    expect(b.svc.list.getSnapshot().ids).toEqual([])
+    expect(await b.svc.loadSummary(sid('hit'), new AbortController().signal)).toMatchObject({ ok: false, error: { code: 'gateway/cancelled' } })
+    expect(b.api.callsOf('session.list')).toHaveLength(1)
+  })
+  it('lets a new generation resolve while a cancelled predecessor remains held', async () => {
+    const b = setup()
+    const reply = heldReply()
+    b.api.onList = () => reply.promise
+    const old = b.svc.loadSummary(sid('hit'), new AbortController().signal)
+    await Promise.resolve()
+    b.svc.handleDisconnected()
+    b.api.onList = async () => page([{ ...row(), cwd: '/replacement', projections: { asOfSeq: 5, values: { title: 'Replacement' } } }])
+    expect(await b.svc.loadSummary(sid('hit'), new AbortController().signal)).toEqual(ok(true))
+    reply.resolve(page())
+    expect(await old).toMatchObject({ ok: false, error: { code: 'gateway/cancelled' } })
+    expect(b.svc.list.getSnapshot().byId[sid('hit')]).toMatchObject({ cwd: '/replacement', title: 'Replacement' })
+  })
+
+  it('keeps concurrent caller lifetimes independent and suppresses a late cancelled failure', async () => {
+    const b = setup()
+    const failure = deferred<ReturnType<typeof page>>()
+    releases.push(() => { failure.resolve(page([])) })
+    b.api.onList = () => failure.promise
+    const abort = new AbortController()
+    const first = b.svc.loadSummary(sid('hit'), abort.signal)
+    await Promise.resolve()
+    abort.abort()
+    b.api.onList = async () => page()
+    expect(await b.svc.loadSummary(sid('hit'), new AbortController().signal)).toEqual(ok(true))
+    failure.reject(new Error('late carrier rejection'))
+    expect(await first).toMatchObject({ ok: false, error: { code: 'gateway/cancelled' } })
+    expect(b.svc.list.getSnapshot().ids).toEqual(['hit'])
+  })
+
+  it('propagates an active programming error without turning it into absence', async () => {
+    const b = setup()
+    const error = new Error('programming defect')
+    b.api.onList = async () => { throw error }
+    await expect(b.svc.loadSummary(sid('hit'), new AbortController().signal)).rejects.toBe(error)
+    expect(b.svc.list.getSnapshot().ids).toEqual([])
+  })
+
+})
