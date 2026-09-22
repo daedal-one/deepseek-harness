@@ -1,0 +1,8 @@
+version: 1
+scenario: environment-workspace-outcomes
+profile: sdk
+composition: sdk-environment-workspace-outcomes
+recording: authored
+header:
+  class: environment-workspace-outcomes
+  pin: true

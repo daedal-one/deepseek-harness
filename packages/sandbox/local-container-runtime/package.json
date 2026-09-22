@@ -30,6 +30,10 @@
     },
     "./workspace-types": {
       "types": "./lib/types/workspace-types.d.ts"
+    },
+    "./tool-request-repo-access": {
+      "types": "./lib/types/tool-request-repo-access.d.ts",
+      "default": "./lib/tool-request-repo-access.js"
     }
   },
   "files": [
@@ -37,7 +41,8 @@
     "lib/startup.js",
     "Containerfile",
     "lib/workspaces.js",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/tool-request-repo-access.js"
   ],
   "license": "MIT",
   "peerDependencies": {
@@ -52,7 +57,9 @@
     "@deepseek-ai/dsh-llm": "workspace:^",
     "@deepseek-ai/dsh-system-prompt": "workspace:^",
     "@deepseek-ai/node-addon-system": "workspace:^",
-    "@deepseek-ai/dsh-brand": "workspace:^"
+    "@deepseek-ai/dsh-brand": "workspace:^",
+    "@deepseek-ai/dsh-user-questions": "workspace:^",
+    "@deepseek-ai/dsh-tools": "workspace:^"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",

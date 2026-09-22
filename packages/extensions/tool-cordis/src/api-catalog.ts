@@ -828,6 +828,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'path', description: 'source or execution path.' }],
         returns: 'the corresponding execution path, or the unchanged non-source path.',
       },
+      {
+        signature: 'async requestRepository( agent: Agent, repository: string, access: RepositoryAccess, reason: string, signal: AbortSignal, ): Promise<RepositoryRequestResult>',
+        description: 'Request repository authority through the human question provider, then attach an isolated checkout.',
+        parameters: [{ name: 'agent', description: 'initiating top-level session; determines the environment and workspace.' }, { name: 'repository', description: 'canonical HTTPS repository URL allowed by environment configuration.' }, { name: 'access', description: 'fetch authority or explicitly approved push authority.' }, { name: 'reason', description: 'task-related reason shown with the complete approval scope.' }, { name: 'signal', description: 'cancellation of the pending question and attachment request.' }],
+        returns: 'approval and readiness separately; paths appear only for attached repositories.',
+      },
     ],
   },
   {
@@ -1470,9 +1476,15 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'an attached started handle whose removal proves descendant quiescence.',
       },
       {
-        signature: 'async createWorkspace(directory: string): Promise<{ runtime: LocalContainerRuntime; dispose(): Promise<void> }>',
+        signature: 'registerWorkspaceOwner(shutdown: () => Promise<void>): () => void',
+        description: 'Keep the engine available until a workspace supervisor finishes its child worlds.',
+        parameters: [{ name: 'shutdown', description: 'coalesced checkpoint and child-container disposal operation.' }],
+        returns: 'unregister function, called only after that supervisor has finished shutdown.',
+      },
+      {
+        signature: 'async createWorkspace( directory: string, authorize?: () => Promise<string[]>, ): Promise<{ runtime: LocalContainerRuntime; dispose(): Promise<void> }>',
         description: 'Bind a separately owned workspace to a new isolated world on the same engine.',
-        parameters: [{ name: 'directory', description: 'trusted supervisor-owned private backing directory.' }],
+        parameters: [{ name: 'directory', description: 'trusted supervisor-owned private backing directory.' }, { name: 'authorize', description: 'environment-owned credential issuance checked for each process admission.' }],
         returns: 'the verified world and its quiescent container disposer; storage is retained.',
       },
       {
@@ -4603,6 +4615,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface EncodedImageAttachment {\n    mediaType: ImageMediaType;\n    data: string;\n    name?: string;\n}',
   },
   {
+    name: 'EnvironmentId',
+    declaration: 'export type EnvironmentId = Branded<\'EnvironmentId\'>;',
+  },
+  {
     name: 'EpochHeader',
     declaration: 'export interface EpochHeader {\n    config: LlmCallConfig;\n    adapterDefaults?: LlmCallConfigAdapterDefaults;\n    tools?: ToolSchema[];\n}',
   },
@@ -4988,11 +5004,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LocalContainerRuntime',
-    declaration: 'export class LocalContainerRuntime extends Service {\n    static Config: z<LocalContainerRuntimeConfig>;\n    readonly executionWorld: object;\n    readonly workspacePath: \'/workspace\';\n    readonly containerName: string;\n    constructor(ctx: Context, config: LocalContainerRuntimeConfig, private readonly retainedDirectory?: string);\n    async getContainer(): Promise<LocalContainerHandle>;\n    async executeController(request: PodmanControllerExecRequest & {\n        readonly deadlineMs: number;\n    }): Promise<PodmanControllerExecResult>;\n    async createProcess(request: LocalContainerProcessRequest): Promise<LocalContainerProcessHandle>;\n    async createWorkspace(directory: string): Promise<{\n        runtime: LocalContainerRuntime;\n        dispose(): Promise<void>;\n    }>;\n    async settle<T>(timeoutMs: number, operation: (control: (request: PodmanControllerExecRequest & {\n        readonly deadlineMs: number;\n    }) => Promise<PodmanControllerExecResult>) => Promise<T>, quiesce?: () => Promise<void>): Promise<T>;\n    async cancelProcesses(): Promise<void>;\n    async recoverWorkspace(directory: string): Promise<void>;\n    get diagnostics(): LocalContainerDiagnostics;\n}',
+    declaration: 'export class LocalContainerRuntime extends Service {\n    static Config: z<LocalContainerRuntimeConfig>;\n    readonly executionWorld: object;\n    readonly workspacePath: \'/workspace\';\n    readonly containerName: string;\n    constructor(ctx: Context, config: LocalContainerRuntimeConfig, private readonly retainedDirectory?: string);\n    async getContainer(): Promise<LocalContainerHandle>;\n    async executeController(request: PodmanControllerExecRequest & {\n        readonly deadlineMs: number;\n    }): Promise<PodmanControllerExecResult>;\n    async createProcess(request: LocalContainerProcessRequest): Promise<LocalContainerProcessHandle>;\n    registerWorkspaceOwner(shutdown: () => Promise<void>): () => void;\n    async createWorkspace(directory: string, authorize?: () => Promise<string[]>): Promise<{\n        runtime: LocalContainerRuntime;\n        dispose(): Promise<void>;\n    }>;\n    async settle<T>(timeoutMs: number, operation: (control: (request: PodmanControllerExecRequest & {\n        readonly deadlineMs: number;\n    }) => Promise<PodmanControllerExecResult>) => Promise<T>, quiesce?: () => Promise<void>): Promise<T>;\n    async cancelProcesses(): Promise<void>;\n    async recoverWorkspace(directory: string): Promise<void>;\n    get diagnostics(): LocalContainerDiagnostics;\n}',
   },
   {
     name: 'LocalContainerRuntimeConfig',
-    declaration: 'export interface LocalContainerRuntimeConfig {\n    socketPath: string;\n    manageService: boolean;\n    podmanCommand?: string;\n    serviceStartupTimeoutMs: number;\n    image: string;\n    user: string;\n    environment: Record<string, string>;\n    memoryBytes: number;\n    nanoCpus: number;\n    pidsLimit: number;\n    tmpfsBytes: number;\n    engineRequestTimeoutMs: number;\n    maxLiveProcesses: number;\n    lifetimeMs: number;\n    stopTimeoutSeconds: number;\n}',
+    declaration: 'export interface LocalContainerRuntimeConfig {\n    network?: \'none\' | \'outbound\';\n    socketPath: string;\n    manageService: boolean;\n    podmanCommand?: string;\n    serviceStartupTimeoutMs: number;\n    image: string;\n    user: string;\n    environment: Record<string, string>;\n    memoryBytes: number;\n    nanoCpus: number;\n    pidsLimit: number;\n    tmpfsBytes: number;\n    engineRequestTimeoutMs: number;\n    maxLiveProcesses: number;\n    lifetimeMs: number;\n    stopTimeoutSeconds: number;\n}',
   },
   {
     name: 'LspHover',
@@ -5417,6 +5433,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ReplayEnvelope',
     declaration: 'export interface ReplayEnvelope {\n    response: unknown;\n    blocks?: readonly unknown[];\n}',
+  },
+  {
+    name: 'RepositoryAccess',
+    declaration: 'export type RepositoryAccess = \'fetch\' | \'push\';',
+  },
+  {
+    name: 'RepositoryRequestResult',
+    declaration: 'export interface RepositoryRequestResult {\n    status: \'ready\' | \'denied\' | \'approved_pending\';\n    repository: string;\n    access: RepositoryAccess;\n    environmentId: EnvironmentId;\n    path?: string;\n    error?: string;\n}',
   },
   {
     name: 'RequestContext',

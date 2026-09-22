@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -19,6 +19,27 @@ async function fixture() {
 }
 
 describe.skipIf(process.platform === 'win32')('conversation workspace Git broker', () => {
+  it('accepts a materialized partial-clone tip and rejects missing history before import', async () => {
+    const f = await fixture()
+    await f.git('config', 'remote.origin.promisor', 'true')
+    await expect(importWorkspace(f.source, f.recovery, limits)).resolves.toMatchObject({ sourceHead: await f.git('rev-parse', 'HEAD') })
+    const blob = await f.git('rev-parse', 'HEAD:tracked.txt')
+    await rm(join(f.source, '.git/objects', blob.slice(0, 2), blob.slice(2)))
+    await expect(importWorkspace(f.source, f.recovery, limits)).rejects.toThrow('materialize the selected source history')
+    expect(await readdir(f.recovery)).toEqual([])
+  })
+  it('installs only the deployment remote and source branch while excluding host Git configuration', async () => {
+    const f = await fixture()
+    await f.git('remote', 'add', 'origin', 'https://host-secret@example.invalid/other.git')
+    await f.git('config', 'credential.helper', '/host/credential-helper')
+    const seed = await importWorkspace(f.source, f.recovery, { ...limits, remotes: [{ source: await realpath(f.source), url: 'https://github.com/example/approved.git', credentialTimeoutMs: 5000 }] })
+    expect(seed.sourceBranch).toBe('main')
+    const config = Buffer.from(seed.entries.find(entry => entry.path === '.git/config')?.data ?? '', 'base64').toString()
+    expect(config).toContain('https://github.com/example/approved.git')
+    expect(config).toContain('merge = refs/heads/main')
+    expect(config).not.toMatch(/host-secret|credential-helper/)
+    expect(await f.git('remote', 'get-url', 'origin')).toBe('https://host-secret@example.invalid/other.git')
+  })
   it('imports tracked edits and non-ignored new files into a labelled baseline without mutating the source', async () => {
     const f = await fixture()
     await writeFile(join(f.source, 'tracked.txt'), 'staged\n'); await f.git('add', 'tracked.txt')

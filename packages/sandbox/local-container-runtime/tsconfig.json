@@ -37,6 +37,12 @@
     },
     {
       "path": "../../util/brand"
+    },
+    {
+      "path": "../../interaction/user-questions"
+    },
+    {
+      "path": "../../core/tools"
     }
   ]
 }

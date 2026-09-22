@@ -143,7 +143,7 @@ export interface PodmanContainerCreate {
   Tty?: boolean
   /** Host restrictions and mounts. */
   HostConfig: {
-    /** No container networking. */
+    /** Private network mode selected by the deployment. */
     NetworkMode: string
     /** Preserve the invoking rootless user's numeric identity in the container. */
     UsernsMode: string
@@ -288,6 +288,8 @@ export interface PodmanEngine {
 
 /** The fixed, validated configuration for one runtime owner. */
 export interface LocalContainerRuntimeConfig {
+  /** Offline by default; outbound uses rootless networking with host loopback disabled. */
+  network?: 'none' | 'outbound'
   /** Explicit Unix socket for the rootless Podman service. */
   socketPath: string
   /** Start and own a rootless Podman API service for this DSH process. */
@@ -318,6 +320,18 @@ export interface LocalContainerRuntimeConfig {
   lifetimeMs: number
   /** Engine stop timeout in whole seconds. */
   stopTimeoutSeconds: number
+}
+
+/** Deployment-authorized repository credential request; never derived from container Git configuration. */
+export interface WorkspaceGitRemote {
+  /** Canonical source checkout selecting this authorization. */
+  source: string
+  /** Exact HTTPS Git remote without embedded credentials. */
+  url: string
+  /** Absolute host Git credential helper; omitted for public repositories. */
+  credentialCommand?: string
+  /** Bound for each helper invocation. */
+  credentialTimeoutMs: number
 }
 
 /** Opaque runtime container facts available to provider adapters. */

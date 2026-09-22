@@ -1685,6 +1685,8 @@ Source: [`packages/llm/llm-retry/src/index.ts:25`](../packages/llm/llm-retry/src
 ```ts config-catalog
 /** The fixed, validated configuration for one runtime owner. */
 export interface LocalContainerRuntimeConfig {
+  /** Offline by default; outbound uses rootless networking with host loopback disabled. */
+  network?: 'none' | 'outbound'
   /** Explicit Unix socket for the rootless Podman service. */
   socketPath: string
   /** Start and own a rootless Podman API service for this DSH process. */

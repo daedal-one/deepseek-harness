@@ -8,15 +8,17 @@ import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import SessionStore, { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import ProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import Persistence from '@deepseek-ai/dsh-session-persistence-jsonl'
-import LlmRuntime, { createUserMessage } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import Tools from '@deepseek-ai/dsh-tools'
+import UserQuestions from '@deepseek-ai/dsh-user-questions'
 import type { LocalContainerRuntime } from '../src/index.ts'
+import * as RepoAccessTool from '../src/tool-request-repo-access.ts'
 import Workspaces, { type ConversationWorkspaceConfig } from '../src/workspaces.ts'
 import type { PodmanControllerExecRequest, PodmanControllerExecResult } from '../src/types.ts'
 import { workspaceGit } from '../src/workspace-git.ts'
 import * as broker from '../src/workspace-git.ts'
-import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
+import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 // These tests exercise persistence and transaction ordering with a local controller.
@@ -34,6 +36,7 @@ afterEach(async () => {
 })
 
 async function fixture(options: {
+  environment?: boolean
   message?: boolean
   failAfterCommit?: boolean
   retryDelayMs?: number
@@ -53,7 +56,15 @@ async function fixture(options: {
   await workspaceGit(source, ['init', '--template=', '--initial-branch=main'], config)
   await writeFile(join(source, 'input.txt'), 'initial\n')
   await workspaceGit(source, ['add', '.'], config); await workspaceGit(source, ['commit', '-m', 'initial'], config)
-  const ctx = new Context()
+  const secondSource = join(root, 'second-source')
+  if (options.environment === true) {
+    await cp(source, secondSource, { recursive: true })
+    config.environment = { id: 'test-environment', name: 'Test environment', grantLifetimeMs: 3_600_000,
+      repositories: [{ source, url: 'https://github.example/org/first.git', credentialTimeoutMs: 1000 },
+        { source: secondSource, url: 'https://github.example/org/second.git', credentialTimeoutMs: 1000, pushCredentialCommand: '/usr/local/bin/scoped-push' }],
+      initialGrants: [{ repository: 'https://github.example/org/first.git', access: 'fetch' }] }
+  }
+  let ctx = new Context()
   const worlds = new Map<object, string>()
   let failAfterCommit = options.failAfterCommit === true
   const execute = async (directory: string, request: PodmanControllerExecRequest): Promise<PodmanControllerExecResult> => {
@@ -75,6 +86,7 @@ async function fixture(options: {
     })
   }
   const runtime = {
+    registerWorkspaceOwner: () => () => {},
     async recoverWorkspace() {},
     async createWorkspace(directory: string) {
       const world = {
@@ -91,11 +103,15 @@ async function fixture(options: {
       return { runtime: world, async dispose() {} }
     },
   }
-  ctx.provide('localContainerRuntime', runtime as unknown as LocalContainerRuntime)
-  await ctx.plugin(SessionStore); await ctx.plugin(ProjectionRegistry)
-  await ctx.plugin(Persistence, { root: join(root, 'sessions'), compression: 'none' })
-  await ctx.plugin(LlmRuntime); await ctx.plugin(AgentRegistry); await ctx.plugin(SystemPrompt); await ctx.plugin(Tools)
-  await ctx.plugin(LocalStorageWorkspaces, config); await ctx.plugin(AgentLoop, { agents: [] })
+  const boot = async () => {
+    ctx.provide('localContainerRuntime', runtime as unknown as LocalContainerRuntime)
+    await ctx.plugin(SessionStore); await ctx.plugin(ProjectionRegistry)
+    await ctx.plugin(Persistence, { root: join(root, 'sessions'), compression: 'none' })
+    await ctx.plugin(LlmRuntime); await ctx.plugin(AgentRegistry); await ctx.plugin(SystemPrompt); await ctx.plugin(Tools)
+    await ctx.plugin(UserQuestions)
+    await ctx.plugin(LocalStorageWorkspaces, config); await ctx.plugin(AgentLoop, { agents: [] })
+  }
+  await boot()
   disposers.push(async () => { await ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) })
   const adapter = new MockAdapter(options.script ?? [textResponse('Done.'), textResponse('feat: retain changes'), textResponse('No further changes.')])
   ctx.llm.registerAdapter(['mock'], adapter)
@@ -109,10 +125,180 @@ async function fixture(options: {
     return handle.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')
   }
   const executionFor = (agent: Agent) => worlds.get(ctx.agents.withInitiator(agent, () => ctx.conversationWorkspaces.capture()))
-  return { ctx, root, source, pool, recovery, execution, config, handle, turn, adapter, executionFor }
+  const restart = async () => {
+    await ctx.fiber.dispose()
+    ctx = new Context()
+    await boot()
+    ctx.llm.registerAdapter(['mock'], adapter)
+    return ctx
+  }
+  return { ctx, root, source, secondSource, pool, recovery, execution, config, handle, turn, adapter, executionFor, restart }
 }
 
 describe.skipIf(process.platform === 'win32')('conversation workspace transaction lifecycle', () => {
+  it('executes repository requests through the model-facing tool and removes them on plugin disposal', async () => {
+    const args = { repository: 'https://github.example/org/second.git', access: 'fetch', reason: 'Inspect the second repository requested by the user.' }
+    const f = await fixture({ environment: true, script: [toolCallResponse('repo-access', 'request_repo_access', args), textResponse('Attached.')] })
+    const plugin = await f.ctx.plugin(RepoAccessTool)
+    f.ctx.on('user-questions/request', async ({ questions }) => ({ answers: [{ id: questions[0]!.id, selected: ['Approve'] }] }))
+    await f.turn()
+    const events = f.handle.agent.session.snapshotEvents()
+    const resultEvent = events.find(event => event.type === 'tool/result')
+    if (resultEvent?.type !== 'tool/result') throw new Error('missing repository tool result')
+    const resultText = resultEvent.data.message.content.find(block => block.type === 'tool-result')?.content.find(block => block.type === 'text')
+    expect(JSON.parse(resultText?.text ?? '{}')).toMatchObject({ status: 'ready', repository: args.repository })
+    expect(JSON.stringify(events)).toContain('/workspace/repos/')
+    const missing = await f.ctx.tools.execute({ signal: new AbortController().signal, callId: ToolCallId('missing-agent'), name: 'request_repo_access', arguments: args })
+    expect(missing).toMatchObject({ isError: true })
+    expect(JSON.stringify(missing)).toContain('requires an initiating session')
+    expect(f.ctx.tools.get('request_repo_access')).toBeDefined()
+    await plugin.dispose()
+    expect(f.ctx.tools.get('request_repo_access')).toBeUndefined()
+  })
+
+  it('retains successful repository returns while another repository fails, then retries only the pending return', async () => {
+    const f = await fixture({ environment: true, retryDelayMs: 2_147_483_647 })
+    f.ctx.on('user-questions/request', async ({ questions }) => ({ answers: [{ id: questions[0]!.id, selected: ['Approve'] }] }))
+    await f.ctx.conversationWorkspaces.requestRepository(f.handle.agent, 'https://github.example/org/second.git', 'fetch', 'Change both repositories.', new AbortController().signal)
+    const original = broker.returnWorkspaceBranches
+    const returned: string[] = []
+    const failure = vi.spyOn(broker, 'returnWorkspaceBranches').mockImplementation(async (...args) => {
+      returned.push(args[0])
+      if (args[0] === f.secondSource) throw new Error('second destination is unavailable')
+      return await original(...args)
+    })
+    expect((await f.turn())?.data).toMatchObject({ phase: 'pending', repositories: [{ lastTurn: 1 }, { lastTurn: 0 }] })
+    expect(returned).toEqual([f.source, f.secondSource])
+    failure.mockRestore()
+    const retries = vi.spyOn(broker, 'returnWorkspaceBranches')
+    const ctx = await f.restart()
+    const resumed = await ctx.agents.resume({ resumeSessionId: f.handle.agent.id, agentOptions: { provider: 'mock', model: 'main' } })
+    try {
+      await expect.poll(() => resumed.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')?.data,
+        { timeout: 5000 }).toMatchObject({ phase: 'returned', repositories: [{ lastTurn: 1 }, { lastTurn: 1 }] })
+      expect(retries.mock.calls.map(args => args[0])).toEqual([f.secondSource])
+    } finally { await resumed.dispose() }
+  })
+
+  it('restores a multi-repository environment after RAM loss and preserves its grants', async () => {
+    const f = await fixture({ environment: true })
+    f.ctx.on('user-questions/request', async ({ questions }) => ({ answers: [{ id: questions[0]!.id, selected: ['Approve'] }] }))
+    const result = await f.ctx.conversationWorkspaces.requestRepository(f.handle.agent, 'https://github.example/org/second.git', 'fetch', 'Work on the second repository.', new AbortController().signal)
+    const relative = result.path!.slice('/workspace/'.length)
+    await writeFile(join(f.execution, relative, 'retained.txt'), 'sandbox change\n')
+    await f.turn()
+    const ctx = await f.restart()
+    await rm(join(f.pool, 'workspace'), { recursive: true }); await rm(join(f.pool, 'owner.json'))
+    await writeFile(join(f.secondSource, 'input.txt'), 'new host change\n')
+    const resumed = await ctx.agents.resume({ resumeSessionId: f.handle.agent.id, agentOptions: { provider: 'mock', model: 'main' } })
+    try {
+      const world = f.executionFor(resumed.agent)!
+      expect(await readFile(join(world, relative, 'retained.txt'), 'utf8')).toBe('sandbox change\n')
+      expect(await readFile(join(world, relative, 'input.txt'), 'utf8')).toBe('initial\n')
+      expect((await ctx.conversationWorkspaces.requestRepository(resumed.agent, 'https://github.example/org/second.git', 'fetch', 'Reuse access.', new AbortController().signal)).status).toBe('ready')
+    } finally { await resumed.dispose() }
+  })
+
+  it('recovers an attachment interrupted after its physical import but before its checkpoint', async () => {
+    const f = await fixture({ environment: true })
+    f.ctx.on('user-questions/request', async ({ questions }) => ({ answers: [{ id: questions[0]!.id, selected: ['Approve'] }] }))
+    const publish = broker.publishWorkspaceJson
+    const failure = vi.spyOn(broker, 'publishWorkspaceJson').mockImplementation(async (path, value, bound) => {
+      if (path.includes('/checkpoint-')) throw new Error('injected checkpoint failure')
+      await publish(path, value, bound)
+    })
+    const result = await f.ctx.conversationWorkspaces.requestRepository(f.handle.agent, 'https://github.example/org/second.git', 'fetch', 'Attach the second repository.', new AbortController().signal)
+    expect(result.status).toBe('approved_pending')
+    expect(result.path).toBeUndefined()
+    const retry = await f.ctx.conversationWorkspaces.requestRepository(f.handle.agent, result.repository, 'fetch', 'Retry before recovery.', new AbortController().signal)
+    expect(retry).toMatchObject({ status: 'approved_pending' })
+    expect(retry.path).toBeUndefined()
+    failure.mockRestore()
+    const ctx = await f.restart()
+    const resumed = await ctx.agents.resume({ resumeSessionId: f.handle.agent.id, agentOptions: { provider: 'mock', model: 'main' } })
+    try {
+      const attached = await ctx.conversationWorkspaces.requestRepository(resumed.agent, 'https://github.example/org/second.git', 'fetch', 'Resume attachment.', new AbortController().signal)
+      expect(attached.status).toBe('ready')
+      expect(await readFile(join(f.executionFor(resumed.agent)!, attached.path!.slice('/workspace/'.length), 'input.txt'), 'utf8')).toBe('initial\n')
+    } finally { await resumed.dispose() }
+  })
+
+  it('attaches two repositories after explicit approval and retains environment authority across sessions', async () => {
+    const f = await fixture({ environment: true })
+    const requests: string[] = []
+    f.ctx.on('user-questions/request', async ({ questions }) => {
+      requests.push(questions[0]!.detail!)
+      return { answers: [{ id: questions[0]!.id, selected: ['Approve'] }] }
+    })
+    const repository = 'https://github.example/org/second.git'
+    const request = () => f.ctx.conversationWorkspaces.requestRepository(f.handle.agent, repository, 'fetch', 'Compare both repositories.', new AbortController().signal)
+    const result = await request()
+    expect(result.status).toBe('ready')
+    expect(result.path).toMatch(/^\/workspace\/repos\/[a-f0-9]{16}$/u)
+    expect(requests).toHaveLength(1)
+    expect(requests[0]).toContain('every session attached to this environment')
+    const firstPath = f.ctx.agents.withInitiator(f.handle.agent, () => f.ctx.conversationWorkspaces.executionPath(f.source))
+    const secondPath = join(f.execution, result.path!.slice('/workspace/'.length))
+    await writeFile(join(f.execution, firstPath.slice('/workspace/'.length), 'first-change.txt'), 'first\n')
+    await writeFile(join(secondPath, 'second-change.txt'), 'second\n')
+    expect((await f.turn())?.data).toMatchObject({ phase: 'returned', environmentId: 'test-environment', repositories: [{ lastTurn: 1 }, { lastTurn: 1 }] })
+    expect((await workspaceGit(f.secondSource, ['for-each-ref', '--format=%(refname)', 'refs/heads/dsh/'], f.config)).toString()).not.toBe('')
+    await request()
+    expect(requests).toHaveLength(1)
+    const originalWorld = f.executionFor(f.handle.agent)
+    const id = f.handle.agent.id
+    await f.handle.dispose()
+    const resumed = await f.ctx.agents.resume({ resumeSessionId: id, agentOptions: { provider: 'mock', model: 'main' } })
+    expect(f.executionFor(resumed.agent)).toBe(originalWorld)
+    const other = await f.ctx.agents.create({ sessionId: SessionId('another-environment-session'), meta: { cwd: f.source }, agentOptions: { provider: 'mock', model: 'main' } })
+    try {
+      const attached = await f.ctx.conversationWorkspaces.requestRepository(other.agent, repository, 'fetch', 'Use the already approved repository.', new AbortController().signal)
+      expect(attached.status).toBe('ready')
+      expect(requests).toHaveLength(1)
+      expect(f.executionFor(other.agent)).not.toBe(originalWorld)
+      expect(f.executionFor(resumed.agent)).toBe(originalWorld)
+    } finally { await other.dispose(); await resumed.dispose() }
+  })
+
+  it('denies ambiguous and rejected repository approvals and asks again for push escalation', async () => {
+    const f = await fixture({ environment: true })
+    let selected = ['Deny']; let custom: string | undefined
+    const answerer = f.ctx.on('user-questions/request', async ({ questions }) => ({ answers: [{ id: questions[0]!.id, selected,
+      ...custom === undefined ? {} : { custom } }] }))
+    const repository = 'https://github.example/org/second.git'
+    const request = (access: 'fetch' | 'push') => f.ctx.conversationWorkspaces.requestRepository(f.handle.agent, repository, access, 'Requested comparison.', new AbortController().signal)
+    expect((await request('fetch')).status).toBe('denied')
+    selected = ['Approve']; custom = 'Only if another condition holds'
+    expect((await request('fetch')).status).toBe('denied')
+    custom = undefined
+    expect((await request('fetch')).status).toBe('ready')
+    selected = ['Deny']
+    expect((await request('push')).status).toBe('denied')
+    const durable = JSON.parse(await readFile(join(f.recovery, 'environments/test-environment/environment-access.json'), 'utf8')) as { grants: Array<{ repository: string; access: string }> }
+    expect(durable.grants.find(grant => grant.repository === repository)?.access).toBe('fetch')
+    answerer()
+  })
+
+  it('cancels and joins a pending human approval before releasing workspace storage', async () => {
+    const f = await fixture({ environment: true })
+    let entered!: () => void
+    const ready = new Promise<void>((resolve) => { entered = resolve })
+    f.ctx.on('user-questions/request', async ({ signal }) => {
+      entered()
+      return await new Promise((_resolve, reject) => {
+        signal?.addEventListener('abort', () => { reject(new Error('approval cancelled')) }, { once: true })
+      })
+    })
+    const request = f.ctx.conversationWorkspaces.requestRepository(f.handle.agent, 'https://github.example/org/second.git', 'fetch', 'Compare repositories.', new AbortController().signal)
+    const rejected = expect(request).rejects.toThrow()
+    await ready
+    await f.ctx.fiber.dispose()
+    await rejected
+    const record = JSON.parse(await readFile(join(f.recovery, 'environments/test-environment/environment-access.json'), 'utf8')) as { revision: number }
+    expect(record.revision).toBe(1)
+    expect(JSON.parse(await readFile(join(f.pool, 'owner.json'), 'utf8'))).toMatchObject({ clean: true })
+  })
+
   it('uses the fixed residual commit when no message route exists and preserves source state', async () => {
     const f = await fixture()
     const sourceHead = await workspaceGit(f.source, ['rev-parse', 'HEAD'], f.config)

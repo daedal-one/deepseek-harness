@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createProcessShutdown,
+  resolveShutdownTimeout,
   PROCESS_SHUTDOWN_TIMEOUT_MS,
 } from '../src/process-shutdown.ts'
 
@@ -176,4 +177,13 @@ describe('process shutdown', () => {
     expect(exit).toHaveBeenCalledOnce()
     expect(exit).toHaveBeenCalledWith(130)
   })
+})
+
+
+it('resolves an explicit bounded shutdown grace and retains the default when omitted', () => {
+  expect(resolveShutdownTimeout(undefined)).toBe(5000)
+  expect(resolveShutdownTimeout('60000')).toBe(60000)
+  for (const value of ['', '0', '-1', '1.5', 'NaN', 'Infinity', '2147483648', ' 5000']) {
+    expect(() => resolveShutdownTimeout(value)).toThrow('DSH_SHUTDOWN_TIMEOUT_MS')
+  }
 })

@@ -36,7 +36,7 @@ import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import { installProxyFromEnvironment } from '@deepseek-ai/dsh-http-proxy'
 import { DSH_LAUNCH_ENVIRONMENT_KEY, type LaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import { provideCmdline, type AppReady } from '@deepseek-ai/dsh-cmdline'
-import { createProcessShutdown, type ProcessShutdown } from './process-shutdown.ts'
+import { createProcessShutdown, resolveShutdownTimeout, type ProcessShutdown } from './process-shutdown.ts'
 import { profileSandboxPatches } from './profile-sandbox.ts'
 
 const NAME = 'dsh'
@@ -282,6 +282,7 @@ function suppressShutdownError(ctx: Context, signal: AbortSignal, error: unknown
  * @returns the settled root context and the shutdown controller.
  */
 export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Context; shutdown: ProcessShutdown }> {
+  const shutdownTimeout = resolveShutdownTimeout(options.environment.getFrom('DSH_SHUTDOWN_TIMEOUT_MS', ['process'])?.value)
   // Before the first plugin mounts and before anything can issue a request: Node's fetch ignores the
   // proxy environment on its own, so every profile would otherwise connect directly. Resolving from
   // the launcher's snapshot — not `process.env` — is what lets a proxy declared in a `.env` layer
@@ -297,7 +298,7 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
   const shutdown = createProcessShutdown(async () => {
     await app.current?.fiber.dispose()
     await disposeProxy()
-  })
+  }, undefined, undefined, shutdownTimeout)
   const signalShutdown = new AbortController()
   const interrupt = (code: number): void => {
     signalShutdown.abort()

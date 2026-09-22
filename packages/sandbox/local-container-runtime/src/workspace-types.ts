@@ -2,6 +2,7 @@
 
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { Message } from '@deepseek-ai/dsh-llm/types'
+import type { EnvironmentId } from './environment-types.ts'
 
 /** Host-generated identity for one conversation repository. */
 export type ConversationWorkspaceId = Branded<'ConversationWorkspaceId'>
@@ -16,6 +17,10 @@ export interface WorkspaceState {
   checkpointHash: string
   branches: Record<string, string>
   error?: string
+  /** Environment scope for workspaces using independently owned grants. */
+  environmentId?: EnvironmentId
+  /** Individual repository outcomes; Git return across these repositories is not atomic. */
+  repositories?: Array<{ remote: string; path: string; baseline: string; lastTurn: number; branches: Record<string, string> }>
 }
 
 declare module '@deepseek-ai/dsh-session/types' {
