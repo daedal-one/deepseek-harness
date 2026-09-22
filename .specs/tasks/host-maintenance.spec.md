@@ -4,7 +4,7 @@ type: task
 status: accepted
 summary: Add an explicit host-maintenance profile option and qualify a recoverable systemd deployment.
 owners: [carlo]
-progress: in-progress
+progress: done
 addresses:
   - REQ:sandbox/host-maintenance#c-profile
   - REQ:sandbox/host-maintenance#c-world
