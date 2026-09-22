@@ -19,7 +19,7 @@ import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import { SessionSeq, type SessionId } from '@deepseek-ai/dsh-session/types'
 import { workspaceTitleOf } from '@deepseek-ai/dsh-util-workspace-path'
 import { SESSION_SEARCH_RESULT_LIMIT } from '../../types.ts'
-import type { SessionJob as JobView, SessionCreateRequest } from '../../types.ts'
+import type { SessionJob as JobView, SessionCreateRequest, SessionForkToRequest } from '../../types.ts'
 import type { SessionProjectionMap } from '@deepseek-ai/dsh-session-projection/types'
 import {
   createSnapshotStore, type SnapshotStore,
@@ -115,10 +115,12 @@ export class SessionForkError extends Error {
   /**
    * @param rpcError - Host business or folded transport error.
    * @param sourceSessionId - the session the fork was cut from.
+   * @param requestedSessionId - caller-owned destination retained for explicit inspection; not publication evidence.
    */
   constructor(
     readonly rpcError: RemoteFailure,
     readonly sourceSessionId: SessionId,
+    readonly requestedSessionId?: SessionId,
   ) {
     super(`session fork failed: ${rpcError.code}: ${rpcError.message}`)
   }
@@ -477,6 +479,19 @@ export class ClientSessions implements ISessions {
       if (!renamed.ok) throw new Error(`fork child rename failed: ${renamed.error.code}: ${renamed.error.message}`)
     }
     return childId
+  }
+
+  /**
+   * Fork to a fresh caller-owned identity, leaving title changes to a separate operation.
+   * @param request - source, optional integer anchor, and child identity retained before dispatch.
+   * @returns the child identity after confirmed publication makes its binding addressable.
+   * @throws {SessionForkError} retaining the requested identity on a structured failure.
+   */
+  async forkTo(request: SessionForkToRequest): Promise<SessionId> {
+    const result = await this.manager.forkTo(request)
+    if (!result.ok) throw new SessionForkError(result.error, request.sessionId, request.childSessionId)
+    this.projectList()
+    return result.value.sessionId
   }
 
   /**

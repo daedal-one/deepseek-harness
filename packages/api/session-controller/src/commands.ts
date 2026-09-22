@@ -40,6 +40,7 @@ import type {
   SessionCreateRequest,
   SessionCreateValue,
   SessionForkRequest,
+  SessionForkToRequest,
   SessionForkValue,
   SessionPromptRequest,
   SessionPromptValue,
@@ -199,7 +200,21 @@ export class SessionCommandController {
    * @param request - source Session and optional event anchor.
    * @returns the new Session identity.
    */
-  async fork(request: SessionForkRequest): Promise<SessionForkValue> {
+  fork(request: SessionForkRequest): Promise<SessionForkValue> {
+    return this.forkChild(request, brandString<SessionId>(`session-${randomUUID()}`))
+  }
+
+  /**
+   * Fork to one caller-owned identity without adopting or overwriting an existing Session.
+   * @param request - source, optional integer anchor, and fresh child identity retained before dispatch.
+   * @returns the published child identity after Workspace attachment, without renaming it.
+   * @throws after partial publication; failure does not authorize another dispatch.
+   */
+  forkTo(request: SessionForkToRequest): Promise<SessionForkValue> {
+    return this.forkChild(request, request.childSessionId)
+  }
+
+  private async forkChild(request: SessionForkRequest, childId: SessionId): Promise<SessionForkValue> {
     let atSeq: ReturnType<typeof SessionSeq> | undefined
     try {
       atSeq = request.atSeq === undefined ? undefined : SessionSeq(request.atSeq)
@@ -254,7 +269,6 @@ export class SessionCommandController {
         {},
       )
     }
-    const childId = brandString<SessionId>(`session-${randomUUID()}`)
     const composition = await this.agents.composeAgent(this.agents.presetForObservation(source))
     try {
       const { provider, model } = this.ctx.agentModels.mainSelection(composition.agentPreset)

@@ -180,6 +180,9 @@ describe('sessions', () => {
     await expect(runtime.sessions.fork({
       sessionId: 's1' as SessionId, atSeq: 7, increaseTitle: true,
     })).resolves.toBe('s1')
+    await expect(runtime.sessions.forkTo({ sessionId: 's1' as SessionId, childSessionId: 'child' as SessionId }))
+      .resolves.toBe('child')
+    expect(runtime.sessions.binding('child')).toBeUndefined()
     expect(runtime.sessions.calls).toEqual([
       { method: 'openSubagent', args: [address] },
       { method: 'setSubagentCatalogOpen', args: ['s2', true] },
@@ -187,6 +190,7 @@ describe('sessions', () => {
       { method: 'open', args: ['s1'] },
       { method: 'clear', args: [] },
       { method: 'fork', args: [{ sessionId: 's1', atSeq: 7, increaseTitle: true }] },
+      { method: 'forkTo', args: [{ sessionId: 's1', childSessionId: 'child' }] },
     ])
     await runtime.dispose()
   })

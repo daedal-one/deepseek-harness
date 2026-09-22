@@ -782,6 +782,14 @@ workspaceDesktop(): { name: string; available: boolean; fileManager: 'finder' | 
 @Remote('fork') fork(request: SessionForkRequest): Promise<SessionForkValue>
 
 /**
+ * Fork one completed-turn prefix into a fresh caller-owned Session identity.
+ * @param request - source, optional integer anchor, and child identity retained before dispatch.
+ * @returns the published child identity after Workspace attachment, without a title change.
+ * @throws after partial publication; existing identities are never adopted or overwritten.
+ */
+@Remote('forkTo') forkTo(request: SessionForkToRequest): Promise<SessionForkValue>
+
+/**
  * Admit one prompt after explicitly resuming its Session.
  * @param request - Session identity, prompt content, source metadata, and delivery mode.
  * @param signal - caller cancellation before prompt admission begins.

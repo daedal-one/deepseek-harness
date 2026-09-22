@@ -10,7 +10,7 @@ import type {
   SessionEventLikeEntry, SessionLiveEventEntry, SessionSearchResultItem,
   SessionSnapshot, SessionSummary, SubmissionHandle,
 } from '@deepseek-ai/dsh-api-session-controller/client'
-import type { SessionRequestId } from '@deepseek-ai/dsh-api-session-controller/types'
+import type { SessionRequestId, SessionForkToRequest } from '@deepseek-ai/dsh-api-session-controller/types'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { ObservableSnapshot, SnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -212,7 +212,7 @@ export class TestSessions implements ISessions {
   /** Calls observed on the service-level face, newest last. */
   readonly calls: {
     method: 'create' | 'open' | 'openSubagent' | 'setSubagentCatalogOpen' | 'refreshSubagents'
-      | 'clear' | 'refresh' | 'loadMore' | 'loadSummary' | 'search' | 'fork'
+      | 'clear' | 'refresh' | 'loadMore' | 'loadSummary' | 'search' | 'fork' | 'forkTo'
     args: unknown[]
   }[] = []
 
@@ -548,6 +548,16 @@ export class TestSessions implements ISessions {
   fork(opts: { sessionId: SessionId; atSeq?: number; increaseTitle?: boolean }): Promise<SessionId> {
     this.calls.push({ method: 'fork', args: [opts] })
     return Promise.resolve(opts.sessionId)
+  }
+
+  /**
+   * Record the exact fork destination without fabricating a fixture Session.
+   * @param request - source, integer anchor, and caller-owned destination.
+   * @returns the requested child identity; no fixture row is created.
+   */
+  forkTo(request: SessionForkToRequest): Promise<SessionId> {
+    this.calls.push({ method: 'forkTo', args: [request] })
+    return Promise.resolve(request.childSessionId)
   }
 
   /**

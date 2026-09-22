@@ -1776,6 +1776,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the new Session identity.',
       },
       {
+        signature: '@Remote(\'forkTo\') forkTo(request: SessionForkToRequest): Promise<SessionForkValue>',
+        description: 'Fork one completed-turn prefix into a fresh caller-owned Session identity.',
+        parameters: [{ name: 'request', description: 'source, optional integer anchor, and child identity retained before dispatch.' }],
+        returns: 'the published child identity after Workspace attachment, without a title change.',
+        throws: ['after partial publication; existing identities are never adopted or overwritten.'],
+      },
+      {
         signature: '@Remote(\'prompt\') prompt(request: SessionPromptRequest, signal: AbortSignal): Promise<SessionPromptValue>',
         description: 'Admit one prompt after explicitly resuming its Session.',
         parameters: [{ name: 'request', description: 'Session identity, prompt content, source metadata, and delivery mode.' }, { name: 'signal', description: 'caller cancellation before prompt admission begins.' }],
@@ -5713,6 +5720,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SessionForkSource',
     declaration: 'export type SessionForkSource = Session | SessionId;',
+  },
+  {
+    name: 'SessionForkToRequest',
+    declaration: 'export interface SessionForkToRequest extends SessionForkRequest {\n    readonly childSessionId: SessionId;\n}',
   },
   {
     name: 'SessionForkValue',

@@ -1432,3 +1432,41 @@ describe('off-page Session summaries', () => {
   })
 
 })
+
+
+describe('forkTo exact requested identity', () => {
+  it('forwards the allocated identity and anchor without renaming or selecting the child', async () => {
+    const b = bench()
+    await feedList(b, [{ id: 'source', cwd: '/work' }])
+    b.svc.open(sid('source'))
+    b.api.onForkTo = () => Promise.resolve(ok({ sessionId: sid('child') }))
+    const request = { sessionId: sid('source'), childSessionId: sid('child'), atSeq: 7 }
+    await expect(b.svc.forkTo(request)).resolves.toBe('child')
+    expect(b.api.callsOf('session.forkTo')).toEqual([request])
+    expect(b.api.callsOf('session.fork')).toEqual([])
+    expect(b.api.callsOf('session.rename')).toEqual([])
+    expect(b.svc.binding(sid('child'))).toBeDefined()
+    expect(b.svc.list.getSnapshot()).toMatchObject({ current: 'source', byId: { child: { parentId: 'source', cwd: '/work' } } })
+  })
+
+  it('retains the requested identity on an uncertain failure without fabricating a child row', async () => {
+    const b = bench()
+    b.api.onForkTo = () => Promise.resolve(err(new RemoteError('gateway/internal', 'reply unknown', {})))
+    await expect(b.svc.forkTo({ sessionId: sid('source'), childSessionId: sid('unknown-child') }))
+      .rejects.toMatchObject({ name: 'SessionForkError', sourceSessionId: 'source', requestedSessionId: 'unknown-child', rpcError: { code: 'gateway/internal' } })
+    expect(b.svc.list.getSnapshot().ids).toEqual([])
+    expect(b.api.callsOf('session.forkTo')).toHaveLength(1)
+  })
+
+  it('retains an unattached published child while reporting the attachment failure', async () => {
+    const b = bench()
+    b.api.onForkTo = () => Promise.resolve(err(new RemoteError('session/workspace-attach-failed', 'attachment failed', {
+      sessionId: sid('child'), workspaceId: 'ws',
+    })))
+    await expect(b.svc.forkTo({ sessionId: sid('source'), childSessionId: sid('child') }))
+      .rejects.toMatchObject({ requestedSessionId: 'child', rpcError: { code: 'session/workspace-attach-failed' } })
+    await Promise.resolve()
+    expect(b.svc.binding(sid('child'))).toBeDefined()
+    expect(b.svc.list.getSnapshot().byId[sid('child')]).toMatchObject({ parentId: 'source' })
+  })
+})

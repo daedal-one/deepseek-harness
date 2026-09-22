@@ -7,7 +7,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { SessionCreateRequest } from '../../types.ts'
+import type { SessionCreateRequest, SessionForkToRequest } from '../../types.ts'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { AgentContext } from '../scope.ts'
 import type { SessionSearchResultItem } from '../sessions/manager.ts'
@@ -103,6 +103,13 @@ export interface ISessions {
    * @throws when the fork fails, or when a requested child-title rename fails after creation.
    */
   fork(opts: { sessionId: SessionId; atSeq?: number; increaseTitle?: boolean }): Promise<SessionId>
+  /**
+   * Fork into a fresh identity retained before dispatch; never adopts an existing child or renames it.
+   * @param request - source, optional integer anchor, and caller-owned child identity.
+   * @returns the child identity with an addressable binding after confirmed publication.
+   * @throws SessionForkError retaining the requested identity; an uncertain failure does not publish a row.
+   */
+  forkTo(request: SessionForkToRequest): Promise<SessionId>
   /**
    * Resolve an Agent-scoped context view (use-and-discard).
    * @param id - session id.

@@ -6,6 +6,8 @@ import type { SubagentAddress, SubagentCatalog } from '@deepseek-ai/dsh-subagent
 import { SessionSeq, type SessionId, type SessionSeqCursor } from '@deepseek-ai/dsh-session/types'
 import type {
   SessionCreateRequest,
+  SessionForkToRequest,
+  SessionForkValue,
   SessionControlBaseline,
   SessionControlFrame,
   SessionQueuedItem,
@@ -753,18 +755,34 @@ export class SessionManager {
   async fork(
     opts: { sessionId: SessionId; atSeq?: SessionSeq },
   ): Promise<RemoteResult<{ sessionId: SessionId }>> {
-    const source = this.summaries.find(s => s.sessionId === opts.sessionId)
-    const result = await this.remote.session.fork({
+    return this.forkRequest(opts.sessionId, () => this.remote.session.fork({
       sessionId: opts.sessionId,
       ...opts.atSeq === undefined ? {} : { atSeq: opts.atSeq },
-    })
+    }))
+  }
+
+  /**
+   * Dispatch a fork to the exact caller-owned identity without retry or title changes.
+   * @param request - source, optional integer anchor, and fresh child identity.
+   * @returns the Host result; only confirmed publication adds a local summary.
+   */
+  forkTo(request: SessionForkToRequest): Promise<RemoteResult<SessionForkValue>> {
+    return this.forkRequest(request.sessionId, () => this.remote.session.forkTo(request))
+  }
+
+  private async forkRequest(
+    sourceId: SessionId,
+    dispatch: () => Promise<RemoteResult<SessionForkValue>>,
+  ): Promise<RemoteResult<SessionForkValue>> {
+    const source = this.summaries.find(s => s.sessionId === sourceId)
+    const result = await dispatch()
     const childId = result.ok
       ? result.value.sessionId
       : workspaceAttachSessionId(result.error)
     if (childId !== undefined) {
       this.recordMutation({ kind: 'upsert', summary: {
         sessionId: childId, updatedAt: Date.now(), running: false, blank: false,
-        parentSessionId: opts.sessionId,
+        parentSessionId: sourceId,
         ...(source?.cwd !== undefined ? { cwd: source.cwd } : {}),
       } })
     }

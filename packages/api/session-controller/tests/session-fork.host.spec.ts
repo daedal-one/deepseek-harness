@@ -302,3 +302,82 @@ describe('sessions.fork', () => {
     await ctx.fiber.dispose()
   })
 })
+
+
+describe('sessions.forkTo caller identity', () => {
+  it('uses the exact child identity and completed-turn cut without changing the source', async () => {
+    const ctx = await composed()
+    try {
+      const source = liveAgent(ctx, 'owned-source', 2)
+      const before = source.snapshotEvents()
+      const result = await remote(ctx).forkTo({ sessionId: source.id, childSessionId: sid('owned-child'), atSeq: 1 })
+      expect(result).toEqual({ ok: true, value: { sessionId: 'owned-child' } })
+      const child = ctx.sessions.get(sid('owned-child'))
+      expect(child?.header).toMatchObject({ parentSession: source.id, isSeeded: true, cwd: '/proj' })
+      expect(child?.snapshotEvents().slice(0, 3)).toEqual(before.slice(0, 3))
+      expect(child?.snapshotEvents()[3]).toMatchObject({ type: 'session/end-seed', data: { inherited: true } })
+      expect(source.snapshotEvents()).toBe(before)
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('refuses both repeated and different-source requests for an existing identity', async () => {
+    const ctx = await composed()
+    try {
+      const a = liveAgent(ctx, 'source-a', 1)
+      const b = liveAgent(ctx, 'source-b', 1)
+      const proxy = remote(ctx)
+      const request = { sessionId: a.id, childSessionId: sid('one-child') }
+      expect(await proxy.forkTo(request)).toMatchObject({ ok: true })
+      const child = ctx.sessions.get(request.childSessionId)
+      const events = child?.snapshotEvents()
+      expect(await proxy.forkTo(request)).toMatchObject({ ok: false })
+      expect(await proxy.forkTo({ ...request, sessionId: b.id })).toMatchObject({ ok: false })
+      expect(ctx.sessions.get(request.childSessionId)).toBe(child)
+      expect(child?.snapshotEvents()).toBe(events)
+      expect(ctx.sessions.list()).toHaveLength(3)
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('allows only one concurrent caller to publish a child identity', async () => {
+    const ctx = await composed()
+    try {
+      const source = liveAgent(ctx, 'concurrent-source', 1)
+      const proxy = remote(ctx)
+      const create = ctx.agents.create.bind(ctx.agents)
+      let release!: () => void
+      const held = new Promise<void>((resolve) => { release = resolve })
+      let ready!: () => void
+      const entered = new Promise<void>((resolve) => { ready = resolve })
+      let arrivals = 0
+      vi.spyOn(ctx.agents, 'create').mockImplementation(async (options) => {
+        if (++arrivals === 2) ready()
+        await held
+        return create(options)
+      })
+      const request = { sessionId: source.id, childSessionId: sid('concurrent-child') }
+      const first = proxy.forkTo(request)
+      const second = proxy.forkTo(request)
+      await entered
+      release()
+      const results = await Promise.all([first, second])
+      expect(results.filter(result => result.ok)).toHaveLength(1)
+      expect(ctx.sessions.list()).toHaveLength(2)
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('preserves the requested identity when Workspace attachment fails after publication', async () => {
+    const workspace = {
+      id: 'fork-workspace', sessionIds: [sid('attached-source')],
+      attachSession: () => Promise.reject(new Error('attachment storage unavailable')),
+    } as unknown as Workspace
+    const ctx = await composed([workspace])
+    try {
+      const source = liveAgent(ctx, 'attached-source', 1)
+      const result = await remote(ctx).forkTo({ sessionId: source.id, childSessionId: sid('unattached-child') })
+      expect(result).toMatchObject({ ok: false, error: {
+        code: 'session/workspace-attach-failed', details: { sessionId: 'unattached-child', workspaceId: 'fork-workspace' },
+      } })
+      expect(ctx.sessions.get(sid('unattached-child'))?.header.parentSession).toBe(source.id)
+    } finally { await ctx.fiber.dispose() }
+  })
+})
