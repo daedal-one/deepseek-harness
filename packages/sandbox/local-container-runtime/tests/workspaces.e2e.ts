@@ -66,6 +66,12 @@ describe.skipIf(!enabled)('conversation workspace real Podman Loader flow', () =
       isolate: { fs: true, subprocess: true, shell: true }, config: [
         { name: hostFs, config: { cwd: source } }, { name: hostSubprocess }, { name: hostShell },
       ] }]))
+    const internalPresetPath = join(presetRoot, 'internal'); await mkdir(internalPresetPath)
+    await writeFile(join(internalPresetPath, 'preset.yml'), 'name: Internal providers\ndescription: Instruction and reviewed transport services.\n')
+    await writeFile(join(internalPresetPath, 'agent.cordis.yml'), JSON.stringify([
+      { name: 'cordis:group', group: true, isolate: { fs: true }, config: [{ name: hostFs, config: { cwd: source } }] },
+      { name: 'cordis:group', group: true, isolate: { subprocess: true }, config: [{ name: hostSubprocess }] },
+    ]))
     try {
       const modules = new Map<string, unknown>([
         [hostFs, HostFs], [hostSubprocess, HostSubprocess], [hostShell, HostShell], ['presets', AgentPresets],
@@ -101,7 +107,7 @@ describe.skipIf(!enabled)('conversation workspace real Podman Loader flow', () =
       expect((await hostExecutor.run(hostExecutor.resolve({ command: 'cat ignored', workdir: source }))).stdout.text).toBe('host secret\n')
       expect(() => ctx.agents.withInitiator(maintenance!.agent, () => ctx.conversationWorkspaces.capture())).toThrow('host maintenance')
       const id = SessionId(`workspace-e2e-${randomUUID()}`)
-      first = await ctx.agents.create({ sessionId: id, meta: { cwd: source }, agentOptions: { provider: 'mock', model: 'main' } })
+      first = await ctx.agents.create({ sessionId: id, meta: { cwd: source, agentPreset: 'internal' }, agentOptions: { provider: 'mock', model: 'main' }, setup: async (scope) => { await ctx.agentPresets.mount(scope, 'internal') } })
       second = await ctx.agents.create({ sessionId: SessionId(`workspace-e2e-${randomUUID()}`), meta: { cwd: source }, agentOptions: { provider: 'mock', model: 'main' } })
       const read = async (agent: Agent, path: string) => ctx.agents.withInitiator(
         agent, async () => ctx.fs.readText(await ctx.fs.resolve(path, { cwd: source })),

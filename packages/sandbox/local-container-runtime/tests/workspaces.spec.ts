@@ -82,13 +82,14 @@ async function fixture(options: {
   ])
   const [hostFs, hostSubprocess, hostShell] = [...hostModules.keys()]
   if (options.maintenance === true) {
-    for (const id of ['maintenance', 'incomplete']) {
+    for (const id of ['maintenance', 'incomplete', 'internal']) {
       const directory = join(presetRoot, id); await mkdir(directory, { recursive: true })
       await writeFile(join(directory, 'preset.yml'), `name: ${id}\ndescription: Private fixture preset.\n`)
       await writeFile(join(directory, 'agent.cordis.yml'), JSON.stringify([{ name: 'cordis:group', group: true,
         isolate: { fs: true, subprocess: true, shell: true }, config: [
           { name: hostFs, config: { cwd: source } },
           ...(id === 'maintenance' ? [{ name: hostSubprocess }, { name: hostShell }] : []),
+          ...(id === 'internal' ? [{ name: hostSubprocess }] : []),
         ] }]))
     }
   }
@@ -204,6 +205,19 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
       try { expect(child.agent.session.snapshotEvents().some(event => event.type === 'workspace/state')).toBe(false) }
       finally { await child.dispose() }
     } finally { await host.dispose() }
+  })
+
+  it('keeps internal instruction and transport providers in the ordinary container lifecycle', async () => {
+    const f = await fixture({ maintenance: true })
+    const handle = await f.ctx.agents.create({ sessionId: SessionId('internal-services'),
+      meta: { cwd: f.source, agentPreset: 'internal' }, agentOptions: { provider: 'mock', model: 'main' },
+      setup: async (ctx) => { await f.ctx.agentPresets.mount(ctx, 'internal') } })
+    try {
+      expect(serviceForAgent(f.ctx, handle.agent, 'fs')).toBeDefined()
+      expect(serviceForAgent(f.ctx, handle.agent, 'subprocess')).toBeDefined()
+      expect(serviceForAgent(f.ctx, handle.agent, 'shell')).toBeUndefined()
+      expect(f.ctx.agents.withInitiator(handle.agent, () => f.ctx.conversationWorkspaces.capture())).toBeDefined()
+    } finally { await handle.dispose() }
   })
 
   it('rejects unadmitted host providers and changed identity fields before a turn', async () => {

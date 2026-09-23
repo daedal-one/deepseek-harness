@@ -301,8 +301,8 @@ export class ConversationWorkspaces extends Service {
     const admission = this.config.hostSessions?.find(entry => entry.sessionId === agent.id)
     const inherited = parent !== undefined && this.hostAgents.has(parent)
     if (admission === undefined && !inherited) {
-      if (fs !== undefined || subprocess !== undefined || shell !== undefined) {
-        throw new Error('conversation-scoped execution providers require explicit host Session admission')
+      if (shell !== undefined) {
+        throw new Error('conversation-scoped shell execution requires explicit host Session admission')
       }
       return false
     }
