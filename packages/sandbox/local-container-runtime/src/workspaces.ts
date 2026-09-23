@@ -1,7 +1,7 @@
 /** Conversation-owned container repositories and deterministic turn settlement. @module */
 
 import { brandString } from '@deepseek-ai/dsh-brand'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { lstat, mkdir, open, realpath, readdir, rm, statfs } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
 import { isAbsolute, join, relative } from 'node:path'
@@ -16,7 +16,11 @@ import type { LocalContainerRuntime } from './index.ts'
 import type { PodmanControllerExecRequest, PodmanControllerExecResult } from './types.ts'
 import { WORKSPACE_CONTROLLER } from './workspace-controller.ts'
 import { installWorkspaceGuidance } from './workspace-guidance.ts'
-import { importWorkspace, publishWorkspaceJson, returnWorkspaceBranches, validateWorkspaceEntries, readWorkspaceJson } from './workspace-git.ts'
+import type {} from '@deepseek-ai/dsh-commands'
+import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
+import { generateWorkspaceTopics, workspaceNamingMessages, workspaceTopic } from './workspace-names.ts'
+import { lookupWorkspaceProvenance, saveWorkspaceProvenance } from './workspace-provenance.ts'
+import { importWorkspace, publishWorkspaceJson, returnWorkspaceBranches, workspaceGit, workspaceResultRef, validateWorkspaceEntries, readWorkspaceJson } from './workspace-git.ts'
 import type { WorkspaceEntry, WorkspaceLimits } from './workspace-git.ts'
 
 /** Deployment-owned workspace capacity, retention location, and optional cheap model route. */
@@ -29,6 +33,8 @@ export interface ConversationWorkspaceConfig extends WorkspaceLimits {
   slotInodes: number
   /** Durable owner-only root, outside every execution mount. */
   recoveryRoot: string
+  /** Global receipt directory shared by profiles; resolves to $DSH_HOME/provenance when omitted. */
+  provenanceRoot?: string
   /** Maximum complete JSON controller response. */
   maxOutputBytes: number
   /** Bounded wait for live processes and child agents at settlement. */
@@ -49,7 +55,7 @@ export interface ConversationWorkspaceConfig extends WorkspaceLimits {
 
 declare module '@deepseek-ai/cordis' { interface Context { conversationWorkspaces: ConversationWorkspaces } }
 
-import type { ConversationWorkspaceId, WorkspaceState } from './workspace-types.ts'
+import type { ConversationWorkspaceId, WorkspaceState, WorkspaceProvenanceId, WorkspaceProvenance } from './workspace-types.ts'
 export type { WorkspaceState } from './workspace-types.ts'
 
 type Control = (request: PodmanControllerExecRequest & { readonly deadlineMs: number }) => Promise<PodmanControllerExecResult>
@@ -63,8 +69,13 @@ interface Transaction {
   clean: boolean
   message?: string
   oid?: string
+  provenanceTrailers?: true
+  provenanceId?: WorkspaceProvenanceId
+  eventRange?: WorkspaceProvenance['eventRange']
+  summary?: string
 }
 interface RecordState {
+  topics?: Record<string, string>
   version: 1
   workspaceId: ConversationWorkspaceId
   sessionId: SessionId
@@ -107,6 +118,7 @@ export class ConversationWorkspaces extends Service {
     slotBytes: z.natural().required(),
     slotInodes: z.natural().required(),
     recoveryRoot: z.string().required(),
+    provenanceRoot: z.string(),
     gitCommand: z.string().required(),
     authorName: z.string().required(), authorEmail: z.string().required(),
     resourceLimitCommand: z.string().required(),
@@ -123,11 +135,32 @@ export class ConversationWorkspaces extends Service {
   })
   private readonly bindings = new WeakMap<Agent, Workspace>()
   private readonly workspaces = new Set<Workspace>()
-  private readonly config: ConversationWorkspaceConfig
+  private readonly config: ConversationWorkspaceConfig & { provenanceRoot: string }
+  private readonly requestCancellation = new AbortController()
 
   constructor(ctx: Context, config: ConversationWorkspaceConfig) {
     super(ctx, 'conversationWorkspaces')
     this.config = resolveConfig(config)
+    ctx.inject(['commands'], (inner) => {
+      inner.effect(() => inner.commands.register({
+        name: 'changes', description: 'Find saved branches and their conversations.',
+        input: { hint: '[all | query | export query]' },
+        handler: async ({ agent, rawInput, signal }) => {
+          const input = rawInput.trim()
+          const exporting = input === 'export' || input.startsWith('export ')
+          const query = exporting ? input.slice('export'.length).trim() : input
+          const result = await this.lookupChanges(query === 'all' ? '' : query || agent.id, signal)
+          if (exporting) return { kind: 'success', text: JSON.stringify(result) }
+          const text = result.records.map(record => [
+            `${record.repository} — turn ${record.turn}`,
+            `Conversation: ${record.sessionId} (events ${record.eventRange.join('–')})`,
+            `Receipt: ${record.id}`,
+            ...record.refs.map(ref => `${ref.branch.replace(/^refs\/heads\//u, '')}  ${ref.commit}`),
+          ].join('\n')).join('\n\n')
+          return { kind: 'success', text: (text || 'No saved changes match this query.') + (result.truncated ? '\nResults truncated; narrow the query.' : '') }
+        },
+      }), 'workspace changes command')
+    })
     ctx.on('agent/prepare', async ({ agent, origin: { parentAgent }, signal }) => {
       signal.throwIfAborted()
       if (parentAgent !== undefined) {
@@ -168,6 +201,7 @@ export class ConversationWorkspaces extends Service {
     })
 
     ctx.effect(() => async () => {
+      this.requestCancellation.abort()
       const results = await Promise.allSettled([...this.workspaces].map(workspace => this.release(workspace)))
       const failures = results.flatMap(result => result.status === 'rejected' ? [result.reason as unknown] : [])
       if (failures.length > 0) throw new AggregateError(failures, 'workspace shutdown failed; retained storage requires recovery')
@@ -175,6 +209,18 @@ export class ConversationWorkspaces extends Service {
   }
 
   async [Service.init](): Promise<void> { await this.verifyPool() }
+
+  /** Search host-wide saved change metadata without invoking a model.
+   * @param query - literal conversation, commit, branch, topic or receipt text; empty selects all.
+   * @param signal - caller cancellation.
+   * @returns bounded immutable receipts and an explicit truncation indicator.
+   */
+  async lookupChanges(query: string, signal: AbortSignal): Promise<{ records: WorkspaceProvenance[]; truncated: boolean }> {
+    if (Buffer.byteLength(query) > this.config.messageInputBytes) throw new Error('workspace provenance query exceeds its bound')
+    return await lookupWorkspaceProvenance(this.config.provenanceRoot, query,
+      { maxBytes: this.config.maxOutputBytes, maxEntries: this.config.maxEntries },
+      AbortSignal.any([signal, this.requestCancellation.signal, AbortSignal.timeout(this.config.timeoutMs)]))
+  }
 
   /** Run a user-facing workspace operation with the selected live conversation.
    * @param sessionId - selected conversation identity from the host request.
@@ -229,12 +275,13 @@ export class ConversationWorkspaces extends Service {
   private async verifyPool(): Promise<void> {
     if (process.platform !== 'linux') throw new Error('conversation container workspaces require Linux tmpfs mounts')
     await mkdir(this.config.recoveryRoot, { recursive: true, mode: 0o700 })
+    await mkdir(this.config.provenanceRoot, { recursive: true, mode: 0o700 })
     const devices = new Set<number>()
-    for (const path of [this.config.recoveryRoot, ...this.config.poolPaths]) {
+    for (const path of [this.config.recoveryRoot, this.config.provenanceRoot, ...this.config.poolPaths]) {
       const info = await lstat(path)
       if (!info.isDirectory() || info.isSymbolicLink() || info.uid !== process.getuid?.() || (info.mode & 0o077) !== 0 || await realpath(path) !== path) throw new Error('workspace storage roots must be canonical owner-only directories')
       const fs = await statfs(path)
-      if (path === this.config.recoveryRoot) {
+      if (path === this.config.recoveryRoot || path === this.config.provenanceRoot) {
         if (fs.type === 0x01021994) throw new Error('workspace recovery storage must survive tmpfs loss')
         continue
       }
@@ -443,9 +490,10 @@ export class ConversationWorkspaces extends Service {
         let transaction = workspace.record.transaction
         if (transaction === undefined) {
           let prepared: Record<string, unknown>
-          try { prepared = await this.control(control, 'prepare') }
+          try { prepared = await this.control(control, 'prepare', { baseline: workspace.record.baseline }) }
           catch (error) { await this.checkpoint(workspace, control); throw error }
-          transaction = { turn, authorName: this.config.authorName, authorEmail: this.config.authorEmail, timestamp: new Date(workspace.owner.session.snapshotEvents().findLast(event => event.type === 'turn/end' && event.data.turn === turn)?.time ?? workspace.owner.session.header.createdAt).toISOString(), tree: requireOid(prepared.tree), parent: requireOid(prepared.parent), clean: prepared.clean === true }
+          transaction = { turn, provenanceTrailers: true, authorName: this.config.authorName, authorEmail: this.config.authorEmail, timestamp: new Date(workspace.owner.session.snapshotEvents().findLast(event => event.type === 'turn/end' && event.data.turn === turn)?.time ?? workspace.owner.session.header.createdAt).toISOString(), tree: requireOid(prepared.tree), parent: requireOid(prepared.parent), clean: prepared.clean === true }
+          transaction.summary = String(prepared.summary)
           workspace.record.transaction = transaction
           await this.checkpoint(workspace, control)
           if (!transaction.clean) {
@@ -453,10 +501,18 @@ export class ConversationWorkspaces extends Service {
             await this.saveRecord(workspace)
           }
         }
+        if (transaction.provenanceId === undefined) {
+          transaction.provenanceId = brandString<WorkspaceProvenanceId>(randomUUID())
+          const events = workspace.owner.session.snapshotEvents()
+          const end = events.findLast(event => event.type === 'turn/end' && event.data.turn === turn)
+          if (end === undefined || events[0] === undefined) throw new Error('workspace provenance requires a completed turn')
+          transaction.eventRange = [events[0].seq, end.seq]
+          await this.saveRecord(workspace)
+        }
         if (!transaction.clean) {
           transaction.message ??= fallback(turn)
           await this.saveRecord(workspace)
-          const result = await this.control(control, 'commit', { authorName: transaction.authorName, authorEmail: transaction.authorEmail, tree: transaction.tree, parent: transaction.parent, timestamp: transaction.timestamp, message: `${transaction.message}\n\nDSH-Workspace: ${workspace.record.workspaceId}\nDSH-Turn: ${turn}\nDSH-Input-Baseline: ${workspace.record.baseline}\n` })
+          const result = await this.control(control, 'commit', { authorName: transaction.authorName, authorEmail: transaction.authorEmail, tree: transaction.tree, parent: transaction.parent, timestamp: transaction.timestamp, message: `${transaction.message}\n\nDSH-Workspace: ${workspace.record.workspaceId}\nDSH-Turn: ${turn}\nDSH-Input-Baseline: ${workspace.record.baseline}\n${transaction.provenanceTrailers === true ? `DSH-Session: ${workspace.owner.session.id}\nDSH-Provenance: ${transaction.provenanceId}\n` : ''}` })
           transaction.oid = requireOid(result.oid)
         }
         await this.checkpoint(workspace, control)
@@ -466,9 +522,41 @@ export class ConversationWorkspaces extends Service {
         for (const [ref, value] of Object.entries(exported.heads)) heads[ref] = requireOid(value)
         const bundle = Buffer.from(exported.bundle, 'base64')
         if (bundle.toString('base64') !== exported.bundle) throw new Error('invalid workspace bundle encoding')
+        const unnamed = Object.keys(heads).filter(ref => workspace.record.topics?.[ref] === undefined)
+        if (unnamed.length > 0) {
+          const fallbackTopic = workspaceTopic(workspaceNamingMessages(workspace.owner.session).at(-1)?.text ?? 'changes')
+          workspace.record.topics = { ...workspace.record.topics, ...Object.fromEntries(unnamed.map(ref => [ref, fallbackTopic])) }
+          await this.saveRecord(workspace)
+          const names = await generateWorkspaceTopics(this.ctx, workspace.owner.session, turn, unnamed, transaction.summary ?? transaction.message ?? '', this.config)
+          if (names !== undefined) { workspace.record.topics = { ...workspace.record.topics, ...names }; await this.saveRecord(workspace) }
+        }
+        await this.saveRecord(workspace)
         workspace.record.branches = await returnWorkspaceBranches(
-          workspace.record.source, this.config.recoveryRoot, workspace.record.workspaceId, turn, bundle, heads, this.config,
+          workspace.record.source, this.config.recoveryRoot, workspace.record.workspaceId, turn,
+          bundle, heads, this.config, workspace.record.topics,
         )
+        const historyBytes = await workspaceGit(workspace.record.source,
+          ['rev-list', ...Object.values(heads), '--not', workspace.record.baseline], this.config)
+        const history = historyBytes.toString().trim()
+        const observedCommits = [...new Set([...Object.values(heads), ...history === '' ? [] : history.split('\n')])].sort()
+        if (observedCommits.length > this.config.maxEntries) throw new Error('workspace provenance commit count exceeds its bound')
+        const eventRange = transaction.eventRange
+        if (eventRange === undefined) throw new Error('workspace provenance event interval is missing')
+        const refs = Object.entries(heads).sort(([a], [b]) => a.localeCompare(b)).map(([ref, commit]) => {
+          const topic = workspace.record.topics?.[ref]
+          if (topic === undefined) throw new Error('workspace provenance branch topic is missing')
+          return { source: ref, branch: workspaceResultRef(workspace.record.workspaceId, turn, ref, topic), commit, topic }
+        })
+        const receipt: WorkspaceProvenance = {
+          version: 1, id: transaction.provenanceId, workspaceId: workspace.record.workspaceId,
+          sessionId: workspace.owner.session.id, turn, eventRange,
+          repository: workspace.record.source, baseline: workspace.record.baseline, createdAt: transaction.timestamp,
+          refs,
+          observedCommits, createdCommits: transaction.oid === undefined ? [] : [transaction.oid],
+        }
+        await saveWorkspaceProvenance(this.config.provenanceRoot, receipt, this.config.maxOutputBytes)
+        if (!workspace.owner.session.snapshotEvents().some(event => event.type === 'workspace/provenance' && event.data.id === receipt.id)) workspace.owner.session.append('workspace/provenance', receipt)
+        if (!await this.ctx.sessions.flush(workspace.owner.session)) throw new Error('workspace provenance requires durable session persistence')
         workspace.record.lastTurn = turn; delete workspace.record.transaction
         await this.saveRecord(workspace)
         this.state(workspace, 'returned', turn)
@@ -550,10 +638,16 @@ function parseRecord(value: unknown, workspaceId: ConversationWorkspaceId, sessi
     || typeof value.sourceStatus !== 'string' || typeof value.stagedPatch !== 'string' || !isObject(value.branches)) throw new Error('corrupt workspace recovery manifest')
   requireOid(value.sourceHead); requireOid(value.baseline)
   if (typeof value.checkpointHash !== 'string' || !/^[a-f0-9]{64}$/u.test(value.checkpointHash)) throw new Error('corrupt workspace checkpoint digest')
+  if (value.topics !== undefined && (!isObject(value.topics) || Object.values(value.topics).some(topic => typeof topic !== 'string' || topic.length > 48 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(topic)))) throw new Error('invalid workspace branch topics')
   for (const hash of Object.values(value.branches)) requireOid(hash)
   if (value.transaction !== undefined) {
     const t = value.transaction
     if (!isObject(t) || typeof t.turn !== 'number' || !Number.isSafeInteger(t.turn) || t.turn < 1 || typeof t.timestamp !== 'string' || !Number.isFinite(Date.parse(t.timestamp)) || typeof t.clean !== 'boolean' || (t.message !== undefined && typeof t.message !== 'string')) throw new Error('corrupt workspace transaction')
+    if (t.provenanceTrailers !== undefined && t.provenanceTrailers !== true) throw new Error('invalid workspace provenance trailer policy')
+    if (t.summary !== undefined && typeof t.summary !== 'string') throw new Error('invalid workspace naming summary')
+    if (t.provenanceId !== undefined && (typeof t.provenanceId !== 'string' || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/u.test(t.provenanceId)
+      || !Array.isArray(t.eventRange) || t.eventRange.length !== 2 || t.eventRange.some(seq => typeof seq !== 'number' || !Number.isSafeInteger(seq) || seq < 0) || t.eventRange[0] > t.eventRange[1])) throw new Error('invalid workspace provenance identity or event interval')
+    if (t.oid !== undefined) requireOid(t.oid)
     requireOid(t.tree); requireOid(t.parent)
     validateIdentity(t.authorName, t.authorEmail)
   }
@@ -564,15 +658,17 @@ function validateIdentity(name: unknown, email: unknown): void {
     if (typeof value !== 'string' || value.trim().length === 0 || Buffer.byteLength(value) > 200 || /[\x00-\x1f\x7f<>]/u.test(value)) throw new Error('invalid workspace Git identity')
   }
 }
-function resolveConfig(config: ConversationWorkspaceConfig): ConversationWorkspaceConfig {
+function resolveConfig(config: ConversationWorkspaceConfig): ConversationWorkspaceConfig & { provenanceRoot: string } {
+  const provenanceRoot = config.provenanceRoot ?? join(resolveDshHome(), 'provenance')
   validateIdentity(config.authorName, config.authorEmail)
   if (config.poolPaths.length === 0 || new Set(config.poolPaths).size !== config.poolPaths.length || !isAbsolute(config.gitCommand) || !isAbsolute(config.resourceLimitCommand)) throw new Error('workspace pool and Git executable must be explicit')
-  for (const path of [config.recoveryRoot, ...config.poolPaths]) if (!isAbsolute(path) || path.includes(':')) throw new Error('workspace storage paths must be absolute')
+  for (const path of [config.recoveryRoot, provenanceRoot, ...config.poolPaths]) if (!isAbsolute(path) || path.includes(':')) throw new Error('workspace storage paths must be absolute')
   for (const path of config.poolPaths) if (config.recoveryRoot === path || config.recoveryRoot.startsWith(`${path}/`) || path.startsWith(`${config.recoveryRoot}/`)) throw new Error('recovery and execution storage must be separate')
   for (const [key, value] of Object.entries(config)) if (typeof value === 'number' && (!Number.isSafeInteger(value) || value <= 0 || value > 2_147_483_647)) throw new Error(`invalid workspace bound: ${key}`)
   if ((config.messageProvider === undefined) !== (config.messageModel === undefined)) throw new Error('workspace message provider and model must be paired')
   if (config.maxOutputBytes < config.maxBytes * 4 / 3 + config.maxEntries * 512) throw new Error('workspace response bound cannot hold the configured snapshot')
-  return { ...config, poolPaths: [...config.poolPaths] }
+  for (const path of config.poolPaths) if (provenanceRoot === path || provenanceRoot.startsWith(`${path}/`)) throw new Error('provenance and execution storage must be separate')
+  return { ...config, provenanceRoot, poolPaths: [...config.poolPaths] }
 }
 
 export default ConversationWorkspaces

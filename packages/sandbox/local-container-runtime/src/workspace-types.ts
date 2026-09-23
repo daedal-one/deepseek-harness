@@ -2,6 +2,29 @@
 
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { Message } from '@deepseek-ai/dsh-llm/types'
+import type { SessionId, SessionSeq } from '@deepseek-ai/dsh-session/types'
+
+/** Stable identity of one repository return receipt. */
+export type WorkspaceProvenanceId = Branded<'WorkspaceProvenanceId'>
+
+/** Immutable host receipt; observed history does not assert conversation authorship. */
+export interface WorkspaceProvenance {
+  version: 1
+  id: WorkspaceProvenanceId
+  workspaceId: ConversationWorkspaceId
+  sessionId: SessionId
+  turn: number
+  /** Inclusive owner-conversation event interval through the completed turn. */
+  eventRange: [SessionSeq, SessionSeq]
+  repository: string
+  baseline: string
+  createdAt: string
+  refs: Array<{ source: string; branch: string; commit: string; topic: string }>
+  /** Commits reachable from returned tips but not the imported baseline, plus the tips themselves. */
+  observedCommits: string[]
+  /** Only commits created by this Harness finalization transaction. */
+  createdCommits: string[]
+}
 
 /** Host-generated identity for one conversation repository. */
 export type ConversationWorkspaceId = Branded<'ConversationWorkspaceId'>
@@ -24,5 +47,9 @@ declare module '@deepseek-ai/dsh-session/types' {
     'workspace/state': WorkspaceState
     /** Exact bounded auxiliary request recorded before dispatch. */
     'workspace/commit-message-request': { turn: number; system: string; messages: Message[]; provider: string; model: string; maxTokens: number }
+    /** Exact bounded naming input recorded before the auxiliary request. */
+    'workspace/branch-name-request': { turn: number; system: string; messages: Message[]; provider: string; model: string; maxTokens: number }
+    /** Host-persisted repository return metadata, independent of mutable branch names. */
+    'workspace/provenance': WorkspaceProvenance
   }
 }

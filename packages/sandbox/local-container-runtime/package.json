@@ -52,7 +52,9 @@
     "@deepseek-ai/dsh-llm": "workspace:^",
     "@deepseek-ai/dsh-system-prompt": "workspace:^",
     "@deepseek-ai/node-addon-system": "workspace:^",
-    "@deepseek-ai/dsh-brand": "workspace:^"
+    "@deepseek-ai/dsh-brand": "workspace:^",
+    "@deepseek-ai/dsh-commands": "workspace:^",
+    "@deepseek-ai/dsh-home-paths": "workspace:^"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",

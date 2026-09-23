@@ -170,6 +170,13 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 Owns private workspace storage, live agent bindings, and automatic branch return.
 
 ```ts cordis-catalog
+/** Search host-wide saved change metadata without invoking a model.
+ * @param query - literal conversation, commit, branch, topic or receipt text; empty selects all.
+ * @param signal - caller cancellation.
+ * @returns bounded immutable receipts and an explicit truncation indicator.
+ */
+async lookupChanges(query: string, signal: AbortSignal): Promise<{ records: WorkspaceProvenance[]; truncated: boolean }>
+
 /** Run a user-facing workspace operation with the selected live conversation.
  * @param sessionId - selected conversation identity from the host request.
  * @param operation - operation whose filesystem and process calls share that owner.

@@ -1265,6 +1265,17 @@ Source: [`packages/web/web-search-openrouter/src/provider.ts:74`](../packages/we
 
 ### `workspace/*`
 
+<a id="workspacebranch-name-request--log-only"></a>
+
+#### `workspace/branch-name-request` — log-only
+
+```ts persistence-catalog
+/** Exact bounded naming input recorded before the auxiliary request. */
+'workspace/branch-name-request': { turn: number; system: string; messages: Message[]; provider: string; model: string; maxTokens: number }
+```
+
+Source: [`packages/sandbox/local-container-runtime/src/workspace-types.ts:51`](../packages/sandbox/local-container-runtime/src/workspace-types.ts)
+
 <a id="workspacecommit-message-request--log-only"></a>
 
 #### `workspace/commit-message-request` — log-only
@@ -1274,7 +1285,18 @@ Source: [`packages/web/web-search-openrouter/src/provider.ts:74`](../packages/we
 'workspace/commit-message-request': { turn: number; system: string; messages: Message[]; provider: string; model: string; maxTokens: number }
 ```
 
-Source: [`packages/sandbox/local-container-runtime/src/workspace-types.ts:26`](../packages/sandbox/local-container-runtime/src/workspace-types.ts)
+Source: [`packages/sandbox/local-container-runtime/src/workspace-types.ts:49`](../packages/sandbox/local-container-runtime/src/workspace-types.ts)
+
+<a id="workspaceprovenance--log-only"></a>
+
+#### `workspace/provenance` — log-only
+
+```ts persistence-catalog
+/** Host-persisted repository return metadata, independent of mutable branch names. */
+'workspace/provenance': WorkspaceProvenance
+```
+
+Source: [`packages/sandbox/local-container-runtime/src/workspace-types.ts:53`](../packages/sandbox/local-container-runtime/src/workspace-types.ts)
 
 <a id="workspacestate--log-only"></a>
 
@@ -1285,4 +1307,4 @@ Source: [`packages/sandbox/local-container-runtime/src/workspace-types.ts:26`](.
 'workspace/state': WorkspaceState
 ```
 
-Source: [`packages/sandbox/local-container-runtime/src/workspace-types.ts:24`](../packages/sandbox/local-container-runtime/src/workspace-types.ts)
+Source: [`packages/sandbox/local-container-runtime/src/workspace-types.ts:47`](../packages/sandbox/local-container-runtime/src/workspace-types.ts)

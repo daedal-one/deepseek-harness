@@ -56,7 +56,7 @@ describe.skipIf(!enabled)('conversation workspace real Podman Loader flow', () =
         { name: 'container', config: { socketPath, manageService: false, serviceStartupTimeoutMs: 10000, image, user: 'dsh', environment: { HOME: '/home/dsh', LANG: 'C.UTF-8', PATH: '/usr/local/bin:/usr/bin:/bin' }, memoryBytes: 268435456, nanoCpus: 500000000, pidsLimit: 128, tmpfsBytes: 67108864, engineRequestTimeoutMs: 10000, maxLiveProcesses: 8, lifetimeMs: 300000, stopTimeoutSeconds: 2 } },
         { name: 'container-fs', config: { cwdAliases: [], maxFileBytes: 65536, diffBasisMaxBytes: 32768, maxControllerOutputBytes: 200000, operationTimeoutMs: 10000 } },
         { name: 'container-subprocess', config: { cwdAliases: [], controlOutputBytes: 4096, controlTimeoutMs: 10000 } },
-        { name: 'workspaces', config: { ...limits, poolPaths, slotBytes: 67108864, slotInodes: 20000, recoveryRoot: join(root, 'recovery'), maxOutputBytes: 8388608, settleTimeoutMs: 10000, retryDelayMs: 1000, messageProvider: 'mock', messageModel: 'cheap', messageInputBytes: 4096, messageOutputTokens: 64, messageTimeoutMs: 10000 } },
+        { name: 'workspaces', config: { ...limits, poolPaths, slotBytes: 67108864, slotInodes: 20000, recoveryRoot: join(root, 'recovery'), provenanceRoot: join(root, 'provenance'), maxOutputBytes: 8388608, settleTimeoutMs: 10000, retryDelayMs: 1000, messageProvider: 'mock', messageModel: 'cheap', messageInputBytes: 4096, messageOutputTokens: 64, messageTimeoutMs: 10000 } },
         { name: 'instructions', config: { dshHome: '/workspace/.dsh', maxBytes: 4096 } },
         { name: 'fs-tools' }, { name: 'loop', config: { agents: [] } },
       ]
@@ -64,7 +64,7 @@ describe.skipIf(!enabled)('conversation workspace real Podman Loader flow', () =
       ctx.baseUrl = pathToFileURL(root).href + '/'; await ctx.plugin(Loader); ctx.loader.builtins.include = Include
       ctx.loader.internal = { version: 'v2', async import(specifier: string) { const module = modules.get(specifier); if (module === undefined) throw new Error(`unexpected test module ${specifier}`); return module } } as unknown as NonNullable<typeof ctx.loader.internal>
       await ctx.loader.create({ name: 'cordis:include', config: { path: pathToFileURL(configPath).href } }); await ctx.loader.await()
-      const adapter = new MockAdapter([toolCallResponse('workspace-write', 'write', { file_path: 'result.txt', content: 'agent result\n' }), textResponse('Done.'), textResponse('feat: add result'), textResponse('No further changes.'), textResponse('Background work remains active.'), textResponse('chore: retain background output'), 'hang'])
+      const adapter = new MockAdapter([toolCallResponse('workspace-write', 'write', { file_path: 'result.txt', content: 'agent result\n' }), textResponse('Done.'), textResponse('feat: add result'), textResponse(JSON.stringify({ HEAD: 'add-result', 'refs/heads/codex/conversation': 'add-result' })), textResponse('No further changes.'), textResponse('Background work remains active.'), textResponse('chore: retain background output'), 'hang'])
       ctx.llm.registerAdapter(['mock'], adapter)
       const id = SessionId(`workspace-e2e-${randomUUID()}`)
       first = await ctx.agents.create({ sessionId: id, meta: { cwd: source }, agentOptions: { provider: 'mock', model: 'main' } })

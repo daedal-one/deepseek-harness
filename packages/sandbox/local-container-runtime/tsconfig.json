@@ -37,6 +37,12 @@
     },
     {
       "path": "../../util/brand"
+    },
+    {
+      "path": "../../interaction/commands"
+    },
+    {
+      "path": "../../util/home-paths"
     }
   ]
 }

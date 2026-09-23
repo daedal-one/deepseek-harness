@@ -49,6 +49,10 @@ Chat restores semantic anchors across history prepend and renderer remounts. Pin
 -----
 
 <a id="model-experience"></a>
+## Saved workspace branches
+
+Workspace return cards group equal commit tips and retain alternate branch names in an expandable list. Different repositories remain separate even when commit ids match.
+
 ## Model Experience
 
 None, as this package renders logged conversation state in the browser and registers nothing model-facing.
