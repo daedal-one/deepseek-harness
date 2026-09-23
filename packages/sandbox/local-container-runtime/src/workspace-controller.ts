@@ -88,7 +88,8 @@ def maintain():
             tree=git('write-tree').decode().strip(); parent=git('rev-parse','HEAD').decode().strip()
             clean=tree==git('rev-parse','HEAD^{tree}').decode().strip()
             diff=git('diff','--cached','--no-ext-diff','--no-textconv','--stat').decode('utf-8','replace')
-            return {'tree':tree,'parent':parent,'clean':clean,'diff':diff}
+            summary=git('diff','--no-ext-diff','--no-textconv','--stat',r['baseline']).decode('utf-8','replace')
+            return {'tree':tree,'parent':parent,'clean':clean,'diff':diff,'summary':summary}
         if op=='commit':
             env['GIT_AUTHOR_DATE']=r['timestamp']; env['GIT_COMMITTER_DATE']=r['timestamp']
             oid=git('commit-tree',r['tree'],'-p',r['parent'],data=r['message'].encode()).decode().strip()

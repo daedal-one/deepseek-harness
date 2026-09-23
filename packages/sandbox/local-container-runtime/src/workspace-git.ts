@@ -285,11 +285,12 @@ export async function importWorkspace(source: string, recoveryRoot: string, limi
  * @param bundle - bounded bundle bytes captured in the sandbox.
  * @param heads - exact declared branch/object manifest.
  * @param limits - resource bounds for validation and host Git commands.
+ * @param topics - persisted descriptive topics keyed by original sandbox ref.
  * @returns host result refs mapped to immutable object ids.
  */
 export async function returnWorkspaceBranches(
   source: string, stagingRoot: string, workspaceId: string, turn: number,
-  bundle: Buffer, heads: Record<string, string>, limits: WorkspaceLimits,
+  bundle: Buffer, heads: Record<string, string>, limits: WorkspaceLimits, topics?: Record<string, string>,
 ): Promise<Record<string, string>> {
   if (!/^[a-f0-9]{32}$/u.test(workspaceId) || !Number.isSafeInteger(turn) || turn < 1 || bundle.length > limits.maxBytes) throw new Error('invalid workspace return identity or size')
   const declared = Object.entries(heads)
@@ -308,11 +309,10 @@ export async function returnWorkspaceBranches(
     const results: Record<string, string> = {}
     for (const [ref, hash] of declared) {
       await git('cat-file', '-e', `${hash}^{commit}`)
-      const key = createHash('sha256').update(ref).digest('hex').slice(0, 24)
-      results[`refs/heads/dsh/${workspaceId}/${key}/turn-${turn}`] = hash
+      results[workspaceResultRef(workspaceId, turn, ref, topics?.[ref])] = hash
     }
     await workspaceGit(source, ['-c', 'fetch.fsckObjects=true', 'bundle', 'unbundle', file], limits)
-    const existing = Object.fromEntries(text(await workspaceGit(source, ['for-each-ref', '--format=%(refname) %(objectname)', `refs/heads/dsh/${workspaceId}/`], limits)).trim().split('\n').filter(Boolean).map((line) => { const [ref, hash] = line.split(' '); return [String(ref), String(hash)] as const }))
+    const existing = Object.fromEntries(text(await workspaceGit(source, ['for-each-ref', '--format=%(refname) %(objectname)', ...Object.keys(results)], limits)).trim().split('\n').filter(Boolean).map((line) => { const [ref, hash] = line.split(' '); return [String(ref), String(hash)] as const }))
     const commands = ['start']
     for (const [ref, hash] of Object.entries(results)) {
       if (existing[ref] === hash) continue
@@ -323,4 +323,21 @@ export async function returnWorkspaceBranches(
     await workspaceGit(source, ['update-ref', '--stdin'], limits, Buffer.from(commands.join('\n')))
     return results
   } finally { await rm(staging, { recursive: true, force: true }) }
+}
+
+/** Derive an immutable result ref from its workspace, original ref and persisted topic.
+ * @param workspaceId - full owner identity.
+ * @param turn - completed turn number.
+ * @param ref - original sandbox ref, including detached HEAD.
+ * @param topic - validated descriptive slug; omission preserves legacy destinations.
+ * @returns deterministic host ref; invalid topics throw before Git invocation.
+ */
+export function workspaceResultRef(workspaceId: string, turn: number, ref: string, topic?: string): string {
+  if (topic === undefined) {
+    const key = createHash('sha256').update(ref).digest('hex').slice(0, 24)
+    return `refs/heads/dsh/${workspaceId}/${key}/turn-${turn}`
+  }
+  if (topic.length > 48 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(topic)) throw new Error('invalid workspace branch topic')
+  const key = createHash('sha256').update(`${workspaceId}\0${ref}`).digest('hex').slice(0, 24)
+  return `refs/heads/dsh/${topic}-${key}/turn-${turn}`
 }

@@ -11,11 +11,13 @@ import Persistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import LlmRuntime, { createUserMessage } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import Tools from '@deepseek-ai/dsh-tools'
+import Commands from '@deepseek-ai/dsh-commands'
 import type { LocalContainerRuntime } from '../src/index.ts'
 import Workspaces, { type ConversationWorkspaceConfig } from '../src/workspaces.ts'
 import type { PodmanControllerExecRequest, PodmanControllerExecResult } from '../src/types.ts'
 import { workspaceGit } from '../src/workspace-git.ts'
 import * as broker from '../src/workspace-git.ts'
+import * as provenance from '../src/workspace-provenance.ts'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -43,7 +45,7 @@ async function fixture(options: {
   const source = join(root, 'source'); const pool = join(root, 'slot'); const secondPool = join(root, 'second-slot'); const recovery = join(root, 'recovery')
   await Promise.all([source, pool, secondPool, recovery].map(path => mkdir(path, { mode: 0o700 })))
   const config: ConversationWorkspaceConfig = {
-    poolPaths: [pool, secondPool], slotBytes: 67108864, slotInodes: 20000, recoveryRoot: recovery,
+    poolPaths: [pool, secondPool], slotBytes: 67108864, slotInodes: 20000, recoveryRoot: recovery, provenanceRoot: join(recovery, 'provenance'),
     gitCommand: '/usr/bin/git', authorName: 'DSH', authorEmail: 'dsh@localhost', resourceLimitCommand: '/usr/bin/prlimit', gitMemoryBytes: 536870912,
     maxBytes: 4194304, maxEntries: 1000, timeoutMs: 30000, maxOutputBytes: 8388608,
     settleTimeoutMs: 1000, retryDelayMs: options.retryDelayMs ?? 10000,
@@ -53,7 +55,7 @@ async function fixture(options: {
   await workspaceGit(source, ['init', '--template=', '--initial-branch=main'], config)
   await writeFile(join(source, 'input.txt'), 'initial\n')
   await workspaceGit(source, ['add', '.'], config); await workspaceGit(source, ['commit', '-m', 'initial'], config)
-  const ctx = new Context()
+  let ctx = new Context()
   const worlds = new Map<object, string>()
   let failAfterCommit = options.failAfterCommit === true
   const execute = async (directory: string, request: PodmanControllerExecRequest): Promise<PodmanControllerExecResult> => {
@@ -91,13 +93,16 @@ async function fixture(options: {
       return { runtime: world, async dispose() {} }
     },
   }
-  ctx.provide('localContainerRuntime', runtime as unknown as LocalContainerRuntime)
-  await ctx.plugin(SessionStore); await ctx.plugin(ProjectionRegistry)
-  await ctx.plugin(Persistence, { root: join(root, 'sessions'), compression: 'none' })
-  await ctx.plugin(LlmRuntime); await ctx.plugin(AgentRegistry); await ctx.plugin(SystemPrompt); await ctx.plugin(Tools)
-  await ctx.plugin(LocalStorageWorkspaces, config); await ctx.plugin(AgentLoop, { agents: [] })
+  const boot = async () => {
+    ctx.provide('localContainerRuntime', runtime as unknown as LocalContainerRuntime)
+    await ctx.plugin(SessionStore); await ctx.plugin(ProjectionRegistry)
+    await ctx.plugin(Persistence, { root: join(root, 'sessions'), compression: 'none' })
+    await ctx.plugin(LlmRuntime); await ctx.plugin(AgentRegistry); await ctx.plugin(SystemPrompt); await ctx.plugin(Tools)
+    await ctx.plugin(LocalStorageWorkspaces, config); await ctx.plugin(AgentLoop, { agents: [] })
+  }
+  await boot()
   disposers.push(async () => { await ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) })
-  const adapter = new MockAdapter(options.script ?? [textResponse('Done.'), textResponse('feat: retain changes'), textResponse('No further changes.')])
+  const adapter = new MockAdapter(options.script ?? [textResponse('Done.'), textResponse('feat: retain changes'), textResponse(JSON.stringify({ HEAD: 'finish-task', 'refs/heads/codex/conversation': 'finish-task' })), textResponse('No further changes.')])
   ctx.llm.registerAdapter(['mock'], adapter)
   const handle = await ctx.agents.create({ sessionId: SessionId(`test-${root.split('/').at(-1)}`), meta: { cwd: source }, agentOptions: { provider: 'mock', model: 'main' } })
   const runtimeForAgent = ctx.agents.withInitiator(handle.agent, () => ctx.conversationWorkspaces.capture())
@@ -109,10 +114,86 @@ async function fixture(options: {
     return handle.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')
   }
   const executionFor = (agent: Agent) => worlds.get(ctx.agents.withInitiator(agent, () => ctx.conversationWorkspaces.capture()))
-  return { ctx, root, source, pool, recovery, execution, config, handle, turn, adapter, executionFor }
+  const restart = async () => {
+    await ctx.fiber.dispose()
+    ctx = new Context()
+    await boot()
+    ctx.llm.registerAdapter(['mock'], adapter)
+    return ctx
+  }
+  return { ctx, root, source, pool, recovery, execution, config, handle, turn, adapter, executionFor, restart }
 }
 
 describe.skipIf(process.platform === 'win32')('conversation workspace transaction lifecycle', () => {
+  it('names branches once and finds granular commits after host ref deletion and restart', async () => {
+    const names = JSON.stringify({ HEAD: 'repair-session-recovery', 'refs/heads/codex/conversation': 'repair-session-recovery' })
+    const f = await fixture({ message: true, script: [textResponse('Done.'), textResponse(names), textResponse('Done again.')] })
+    await writeFile(join(f.execution, 'granular.txt'), 'granular change\n')
+    await workspaceGit(f.execution, ['add', '.'], f.config)
+    await workspaceGit(f.execution, ['commit', '-m', 'fix: granular change'], f.config)
+    const granular = (await workspaceGit(f.execution, ['rev-parse', 'HEAD'], f.config)).toString().trim()
+    expect((await f.turn())?.data).toMatchObject({ phase: 'returned' })
+    const first = await f.ctx.conversationWorkspaces.lookupChanges(granular, new AbortController().signal)
+    expect(first.records).toHaveLength(1)
+    expect(first.records[0]).toMatchObject({ sessionId: f.handle.agent.id, observedCommits: [granular], createdCommits: [] })
+    expect(first.records[0]!.refs.every(ref => ref.branch.includes('/repair-session-recovery-'))).toBe(true)
+    await f.turn()
+    expect(f.adapter.requests.filter(request => request.purpose === 'workspace-branch-name')).toHaveLength(1)
+    const all = await f.ctx.conversationWorkspaces.lookupChanges(granular, new AbortController().signal)
+    for (const record of all.records) for (const ref of record.refs) await workspaceGit(f.source, ['update-ref', '-d', ref.branch], f.config)
+    const ctx = await f.restart()
+    expect((await ctx.conversationWorkspaces.lookupChanges(granular.slice(0, 12), new AbortController().signal)).records).toHaveLength(2)
+    expect((await workspaceGit(f.execution, ['rev-parse', 'HEAD'], f.config)).toString().trim()).toBe(granular)
+  })
+
+  it('links automatic commits to stable receipts and exports them through the disposable human command', async () => {
+    const f = await fixture()
+    const commands = await f.ctx.plugin(Commands)
+    await writeFile(join(f.execution, 'result.txt'), 'result\n')
+    expect((await f.turn())?.data).toMatchObject({ phase: 'returned' })
+    const records = await f.ctx.conversationWorkspaces.lookupChanges(f.handle.agent.id, new AbortController().signal)
+    const receipt = records.records[0]!
+    expect(receipt.createdCommits).toHaveLength(1)
+    const message = (await workspaceGit(f.source, ['show', '-s', '--format=%B', receipt.createdCommits[0]!], f.config)).toString()
+    expect(message).toContain(`DSH-Session: ${f.handle.agent.id}`)
+    expect(message).toContain(`DSH-Provenance: ${receipt.id}`)
+    expect(f.handle.agent.session.snapshotEvents().filter(event => event.type === 'workspace/provenance')).toHaveLength(1)
+    expect(f.ctx.commands.find(f.handle.agent, 'changes')).toBeDefined()
+    const result = await f.ctx.commands.execute(f.handle.agent, '/changes export all', [], new AbortController().signal)
+    expect(JSON.parse(result!.result.text!)).toEqual(records)
+    await commands.dispose()
+    expect(f.ctx.get('commands')).toBeUndefined()
+  })
+
+  it('reconciles published refs after a receipt-write failure without another naming call', async () => {
+    const f = await fixture({ message: true, retryDelayMs: 2_147_483_647 })
+    await writeFile(join(f.execution, 'result.txt'), 'result\n')
+    const save = vi.spyOn(provenance, 'saveWorkspaceProvenance').mockRejectedValueOnce(new Error('receipt disk unavailable'))
+    expect((await f.turn())?.data).toMatchObject({ phase: 'pending' })
+    const head = await workspaceGit(f.execution, ['rev-parse', 'HEAD'], f.config)
+    const refs = await workspaceGit(f.source, ['for-each-ref', '--format=%(refname) %(objectname)', 'refs/heads/dsh/'], f.config)
+    save.mockRestore()
+    const ctx = await f.restart()
+    const resumed = await ctx.agents.resume({ resumeSessionId: f.handle.agent.id, agentOptions: { provider: 'mock', model: 'main' } })
+    try {
+      await expect.poll(() => resumed.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')?.data, { timeout: 5000 }).toMatchObject({ phase: 'returned' })
+      expect(await workspaceGit(f.execution, ['rev-parse', 'HEAD'], f.config)).toEqual(head)
+      expect(await workspaceGit(f.source, ['for-each-ref', '--format=%(refname) %(objectname)', 'refs/heads/dsh/'], f.config)).toEqual(refs)
+      expect(f.adapter.requests.filter(request => request.purpose === 'workspace-branch-name')).toHaveLength(1)
+      expect((await ctx.conversationWorkspaces.lookupChanges(f.handle.agent.id, new AbortController().signal)).records).toHaveLength(1)
+      expect(resumed.agent.session.snapshotEvents().filter(event => event.type === 'workspace/provenance')).toHaveLength(1)
+    } finally { await resumed.dispose() }
+  })
+
+  it('keeps a safe persisted fallback when the naming model emits an invalid ref', async () => {
+    const f = await fixture({ message: true, script: [textResponse('Done.'), textResponse('{"HEAD":"../../escape"}'), textResponse('Done again.')] })
+    expect((await f.turn())?.data).toMatchObject({ phase: 'returned' })
+    const records = await f.ctx.conversationWorkspaces.lookupChanges('', new AbortController().signal)
+    expect(records.records[0]!.refs.every(ref => ref.topic === 'finish-the-task')).toBe(true)
+    await f.turn()
+    expect(f.adapter.requests.filter(request => request.purpose === 'workspace-branch-name')).toHaveLength(1)
+  })
+
   it('uses the fixed residual commit when no message route exists and preserves source state', async () => {
     const f = await fixture()
     const sourceHead = await workspaceGit(f.source, ['rev-parse', 'HEAD'], f.config)

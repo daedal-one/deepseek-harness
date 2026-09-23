@@ -402,6 +402,7 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   SubprocessTerminalSpawnSpec: 'subprocess.md',
   LocalContainerHandle: 'sandbox.md',
   LocalContainerRuntime: 'sandbox.md',
+  WorkspaceProvenance: 'sandbox.md',
   PodmanControllerExecRequest: 'sandbox.md',
   PodmanControllerExecResult: 'sandbox.md',
   LocalContainerProcessHandle: 'sandbox.md',

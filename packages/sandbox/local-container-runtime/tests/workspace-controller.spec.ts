@@ -12,7 +12,7 @@ const limits = { gitCommand: '/usr/bin/git', authorName: 'DSH', authorEmail: 'ds
 afterEach(async () => { await Promise.all(roots.splice(0).map(path => rm(path, { recursive: true, force: true }))) })
 interface Responses {
   restore: Record<string, never>
-  prepare: { tree: string; parent: string; clean: boolean; diff: string }
+  prepare: { tree: string; parent: string; clean: boolean; diff: string; summary: string }
   commit: { oid: string }
   capture: { entries: WorkspaceEntry[] }
 }
@@ -27,7 +27,8 @@ async function fixture() {
   const control = async <K extends keyof Responses>(operation: K, fields: Record<string, unknown> = {}): Promise<Responses[K]> => {
     const result = await new Promise<string>((resolve, reject) => {
       const child = execFile('/usr/bin/python3', ['-c', controller], { maxBuffer: 16 * 1024 * 1024, timeout: limits.timeoutMs }, (error, stdout) => { if (error === null) resolve(stdout); else reject(new Error('controller failed', { cause: error })) })
-      child.stdin?.end(JSON.stringify({ operation, ...fields, ...limits, maxOutputBytes: 16 * 1024 * 1024, timeoutSeconds: 20 }))
+      child.stdin?.end(JSON.stringify({ operation, baseline: seed.baseline, ...fields, ...limits,
+        maxOutputBytes: 16 * 1024 * 1024, timeoutSeconds: 20 }))
     })
     const parsed = JSON.parse(result) as { ok: boolean; error: string; value: Responses[K] }
     if (!parsed.ok) throw new Error(parsed.error)
@@ -45,7 +46,10 @@ describe.skipIf(process.platform === 'win32')('container workspace controller pr
     const first = await f.control('commit', request); const replay = await f.control('commit', request)
     expect(first).toEqual(replay)
     expect((await workspaceGit(f.execution, ['rev-parse', 'HEAD^'], limits)).toString().trim()).toBe(prepared.parent)
-    expect((await f.control('prepare')).clean).toBe(true)
+    const clean = await f.control('prepare')
+    expect(clean.clean).toBe(true)
+    expect(clean.diff).toBe('')
+    expect(clean.summary).toContain('file.txt')
     expect(await readFile(join(f.source, 'file.txt'), 'utf8')).toBe('initial\n')
   })
   it('checkpoints ignored data and index bytes and restores them into an empty workspace', async () => {

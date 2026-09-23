@@ -13,6 +13,7 @@ export const en = {
   'workspace.checkpointed': 'Workspace saved for recovery',
   'workspace.pending': 'Workspace save needs attention',
   'workspace.details': 'Details',
+  'workspace.aliases': 'Other branches at this commit ({count})',
   'view.chat': 'Chat',
   'number.groupSeparator': ',',
   'duration.compactSeconds': '{seconds}s',
