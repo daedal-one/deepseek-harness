@@ -4,7 +4,7 @@ type: task
 status: accepted
 summary: Run the authorized migration loop as a host-maintenance conversation in the existing DSH Web Host.
 owners: [carlo]
-progress: in-progress
+progress: done
 addresses:
   - REQ:sandbox/host-maintenance#c-world
   - REQ:sandbox/host-maintenance#c-deployment
@@ -22,3 +22,7 @@ Keep the stopped worker's Session history, current source and evidence intact. A
 Shell providers report an optional execution-world identity so admission can reject unproven or split provider compositions. A stopped container workspace releases its environment lease even when checkpoint publication fails; a still-live world retains exclusive ownership.
 
 Internal preset filesystem and subprocess services for instruction loading and reviewed MCP transports MUST preserve ordinary container ownership when the preset has no scoped shell executor. The deployed Daedal composition must be qualified alongside the admitted maintenance composition.
+
+## Verified operation
+
+The qualified Host runs the approved migration conversation in the existing Web UI at port 3081, under Ungrouped, with one native hourly reminder. Native host commands, timer delivery, and delivery of a pending reminder after main-Host restart are observed. Ordinary preset internal services remain container-owned. The old dedicated worker is stopped and disabled; the Codex heartbeat is paused. Source commit 8f5b236efd is published and deployed, with prior release/configuration retained. The resumed conversation is performing the next migration package. This completes loop ownership transfer, not Phase4 or later platform gates. Evidence is retained in .dev/daedal-dsh-plan-audit/native-loop-main-20260923/verification.json and the remote handoff evidence.
