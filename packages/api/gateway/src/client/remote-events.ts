@@ -364,15 +364,15 @@ function invalidRemoteEventFrame(): never {
   throw new TypeError('client api: invalid forwarded Remote event frame')
 }
 
-/** Race listener completion against its delivery lifetime. */
+/** Observe supplied work even after cancellation; a pre-existing abort wins over a settled value. */
 async function abortable<T>(value: T | PromiseLike<T>, signal: AbortSignal): Promise<T> {
-  signal.throwIfAborted()
   let rejectAbort: ((reason: unknown) => void) | undefined
   const aborted = new Promise<never>((_resolve, reject) => { rejectAbort = reject })
   const onAbort = (): void => { rejectAbort?.(signal.reason) }
-  signal.addEventListener('abort', onAbort, { once: true })
+  if (signal.aborted) onAbort()
+  else signal.addEventListener('abort', onAbort, { once: true })
   try {
-    return await Promise.race([Promise.resolve(value), aborted])
+    return await Promise.race([aborted, Promise.resolve(value)])
   } finally {
     signal.removeEventListener('abort', onAbort)
   }
