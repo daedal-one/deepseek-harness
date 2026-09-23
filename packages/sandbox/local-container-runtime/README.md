@@ -91,6 +91,12 @@ Recovery retains the current and previous checkpoint generations, including igno
 
 Set `DSH_PODMAN_EGRESS=1` to exercise outbound access and the environment repository tool in real-container tests. The opt-in `tests/workspaces.e2e.ts` additionally requires `DSH_WORKSPACE_POOL`, a JSON array of two exclusively reserved tmpfs directories. Its test composition uses the real Loader and rootless engine; only model responses are scripted. Local transaction tests do not establish engine isolation. The private-remote case in `tests/podman.e2e.ts` also takes `DSH_PRIVATE_REPO_URL`, `DSH_PRIVATE_REPO_SOURCE`, and `DSH_PRIVATE_REPO_FETCH_HELPER`; it verifies an authenticated read with an environment-issued credential and confirms that the controller has no credential environment.
 
+#### Host maintenance conversations
+
+An operator can admit a fresh maintenance conversation in the same Web Host with `hostSessions`, an array of exact `sessionId`, `preset`, and absolute `cwd` values. Its trusted preset must supply filesystem, subprocess, and shell services in an isolated Cordis group; all three must identify the host execution world. The conversation and its children use that composition without allocating or settling a container workspace. Admission is checked on creation and resume. Other conversations cannot mount scoped execution providers through this exception.
+
+Host maintenance has direct host authority and no automatic container checkpoint or Git return. It does not inherit the container-only repository broker or file-preview services. Those operations and contained-world policy assertions refuse the maintenance conversation. Operators retain explicit Session permissions and restart recovery, and hand existing work to a new Session without rewriting recorded headers. Ordinary conversations keep the container lifecycle.
+
 #### Repository remotes and outbound access
 
 Set the runtime's `network: outbound` to allow network requests from ordinary shell, Git, and language-server processes. This grants outbound network effects without per-command review; it is not a GET-only or destination-filtered policy. The runtime uses rootless slirp4netns, publishes no ports, verifies a separate network namespace, and probes a real host-loopback listener before accepting the world. Internet access does not mount host files or enable host process execution.

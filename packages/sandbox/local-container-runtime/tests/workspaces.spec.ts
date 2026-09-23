@@ -1,8 +1,15 @@
 import { execFile } from 'node:child_process'
-import { cp, mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdtemp, mkdir, open, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import Loader from '@deepseek-ai/cordis-plugin-loader'
+import Include from '@deepseek-ai/cordis-plugin-include'
+import Group from '@deepseek-ai/cordis-plugin-group'
 import { Context, Service } from '@deepseek-ai/cordis'
+import AgentPresets, { serviceForAgent } from '@deepseek-ai/dsh-agent-presets'
+import * as HostFs from '@deepseek-ai/dsh-fs-local'
+import * as HostSubprocess from '@deepseek-ai/dsh-subprocess-local'
+import * as HostShell from '@deepseek-ai/dsh-bash-local'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import SessionStore, { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
@@ -16,6 +23,7 @@ import type { LocalContainerRuntime } from '../src/index.ts'
 import * as RepoAccessTool from '../src/tool-request-repo-access.ts'
 import Workspaces, { type ConversationWorkspaceConfig } from '../src/workspaces.ts'
 import type { PodmanControllerExecRequest, PodmanControllerExecResult } from '../src/types.ts'
+import { tryLockExclusive } from '@deepseek-ai/node-addon-system/flock'
 import { workspaceGit } from '../src/workspace-git.ts'
 import * as broker from '../src/workspace-git.ts'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
@@ -37,6 +45,7 @@ afterEach(async () => {
 
 async function fixture(options: {
   environment?: boolean
+  maintenance?: boolean
   message?: boolean
   failAfterCommit?: boolean
   retryDelayMs?: number
@@ -46,6 +55,7 @@ async function fixture(options: {
   const source = join(root, 'source'); const pool = join(root, 'slot'); const secondPool = join(root, 'second-slot'); const recovery = join(root, 'recovery')
   await Promise.all([source, pool, secondPool, recovery].map(path => mkdir(path, { mode: 0o700 })))
   const config: ConversationWorkspaceConfig = {
+    ...options.maintenance === true ? { hostSessions: [{ sessionId: 'maintenance-root', preset: 'maintenance', cwd: source }] } : {},
     poolPaths: [pool, secondPool], slotBytes: 67108864, slotInodes: 20000, recoveryRoot: recovery,
     gitCommand: '/usr/bin/git', authorName: 'DSH', authorEmail: 'dsh@localhost', resourceLimitCommand: '/usr/bin/prlimit', gitMemoryBytes: 536870912,
     maxBytes: 4194304, maxEntries: 1000, timeoutMs: 30000, maxOutputBytes: 8388608,
@@ -63,6 +73,24 @@ async function fixture(options: {
       repositories: [{ source, url: 'https://github.example/org/first.git', credentialTimeoutMs: 1000 },
         { source: secondSource, url: 'https://github.example/org/second.git', credentialTimeoutMs: 1000, pushCredentialCommand: '/usr/local/bin/scoped-push' }],
       initialGrants: [{ repository: 'https://github.example/org/first.git', access: 'fetch' }] }
+  }
+  const presetRoot = join(root, 'presets')
+  const hostModules = new Map<string, unknown>([
+    [new URL('../../../fs/fs-local/src/index.ts', import.meta.url).href, HostFs],
+    [new URL('../../../subprocess/subprocess-local/src/index.ts', import.meta.url).href, HostSubprocess],
+    [new URL('../../../shell/bash-local/src/index.ts', import.meta.url).href, HostShell],
+  ])
+  const [hostFs, hostSubprocess, hostShell] = [...hostModules.keys()]
+  if (options.maintenance === true) {
+    for (const id of ['maintenance', 'incomplete']) {
+      const directory = join(presetRoot, id); await mkdir(directory, { recursive: true })
+      await writeFile(join(directory, 'preset.yml'), `name: ${id}\ndescription: Private fixture preset.\n`)
+      await writeFile(join(directory, 'agent.cordis.yml'), JSON.stringify([{ name: 'cordis:group', group: true,
+        isolate: { fs: true, subprocess: true, shell: true }, config: [
+          { name: hostFs, config: { cwd: source } },
+          ...(id === 'maintenance' ? [{ name: hostSubprocess }, { name: hostShell }] : []),
+        ] }]))
+    }
   }
   let ctx = new Context()
   const worlds = new Map<object, string>()
@@ -104,11 +132,23 @@ async function fixture(options: {
     },
   }
   const boot = async () => {
+    if (options.maintenance === true) {
+      ctx.baseUrl = new URL('../../../../apps/raw/', import.meta.url).href
+      await ctx.plugin(Loader)
+      ctx.loader.builtins.include = Include
+      ctx.loader.builtins.group = Group
+      ctx.loader.internal = { version: 'v2', async import(specifier: string) {
+        const module = hostModules.get(specifier)
+        if (module === undefined) throw new Error(`unexpected fixture module ${specifier}`)
+        return module
+      } } as unknown as NonNullable<typeof ctx.loader.internal>
+    }
     ctx.provide('localContainerRuntime', runtime as unknown as LocalContainerRuntime)
     await ctx.plugin(SessionStore); await ctx.plugin(ProjectionRegistry)
     await ctx.plugin(Persistence, { root: join(root, 'sessions'), compression: 'none' })
     await ctx.plugin(LlmRuntime); await ctx.plugin(AgentRegistry); await ctx.plugin(SystemPrompt); await ctx.plugin(Tools)
     await ctx.plugin(UserQuestions)
+    if (options.maintenance === true) await ctx.plugin(AgentPresets, { default: 'maintenance', roots: [{ path: presetRoot, trust: 'user' }], includeShippedRoot: false, includeUserRoot: false })
     await ctx.plugin(LocalStorageWorkspaces, config); await ctx.plugin(AgentLoop, { agents: [] })
   }
   await boot()
@@ -136,6 +176,95 @@ async function fixture(options: {
 }
 
 describe.skipIf(process.platform === 'win32')('conversation workspace transaction lifecycle', () => {
+  it('admits only the configured host identity and preserves ordinary container settlement', async () => {
+    const f = await fixture({ maintenance: true })
+    const host = await f.ctx.agents.create({ sessionId: SessionId('maintenance-root'),
+      meta: { cwd: f.source, agentPreset: 'maintenance' }, agentOptions: { provider: 'mock', model: 'main' },
+      setup: async (ctx) => { await f.ctx.agentPresets.mount(ctx, 'maintenance') } })
+    try {
+      const fs = serviceForAgent(f.ctx, host.agent, 'fs')!
+      const shell = serviceForAgent(f.ctx, host.agent, 'shell')!
+      await writeFile(join(f.source, 'host-only.txt'), 'host fixture')
+      expect(await fs.readText(await fs.resolve('host-only.txt', { cwd: f.source }))).toBe('host fixture')
+      const result = await shell.run(shell.resolve({ command: 'cat host-only.txt', workdir: f.source }))
+      expect(result.exitCode).toBe(0)
+      expect(result.stdout.text).toBe('host fixture')
+      host.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Finish.' }], source: { kind: 'user' } }))
+      await host.agent.whenIdle()
+      expect(host.agent.session.snapshotEvents().some(event => event.type === 'workspace/state')).toBe(false)
+      expect(() => f.ctx.agents.withInitiator(host.agent, () => f.ctx.conversationWorkspaces.capture()))
+        .toThrow('host maintenance conversations do not have a container workspace')
+      await expect(f.ctx.conversationWorkspaces.requestRepository(host.agent, 'https://github.example/org/repo.git',
+        'fetch', 'Read a repository.', new AbortController().signal)).rejects.toThrow('host maintenance conversations')
+      expect((await f.turn())?.data).toMatchObject({ phase: 'returned' })
+      expect(f.executionFor(f.handle.agent)).toBe(f.execution)
+      const child = await f.ctx.agents.create({ sessionId: SessionId('maintenance-child'), parentAgent: host.agent,
+        meta: { cwd: f.source, agentPreset: 'maintenance' }, agentOptions: { provider: 'mock', model: 'main' },
+        setup: async (ctx) => { await f.ctx.agentPresets.mount(ctx, 'maintenance') } })
+      try { expect(child.agent.session.snapshotEvents().some(event => event.type === 'workspace/state')).toBe(false) }
+      finally { await child.dispose() }
+    } finally { await host.dispose() }
+  })
+
+  it('rejects unadmitted host providers and changed identity fields before a turn', async () => {
+    const f = await fixture({ maintenance: true })
+    const create = (id: string, cwd: string, preset: string) => f.ctx.agents.create({ sessionId: SessionId(id),
+      meta: { cwd, agentPreset: preset }, agentOptions: { provider: 'mock', model: 'main' },
+      setup: async (ctx) => { await f.ctx.agentPresets.mount(ctx, preset) } }).then(() => undefined)
+    await expect(create('not-admitted', f.source, 'maintenance')).rejects.toThrow('explicit host Session admission')
+    await expect(create('maintenance-root', f.root, 'maintenance')).rejects.toThrow('admitted preset and directory')
+    await expect(create('maintenance-root', f.source, 'incomplete')).rejects.toThrow('admitted preset and directory')
+  })
+
+  it('refuses an admitted identity without its isolated provider composition', async () => {
+    const f = await fixture({ maintenance: true })
+    await expect(f.ctx.agents.create({ sessionId: SessionId('maintenance-root'),
+      meta: { cwd: f.source, agentPreset: 'maintenance' }, agentOptions: { provider: 'mock', model: 'main' } }))
+      .rejects.toThrow('matching isolated host filesystem, subprocess and shell services')
+  })
+
+  it.each(['fs', 'subprocess', 'shell'] as const)('refuses a scoped %s provider from a different world', async (name) => {
+    const f = await fixture({ maintenance: true })
+    await expect(f.ctx.agents.create({ sessionId: SessionId('maintenance-root'),
+      meta: { cwd: f.source, agentPreset: 'maintenance' }, agentOptions: { provider: 'mock', model: 'main' },
+      setup: async (ctx) => {
+        await f.ctx.agentPresets.mount(ctx, 'maintenance')
+        const service = serviceForAgent(f.ctx, { ctx }, name)!
+        vi.spyOn(service, 'executionWorld', 'get').mockReturnValue({})
+      } }).then(() => undefined)).rejects.toThrow('matching isolated host filesystem, subprocess and shell services')
+  })
+
+  it('restores exact host admission after a fresh runtime without admitting an unrelated child', async () => {
+    const f = await fixture({ maintenance: true })
+    const host = await f.ctx.agents.create({ sessionId: SessionId('maintenance-root'),
+      meta: { cwd: f.source, agentPreset: 'maintenance' }, agentOptions: { provider: 'mock', model: 'main' },
+      setup: async (ctx) => { await f.ctx.agentPresets.mount(ctx, 'maintenance') } })
+    host.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Finish.' }], source: { kind: 'user' } }))
+    await host.agent.whenIdle()
+    await host.dispose()
+    const fresh = await f.restart()
+    const resumed = await fresh.agents.resume({ resumeSessionId: SessionId('maintenance-root'),
+      setup: async (ctx) => { await fresh.agentPresets.mount(ctx, 'maintenance') } })
+    expect(resumed.agent.session.snapshotEvents().some(event => event.type === 'workspace/state')).toBe(false)
+    await expect(fresh.agents.create({ sessionId: SessionId('unadmitted-child'), parentAgent: f.handle.agent,
+      meta: { cwd: f.source, agentPreset: 'maintenance' },
+      setup: async (ctx) => { await fresh.agentPresets.mount(ctx, 'maintenance') } })).rejects.toThrow('explicit host Session admission')
+    await resumed.dispose()
+  })
+
+  it('releases the environment lease after stopped-world checkpoint failure', async () => {
+    const f = await fixture({ environment: true })
+    const publish = broker.publishWorkspaceJson
+    vi.spyOn(broker, 'publishWorkspaceJson').mockImplementation(async (path, value, bound) => {
+      if (path.includes('/checkpoint-')) throw new Error('injected shutdown checkpoint failure')
+      await publish(path, value, bound)
+    })
+    await f.ctx.fiber.dispose()
+    const lease = await open(join(f.recovery, 'environments/test-environment/lease'), 'a+')
+    try { await expect(tryLockExclusive(lease.fd)).resolves.toBeUndefined() }
+    finally { await lease.close() }
+  })
+
   it('executes repository requests through the model-facing tool and removes them on plugin disposal', async () => {
     const args = { repository: 'https://github.example/org/second.git', access: 'fetch', reason: 'Inspect the second repository requested by the user.' }
     const f = await fixture({ environment: true, script: [toolCallResponse('repo-access', 'request_repo_access', args), textResponse('Attached.')] })

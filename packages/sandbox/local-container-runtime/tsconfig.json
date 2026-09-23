@@ -43,6 +43,18 @@
     },
     {
       "path": "../../core/tools"
+    },
+    {
+      "path": "../../preset/agent-presets"
+    },
+    {
+      "path": "../../fs/fs"
+    },
+    {
+      "path": "../../subprocess/subprocess"
+    },
+    {
+      "path": "../../shell/shell"
     }
   ]
 }

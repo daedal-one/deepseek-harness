@@ -12,6 +12,8 @@ The [CLI profile option](../../../../apps/cli/reference/README.md#host-maintenan
 
 The [conversation workspace decision](2026-09-20-conversation-git-workspace.md) remains the authority for container ownership, recovery, and Git return. Its isolation and data-transfer decisions remain active; this option supplies an independent host launch path and supersedes none of them. Agents request a handoff through existing user interaction. A new host session receives the task and committed work; an active container session never silently changes its filesystem namespace.
 
+The [operator-admitted host conversation](2026-09-23-admitted-host-conversations.md) decision adds an explicit mixed-Host path while retaining these launch-profile and handoff guarantees.
+
 ## Alternatives considered
 
 **Change the execution world with a permission selector.** Existing permission events record sandbox mode and approval policy. They do not transfer process ownership, durable workspace recovery, filesystem paths, or background jobs, so treating them as a container-to-host transition would misrepresent what is running.

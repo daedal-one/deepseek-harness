@@ -6,6 +6,11 @@ import { randomUUID } from 'node:crypto'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
+import Group from '@deepseek-ai/cordis-plugin-group'
+import AgentPresets, { serviceForAgent } from '@deepseek-ai/dsh-agent-presets'
+import * as HostFs from '@deepseek-ai/dsh-fs-local'
+import * as HostSubprocess from '@deepseek-ai/dsh-subprocess-local'
+import * as HostShell from '@deepseek-ai/dsh-bash-local'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
@@ -49,8 +54,21 @@ describe.skipIf(!enabled)('conversation workspace real Podman Loader flow', () =
     const ctx = new Context()
     let first: Awaited<ReturnType<typeof ctx.agents.create>> | undefined
     let second: Awaited<ReturnType<typeof ctx.agents.create>> | undefined
+    let maintenance: Awaited<ReturnType<typeof ctx.agents.create>> | undefined
+    const maintenanceId = SessionId(`maintenance-${randomUUID()}`)
+    const presetRoot = join(root, 'presets'); const presetPath = join(presetRoot, 'maintenance')
+    await mkdir(presetPath, { recursive: true })
+    const hostFs = new URL('../../../fs/fs-local/src/index.ts', import.meta.url).href
+    const hostSubprocess = new URL('../../../subprocess/subprocess-local/src/index.ts', import.meta.url).href
+    const hostShell = new URL('../../../shell/bash-local/src/index.ts', import.meta.url).href
+    await writeFile(join(presetPath, 'preset.yml'), 'name: Maintenance\ndescription: Explicit host probe.\n')
+    await writeFile(join(presetPath, 'agent.cordis.yml'), JSON.stringify([{ name: 'cordis:group', group: true,
+      isolate: { fs: true, subprocess: true, shell: true }, config: [
+        { name: hostFs, config: { cwd: source } }, { name: hostSubprocess }, { name: hostShell },
+      ] }]))
     try {
       const modules = new Map<string, unknown>([
+        [hostFs, HostFs], [hostSubprocess, HostSubprocess], [hostShell, HostShell], ['presets', AgentPresets],
         ['sessions', SessionStore], ['projections', SessionProjectionRegistry], ['persistence', Persistence], ['llm', LlmRuntime], ['agents', AgentRegistry],
         ['user-questions', UserQuestions], ['repo-access', RepoAccess], ['system-prompt', SystemPrompt], ['tools', Tools], ['loop', AgentLoop], ['container', Runtime], ['container-fs', ContainerFs], ['container-subprocess', ContainerSubprocess], ['workspaces', Workspaces], ['instructions', Instructions], ['fs-tools', FsTools],
       ])
@@ -61,19 +79,27 @@ describe.skipIf(!enabled)('conversation workspace real Podman Loader flow', () =
         { name: 'container', config: { network: environment ? 'outbound' : 'none', socketPath, manageService: false, serviceStartupTimeoutMs: 10000, image, user: 'dsh', environment: { HOME: '/home/dsh', LANG: 'C.UTF-8', PATH: '/usr/local/bin:/usr/bin:/bin' }, memoryBytes: 268435456, nanoCpus: 500000000, pidsLimit: 128, tmpfsBytes: 67108864, engineRequestTimeoutMs: 10000, maxLiveProcesses: 8, lifetimeMs: 300000, stopTimeoutSeconds: 2 } },
         { name: 'container-fs', config: { cwdAliases: [], maxFileBytes: 65536, diffBasisMaxBytes: 32768, maxControllerOutputBytes: 200000, operationTimeoutMs: 10000 } },
         { name: 'container-subprocess', config: { cwdAliases: [], controlOutputBytes: 4096, controlTimeoutMs: 10000 } },
-        { name: 'workspaces', config: { ...limits, ...(environment ? { environment: { id: 'e2e-environment', name: 'E2E environment', grantLifetimeMs: 3600000, repositories: [{ source, url: 'https://github.example/org/first.git', credentialTimeoutMs: 1000 }, { source: secondSource, url: 'https://github.example/org/second.git', credentialTimeoutMs: 1000 }], initialGrants: [{ repository: 'https://github.example/org/first.git', access: 'fetch' }] } } : {}), poolPaths, slotBytes: 67108864, slotInodes: 20000, recoveryRoot: join(root, 'recovery'), maxOutputBytes: 8388608, settleTimeoutMs: 10000, retryDelayMs: 1000, messageProvider: 'mock', messageModel: 'cheap', messageInputBytes: 4096, messageOutputTokens: 64, messageTimeoutMs: 10000 } },
+        { name: 'presets', config: { default: 'maintenance', roots: [{ path: presetRoot, trust: 'user' }], includeShippedRoot: false, includeUserRoot: false } },
+        { name: 'workspaces', config: { ...limits, hostSessions: [{ sessionId: maintenanceId, preset: 'maintenance', cwd: source }], ...(environment ? { environment: { id: 'e2e-environment', name: 'E2E environment', grantLifetimeMs: 3600000, repositories: [{ source, url: 'https://github.example/org/first.git', credentialTimeoutMs: 1000 }, { source: secondSource, url: 'https://github.example/org/second.git', credentialTimeoutMs: 1000 }], initialGrants: [{ repository: 'https://github.example/org/first.git', access: 'fetch' }] } } : {}), poolPaths, slotBytes: 67108864, slotInodes: 20000, recoveryRoot: join(root, 'recovery'), maxOutputBytes: 8388608, settleTimeoutMs: 10000, retryDelayMs: 1000, messageProvider: 'mock', messageModel: 'cheap', messageInputBytes: 4096, messageOutputTokens: 64, messageTimeoutMs: 10000 } },
         { name: 'instructions', config: { dshHome: '/workspace/.dsh', maxBytes: 4096 } },
         ...(environment ? [{ name: 'repo-access' }] : []),
         { name: 'fs-tools' }, { name: 'loop', config: { agents: [] } },
       ]
       const configPath = join(root, 'cordis.yml'); await writeFile(configPath, JSON.stringify(entries))
-      ctx.baseUrl = pathToFileURL(root).href + '/'; await ctx.plugin(Loader); ctx.loader.builtins.include = Include
+      ctx.baseUrl = pathToFileURL(root).href + '/'; await ctx.plugin(Loader); ctx.loader.builtins.include = Include; ctx.loader.builtins.group = Group
       ctx.loader.internal = { version: 'v2', async import(specifier: string) { const module = modules.get(specifier); if (module === undefined) throw new Error(`unexpected test module ${specifier}`); return module } } as unknown as NonNullable<typeof ctx.loader.internal>
       await ctx.loader.create({ name: 'cordis:include', config: { path: pathToFileURL(configPath).href } }); await ctx.loader.await()
       let approvals = 0
       ctx.on('user-questions/request', async ({ questions }) => { approvals++; return { answers: [{ id: questions[0]!.id, selected: ['Approve'] }] } })
       const adapter = new MockAdapter([...(environment ? [toolCallResponse('attach-repository', 'request_repo_access', { repository: 'https://github.example/org/second.git', access: 'fetch', reason: 'The user requested work across both repositories.' })] : []), toolCallResponse('workspace-write', 'write', { file_path: 'result.txt', content: 'agent result\n' }), textResponse('Done.'), textResponse('feat: add result'), textResponse('No further changes.'), textResponse('Background work remains active.'), textResponse('chore: retain background output'), 'hang'])
       ctx.llm.registerAdapter(['mock'], adapter)
+      maintenance = await ctx.agents.create({ sessionId: maintenanceId, meta: { cwd: source, agentPreset: 'maintenance' },
+        agentOptions: { provider: 'mock', model: 'main' }, setup: async (scope) => { await ctx.agentPresets.mount(scope, 'maintenance') } })
+      const hostFileSystem = serviceForAgent(ctx, maintenance.agent, 'fs')!
+      const hostExecutor = serviceForAgent(ctx, maintenance.agent, 'shell')!
+      expect(await hostFileSystem.readText(await hostFileSystem.resolve('ignored', { cwd: source }))).toBe('host secret\n')
+      expect((await hostExecutor.run(hostExecutor.resolve({ command: 'cat ignored', workdir: source }))).stdout.text).toBe('host secret\n')
+      expect(() => ctx.agents.withInitiator(maintenance!.agent, () => ctx.conversationWorkspaces.capture())).toThrow('host maintenance')
       const id = SessionId(`workspace-e2e-${randomUUID()}`)
       first = await ctx.agents.create({ sessionId: id, meta: { cwd: source }, agentOptions: { provider: 'mock', model: 'main' } })
       second = await ctx.agents.create({ sessionId: SessionId(`workspace-e2e-${randomUUID()}`), meta: { cwd: source }, agentOptions: { provider: 'mock', model: 'main' } })
@@ -156,7 +182,8 @@ describe.skipIf(!enabled)('conversation workspace real Podman Loader flow', () =
         .toMatchObject({ phase: 'checkpointed' })
       expect(await read(second.agent, 'unfinished.txt')).toBe('cancelled work')
     } finally {
-      await first?.dispose(); await second?.dispose(); await ctx.fiber.dispose()
+      await first?.dispose(); await maintenance?.dispose()
+      await second?.dispose(); await ctx.fiber.dispose()
       await rm(root, { recursive: true, force: true })
     }
   })

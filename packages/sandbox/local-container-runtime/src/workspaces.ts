@@ -8,6 +8,10 @@ import { isAbsolute, join, relative } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import { serviceForAgent } from '@deepseek-ai/dsh-agent-presets'
+import type {} from '@deepseek-ai/dsh-fs'
+import type {} from '@deepseek-ai/dsh-subprocess'
+import type {} from '@deepseek-ai/dsh-shell'
 import type {} from '@deepseek-ai/dsh-session-persistence'
 import type { Session, SessionId, TurnEndReason } from '@deepseek-ai/dsh-session'
 import { BlockAssembler, createUserMessage } from '@deepseek-ai/dsh-llm'
@@ -27,6 +31,8 @@ import type { WorkspaceEntry, WorkspaceLimits } from './workspace-git.ts'
 export interface ConversationWorkspaceConfig extends Omit<WorkspaceLimits, 'remotes'> {
   /** Independent environment authority and repository catalog; omitted retains the single-conversation lifecycle. */
   environment?: EnvironmentAccessConfig
+  /** Exact operator-admitted host conversations; each preset must supply isolated host filesystem, subprocess and shell services. */
+  hostSessions?: Array<{ sessionId: string; preset: string; cwd: string }>
   /** Individually mounted tmpfs roots, exclusively provisioned for this supervisor. */
   poolPaths: string[]
   /** Maximum capacity of each tmpfs mount; their sum bounds aggregate admission. */
@@ -145,6 +151,7 @@ export class ConversationWorkspaces extends Service {
           fetchCredentialCommand: z.string(), pushCredentialCommand: z.string() })).required(),
       }).default(undefined as never),
     }).default(undefined as never),
+    hostSessions: z.array(z.object({ sessionId: z.string().required(), preset: z.string().required(), cwd: z.string().required() })),
     poolPaths: z.array(z.string()).required(),
     slotBytes: z.natural().required(),
     slotInodes: z.natural().required(),
@@ -164,6 +171,7 @@ export class ConversationWorkspaces extends Service {
     messageTimeoutMs: z.natural().required(),
   })
   private readonly bindings = new WeakMap<Agent, Workspace>()
+  private readonly hostAgents = new WeakSet<Agent>()
   private readonly workspaces = new Set<Workspace>()
   private readonly config: ConversationWorkspaceConfig
   private environment: EnvironmentAccess | undefined
@@ -181,6 +189,7 @@ export class ConversationWorkspaces extends Service {
     ctx.on('agent/prepare', async ({ agent, origin: { parentAgent }, signal }) => {
       signal.throwIfAborted()
       if (this.shutdown !== undefined) throw new Error('workspace supervisor is shutting down')
+      if (this.admitHostAgent(agent, parentAgent)) return
       if (parentAgent !== undefined) {
         const workspace = this.forAgent(parentAgent)
         workspace.users.add(agent); this.bindings.set(agent, workspace)
@@ -202,6 +211,7 @@ export class ConversationWorkspaces extends Service {
         text: () => this.environment?.guidance() ?? '' })
     })
     ctx.on('agent/session-start', ({ agent }) => {
+      if (this.hostAgents.has(agent)) return
       const workspace = this.forAgent(agent)
       if (workspace.owner !== agent || workspace.resumeTurn === undefined) return
       const { turn, reason } = workspace.resumeTurn
@@ -209,6 +219,7 @@ export class ConversationWorkspaces extends Service {
       void workspace.recovery.catch((error: unknown) =>{  ctx.logger.error(error) })
     })
     ctx.on('agent/turn-starting', async ({ agent, signal }, next) => {
+      if (this.hostAgents.has(agent)) { await next(); return }
       const workspace = this.forAgent(agent)
       await workspace.recovery
       await workspace.settlement
@@ -217,10 +228,12 @@ export class ConversationWorkspaces extends Service {
       await next()
     })
     ctx.on('agent/turn-settled', async ({ agent, turn, reason }) => {
+      if (this.hostAgents.has(agent)) return
       const workspace = this.forAgent(agent)
       if (workspace.owner === agent) await this.settle(workspace, turn, reason)
     })
     ctx.on('agent/pre-step', async ({ agent }, next) => {
+      if (this.hostAgents.has(agent)) return await next()
       if (this.forAgent(agent).pending) throw new Error('workspace save is pending; resume after resolving the reported storage or writer error')
       return await next()
     })
@@ -281,7 +294,32 @@ export class ConversationWorkspaces extends Service {
     return agent === undefined ? this.ctx.localContainerRuntime.executionWorld : this.forAgent(agent).runtime.executionWorld
   }
 
+  private admitHostAgent(agent: Agent, parent: Agent | undefined): boolean {
+    const fs = serviceForAgent(this.ctx, agent, 'fs')
+    const subprocess = serviceForAgent(this.ctx, agent, 'subprocess')
+    const shell = serviceForAgent(this.ctx, agent, 'shell')
+    const admission = this.config.hostSessions?.find(entry => entry.sessionId === agent.id)
+    const inherited = parent !== undefined && this.hostAgents.has(parent)
+    if (admission === undefined && !inherited) {
+      if (fs !== undefined || subprocess !== undefined || shell !== undefined) {
+        throw new Error('conversation-scoped execution providers require explicit host Session admission')
+      }
+      return false
+    }
+    if (admission !== undefined && (agent.session.header.agentPreset !== admission.preset || agent.session.header.cwd !== admission.cwd)) {
+      throw new Error('host Session identity does not match its admitted preset and directory')
+    }
+    const hostWorld = Symbol.for('@deepseek-ai/dsh/host-execution-world')
+    if (fs?.executionWorld !== hostWorld || subprocess?.executionWorld !== hostWorld
+      || shell?.executionWorld !== hostWorld) {
+      throw new Error('host Session preset must provide matching isolated host filesystem, subprocess and shell services')
+    }
+    this.hostAgents.add(agent)
+    return true
+  }
+
   private forAgent(agent: Agent): Workspace {
+    if (this.hostAgents.has(agent)) throw new Error('host maintenance conversations do not have a container workspace')
     const workspace = this.bindings.get(agent)
     if (workspace === undefined) throw new Error('conversation workspace was not prepared for this agent')
     return workspace
@@ -595,8 +633,11 @@ export class ConversationWorkspaces extends Service {
     const preparing = await Promise.allSettled([...this.preparations])
     const results = await Promise.allSettled([...this.workspaces].map(workspace => this.release(workspace)))
     const failures = [...preparing, ...results].flatMap(result => result.status === 'rejected' ? [result.reason as unknown] : [])
+    if (this.workspaces.size === 0) {
+      await this.environmentLease?.close()
+      this.environmentLease = undefined
+    }
     if (failures.length > 0) throw new AggregateError(failures, 'workspace shutdown failed; retained storage requires recovery')
-    await this.environmentLease?.close()
   }
 
   private release(workspace: Workspace): Promise<void> {
@@ -849,13 +890,19 @@ function validateIdentity(name: unknown, email: unknown): void {
 function resolveConfig(config: ConversationWorkspaceConfig): ConversationWorkspaceConfig {
   if (config.environment !== undefined && !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/u.test(config.environment.id)) throw new Error('invalid environment identity')
   validateIdentity(config.authorName, config.authorEmail)
+  const hostSessions = config.hostSessions ?? []
+  if (new Set(hostSessions.map(entry => entry.sessionId)).size !== hostSessions.length
+    || hostSessions.some(entry => entry.sessionId.trim().length === 0
+      || !/^[a-z0-9][a-z0-9-]*$/u.test(entry.preset) || !isAbsolute(entry.cwd))) {
+    throw new Error('host Sessions require unique identities, preset ids and absolute directories')
+  }
   if (config.poolPaths.length === 0 || new Set(config.poolPaths).size !== config.poolPaths.length || !isAbsolute(config.gitCommand) || !isAbsolute(config.resourceLimitCommand)) throw new Error('workspace pool and Git executable must be explicit')
   for (const path of [config.recoveryRoot, ...config.poolPaths]) if (!isAbsolute(path) || path.includes(':')) throw new Error('workspace storage paths must be absolute')
   for (const path of config.poolPaths) if (config.recoveryRoot === path || config.recoveryRoot.startsWith(`${path}/`) || path.startsWith(`${config.recoveryRoot}/`)) throw new Error('recovery and execution storage must be separate')
   for (const [key, value] of Object.entries(config)) if (typeof value === 'number' && (!Number.isSafeInteger(value) || value <= 0 || value > 2_147_483_647)) throw new Error(`invalid workspace bound: ${key}`)
   if ((config.messageProvider === undefined) !== (config.messageModel === undefined)) throw new Error('workspace message provider and model must be paired')
   if (config.maxOutputBytes < config.maxBytes * 4 / 3 + config.maxEntries * 512) throw new Error('workspace response bound cannot hold the configured snapshot')
-  return { ...config, poolPaths: [...config.poolPaths] }
+  return { ...config, hostSessions: hostSessions.map(entry => ({ ...entry })), poolPaths: [...config.poolPaths] }
 }
 
 export default ConversationWorkspaces
