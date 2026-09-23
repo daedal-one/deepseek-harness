@@ -43,6 +43,12 @@
     },
     {
       "path": "../../core/tools"
+    },
+    {
+      "path": "../../interaction/commands"
+    },
+    {
+      "path": "../../util/home-paths"
     }
   ]
 }

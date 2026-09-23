@@ -85,13 +85,21 @@ Configure a non-secret Git `authorName` and `authorEmail` for ordinary agent com
 
 A new top-level conversation imports the selected repository's HEAD, tracked working-file edits, and non-ignored untracked files into `/workspace`. Local edits form a labelled baseline commit. The source files and index remain unchanged. Absolute source paths resolve to this conversation's imported files; tools, instructions, LSP, file references, and open-conversation file previews use that same repository. Point workspace instruction configuration and `DSH_HOME` to `/workspace/.dsh`; do not mount a separate host filesystem reader for instructions.
 
-Successful turns wait for child agents and writers, preserve granular agent commits, commit remaining changes, checkpoint, and return bounded validated bundles into `refs/heads/dsh/<workspace>/<branch-hash>/turn-<turn>`. These immutable result branches never replace the checked-out branch or publish remotely. A changed result ref is a reported conflict. Pending returns retry automatically without another coding turn or message call. The chat displays saving, returned, checkpointed, and pending outcomes separately from the model answer.
+Successful turns wait for child agents and writers, preserve granular agent commits, commit remaining changes, checkpoint, and return bounded validated bundles into `refs/heads/dsh/<topic>-<identity>/turn-<turn>`. These immutable result branches never replace the checked-out branch or publish remotely. Topics use recorded human conversation and the frozen change summary through the paired auxiliary model route. The first topic or deterministic fallback is persisted for each original branch; later turns and retries preserve it. The identity suffix hashes the full workspace identity and original ref. Equal tips retain their individual refs and appear as one expandable group per repository in Chat. A changed result ref is a reported conflict. Pending returns retry automatically without another coding turn or message call. The chat displays saving, returned, checkpointed, and pending outcomes separately from the model answer.
 
 Recovery retains the current and previous checkpoint generations, including ignored files, Git objects, refs, and index bytes. A SHA-256 digest verifies the selected generation. Shutdown stops owned writers before capture; an ordinary successful-turn timeout leaves writers running and reports pending. Resume preserves surviving RAM data, or restores the acknowledged checkpoint after RAM loss. Missing or corrupt recovery never silently imports a new source tree. A host crash can lose writes made after the last acknowledged checkpoint. Capacity failures retain the last checkpoint and unacknowledged RAM data.
 
 Set `DSH_PODMAN_EGRESS=1` to exercise outbound access and the environment repository tool in real-container tests. The opt-in `tests/workspaces.e2e.ts` additionally requires `DSH_WORKSPACE_POOL`, a JSON array of two exclusively reserved tmpfs directories. Its test composition uses the real Loader and rootless engine; only model responses are scripted. Local transaction tests do not establish engine isolation. The private-remote case in `tests/podman.e2e.ts` also takes `DSH_PRIVATE_REPO_URL`, `DSH_PRIVATE_REPO_SOURCE`, and `DSH_PRIVATE_REPO_FETCH_HELPER`; it verifies an authenticated read with an environment-issued credential and confirms that the controller has no credential environment.
 
-#### Repository remotes and outbound access
+#### Saved change lookup
+
+The workspace service stores immutable versioned receipts under `$DSH_HOME/provenance` by default; `provenanceRoot` selects another absolute host directory shared by all relevant profiles. Keep it outside sandbox execution roots. A receipt records its UUID, repository, source and returned refs, exact observed commits, owner conversation, event interval and turn. Automatic commits carry `DSH-Session` and `DSH-Provenance` trailers. Existing commits keep their hashes; the external receipts associate them with conversations without asserting authorship. Repeated observations can link one commit to several conversations.
+
+With the human command service mounted, `/changes` lists the current conversation's receipts, `/changes all` searches every receipt, and `/changes <text>` matches a conversation id, commit prefix, branch, topic or receipt UUID. `/changes export <text>` returns the same metadata as JSON; use `all` for an unfiltered export. Queries rebuild their view from authoritative receipt files, use configured byte, item and time bounds, and report truncation. Narrow a truncated query before exporting a complete selection. These commands make no model calls.
+
+Receipt lookup survives renamed or deleted branches and deleted transcripts. The event interval identifies evidence only while the corresponding conversation log is retained. Back up the provenance directory together with Session storage. Export contains host repository paths and identifiers, but no transcript text. Export does not publish remotely, synchronize Git notes or restore deleted conversations. The directory is an append-only metadata collection; large collections may require narrower queries or a larger lookup deadline. Pre-existing returns without receipts are not automatically backfilled.
+
+### Repository remotes and outbound access
 
 Set the runtime's `network: outbound` to allow network requests from ordinary shell, Git, and language-server processes. This grants outbound network effects without per-command review; it is not a GET-only or destination-filtered policy. The runtime uses rootless slirp4netns, publishes no ports, verifies a separate network namespace, and probes a real host-loopback listener before accepting the world. Internet access does not mount host files or enable host process execution.
 
@@ -198,6 +206,20 @@ Only a non-empty residual tree can cause this request. Configured input bytes, o
 #### KV Cache effect
 
 The request stays outside coding-agent history and does not modify its cached prefix.
+
+### Branch naming
+
+#### What the model sees
+
+The auxiliary model receives recorded human message texts with event sequence numbers, the newly observed source refs, and the frozen repository change summary. It returns a JSON map of refs to ASCII topics; code owns validation and destination refs. The exact request is logged before dispatch. Oversized input and invalid responses keep the persisted fallback.
+
+#### Token effect
+
+At most one bounded naming request is attempted for each batch of previously unnamed refs. The request uses `messageProvider`, `messageModel`, `messageInputBytes`, `messageOutputTokens` and `messageTimeoutMs`. Retries and ordinary later turns with the same refs add no naming calls. The main agent request gains no tokens.
+
+#### KV Cache effect
+
+Naming requests are independent of the coding conversation's request prefix.
 
 ### Environment repository access
 

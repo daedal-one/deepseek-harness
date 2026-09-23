@@ -404,6 +404,7 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   RepositoryAccess: 'sandbox.md',
   RepositoryRequestResult: 'sandbox.md',
   EnvironmentId: 'sandbox.md',
+  WorkspaceProvenance: 'sandbox.md',
   PodmanControllerExecRequest: 'sandbox.md',
   PodmanControllerExecResult: 'sandbox.md',
   LocalContainerProcessHandle: 'sandbox.md',

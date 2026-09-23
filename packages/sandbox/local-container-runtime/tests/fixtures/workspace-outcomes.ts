@@ -1,20 +1,21 @@
 /** Portable transcript fixture: scripted storage outcomes, real prompt assembly and lifecycle dispatch. */
+import { SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { installWorkspaceGuidance } from '../../src/workspace-guidance.ts'
-import type { ConversationWorkspaceId, WorkspaceState } from '../../src/workspace-types.ts'
+import type { ConversationWorkspaceId, WorkspaceState, WorkspaceProvenanceId } from '../../src/workspace-types.ts'
 import type { EnvironmentId } from '../../src/environment-types.ts'
 
 export const name = 'snapshot-workspace-outcomes'
 export const inject = ['agents', 'systemPrompt']
-export const Config = z.object({ environment: z.boolean().default(false) })
+export const Config = z.object({ environment: z.boolean().default(false), provenance: z.boolean().default(false) })
 
 /** Register deterministic storage receipts around a real completed coding turn.
  * @param ctx - shipped SDK profile scope.
  * @param config - whether to include independent environment and repository receipts.
  */
-export function apply(ctx: Context, config: { environment: boolean }): void {
+export function apply(ctx: Context, config: { environment: boolean; provenance: boolean }): void {
   ctx.on('agent/prepare', ({ agent }) => { installWorkspaceGuidance(agent) })
   ctx.on('agent/turn-settled', ({ agent, turn }) => {
     const state: WorkspaceState = { workspaceId: brandString<ConversationWorkspaceId>('a'.repeat(32)), turn,
@@ -25,10 +26,25 @@ export function apply(ctx: Context, config: { environment: boolean }): void {
       ] } : {} }
     agent.session.append('workspace/state', state)
     agent.session.append('workspace/state', { ...state, phase: 'pending', error: 'Result branch changed outside this conversation.' })
+    const branches = config.provenance ? {
+      'refs/heads/dsh/fix-recovery-111111111111111111111111/turn-1': 'd'.repeat(40),
+      'refs/heads/dsh/fix-recovery-222222222222222222222222/turn-1': 'd'.repeat(40),
+    } : { 'refs/heads/dsh/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/main/turn-1': 'd'.repeat(40) }
+    if (config.provenance) {
+      const end = agent.session.snapshotEvents().findLast(event => event.type === 'turn/end')!
+      agent.session.append('workspace/provenance', {
+        version: 1, id: brandString<WorkspaceProvenanceId>('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'),
+        workspaceId: state.workspaceId, sessionId: agent.session.id, turn,
+        eventRange: [SessionSeq(0), end.seq], repository: '/example/repository',
+        baseline: state.baseline, createdAt: '2026-09-23T12:00:00Z',
+        refs: Object.entries(branches).map(([branch, commit], index) => ({ source: index === 0 ? 'HEAD' : 'refs/heads/main', branch, commit, topic: 'fix-recovery' })),
+        observedCommits: ['d'.repeat(40), 'e'.repeat(40)], createdCommits: ['d'.repeat(40)],
+      })
+    }
     agent.session.append('workspace/state', { ...state, phase: 'returned', checkpoint: 2,
       ...state.repositories === undefined ? {} : {
         repositories: state.repositories.map(repository => ({ ...repository, lastTurn: turn })),
       },
-      branches: { 'refs/heads/dsh/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/main/turn-1': 'd'.repeat(40) } })
+      branches })
   })
 }

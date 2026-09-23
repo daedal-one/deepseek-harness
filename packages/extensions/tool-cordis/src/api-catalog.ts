@@ -805,6 +805,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Owns private workspace storage, live agent bindings, and automatic branch return.',
     methods: [
       {
+        signature: 'async lookupChanges(query: string, signal: AbortSignal): Promise<{ records: WorkspaceProvenance[]; truncated: boolean }>',
+        description: 'Search host-wide saved change metadata without invoking a model.',
+        parameters: [{ name: 'query', description: 'literal conversation, commit, branch, topic or receipt text; empty selects all.' }, { name: 'signal', description: 'caller cancellation.' }],
+        returns: 'bounded immutable receipts and an explicit truncation indicator.',
+      },
+      {
         signature: 'runForSession<T>(sessionId: SessionId, operation: () => T): T',
         description: 'Run a user-facing workspace operation with the selected live conversation.',
         parameters: [{ name: 'sessionId', description: 'selected conversation identity from the host request.' }, { name: 'operation', description: 'operation whose filesystem and process calls share that owner.' }],
@@ -4367,6 +4373,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ContinuableSubagentDescriptorData extends SubagentDescriptorBase {\n    readonly mode: \'continuable\';\n    readonly label: string;\n    readonly agentProvider?: string;\n    readonly agentModel?: string;\n    readonly agentReasoningEffort?: ReasoningEffortId;\n    readonly persona?: string;\n    readonly toolFilter?: ToolRestriction;\n}',
   },
   {
+    name: 'ConversationWorkspaceId',
+    declaration: 'export type ConversationWorkspaceId = Branded<\'ConversationWorkspaceId\'>;',
+  },
+  {
     name: 'CordisDynamicPackageId',
     declaration: 'export type CordisDynamicPackageId = Branded<\'CordisDynamicPackageId\'>;',
   },
@@ -4488,7 +4498,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'DeepSeekLlmApiExtensionRequest',
-    declaration: 'export interface DeepSeekLlmApiExtensionRequest {\n    readonly body: Readonly<Record<string, DeepSeekLlmApiJson>>;\n    readonly sessionId?: string;\n    readonly purpose?: \'compaction\' | \'session-title\' | \'workspace-commit\';\n    readonly signal: AbortSignal;\n}',
+    declaration: 'export interface DeepSeekLlmApiExtensionRequest {\n    readonly body: Readonly<Record<string, DeepSeekLlmApiJson>>;\n    readonly sessionId?: string;\n    readonly purpose?: \'compaction\' | \'session-title\' | \'workspace-commit\' | \'workspace-branch-name\';\n    readonly signal: AbortSignal;\n}',
   },
   {
     name: 'DeepSeekLlmApiJson',
@@ -4712,7 +4722,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'GenerateOptions',
-    declaration: 'export interface GenerateOptions {\n    provider: string;\n    model: string;\n    reasoningEffort?: ReasoningEffortId;\n    messages: Message[];\n    system?: string;\n    tools?: ToolSchema[];\n    temperature?: number;\n    maxTokens?: number;\n    stop?: string[];\n    signal?: AbortSignal;\n    sessionId?: Branded<\'SessionId\'>;\n    purpose?: \'compaction\' | \'session-title\' | \'workspace-commit\';\n}',
+    declaration: 'export interface GenerateOptions {\n    provider: string;\n    model: string;\n    reasoningEffort?: ReasoningEffortId;\n    messages: Message[];\n    system?: string;\n    tools?: ToolSchema[];\n    temperature?: number;\n    maxTokens?: number;\n    stop?: string[];\n    signal?: AbortSignal;\n    sessionId?: Branded<\'SessionId\'>;\n    purpose?: \'compaction\' | \'session-title\' | \'workspace-commit\' | \'workspace-branch-name\';\n}',
   },
   {
     name: 'GenericCallView',
@@ -7105,6 +7115,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'WorkspaceOrderValue',
     declaration: 'export interface WorkspaceOrderValue {\n    readonly workspaceIds: readonly WorkspaceId[];\n}',
+  },
+  {
+    name: 'WorkspaceProvenance',
+    declaration: 'export interface WorkspaceProvenance {\n    version: 1;\n    id: WorkspaceProvenanceId;\n    workspaceId: ConversationWorkspaceId;\n    sessionId: SessionId;\n    turn: number;\n    eventRange: [\n        SessionSeq,\n        SessionSeq\n    ];\n    repository: string;\n    baseline: string;\n    createdAt: string;\n    refs: Array<{\n        source: string;\n        branch: string;\n        commit: string;\n        topic: string;\n    }>;\n    observedCommits: string[];\n    createdCommits: string[];\n}',
+  },
+  {
+    name: 'WorkspaceProvenanceId',
+    declaration: 'export type WorkspaceProvenanceId = Branded<\'WorkspaceProvenanceId\'>;',
   },
   {
     name: 'WorkspaceRenameRequest',

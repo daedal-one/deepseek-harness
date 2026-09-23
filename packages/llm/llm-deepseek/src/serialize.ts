@@ -81,7 +81,7 @@ function reasoningEffort(effort: NonNullable<GenerateOptions['reasoningEffort']>
 
 /** Resolve one legal thinking/effort pair without exposing `off` as a wire effort. */
 function resolveThinking(options: GenerateOptions, defaults: RequestDefaults): ResolvedThinking {
-  if ((options.purpose === 'session-title' || options.purpose === 'workspace-commit')) return { thinking: 'disabled' }
+  if ((options.purpose === 'session-title' || options.purpose === 'workspace-commit' || options.purpose === 'workspace-branch-name')) return { thinking: 'disabled' }
   const effort = options.reasoningEffort === undefined
     ? defaults.reasoningEffort
     : reasoningEffort(options.reasoningEffort)
