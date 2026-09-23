@@ -76,6 +76,29 @@ describe('Menu', () => {
     expect(onSelect).toHaveBeenCalledWith('a')
   })
 
+  it('shows an item tooltip on hover and keyboard focus', () => {
+    vi.useFakeTimers()
+    try {
+      render(<Menu
+        open
+        anchor={<span>trigger</span>}
+        items={[{ id: 'a', label: 'Alpha', tooltip: 'Explains Alpha.' }]}
+        onSelect={() => {}}
+        onClose={() => {}}
+      />)
+      const item = screen.getByRole('menuitem', { name: 'Alpha' })
+      fireEvent.mouseEnter(item)
+      act(() => { vi.advanceTimersByTime(400) })
+      expect(screen.getByRole('tooltip').textContent).toBe('Explains Alpha.')
+      fireEvent.mouseLeave(item)
+      expect(screen.queryByRole('tooltip')).toBeNull()
+      fireEvent.focus(item)
+      expect(screen.getByRole('tooltip').textContent).toBe('Explains Alpha.')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('disabled item does not select; Escape and outside pointerdown close', () => {
     const onSelect = vi.fn()
     const onClose = vi.fn()

@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import { IconCheckOutline16 } from './icons/index.tsx'
 import { usePointerGrace } from './pointer-grace.ts'
+import { Tooltip } from './Tooltip.tsx'
 import css from './Menu.module.css'
 
 /** Selectable row (optionally with a nested submenu). */
@@ -15,6 +16,8 @@ export interface MenuItem {
   icon?: ReactNode
   /** Destructive row: error-colored text/icon and danger hover fill. */
   danger?: boolean
+  /** Explanatory tooltip shown on pointer hover or keyboard focus. */
+  tooltip?: string
   /** Nested card opened to the right on hover/focus. */
   submenu?: readonly MenuItem[]
 }
@@ -232,6 +235,29 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
     const hasSub = entry.submenu !== undefined && entry.submenu.length > 0
     const subOpen = hasSub && openSubmenuId === entry.id
     const selected = entry.id === selectedId || selectedIds?.includes(entry.id) === true
+    const button = (
+      <button
+        type="button"
+        role="menuitem"
+        className={clsx(css.item, selected && (selection === 'fill' ? css.selectedFill : css.selected), entry.danger === true && css.danger)}
+        disabled={entry.disabled}
+        aria-haspopup={hasSub ? 'menu' : undefined}
+        aria-expanded={hasSub ? subOpen : undefined}
+        onFocus={() => { setOpenSubmenuId(hasSub ? entry.id : null) }}
+        onClick={() => {
+          if (hasSub) {
+            setOpenSubmenuId(entry.id)
+            return
+          }
+          onSelect(entry.id)
+        }}
+      >
+        {entry.icon !== undefined && <span className={css.itemIcon}>{entry.icon}</span>}
+        <span className={css.itemLabel}>{entry.label}</span>
+        {/* Selection marker is a trailing check (figma .Menu_cell) unless the fill mode carries it. */}
+        {selected && selection === 'check' && <IconCheckOutline16 className={css.check} />}
+      </button>
+    )
     return (
       <div
         key={entry.id}
@@ -239,42 +265,29 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
         onMouseEnter={() => { setOpenSubmenuId(hasSub ? entry.id : null) }}
         onMouseLeave={() => { setOpenSubmenuId(null) }}
       >
-        <button
-          type="button"
-          role="menuitem"
-          className={clsx(css.item, selected && (selection === 'fill' ? css.selectedFill : css.selected), entry.danger === true && css.danger)}
-          disabled={entry.disabled}
-          aria-haspopup={hasSub ? 'menu' : undefined}
-          aria-expanded={hasSub ? subOpen : undefined}
-          onFocus={() => { setOpenSubmenuId(hasSub ? entry.id : null) }}
-          onClick={() => {
-            if (hasSub) {
-              setOpenSubmenuId(entry.id)
-              return
-            }
-            onSelect(entry.id)
-          }}
-        >
-          {entry.icon !== undefined && <span className={css.itemIcon}>{entry.icon}</span>}
-          <span className={css.itemLabel}>{entry.label}</span>
-          {/* Selection marker is a trailing check (figma .Menu_cell) unless the fill mode carries it. */}
-          {selected && selection === 'check' && <IconCheckOutline16 className={css.check} />}
-        </button>
+        {entry.tooltip === undefined
+          ? button
+          : <Tooltip label={entry.tooltip} side="right" delayMs={400} maxWidth={320}>{button}</Tooltip>}
         {subOpen && entry.submenu !== undefined && (
           <div className={clsx(css.submenu, compact && css.compactList)} role="menu">
-            {entry.submenu.map(sub => (
-              <button
-                key={sub.id}
-                type="button"
-                role="menuitem"
-                className={css.item}
-                disabled={sub.disabled}
-                onClick={() => { onSelect(sub.id) }}
-              >
-                {sub.icon !== undefined && <span className={css.itemIcon}>{sub.icon}</span>}
-                <span className={css.itemLabel}>{sub.label}</span>
-              </button>
-            ))}
+            {entry.submenu.map((sub) => {
+              const subButton = (
+                <button
+                  key={sub.id}
+                  type="button"
+                  role="menuitem"
+                  className={css.item}
+                  disabled={sub.disabled}
+                  onClick={() => { onSelect(sub.id) }}
+                >
+                  {sub.icon !== undefined && <span className={css.itemIcon}>{sub.icon}</span>}
+                  <span className={css.itemLabel}>{sub.label}</span>
+                </button>
+              )
+              return sub.tooltip === undefined
+                ? subButton
+                : <Tooltip key={sub.id} label={sub.tooltip} side="right" delayMs={400} maxWidth={320}>{subButton}</Tooltip>
+            })}
           </div>
         )}
       </div>

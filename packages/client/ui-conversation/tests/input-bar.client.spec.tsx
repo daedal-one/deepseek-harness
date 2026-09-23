@@ -1559,9 +1559,16 @@ describe('command launcher chrome and control seats', () => {
     expect(trigger.textContent).toBe('Read Only')
     expect([...trigger.querySelectorAll('svg')]
       .every(icon => icon.closest('[aria-hidden="true"]') !== null)).toBe(true)
+    fireEvent.focus(trigger)
+    expect(view.getByRole('tooltip').textContent)
+      .toBe('Inspect files and run commands without changing files. Actions that need write access ask for approval.')
+    fireEvent.blur(trigger)
     fireEvent.click(trigger)
     const items = view.getAllByRole('menuitem')
     expect(items.map(o => o.textContent)).toEqual(['Read Only', 'Workspace Write', 'Full access'])
+    fireEvent.focus(items[1]!)
+    expect(view.getByRole('tooltip').textContent)
+      .toBe('Read and edit files in the workspace. Actions outside the workspace or other sensitive operations ask for approval.')
     fireEvent.click(items[1]!)
     // Optimistic pick + disable until admission resolves (command stub resolves true).
     const busy = view.getByLabelText(/^Access mode/) as HTMLButtonElement
@@ -1576,7 +1583,7 @@ describe('command launcher chrome and control seats', () => {
     const permissions = {
       options: [
         { value: 'read-only', name: 'Review Only' },
-        { value: 'workspace-write', name: 'Project Files' },
+        { value: 'workspace-write', name: 'Project Files', description: 'May change project files selected by the host.' },
         { value: 'danger-full-access', name: 'Operator Mode' },
         { value: 'custom-mode', name: 'custom-mode' },
         { value: '__proto__', name: '__proto__' },
@@ -1586,6 +1593,9 @@ describe('command launcher chrome and control seats', () => {
     const { view } = bench({ permissions })
     const trigger = view.getByLabelText(/^Access mode/) as HTMLButtonElement
     expect(trigger.textContent).toBe('Project Files')
+    fireEvent.focus(trigger)
+    expect(view.getByRole('tooltip').textContent).toBe('May change project files selected by the host.')
+    fireEvent.blur(trigger)
     fireEvent.click(trigger)
     expect(view.getAllByRole('menuitem').map(item => item.textContent))
       .toEqual(['Review Only', 'Project Files', 'Operator Mode', 'Custom Mode', '__proto__'])

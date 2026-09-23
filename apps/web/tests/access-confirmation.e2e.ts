@@ -52,8 +52,16 @@ describe('web e2e: Full access confirmation', () => {
 
     expect(await access.getAttribute('aria-label')).toBe('Access mode, current: 工作区内修改')
 
+    await access.hover()
+    await expect.poll(() => page.getByRole('tooltip').textContent(), { timeout: 10_000 })
+      .toBe('Read and edit files in the workspace. Actions outside the workspace or other sensitive operations ask for approval.')
+
     await access.click()
-    await page.getByRole('menuitem', { name: 'Full access' }).click()
+    const fullAccess = page.getByRole('menuitem', { name: 'Full access' })
+    await fullAccess.hover()
+    await expect.poll(() => page.getByRole('tooltip').textContent(), { timeout: 10_000 })
+      .toBe('Access files and run commands without sandbox restrictions or routine approval. Use only for trusted tasks.')
+    await fullAccess.click()
     const dialog = page.getByRole('dialog', { name: 'Enable Full access?' })
     await dialog.waitFor({ timeout: 10_000 })
     const enable = dialog.getByRole('button', { name: 'Enable Full access' })
