@@ -170,6 +170,13 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 Owns private workspace storage, live agent bindings, and automatic branch return.
 
 ```ts cordis-catalog
+/** Search host-wide saved change metadata without invoking a model.
+ * @param query - literal conversation, commit, branch, topic or receipt text; empty selects all.
+ * @param signal - caller cancellation.
+ * @returns bounded immutable receipts and an explicit truncation indicator.
+ */
+async lookupChanges(query: string, signal: AbortSignal): Promise<{ records: WorkspaceProvenance[]; truncated: boolean }>
+
 /** Run a user-facing workspace operation with the selected live conversation.
  * @param sessionId - selected conversation identity from the host request.
  * @param operation - operation whose filesystem and process calls share that owner.
@@ -350,6 +357,6 @@ Source: [`packages/sandbox/local-container-runtime/src/index.ts`](../../packages
 
 The optional [runtime owner](../../packages/sandbox/local-container-runtime/README.md) supplies a verified process-owned workspace to matching filesystem and subprocess providers. `LocalContainerHandle` identifies the owner and canonical workspace; `PodmanControllerExecRequest` and `PodmanControllerExecResult` define bounded controller input, output, cancellation, and deadlines. `LocalContainerProcessRequest` supplies an explicit process, environment, cwd, and terminal dimensions, while `LocalContainerProcessHandle` owns its streams, exit observation, signalling, and removal. The [type declarations](../../packages/sandbox/local-container-runtime/src/types.ts) define these provider-facing values.
 
-The optional conversation-workspace service owns import, recovery, residual commits, and branch return. `ConversationWorkspaceId` identifies one private repository; `WorkspaceState` records its save phase, acknowledged checkpoint, baseline commit, and returned refs independently of `turn/end`. The [shared declarations](../../packages/sandbox/local-container-runtime/src/workspace-types.ts) define the durable receipt; the [configuration and lifecycle](../../packages/sandbox/local-container-runtime/README.md#conversation-repositories) define ownership and limits.
+The optional conversation-workspace service owns import, recovery, residual commits, and branch return. `ConversationWorkspaceId` identifies one private repository; `WorkspaceState` records its save phase, acknowledged checkpoint, baseline commit, and returned refs independently of `turn/end`. `WorkspaceProvenance` records a stable receipt identity, owner conversation and event range, original and returned refs, observed commits and the narrower set of Harness-created commits. The [shared declarations](../../packages/sandbox/local-container-runtime/src/workspace-types.ts) define these durable records; the [configuration and lifecycle](../../packages/sandbox/local-container-runtime/README.md#conversation-repositories) define ownership and limits.
 
 With environment configuration, independently stored session attachments select multi-repository workspace identities. `EnvironmentId` identifies the authority owner, `RepositoryGrant` records an approved repository capability and revision, and `RepositoryAccess` distinguishes fetch from push. `EnvironmentAccessConfig` supplies the operator's requestable catalog and initial grants. Their [declarations](../../packages/sandbox/local-container-runtime/src/environment-types.ts) and [repository access semantics](../../packages/sandbox/local-container-runtime/README.md#repository-remotes-and-outbound-access) define the approval, expiry, and credential limits. `WorkspaceState.repositories` reports independent repository return outcomes.

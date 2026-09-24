@@ -326,11 +326,11 @@ describe('serializeRequest', () => {
     )).toThrow(expect.objectContaining({ code: 'UNSUPPORTED_REASONING_EFFORT' }))
   })
 
-  it('disables thinking for session-title requests without changing adapter defaults', () => {
+  it.each(['session-title', 'workspace-commit', 'workspace-branch-name'] as const)('disables thinking for %s requests without changing adapter defaults', (purpose) => {
     const wire = serializeRequest(
       request({
         messages: history,
-        purpose: 'session-title',
+        purpose,
         reasoningEffort: ReasoningEffortId('max'),
       }),
       { thinking: 'enabled', reasoningEffort: 'max' },

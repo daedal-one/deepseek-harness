@@ -1115,7 +1115,7 @@ for line in sys.stdin:
     assert result.events[-1]["data"]["checkpoint"] == 2
 
 
-@pytest.mark.parametrize("scenario", ["workspace-outcomes", "environment-workspace-outcomes"])
+@pytest.mark.parametrize("scenario", ["workspace-outcomes", "environment-workspace-outcomes", "workspace-provenance"])
 def test_recorded_workspace_outcomes_match_the_typescript_sdk(tmp_path: Path, scenario: str) -> None:
     fixture = Path(__file__).resolve().parents[3] / f"snapshots/sdk/{scenario}/notifications.expected.jsonl"
     script = tmp_path / "recorded_workspace_runtime.py"
@@ -1153,3 +1153,14 @@ for line in sys.stdin:
     ]
     assert actual == expected
     assert [event["phase"] for event in actual] == ["saving", "pending", "returned"]
+    if scenario == "workspace-provenance":
+        provenance = [event["data"] for event in result.events if event["type"] == "workspace/provenance"]
+        expected_provenance = [
+            frame["params"]["event"]["data"]
+            for frame in (json.loads(line.replace("{{sessionId}}", "main")) for line in fixture.read_text().splitlines())
+            if frame["method"] == "session.event" and frame["params"]["event"]["type"] == "workspace/provenance"
+        ]
+        assert provenance == expected_provenance
+        assert len(provenance) == 1
+        assert len(provenance[0]["refs"]) == 2
+        assert provenance[0]["createdCommits"] == ["d" * 40]
