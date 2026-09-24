@@ -578,3 +578,13 @@
       config:
         validator: daedal-review-verdict
         kind: review-verdict
+
+# Configure a separate host Web profile to enable confirmed maintenance handoffs.
+- insert:
+    - id: daedal-handoff
+      name: '@deepseek-ai/dsh-daedal-handoff'
+      config:
+        destinationUrl: !!js process.env.DSH_HANDOFF_URL
+        token: !!js process.env.DSH_HANDOFF_TOKEN
+        timeoutMs: 15000
+        maxBytes: 65536

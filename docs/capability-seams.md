@@ -7,6 +7,8 @@ A service can be a core spine service, a swappable capability seam, or a bundle/
 
 ```mermaid
 flowchart LR
+  pkg_daedal_handoff["daedal-handoff"]
+  svc_daedalHandoff["ctx.daedalHandoff<br/>Confirmed Daedal host handoff"]
   pkg_local_container_runtime["local-container-runtime"]
   svc_conversationWorkspaces["ctx.conversationWorkspaces<br/>Conversation Git workspace lifecycle"]
   pkg_fs_local_container["fs-local-container"]
@@ -278,6 +280,7 @@ flowchart LR
   pkg_cordis_host_runner --> svc_dynamicCordisRunner
   pkg_credentials --> svc_credentials
   pkg_credentials_local --> svc_credentials
+  pkg_daedal_handoff --> svc_daedalHandoff
   pkg_deepseek_llm_api_extensions --> svc_deepseekLlmApiExtensions
   pkg_e2b --> svc_e2b
   pkg_experimental_agent_team --> svc_agentTeams
@@ -403,6 +406,7 @@ flowchart LR
   svc_credentials --> pkg_api_settings_controller
   svc_credentials --> pkg_llm_deepseek
   svc_credentials --> pkg_llm_pi_ai
+  svc_daedalHandoff --> pkg_daedal_handoff
   svc_deepseekLlmApiExtensions --> pkg_llm_deepseek
   svc_directoryPicker --> pkg_api_workspace_controller
   svc_dynamicCordisRunner --> pkg_tool_cordis
@@ -516,6 +520,7 @@ flowchart LR
 
 | ctx key | Role | Owner | Implementations | Direct consumers | Companion plugins | Note |
 | --- | --- | --- | --- | --- | --- | --- |
+| `ctx.daedalHandoff` | `core` | [`daedal-handoff`](../packages/integration/daedal-handoff) | - | [`daedal-handoff`](../packages/integration/daedal-handoff) | - | A Daedal-only tool reviews the task and fixed destination with the human before dispatch to a separate host profile. |
 | `ctx.conversationWorkspaces` | `core` | [`local-container-runtime`](../packages/sandbox/local-container-runtime) | - | [`fs-local-container`](../packages/fs/fs-local-container), [`subprocess-local-container`](../packages/subprocess/subprocess-local-container), `workspace-files`, [`file-reference-local`](../packages/context/file-reference-local) | - | Opt-in ownership, recovery, and automatic branch return for conversation repositories. |
 | `ctx.localContainerRuntime` | `core` | [`local-container-runtime`](../packages/sandbox/local-container-runtime) | - | [`fs-local-container`](../packages/fs/fs-local-container), [`subprocess-local-container`](../packages/subprocess/subprocess-local-container) | - | Owns one verified rootless container world and removable process ranges shared by the filesystem and subprocess providers. |
 | `ctx.attachments` | `seam` | [`attachment`](../packages/attachment/attachment) | [`attachment-local`](../packages/attachment/attachment-local) | [`api-session-controller`](../packages/api/session-controller), [`tool-fs`](../packages/fs/tool-fs), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-deepseek`](../packages/llm/llm-deepseek) | - | The host commits accepted images before session events; provider adapters resolve authorized durable references into provider-native content. |

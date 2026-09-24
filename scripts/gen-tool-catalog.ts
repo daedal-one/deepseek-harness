@@ -39,6 +39,7 @@ import * as ToolSubagentListAgents from '@deepseek-ai/dsh-tool-subagent-control/
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import * as SkillFileSystem from '@deepseek-ai/dsh-skill-filesystem'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
+import * as DaedalHandoffTool from '@deepseek-ai/dsh-daedal-handoff/tool'
 import * as ToolAskUser from '@deepseek-ai/dsh-tool-ask-user'
 import * as ToolBash from '@deepseek-ai/dsh-tool-bash'
 import * as ToolPwsh from '@deepseek-ai/dsh-tool-pwsh'
@@ -198,6 +199,19 @@ export interface ToolPackage {
  * guard proves it is exhaustive against the on-disk glob.
  */
 const TOOL_PACKAGES: ToolPackage[] = [
+  {
+    pkg: '@deepseek-ai/dsh-daedal-handoff',
+    dir: 'daedal-handoff',
+    source: 'packages/integration/daedal-handoff/src/tool.ts',
+    requires: ['ctx.tools', 'ctx.systemPrompt', 'ctx.fs', 'ctx.subprocess', 'ctx.daedalHandoff (execution time)'],
+    writes: ['tool/call', 'tool/result after user confirmation or refusal'],
+    async mount(ctx) {
+      await ctx.plugin(LocalFileSystem)
+      await ctx.plugin(LocalSubprocessRuntime)
+      await ctx.plugin(DaedalHandoffTool)
+    },
+    note: 'Mounted only by the Daedal and Daedal OpenAI presets. The default service does not publish this tool globally.',
+  },
   {
     pkg: '@deepseek-ai/dsh-tool-ask-user',
     dir: 'tool-ask-user',
