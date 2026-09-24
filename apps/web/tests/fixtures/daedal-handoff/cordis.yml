@@ -1,0 +1,13 @@
+- id: agent-default-model
+  config:
+    provider: handoff-fixture
+    model: handoff-fixture
+- insert:
+    - id: daedal-handoff-receiver
+      name: '@deepseek-ai/dsh-daedal-handoff/receiver'
+      config:
+        name: Host fixture
+        cwd: !!js process.cwd()
+        token: composition-only-handoff-token-0123456789
+        maxBytes: 8192
+        timeoutMs: 15000

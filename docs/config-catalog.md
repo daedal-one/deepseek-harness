@@ -564,6 +564,28 @@ export interface Config {
 
 Source: [`packages/credentials/credentials-local/src/index.ts:64`](../packages/credentials/credentials-local/src/index.ts)
 
+<a id="deepseek-aidsh-daedal-handoff"></a>
+
+## `@deepseek-ai/dsh-daedal-handoff`
+
+Requires: `agents` · `sessionProjections` · `userQuestions` · `fs` · `subprocess`
+
+```ts config-catalog
+/** Deployment-owned destination; omitted leaves handoff unavailable. */
+export interface Config {
+  /** Separate host profile's HTTP origin, HTTPS except for loopback. */
+  destinationUrl?: string
+  /** Dedicated receiver token, supplied from host credentials, never model arguments. */
+  token?: string
+  /** Deadline for each destination request, excluding human review time. */
+  timeoutMs: number
+  /** Complete request and response byte ceiling. */
+  maxBytes: number
+}
+```
+
+Source: [`packages/integration/daedal-handoff/src/index.ts:17`](../packages/integration/daedal-handoff/src/index.ts)
+
 <a id="deepseek-aidsh-e2b"></a>
 
 ## `@deepseek-ai/dsh-e2b`

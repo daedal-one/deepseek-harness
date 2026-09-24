@@ -47,6 +47,7 @@
     "@deepseek-ai/dsh-compaction-basic": "workspace:^",
     "@deepseek-ai/dsh-compaction-tool-result-pruner": "workspace:^",
     "@deepseek-ai/dsh-cordis-client-runner": "workspace:^",
+    "@deepseek-ai/dsh-daedal-handoff": "workspace:^",
     "@deepseek-ai/dsh-english-output-guard": "workspace:^",
     "@deepseek-ai/dsh-forge-project-workspaces": "workspace:^",
     "@deepseek-ai/dsh-forge-session-adapter": "workspace:^",

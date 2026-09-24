@@ -1,0 +1,8 @@
+version: 1
+scenario: daedal-host-handoff
+profile: headless
+composition: daedal-host-handoff
+recording: authored
+header:
+  class: daedal-host-handoff
+  pin: true

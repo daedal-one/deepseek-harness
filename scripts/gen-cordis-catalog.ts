@@ -63,6 +63,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   settingsController: 'settings.md',
   authorizationController: 'settings.md',
   directoryPicker: 'workspace.md',
+  daedalHandoff: 'session.md',
   deepseekLlmApiExtensions: 'llm-streaming.md',
   dynamicCordisRunner: 'extensions.md',
   e2b: 'subprocess.md',
@@ -243,6 +244,8 @@ export const EVENT_WALK_EXEMPTIONS: Record<string, string> = {
  * appear on more than one page.
  */
 export const LINK_MAP: Readonly<Record<string, string>> = {
+  HandoffResult: 'session.md',
+  ToolCallId: 'llm-streaming.md',
   Agent: 'core.md',
   AgentCancelCause: 'core.md',
   AgentFactory: 'core.md',
