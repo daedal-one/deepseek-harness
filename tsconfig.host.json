@@ -19,6 +19,7 @@
     "packages/client/connection/src/client/host-discovery.ts"
   ],
   "include": [
+    "apps/web/tests/daedal-handoff.e2e.ts",
     "apps/web/tests/workspace-outcomes.e2e.ts",
     "apps/web/tests/poor-connection.e2e.ts",
     "apps/web/tests/client-plugin-load-recovery.e2e.ts",
@@ -378,6 +379,7 @@
     { "path": "./packages/mcp/mcp-client" },
     { "path": "./packages/integration/forge-session-adapter" },
     { "path": "./packages/integration/forge-project-workspaces" },
+    { "path": "./packages/integration/daedal-handoff" },
     { "path": "./packages/host/directory-picker" },
     { "path": "./packages/host/directory-picker-auto" },
     { "path": "./packages/host/directory-picker-browse" },

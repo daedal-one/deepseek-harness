@@ -927,6 +927,19 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'daedalHandoff',
+    summary: 'Configured transport with a human decision before every task dispatch.',
+    description: 'Configured transport with a human decision before every task dispatch.',
+    methods: [
+      {
+        signature: 'handoff(agent: Agent, callId: ToolCallId, task: { title: string; task: string }, signal: AbortSignal): Promise<HandoffResult>',
+        description: 'Review one complete task and dispatch only an exact human approval.',
+        parameters: [{ name: 'agent', description: 'exact live root Agent in a Daedal preset.' }, { name: 'callId', description: 'current tool call identity, used for duplicate delivery protection.' }, { name: 'task', description: 'title and complete summary including committed work and remaining steps.' }, { name: 'signal', description: 'source operation cancellation; cancellation after dispatch can leave acceptance unknown.' }],
+        returns: 'explicit rejection, unavailability, successful receipt, or uncertain acceptance with a destination id.',
+      },
+    ],
+  },
+  {
     key: 'deepseekLlmApiExtensions',
     summary: 'Registry of independently owned top-level fields for official DeepSeek requests.',
     description: 'Registry of independently owned top-level fields for official DeepSeek requests.',
@@ -4765,6 +4778,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'GrantRecord',
     declaration: 'export interface GrantRecord {\n    readonly kind: \'grant\';\n    readonly payload: unknown;\n}',
+  },
+  {
+    name: 'HandoffResult',
+    declaration: 'export interface HandoffResult {\n    status: \'unavailable\' | \'declined\' | \'started\' | \'unknown\';\n    message: string;\n    sessionId?: SessionId;\n    destination?: string;\n    destinationUrl?: string;\n}',
   },
   {
     name: 'ImageAttachmentLimits',

@@ -45,6 +45,10 @@
 
       Firecrawl and crawler are unavailable when FIRECRAWL_API_KEY is unset. Browser, crawler, debugger, and memory actions remain subject to their exact role and approval policies.
 
+- id: daedal-handoff-tool
+  name: '@deepseek-ai/dsh-daedal-handoff/tool'
+  description: Explains the execution environment and requests a human-confirmed handoff for host maintenance.
+
 - id: agent-instructions
   name: '@deepseek-ai/dsh-agent-instructions'
   description: Loads repository instructions so the agent follows the project’s conventions and constraints.

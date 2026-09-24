@@ -99,6 +99,14 @@ const GROUP_ORDER = [
 
 const SERVICE_ROLES: ServiceRole[] = [
   {
+    key: 'daedalHandoff',
+    pkg: 'daedal-handoff',
+    title: 'Confirmed Daedal host handoff',
+    mode: 'core',
+    consumers: ['daedal-handoff'],
+    note: 'A Daedal-only tool reviews the task and fixed destination with the human before dispatch to a separate host profile.',
+  },
+  {
     key: 'conversationWorkspaces',
     pkg: 'local-container-runtime',
     title: 'Conversation Git workspace lifecycle',

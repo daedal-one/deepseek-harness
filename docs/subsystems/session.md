@@ -680,6 +680,10 @@ The backends that consume this contract are on [persistence.md](persistence.md).
 
 `SessionOpenWorkspacePathRequest` carries an absolute or workspace-resolved `path`; optional `action: "reveal"` selects file-manager navigation instead of default-application opening. `SessionOpenWorkspacePathValue` confirms that the Host accepted the native handoff. A Session-aware Client resolves relative paths against its current Session cwd when known; the controller hands the path to the opener unchanged and reports invalid requests, cancellation, and opener failures through the Session Remote error vocabulary.
 
+## Daedal host handoff
+
+The [Daedal handoff integration](../../packages/integration/daedal-handoff/README.md) transfers an explicitly confirmed task into a separately launched host profile. Its `HandoffResult` reports `unavailable`, `declined`, `started`, or `unknown`, a human-readable message, and optional destination name, origin, and branded Session id. `unknown` preserves the deterministic destination id when acknowledgement fails so the user can inspect possible acceptance before another attempt. Only the Daedal presets expose the action; the source retains its execution environment.
+
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
 <a id="cordis-surface"></a>
@@ -687,6 +691,28 @@ The backends that consume this contract are on [persistence.md](persistence.md).
 ## Cordis API
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
+
+<a id="ctxdaedalhandoff--daedalhandoff"></a>
+
+### `ctx.daedalHandoff` — `DaedalHandoff`
+
+Configured transport with a human decision before every task dispatch.
+
+```ts cordis-catalog
+/**
+ * Review one complete task and dispatch only an exact human approval.
+ * @param agent - exact live root Agent in a Daedal preset.
+ * @param callId - current tool call identity, used for duplicate delivery protection.
+ * @param task - title and complete summary including committed work and remaining steps.
+ * @param signal - source operation cancellation; cancellation after dispatch can leave acceptance unknown.
+ * @returns explicit rejection, unavailability, successful receipt, or uncertain acceptance with a destination id.
+ */
+handoff(agent: Agent, callId: ToolCallId, task: { title: string; task: string }, signal: AbortSignal): Promise<HandoffResult>
+```
+
+Types: [Agent](core.md) · [ToolCallId](llm-streaming.md)
+
+Source: [`packages/integration/daedal-handoff/src/index.ts`](../../packages/integration/daedal-handoff/src/index.ts)
 
 <a id="ctxsessioncontroller--sessioncontroller"></a>
 
