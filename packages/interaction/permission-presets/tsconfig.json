@@ -43,6 +43,21 @@
     },
     {
       "path": "../commands"
+    },
+    {
+      "path": "../../core/agent"
+    },
+    {
+      "path": "../../preset/agent-presets"
+    },
+    {
+      "path": "../../fs/fs"
+    },
+    {
+      "path": "../../subprocess/subprocess"
+    },
+    {
+      "path": "../../sandbox/local-container-runtime"
     }
   ]
 }

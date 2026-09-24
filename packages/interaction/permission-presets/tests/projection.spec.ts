@@ -64,7 +64,8 @@ describe('permissions projection unit', () => {
     expect(permissionChanges).toHaveLength(3)
     expect(permissionChanges.at(-1)).toMatchObject({ key: 'permissions', value: { currentValue: 'danger-full-access' } })
     session.append('turn/start', { turn: 1 })
-    expect(changes).toHaveLength(3)
+    expect(changes).toHaveLength(4)
+    expect(changes.at(-1)).toMatchObject({ value: { canChange: false } })
   })
 
   it('appends custom as a current-only option when the knobs match no preset', async () => {

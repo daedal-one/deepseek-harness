@@ -116,10 +116,11 @@ export function apply(ctx: ClientContext): void {
 
   ctx.effect(() => command.decorate({
     name: 'permission',
-    // The picker exists exactly while the projection does: a permission-less
-    // host serves no key and the bare invocation falls through to the host
-    // command (which is absent too — the line simply misses).
-    available: session => selectOf(sessionFor(session)) !== undefined,
+    // Started sessions keep the host command for inspection but cannot open a picker.
+    available: (session) => {
+      const value = selectOf(sessionFor(session))
+      return value !== undefined && value.canChange !== false
+    },
     ui: {
       kind: 'popupSelect',
       options: (session) => {

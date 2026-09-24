@@ -51,7 +51,9 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### Switching presets
 
-Switching to a preset changes only the knobs whose effective value differs; selecting the preset already in effect changes nothing. The current value resolves as the still-matching last recorded selection, else the first matching table entry, else `custom`. Users switch through the `/permission` command: a bare invocation reports the current preset and the available table, and a preset argument switches to it.
+Before the first model turn, switching to a preset changes only the knobs whose effective value differs; selecting the preset already in effect changes nothing. The current value resolves as the still-matching last recorded selection, else the first matching table entry, else `custom`. Users switch through the `/permission` command: a bare invocation reports the current preset and the available table, and a preset argument switches to it.
+
+After the first `turn/start`, the selector and `/permission` reject a different preset. Start a new session to choose another policy; selecting the current value remains a no-op. Permission changes never replace filesystem or process providers.
 
 ### What users see
 
@@ -59,7 +61,9 @@ Clients render the select with every switchable preset in table order, plus `cus
 
 ### Session defaults
 
-The `permission` settings namespace holds `defaultPreset` for future sessions: session creation reads it, applies it to the sandbox mode and approval policy, and records the applied preset as a `permission/preset` selection. Later settings changes never alter an existing session. A resumed seed, including an explicitly empty one marked by `session/end-seed`, preserves its effective permission and receives only missing durable facts rather than the latest user default.
+A conversation profile’s `access.yml` default takes precedence over the `permission` settings namespace’s `defaultPreset`. Session preparation reads the chosen default, applies it to the sandbox mode and approval policy, and records the applied preset as a `permission/preset` selection. Later settings changes never alter an existing session. A resumed seed, including an explicitly empty one marked by `session/end-seed`, preserves its effective permission and receives only missing durable facts rather than the latest user default.
+
+The log-only `permission/context` event captures the default and observed execution environment. The service compares the effective filesystem and subprocess providers: shared host identity means host, a verified local-container identity means container, and other shared identities remain external. Missing or mixed identities remain unknown. Resuming a started session with a different known environment fails; a policy selector cannot migrate its workspace or processes.
 
 -----
 
@@ -85,7 +89,7 @@ The observable behavior is covered in [Use this package](#use-this-package); thi
 
 ### Read side and `custom`
 
-`current(session)` reads the `permissions` projection, whose unit folds the three whole-value knob events over the composition defaults (`ctx.shell.sandboxMode` and the approval config). The host state also retains whether `session/end-seed` has occurred, so session pinning distinguishes an explicitly empty restored seed from a genuinely fresh session without rescanning the log. A still-matching last selection wins shared-bundle ties; otherwise the first table match wins; otherwise the derived `CUSTOM_PRESET` is returned. A missing registry or projection key fails explicitly.
+`current(session)` reads the `permissions` projection, whose unit folds the knob events, captured context, and first-turn marker over the composition defaults (`ctx.shell.sandboxMode` and the approval config). The host state also retains whether `session/end-seed` has occurred, so session pinning distinguishes an explicitly empty restored seed from a genuinely fresh session without rescanning the log. A still-matching last selection wins shared-bundle ties; otherwise the first table match wins; otherwise the derived `CUSTOM_PRESET` is returned. A missing registry or projection key fails explicitly.
 
 ### Session pinning and blank reuse
 
@@ -114,7 +118,7 @@ Read these pages when the package-level contract is not enough. They move from t
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through `dsh-user-approval` and `dsh-tool-bash`, which render the approval-policy prompt, switch notice, and sandboxed tool outcomes selected by this service's knob events; `permission/preset` itself is log-only.
+Indirectly, through `dsh-user-approval` and `dsh-tool-bash`, which render the approval-policy prompt, switch notice, and sandboxed tool outcomes selected by this service's knob events; `permission/preset` and `permission/context` are log-only.
 
 #### KV Cache effect
 
@@ -127,7 +131,7 @@ No direct invalidation; the named consumer owns any request-prefix changes.
 
 These limits define what the preset service does not offer. They are current package constraints, not a permission-system comparison.
 
-- **Only two mechanism knobs are bundled** — presets select sandbox mode and approval policy; an agent/profile choice is not part of `PresetSpec` yet.
+- **Only two mechanism knobs are bundled** — presets select sandbox mode and approval policy; profiles reference server-owned table entries; policies cannot change execution placement.
 - **`custom` is derived-only** — callers can switch away from an unmatched knob combination but cannot target or persist a named custom preset through this service.
 - **The preset table is process-level** — configuration is fixed for the plugin lifetime; changing available presets requires reloading the plugin.
 - **Stored defaults must remain in the preset table** — removing the referenced preset makes Permission settings registration fail until the `permission` section in `settings.yaml` is updated or reset.

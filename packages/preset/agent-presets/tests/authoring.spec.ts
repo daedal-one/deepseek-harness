@@ -87,7 +87,7 @@ describe('copying a preset', () => {
 
   it('copies the whole directory and tightens POSIX modes', async () => {
     await seedPreset(userRoot, 'source', {
-      extras: { 'skills/demo/SKILL.md': '# demo\n', 'skills/demo/run.sh': '#!/bin/sh\n' },
+      extras: { 'skills/demo/SKILL.md': '# demo\n', 'skills/demo/run.sh': '#!/bin/sh\n', 'access.yml': 'permissionPreset: read-only\n' },
     })
     if (process.platform !== 'win32') {
       await chmod(join(userRoot, 'source', 'skills', 'demo', 'run.sh'), 0o755)
@@ -96,6 +96,7 @@ describe('copying a preset', () => {
     await ctx.agentPresets.copy('source', 'mine')
 
     expect(await readFile(join(userRoot, 'mine', 'skills', 'demo', 'SKILL.md'), 'utf8')).toBe('# demo\n')
+    expect((await ctx.agentPresets.list()).find(preset => preset.id === 'mine')?.permissionPreset).toBe('read-only')
     // Windows mode bits are synthetic and cannot represent the inherited DACL.
     if (process.platform !== 'win32') {
       expect((await stat(join(userRoot, 'mine', 'skills', 'demo', 'run.sh'))).mode & 0o777).toBe(0o700)

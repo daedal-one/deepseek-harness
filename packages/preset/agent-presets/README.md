@@ -33,6 +33,16 @@ A session composed from a preset runs the plugins that preset's `agent.cordis.ym
 
 The presets you can choose from come from two places: the presets shipped inside this package under `presets/`, and your own presets under `<dshHome>/.agent-presets`. The picker shows each preset's display name and description; a preset whose composition cannot load is listed with the reason rather than hidden, so you can see what to fix or delete.
 
+### Access defaults
+
+A conversation profile can include `access.yml` beside `agent.cordis.yml`:
+
+```yaml
+permissionPreset: workspace-write
+```
+
+The key must name a preset in the server’s [permission table](../../interaction/permission-presets/README.md). A missing file inherits the server default; a malformed file marks the profile broken, and an unsupported key rejects mounting before replacing an existing profile. Display metadata in `preset.yml` remains independent. Copies retain `access.yml`, and edits affect future mounts. A blank profile change applies its default; a creation-time permission override stays with that session. Profiles select from the server’s policies and cannot add execution capabilities.
+
 ### Minimal configuration
 
 The plugin needs a `default` preset id and scans `roots` for presets:

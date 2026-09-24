@@ -51,6 +51,23 @@ export type {
   AgentPresetComposition, AgentPresetCompositionRow, CompositionRowEnablement,
 } from './composition-inventory.ts'
 
+declare module '@deepseek-ai/cordis' {
+  interface Events {
+    /**
+     * Validate a resolved profile before mounting or changing an agent's composition.
+     * @mode serial
+     * @param preset - resolved profile whose defaults must be supported by the server.
+     */
+    'agent-preset/validating'(preset: AgentPreset): Promise<void> | void
+    /**
+     * Apply profile-owned defaults after a blank session commits its selection.
+     * @mode serial
+     * @param agent - agent running the committed profile.
+     */
+    'agent-preset/committed'(agent: Agent): Promise<void> | void
+  }
+}
+
 /** Settings namespace carrying the user's chosen default preset. */
 export const SETTINGS_NAMESPACE = 'agent-presets'
 
@@ -265,6 +282,7 @@ export class AgentPresets extends TypertRemoteService {
       presets: (await this.list()).map(preset => ({
         id: preset.id,
         trust: preset.trust,
+        ...preset.permissionPreset === undefined ? {} : { permissionPreset: preset.permissionPreset },
         isDefault: preset.id === defaultId,
         ...preset.name === undefined ? {} : { name: preset.name },
         ...preset.description === undefined ? {} : { description: preset.description },
@@ -375,6 +393,7 @@ export class AgentPresets extends TypertRemoteService {
         { agentPreset: preset.id, reason: preset.broken },
       )
     }
+    await this.selfCtx.serial('agent-preset/validating', preset)
     return preset
   }
 
@@ -398,6 +417,17 @@ export class AgentPresets extends TypertRemoteService {
    * standing compositions. WeakMap: entries die with their agents.
    */
   private readonly bindings = new WeakMap<ScopeKey, ScopeParentBinding>()
+  private readonly permissionDefaults = new WeakMap<ScopeKey, string>()
+
+  /**
+   * Read the access default captured when an agent joined its profile.
+   * @param agentCtx - scoped context of the agent.
+   * @returns the profile's default, or undefined for server inheritance.
+   */
+  permissionPresetFor(agentCtx: Context): string | undefined {
+    const key = scopeOf(agentCtx)
+    return key === undefined ? undefined : this.permissionDefaults.get(key)
+  }
 
   /**
    * Compose one agent from a preset: ensure the preset's standing mount, then
@@ -424,6 +454,7 @@ export class AgentPresets extends TypertRemoteService {
     // composed agent to another preset; a later recompose layer re-links
     // through it under the caller-owned blank-session contract.
     this.bindings.set(agentKey, bindScopeParent(agentKey, standing.key))
+    if (preset.permissionPreset !== undefined) this.permissionDefaults.set(agentKey, preset.permissionPreset)
     return preset
   }
 
@@ -461,6 +492,8 @@ export class AgentPresets extends TypertRemoteService {
     const standing = standingMountFor(parentCtx)
     if (standing === undefined) return undefined
     this.bindings.set(agentKey, bindScopeParent(agentKey, standing.key))
+    const permissionPreset = this.permissionPresetFor(parentCtx)
+    if (permissionPreset !== undefined) this.permissionDefaults.set(agentKey, permissionPreset)
     return standing.presetId
   }
 
@@ -661,6 +694,8 @@ export class AgentPresets extends TypertRemoteService {
     } else {
       binding.rebind(standing.key)
     }
+    if (preset.permissionPreset === undefined) this.permissionDefaults.delete(agentKey)
+    else this.permissionDefaults.set(agentKey, preset.permissionPreset)
     // Reparenting changes every scope-layered tool view without adding or
     // removing a registration. Publish the registry's normal invalidation so
     // Agent-owned overlays can reconcile with the new ancestry.
@@ -725,6 +760,7 @@ export class AgentPresets extends TypertRemoteService {
     // Recorded only after the swap committed: the log states what the agent
     // runs, and a rejected mount leaves the previous composition.
     agent.session.append('agent-preset/selected', { agentPreset: preset.id })
+    await this.selfCtx.serial('agent-preset/committed', agent)
     return preset.id
   }
 

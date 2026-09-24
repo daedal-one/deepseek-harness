@@ -637,6 +637,17 @@ Source: [`packages/api/session-controller/src/types.ts:40`](../packages/api/sess
 
 ### `permission/*`
 
+<a id="permissioncontext--log-only"></a>
+
+#### `permission/context` — log-only
+
+```ts persistence-catalog
+/** Log-only execution placement and profile default observed before publication or a blank profile change. */
+'permission/context': PermissionContext
+```
+
+Source: [`packages/interaction/permission-presets/src/index.ts:51`](../packages/interaction/permission-presets/src/index.ts)
+
 <a id="permissionpreset--log-only"></a>
 
 #### `permission/preset` — log-only
@@ -651,7 +662,7 @@ Source: [`packages/api/session-controller/src/types.ts:40`](../packages/api/sess
 'permission/preset': { preset: string }
 ```
 
-Source: [`packages/interaction/permission-presets/src/index.ts:53`](../packages/interaction/permission-presets/src/index.ts)
+Source: [`packages/interaction/permission-presets/src/index.ts:58`](../packages/interaction/permission-presets/src/index.ts)
 
 ### `plan/*`
 

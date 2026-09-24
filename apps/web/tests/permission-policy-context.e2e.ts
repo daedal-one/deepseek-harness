@@ -1,8 +1,6 @@
-// Web acceptance for current sandbox-policy context. A real Chromium drives
-// the shipped /permission command through all three presets; record mode uses
-// the real provider, while replay keeps the same provider-authored behavior
-// keyless. Assertions read the exact durable header, runtime-context messages,
-// and tool calls, so assistant prose alone cannot satisfy the scenario.
+// The standing user policy locks after the first turn. Lower-level knob events
+// remain replayable and must refresh the model context before the next request.
+// Recorded provider responses and real tools exercise that enforcement path.
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -11,6 +9,8 @@ import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { canonicalPath } from '@deepseek-ai/dsh-sandbox'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
+import { setApprovalPolicy } from '@deepseek-ai/dsh-user-approval'
 import {
   assertFinalWorkspaceSnapshot, assertFixtureInventory, fixtureUserPrompts, launchWebScaffold, recordFixture,
   watchConsole, webSnapshotMode, type WebScaffold,
@@ -88,7 +88,7 @@ describe('web e2e: current sandbox policy reaches the model before tools', () =>
     await scaffold?.close()
   })
 
-  it('switches read-only, danger-full-access, and workspace-write through the real GUI command path', async () => {
+  it('locks user selection after the first turn while replaying underlying policy events', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-permission-policy-context'))
     if (MODE !== 'record') {
       expect(fixtureUserPrompts(await readFile(FIXTURE, 'utf8'))).toEqual(PROMPTS)
@@ -97,9 +97,17 @@ describe('web e2e: current sandbox policy reaches the model before tools', () =>
     const input = page.locator('[data-composer-input][contenteditable="true"]').first()
     let sessionId: Awaited<ReturnType<WebScaffold['whenTurnSettled']>> | undefined
     for (const [index, preset] of ['read-only', 'danger-full-access', 'workspace-write'].entries()) {
-      await writeComposerDraft(page, input, `/permission ${preset}`)
-      await input.press('Enter')
-      await page.getByRole('button', { name: `Access mode, current: ${PRESET_LABELS[index]}` })
+      if (index === 0) {
+        await writeComposerDraft(page, input, `/permission ${preset}`)
+        await input.press('Enter')
+      } else {
+        if (sessionId === undefined) throw new Error('no session after first turn')
+        const agent = scaffold.ctx.agents.get(sessionId)
+        if (agent === undefined) throw new Error('running session is unavailable')
+        setSandboxMode(agent.session, preset as 'danger-full-access' | 'workspace-write')
+        setApprovalPolicy(agent.session, preset === 'danger-full-access' ? 'never' : 'ask')
+      }
+      await page.getByRole('button', { name: `Access mode, current: Host · ${PRESET_LABELS[index]}` })
         .waitFor({ timeout: 10_000 })
 
       const settled = scaffold.whenTurnSettled()
@@ -109,9 +117,20 @@ describe('web e2e: current sandbox policy reaches the model before tools', () =>
       await input.waitFor({ timeout: 10_000 })
     }
 
+    const access = page.getByRole('button', { name: 'Access mode, current: Host · Workspace Write' })
+    await access.click()
+    expect(await page.getByRole('menuitem', { name: 'Read Only' }).isDisabled()).toBe(true)
+    await page.getByText('Access is fixed · choose another policy in a new session').waitFor()
+    await page.keyboard.press('Escape')
     await writeComposerDraft(page, input, '/permission read-only')
     await input.press('Enter')
-    await page.getByRole('button', { name: 'Access mode, current: Read Only' }).waitFor({ timeout: 10_000 })
+    await page.getByText('Access is fixed after the session starts. Start a new session to choose another policy.', { exact: false }).waitFor()
+    if (sessionId === undefined) throw new Error('no session after policy turns')
+    const agent = scaffold.ctx.agents.get(sessionId)
+    if (agent === undefined) throw new Error('running session is unavailable')
+    expect(scaffold.ctx.permissionPresets.current(agent.session)).toBe('workspace-write')
+    setSandboxMode(agent.session, 'read-only')
+    await page.getByRole('button', { name: 'Access mode, current: Host · Read Only' }).waitFor({ timeout: 10_000 })
     const settled = scaffold.whenTurnSettled()
     await writeComposerDraft(page, input, PROMPTS[3])
     await input.press('Enter')
