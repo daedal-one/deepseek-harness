@@ -47,13 +47,21 @@ Fetched `origin` with pruning and tags before integration. Verified these candid
 - Workspace admission resolution preserves host identity/world checks and host bypass, environment and multi-repository grants, provenance, `close()`/`registerWorkspaceOwner`, settlement ordering, lazy allocation, FIFO capacity, parent/child ownership, per-owner use, cancellation-aware operations, durable admission status, quiescent checkpoint-before-release, resumed waiter cancellation, and target namespaces.
 - Follow-up review repaired host `runForSession`, lazy environment guidance, pre-turn cancellation capacity release, cold repository requests, pending-status flush retry scheduling, and stale portable/client tests.
 - Daedal residual repair hydrates search summaries outside the retained page before rendering, refuses mismatched caller-owned fork identities, and observes late listener rejection after per-event cancellation.
-- OpenRouter repair rejects blank prices, attributes settled usage to durable actual routes, refuses unsupported mixed/unattributed history, invalidates successful-only caches on credential fingerprint changes, retains actual fetch time, and renders configured and remaining limits separately.
+- OpenRouter repair rejects blank prices, prices only child-owned settled usage at durable actual routes, refuses unsupported mixed/unattributed history, clears successful-only caches on credential changes or disappearance, retains actual fetch time, preserves catalog failure classes, withholds Host diagnostics from UI copy, and renders configured and remaining limits separately.
 - Access descriptions are locale-owned, prefer host descriptions, preserve environment/policy separation, and state that Full access cannot escape the displayed environment.
-- `git diff --cached --check` passed after every conflict resolution. Full and filtered dependency installations both failed with `ENOSPC` in the 1 GiB workspace and their partial caches were removed; no Vitest, typecheck, build, catalog, doc-sync, or spec-lint result is claimed yet.
+- `git diff --cached --check` passed after every conflict resolution. Dependency installs use per-command host temporary storage because a persistent full install exceeds the 1 GiB workspace.
+- Daedal focused Vitest: six files, 349 tests passed (`gateway.client`, session manager/service/fork, UI workspace apply/browser).
+- OpenRouter focused Vitest: nine files, 120 tests passed after adversarial fixes for credential disappearance, fork-owned usage, catalog failures, locale-only diagnostics, and limits.
+- Access tooltip Vitest: three files, 123 tests passed; the final fixed-session focus behavior was rerun in the 120-test combined set.
+- Benchmark source-plane Vitest: three files, 80 tests passed. Built benchmark controls remain pending because native/build prerequisites are unavailable.
+- Admission helper and environment Vitest: 23 tests passed. The combined `workspaces.spec.ts` cannot initialize because the native flock binding is absent; building it is blocked by missing `musl-gcc`.
+- `gen-persistence-catalog`, `verify-persistence-catalog`, and `verify-tsconfig-paths` passed; generated persistence files are current.
+- `doc-sync` completed 20 gates and failed 12 under the filtered install: missing unselected workspace dependencies, OOM-killed compiler gates, absent VitePress, and existing export-JSDoc findings. The one candidate-owned tsconfig alias failure was repaired and its focused gate now passes.
+- The repository has no installed `spec` command, so `spec lint` is unavailable in this checkout. Targeted typecheck found two spending-client type defects that were repaired; complete typecheck still requires generated Remote artifacts and a full dependency/build environment.
 
 ## Remaining issues
 
 - Development VM source repair continues on `daedal/reconcile-20260925-development-vm`; real Incus/Docker/Compose qualification is unavailable because `incus` is absent.
-- Run repository checks through CI or a workspace with sufficient dependency capacity before any merge.
+- Run remaining build, generated-Remote, full typecheck, snapshot, and documentation checks through CI or a sufficiently provisioned workspace before any merge.
 - OpenRouter exact-head real-profile GIF evidence cannot be captured without deploying/restarting this existing server or starting another server, both prohibited by this task; keep the candidate unmerged if that repository requirement cannot be satisfied externally.
 - Native-loop commit `9690b85674` is not eligible to port as written: it is a Forge/spec-only status edit with unavailable deployment evidence and is covered by the explicit Forge/Intellect exclusion.
