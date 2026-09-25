@@ -19,6 +19,8 @@ export const PRESET_ID = /^[a-z0-9][a-z0-9-]*$/
 
 /** One preset directory that carries a mountable agent composition. */
 export interface AgentPreset {
+  /** Default permission-table key from access.yml; omission inherits the server default. */
+  readonly permissionPreset?: string
   /** Stable identifier; the preset directory's name. */
   readonly id: string
   /** Trust recorded from the root this preset was discovered under. */

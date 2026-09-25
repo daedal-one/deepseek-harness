@@ -9,6 +9,8 @@ export type { PresetTrust } from './preset.ts'
  * everywhere off the Host, and the composition's location is the Host's own.
  */
 export interface AgentPresetRow {
+  /** Profile's permission default; omission inherits the server default. */
+  readonly permissionPreset?: string
   /** Stable identifier; also the label's fallback. */
   readonly id: string
   /** Trust of the root this preset was discovered under. */

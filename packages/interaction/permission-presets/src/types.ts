@@ -9,6 +9,17 @@
  * @module @deepseek-ai/dsh-permission-presets/types
  */
 
+/** Execution placement observed independently of file-access and approval policy. */
+export type ExecutionEnvironment = 'host' | 'container' | 'external' | 'unknown'
+
+/** Recorded presentation context; provider identities remain process-local. */
+export interface PermissionContext {
+  /** Environment verified from the effective file and process providers. */
+  environment: ExecutionEnvironment
+  /** Permission default captured from the selected profile or server. */
+  defaultPreset: string
+}
+
 /** The select-option shape a presentation layer advertises for one preset (or for the derived `custom` state). */
 export interface PresetOption {
   /** Stable option value: the table key, or `custom`. */
@@ -25,6 +36,10 @@ export interface PresetOption {
  * entry) and the effective current value.
  */
 export interface PermissionSelect {
+  /** Verified execution location and captured default; absent on historical logs without observation. */
+  context?: PermissionContext
+  /** False after the first turn starts; omission is accepted from older servers. */
+  canChange?: boolean
   /** Switchable presets, plus `custom` appended exactly while it is current. */
   options: PresetOption[]
   /** The effective current value: a preset table key, or `custom`. */

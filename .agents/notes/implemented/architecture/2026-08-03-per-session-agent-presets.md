@@ -29,6 +29,8 @@ Which preset an unnamed session gets is a user setting (`agent-presets.default`)
 
 The shared Client facade, service and manager use the Host's `SessionCreateRequest` so an explicit `agentPreset` reaches the creation owner alongside the caller's Session identity. A separately declared subset can silently discard the selection and create the default composition. The Host owns profile validation, adoption and persistence; a rejected selection is not retried with a default.
 
+Profile-owned access defaults and creation-time overrides follow the [conversation access decision](2026-09-24-conversation-profile-access.md); composition lifetime remains owned here.
+
 ## Consequences
 
 **The effective default is read per resolution, never snapshotted.** A cached value would need a `watch` subscription and a reload path to stay honest, and the resolved scope already re-reads a hot-reloaded document. Reading through is also what makes the boundary correct rather than merely cheap: the new value applies to the next session created, and every running session keeps the composition it was built from. That invariant is the same one the session log enforces from the other side — the header records the id a session was CREATED with and an `agent-preset/selected` event records any later blank-session switch, so a reader resolves the pair (`resolveSessionPreset`) and never the header alone: a resume rebuilds the composition its history was produced under rather than the deployment default at resume time, a cold transcript's presenters resolve in that composition's layer, and the gateway rejects an attempt to adopt a live session under a preset other than the one it currently runs. A snapshot would make the two disagree at exactly the moment the setting changes.

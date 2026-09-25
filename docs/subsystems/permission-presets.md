@@ -59,9 +59,11 @@ interface PresetOption {
 }
 ```
 
+The `PermissionSelect` payload also carries optional `context` (`PermissionContext`) and `canChange`. `context.environment` is `host`, `container`, `external`, or `unknown`; `context.defaultPreset` records the profile or server default observed at creation. `canChange` becomes false at the first `turn/start`. Historical logs without an observation omit `context`.
+
 ## Switching and the `permission/preset` event
 
-`set(session, name)` resolves the preset (unknown names throw), appends a log-only `permission/preset` event unless `name` is already the effective preset, then writes each knob through its own setter — `setSandboxMode` from [dsh-sandbox-policy](../../packages/sandbox/sandbox-policy) and `setApprovalPolicy` from [dsh-user-approval](../../packages/interaction/user-approval) — only when that knob's effective value changes. The selection event precedes the knob events in the same turn, and re-selecting the effective preset appends nothing.
+`set(session, name)` rejects a different policy after the first turn and resolves the preset (unknown names throw), appends a log-only `permission/preset` event unless `name` is already the effective preset, then writes each knob through its own setter — `setSandboxMode` from [dsh-sandbox-policy](../../packages/sandbox/sandbox-policy) and `setApprovalPolicy` from [dsh-user-approval](../../packages/interaction/user-approval) — only when that knob's effective value changes. The selection event precedes the knob events in the same turn, and re-selecting the effective preset appends nothing.
 
 `permission/preset` is durable, log-only user intent: it stays out of the model transcript (the knob events own the model-visible consequences through their consumers), and it exists so `current()` can preserve WHICH preset the user chose when two presets share a bundle. The `permissions` projection folds that selection with both knob events and retains the `session/end-seed` boundary used to distinguish a restored empty seed from a fresh session; replay needs no catch-up state or raw-log rescan. The complete event declaration is in the [persistence log event catalog](../persistence-catalog.md); the method signatures are in the generated [service catalog](#ctxpermissionpresets--permissionpresetservice).
 
@@ -116,9 +118,9 @@ optionOf(name: string): PresetOption
 
 /**
  * Record a changed preset, then update each changed knob through its own
- * setter. Selecting the effective preset again appends nothing.
+ * setter before the first turn. Selecting the effective preset again appends nothing.
  * @param session - the session the switch belongs to.
- * @param name - the preset to switch to; unknown names throw.
+ * @param name - the preset to switch to; unknown names or changes after the first turn throw.
  */
 set(session: Session, name: string): void
 ```

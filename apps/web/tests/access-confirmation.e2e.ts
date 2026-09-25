@@ -4,6 +4,7 @@
 // permission projection, client command path, HTTP RPC, and pushed update.
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
@@ -30,9 +31,6 @@ describe('web e2e: Full access confirmation', () => {
     // is temporarily unavailable.
     const executablePath = process.env.DSH_PLAYWRIGHT_EXECUTABLE_PATH
     browser = await chromium.launch(executablePath === undefined ? {} : { executablePath })
-    // Keep the Chinese surface via {@link EN_BROWSER_LOCALE}: the golden pins
-    // the actual registered dictionary rather than a test-local translation
-    // callback.
     page = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: EN_BROWSER_LOCALE })
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
@@ -47,12 +45,13 @@ describe('web e2e: Full access confirmation', () => {
 
   it('requires acknowledgement before the composer picker can enable Full access', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-full-access-confirmation'))
-    const access = page.locator('button[aria-label^="访问模式"]').first()
+    const access = page.locator('button[aria-label^="Access mode"]').first()
     await access.waitFor({ timeout: 10_000 })
 
-    expect(await access.getAttribute('aria-label')).toBe('Access mode, current: 工作区内修改')
+    expect(await access.getAttribute('aria-label')).toBe('Access mode, current: Host · Workspace Write')
 
     await access.click()
+    await page.getByText('Runs on the host · file access follows this policy').waitFor()
     await page.getByRole('menuitem', { name: 'Full access' }).click()
     const dialog = page.getByRole('dialog', { name: 'Enable Full access?' })
     await dialog.waitFor({ timeout: 10_000 })
@@ -69,10 +68,31 @@ describe('web e2e: Full access confirmation', () => {
     expect(await enable.isEnabled()).toBe(true)
     await enable.click()
     await expect.poll(() => access.getAttribute('aria-label'), { timeout: 10_000 })
-      .toBe('Access mode, current: 完全权限')
+      .toBe('Access mode, current: Host · Full access')
     expect(await dialog.count()).toBe(0)
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
+
+  it('keeps the environment icon compact at phone width', async () => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.setViewportSize({ width: 390, height: 844 })
+    const access = page.getByRole('button', { name: 'Access mode, current: Host · Full access' })
+    expect((await access.boundingBox())?.width).toBeLessThan(60)
+    await access.click()
+    await page.getByText('Runs on the host · file access follows this policy').waitFor()
+    const menu = page.getByRole('menu')
+    const bounds = await menu.boundingBox()
+    if (bounds === null) throw new Error('access menu is not visible')
+    expect(bounds.x).toBeGreaterThanOrEqual(0)
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(390)
+    await menu.screenshot({ path: join(tmpdir(), 'conversation-access-phone-menu.png'), animations: 'disabled' })
+    await page.screenshot({ path: join(tmpdir(), 'conversation-access-phone.png'), animations: 'disabled' })
+    await page.keyboard.press('Escape')
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await access.click()
+    await page.screenshot({ path: join(tmpdir(), 'conversation-access-desktop.png'), animations: 'disabled' })
+    await page.keyboard.press('Escape')
+  })
 
   it('keeps its snapshot inventory closed', async () => {
     expect(tripwire.warnings).toEqual([])

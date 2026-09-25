@@ -9,49 +9,27 @@ import { en } from '../locales.ts'
 import css from './PermissionSelect.module.css'
 
 const FULL_ACCESS = 'danger-full-access'
-const POLICY_REVIEWED = 'policy-reviewed'
 
-/* Shield glyphs (design set 1556): check = read-only, pencil = workspace
-   write, magnifier = policy reviewed, exclamation = full access. currentColor
-   lets the trigger and menu rows tint them with their own text color. */
+/** Compact policy glyphs are independent of execution placement. */
+function permissionGlyph(value: string): ReactNode {
+  const paths: Record<string, ReactNode> = {
+    'read-only': <><path d="M1 8s2.5-4 7-4 7 4 7 4-2.5 4-7 4-7-4-7-4Z" /><circle cx="8" cy="8" r="1.8" /></>,
+    'workspace-write': <path d="M2 13V3h4l2 2h6v8H2Zm7-4h3m-1.5-1.5v3" />,
+    'policy-reviewed': <><circle cx="7" cy="7" r="4.5" /><path d="m10.5 10.5 3.5 3.5M5 7l1.5 1.5L9 6" /></>,
+    'danger-full-access': <><rect x="3" y="7" width="10" height="7" rx="1.5" /><path d="M6 7V4a3 3 0 0 1 5.5-1.5M8 10v1" /></>,
+  }
+  return <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{Object.hasOwn(paths, value) ? paths[value] : <circle cx="8" cy="8" r="5" />}</svg>
+}
 
-const shieldOutline = 'M8.20554 0.899994L14.7901 3.36857V7.01026C14.7901 12 11.0466 14.2103 8.20554 15.3C5.36446 14.2103 1.62012 12 1.62012 7.01026V3.36857L8.20554 0.899994Z'
-
-const permissionGlyphs = new Map<string, ReactNode>([
-  ['read-only', (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <path d={shieldOutline} stroke="currentColor" strokeWidth="1.31831" strokeLinejoin="round" />
-      <path d="M12.1654 5.7552L8.9447 9.41475C8.73044 9.65816 8.53628 9.8804 8.35774 10.0423C8.1713 10.2114 7.94235 10.3717 7.64016 10.4254C7.48207 10.4535 7.32 10.4552 7.16151 10.4294C6.85843 10.3801 6.62728 10.2223 6.43836 10.0559C6.25752 9.89653 6.06037 9.67732 5.84264 9.43705L4.72925 8.20897L5.63557 7.38707L6.74897 8.61594C6.98603 8.87755 7.12974 9.03533 7.24673 9.13839C7.31033 9.19443 7.34485 9.21476 7.35823 9.22122C7.38068 9.22484 7.40352 9.22515 7.42593 9.22122C7.40522 9.22502 7.42893 9.23294 7.53583 9.136C7.65132 9.03126 7.79316 8.87139 8.02643 8.60638L11.2479 4.94763L12.1654 5.7552Z" fill="currentColor" />
-    </svg>
-  )],
-  ['workspace-write', (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <path d="M8.08887 0.251709C8.20479 0.23085 8.32486 0.241168 8.43652 0.282959L15.0215 2.75171C15.2787 2.84819 15.4492 3.09414 15.4492 3.3689V7.0105C15.4492 7.10986 15.4441 7.2081 15.4414 7.30542C15.0285 7.07175 14.5905 6.87695 14.1309 6.73022V3.82495L8.20508 1.60327L2.2793 3.82495V7.0105C2.27936 9.7171 3.4745 11.5379 5.02734 12.7947C5.01025 12.9942 5 13.1962 5 13.4001C5.00001 13.7617 5.02722 14.1169 5.08008 14.4636C2.91555 13.0393 0.961014 10.752 0.960938 7.0105V3.3689C0.960938 3.09417 1.13146 2.84821 1.38867 2.75171L7.97461 0.282959L8.08887 0.251709Z" fill="currentColor" />
-      <path d="M11.3525 5.64688V6.85688H5V5.64688H11.3525Z" fill="currentColor" />
-      <path d="M9.5824 8.29376V9.50376H5V8.29376H9.5824Z" fill="currentColor" />
-      <path d="M14.6647 15.6852H10.0338C10.3878 15.3751 10.7567 15.0517 11.0772 14.7706C11.2531 14.6164 11.4144 14.4746 11.5511 14.3547H14.6647V15.6852Z" fill="currentColor" />
-      <path d="M8.14852 14.1308L7.33925 15.4976C7.22458 15.6912 7.42245 15.9194 7.63037 15.8333L9.09785 15.2254L15.0399 10.0719L14.0905 8.97733L8.14852 14.1308Z" fill="currentColor" />
-    </svg>
-  )],
-  [POLICY_REVIEWED, (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <path d={shieldOutline} stroke="currentColor" strokeWidth="1.31831" strokeLinejoin="round" />
-      <circle cx="7.25" cy="7" r="2.2" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M8.8 8.55L10.65 10.4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
-  )],
-  [FULL_ACCESS, (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <path d={shieldOutline} stroke="currentColor" strokeWidth="1.31831" strokeLinejoin="round" />
-      <path d="M9.10094 4.5V8.75939H7.59888V4.5H9.10094Z" fill="currentColor" />
-      <path d="M9.10094 9.8114V11.5H7.59888V9.8114H9.10094Z" fill="currentColor" />
-    </svg>
-  )],
-])
-
-/** Glyph for a permission option value; host-configured names outside the design set get none. */
-function permissionGlyph(value: string): ReactNode | undefined {
-  return permissionGlyphs.get(value)
+function environmentGlyph(environment: string): ReactNode {
+  const shape = environment === 'container'
+    ? <><path d="m8 1 6 3.5v7L8 15l-6-3.5v-7L8 1Zm-6 3.5L8 8l6-3.5M8 8v7M5 2.8l6 3.5" /></>
+    : environment === 'host'
+      ? <><rect x="1.5" y="2" width="13" height="9" rx="1.5" /><path d="M5 14h6M8 11v3" /></>
+      : environment === 'external'
+        ? <><circle cx="8" cy="8" r="6" /><path d="M2 8h12M8 2c4 4 4 8 0 12-4-4-4-8 0-12Z" /></>
+        : <><circle cx="8" cy="8" r="6" /><path d="M6.5 6a1.5 1.5 0 1 1 2.4 1.2C8 7.8 8 8 8 9m0 2h.01" /></>
+  return <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{shape}</svg>
 }
 
 /**
@@ -112,19 +90,34 @@ export function PermissionSelect({ value, locked, command, t }: PermissionSelect
     ? permissionLabel(currentValue, currentValue, t)
     : permissionLabel(current.value, current.name, t)
   const busy = pick !== null || confirmation !== null
+  const canChange = value.canChange !== false
+  const environment = value.context?.environment ?? 'unknown'
+  const environmentLabel = t(`access.environment.${environment}`)
+  const accessLabel = `${environmentLabel} · ${currentLabel}`
 
-  const items: MenuEntry[] = value.options
+  const choices: MenuEntry[] = value.options
     .filter(o => o.value !== 'custom')
     .map((option) => {
       const icon = permissionGlyph(option.value)
       return {
         id: option.value,
         label: permissionLabel(option.value, option.name, t),
-        ...icon === undefined ? {} : { icon },
+        icon,
+        disabled: !canChange,
       }
     })
 
+  const items: MenuEntry[] = [
+    { type: 'label', id: 'environment', text: t(`access.environmentDetail.${environment}`) },
+    ...choices,
+    { type: 'separator', id: 'access-detail' },
+    { type: 'label', id: 'access-source', text: canChange
+      ? t(value.context?.defaultPreset === currentValue ? 'access.profileDefault' : 'access.sessionOverride')
+      : t('access.fixed') },
+  ]
+
   const submit = (id: string): void => {
+    if (!canChange) return
     setPick(id)
     void command(`/permission ${id}`)
       .catch(() => false)
@@ -133,7 +126,7 @@ export function PermissionSelect({ value, locked, command, t }: PermissionSelect
 
   const choose = (id: string): void => {
     setOpen(false)
-    if (id === value.currentValue) return
+    if (!canChange || id === value.currentValue) return
     if (id === FULL_ACCESS) {
       setAcknowledged(false)
       setConfirmation(id)
@@ -148,7 +141,7 @@ export function PermissionSelect({ value, locked, command, t }: PermissionSelect
   }
 
   const confirmFullAccess = (): void => {
-    if (locked || !acknowledged || confirmation === null) return
+    if (locked || !canChange || !acknowledged || confirmation === null) return
     const id = confirmation
     closeConfirmation()
     submit(id)
@@ -167,14 +160,12 @@ export function PermissionSelect({ value, locked, command, t }: PermissionSelect
           <button
             type="button"
             className={css.trigger}
-            aria-label={t('input.accessMode', { name: currentLabel })}
-            title={current?.description}
+            aria-label={t('input.accessMode', { name: accessLabel })}
+            title={accessLabel}
             disabled={locked || busy}
             onClick={() => { setOpen(!open) }}
           >
-            {permissionGlyph(currentValue) !== undefined && (
-              <span className={css.triggerIcon} aria-hidden>{permissionGlyph(currentValue)}</span>
-            )}
+            <span className={css.triggerIcon} aria-hidden>{environmentGlyph(environment)}</span>
             <span className={css.triggerLabel}>{currentLabel}</span>
             <span className={clsx(css.chevron, open && css.chevronOpen)} aria-hidden>
               <IconChevronDownOutline14 />
