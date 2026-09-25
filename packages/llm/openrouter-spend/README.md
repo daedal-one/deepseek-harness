@@ -27,9 +27,9 @@ Call `openrouterSpend/read` with one `sessionId` when a client or settings page 
 
 ### What a read returns
 
-The `key` half reports the inference key's label, its usage in USD for the current day, week, and month plus total usage, its configured limit and remaining headroom (each `null` when the key is unlimited), and whether it is on the free tier. The `session` half reports the latest durable selection — provider and model — and its estimated cost; it is `null` when the session is not live or has no model selection yet. `costUsd` is `null` whenever the cost cannot be computed honestly: any settled usage lacks durable route attribution, any route is outside OpenRouter, the catalog read failed, a routed model has no catalog entry, or a required price is unavailable. `fetchedAt` is the actual epoch milliseconds when the cached key reading completed.
+The `key` half reports the inference key's label, its usage in USD for the current day, week, and month plus total usage, its configured limit and remaining headroom (each `null` when the key is unlimited), and whether it is on the free tier. The `session` half reports the latest durable selection — provider and model — and its estimated cost; it is `null` when the session is not live or has no model selection yet. `costUsd` is `null` whenever the cost cannot be computed honestly from available catalog data: any child-owned settled usage lacks durable route attribution, any route is outside OpenRouter, a routed model has no catalog entry, or a required price is unavailable. A failed catalog read preserves its distinct failure instead. `fetchedAt` is the actual epoch milliseconds when the cached key reading completed.
 
-A read fails as a whole only when the key reading fails: `not-configured` when no credential is available, `unauthorized` for HTTP 401/403, `rate-limited` for HTTP 429, `unreachable` for timeouts and other non-2xx answers, and `malformed-response` when OpenRouter answers with a body the reply cannot be parsed from. No failure detail carries the credential.
+A read fails as a whole when the key or required catalog reading fails: `not-configured` when no credential is available, `unauthorized` for HTTP 401/403, `rate-limited` for HTTP 429, `unreachable` for timeouts and other non-2xx answers, and `malformed-response` when OpenRouter answers with a body the reply cannot be parsed from. No failure detail carries the credential.
 
 ### Configuration
 
@@ -49,7 +49,7 @@ The service projects one question — "what has this key spent, and what has thi
 
 ### Failure mapping
 
-`401`/`403` map to `unauthorized`, `429` to `rate-limited`, any other non-2xx status, timeout, or network failure to `unreachable`, and a body that fails its pure parser to `malformed-response` with the parser's field-naming detail. A session-side failure — no live session, no selection, no token-usage projection, no catalog entry, or an unpriceable price — never fails the read: it degrades `session` or `costUsd` to `null`.
+`401`/`403` map to `unauthorized`, `429` to `rate-limited`, any other non-2xx status, timeout, or network failure to `unreachable`, and a body that fails its pure parser to `malformed-response` with the parser's field-naming detail. No live session or selection degrades `session` to `null`; missing route attribution, a non-OpenRouter route, no catalog entry, or an unpriceable listed price degrades `costUsd` to `null`. A catalog transport or response failure preserves its mapped failure reason for the client.
 
 ### Source map
 
@@ -100,7 +100,7 @@ These limits define what a point-in-time spend read cannot tell a client. They a
 
 - **No management-key or account-credits support, by design** — the service reads `GET /key` with a normal inference key; OpenRouter's management-only credit endpoints are never called, so account-level balances are out of scope.
 - **No background refresh** — there is no refresh interval or push; every read happens per call, and two calls within the cache TTL share one underlying OpenRouter read.
-- **Catalog or attribution gaps degrade silently** — a failed `/models` read, missing durable request attribution, a non-OpenRouter route, a missing catalog entry, or a routed price (`-1` or blank) leaves the session estimate explicitly unpriceable (`costUsd: null`) rather than failing the read or inventing a number.
+- **Attribution and listed-price gaps remain unpriceable** — missing durable request attribution, a non-OpenRouter route, a missing catalog entry, or a routed price (`-1` or blank) leaves the session estimate explicitly unpriceable (`costUsd: null`) rather than inventing a number; a failed `/models` read remains a distinct read failure.
 - **Catalog prices are public-catalog prices** — they describe the model's listed route, not the exact routed provider a request actually took, so the estimate is a display figure, not a billing figure.
 
 <a id="dev-note"></a>

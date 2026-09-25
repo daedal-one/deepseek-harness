@@ -166,7 +166,7 @@ describe('SpendView', () => {
     const view = render(<SpendView {...viewProps(store, vi.fn())} />)
 
     expect(screen.getByRole('alert').textContent).toBe(en[key])
-    expect(screen.getByText('host detail')).toBeTruthy()
+    expect(screen.queryByText('host detail')).toBeNull()
     expect(view.container.firstElementChild?.getAttribute('aria-busy')).toBe('false')
   })
 
@@ -194,7 +194,7 @@ describe('SpendView', () => {
     failed.actions.fail({ reason: 'unauthorized', detail: 'fixture unauthorized' })
     const failedView = render(<SpendView {...viewProps(failed, vi.fn())} />)
     const failure = failedView.getByRole('alert').textContent
-    const detail = failedView.getByText('fixture unauthorized').textContent
+    expect(failedView.queryByText('fixture unauthorized')).toBeNull()
 
     const output = [
       `configured-limit: ${configuredLimit}`,
@@ -204,7 +204,6 @@ describe('SpendView', () => {
       `unlimited-remaining-limit: ${unlimited[1]?.textContent}`,
       `unpriceable-session: ${unpriceableText}`,
       `failure: ${failure}`,
-      `failure-detail: ${detail}`,
       '',
     ].join('\n')
     await expect(output).toBe(await readFile(resolve(process.cwd(), 'packages/client/ui-openrouter-spend/tests/spend-view.expected.md'), 'utf8'))

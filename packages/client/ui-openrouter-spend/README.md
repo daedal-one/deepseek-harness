@@ -27,7 +27,7 @@ Open a Session's conversation view and select the **Spend** tab (order 20, after
 
 ### Reading the view
 
-Each spend row labels its period and shows the amount through the single shared money formatter (en-US, two to four fraction digits, locale-owned unit wording). Separate locale-owned rows show the configured limit and its remaining headroom. A key with no configured limit shows the same locale-owned unlimited wording in both rows instead of fabricating an amount. A free-tier key carries a marker beside its label. The session block names the routed model and provider, then shows the estimated USD cost — or an explicit statement that the model has no OpenRouter catalog price, in which case no zero is fabricated. The reading's fetch time is shown under the blocks, and every failure state shows its stated reason with the Host diagnostic detail.
+Each spend row labels its period and shows the amount through the single shared money formatter (en-US, two to four fraction digits, locale-owned unit wording). Separate locale-owned rows show the configured limit and its remaining headroom. A key with no configured limit shows the same locale-owned unlimited wording in both rows instead of fabricating an amount. A free-tier key carries a marker beside its label. The session block names the routed model and provider, then shows the estimated USD cost — or an explicit statement that the model has no OpenRouter catalog price, in which case no zero is fabricated. The reading's fetch time is shown under the blocks, and every failure state shows its locale-owned reason without rendering Host or carrier diagnostics.
 
 -----
 

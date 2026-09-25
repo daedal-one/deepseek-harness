@@ -23,6 +23,7 @@ import { TtlCache } from './cache.ts'
 import { attributedSessionUsage, sessionCostUsd, type AttributedSessionUsage } from './pricing.ts'
 import { readKeyUsage, readModels, type OpenRouterKeyReadResult, type OpenRouterModelsReadResult, type OpenRouterReadOptions } from './openrouter.ts'
 import type {
+  OpenRouterSpendFailure,
   OpenRouterSpendReadRequest,
   OpenRouterSpendReadResult,
   OpenRouterSessionSpend,
@@ -30,6 +31,14 @@ import type {
 
 /** Provider identity used by OpenRouter's installed LLM route. */
 const OPENROUTER_PROVIDER = 'openrouter'
+
+type SessionSpendResult =
+  | { readonly ok: true; readonly value: OpenRouterSessionSpend | null }
+  | { readonly ok: false; readonly error: OpenRouterSpendFailure }
+
+type SessionPriceResult =
+  | { readonly ok: true; readonly value: number | null }
+  | { readonly ok: false; readonly error: OpenRouterSpendFailure }
 
 /**
  * Service configuration, fully resolved by the schema's defaults before the
@@ -113,6 +122,10 @@ export class OpenRouterSpendService extends TypertRemoteService {
     }
     const apiKey = await this.resolveApiKey()
     if (apiKey === undefined) {
+      if (this.keyCacheCredential !== undefined) {
+        this.keyCacheCredential = undefined
+        this.keyCache.clear()
+      }
       return {
         ok: false,
         error: {
@@ -134,7 +147,8 @@ export class OpenRouterSpendService extends TypertRemoteService {
     )
     if (!keyResult.value.ok) return { ok: false, error: keyResult.value.error }
     const session = await this.sessionSpend(request.sessionId, options)
-    return { ok: true, value: { key: keyResult.value.value, session, fetchedAt: keyResult.fetchedAt } }
+    if (!session.ok) return session
+    return { ok: true, value: { key: keyResult.value.value, session: session.value, fetchedAt: keyResult.fetchedAt } }
   }
 
   /**
@@ -167,23 +181,25 @@ export class OpenRouterSpendService extends TypertRemoteService {
    * request attribution so a pending next selection cannot reprice history.
    * @param sessionId - the session to price.
    * @param options - the endpoint base and request bound for the public catalog read.
-   * @returns the session estimate, or null when there is nothing to report.
+   * @returns the child-owned session estimate, no estimate, or a catalog read failure.
    */
   private async sessionSpend(
     sessionId: SessionId,
     options: OpenRouterReadOptions,
-  ): Promise<OpenRouterSessionSpend | null> {
+  ): Promise<SessionSpendResult> {
     const session = this.ctx.sessions.get(sessionId)
-    if (session === undefined) return null
+    if (session === undefined) return { ok: true, value: null }
     const snapshot = this.ctx.sessionProjections.snapshot(session, ['modelSelection'])
     const selection = snapshot.values.modelSelection
     const selected = selection === undefined ? null : selection.lastUsed ?? selection.next
-    if (selected === null) return null
-    return {
+    if (selected === null) return { ok: true, value: null }
+    const price = await this.priceSession(attributedSessionUsage(session.ownEvents()), options)
+    if (!price.ok) return price
+    return { ok: true, value: {
       provider: selected.provider,
       model: selected.model,
-      costUsd: await this.priceSession(attributedSessionUsage(session.snapshotEvents()), options),
-    }
+      costUsd: price.value,
+    } }
   }
 
   /**
@@ -192,31 +208,31 @@ export class OpenRouterSpendService extends TypertRemoteService {
    * full historical cost explicitly unpriceable.
    * @param usages - route-attributed settled usage, or null when attribution is incomplete.
    * @param options - the endpoint base and request bound for the public catalog read.
-   * @returns exact total USD cost, or null when the cost is unpriceable.
+   * @returns exact total USD cost, an unpriceable value, or the catalog read failure.
    */
   private async priceSession(
     usages: readonly AttributedSessionUsage[] | null,
     options: OpenRouterReadOptions,
-  ): Promise<number | null> {
-    if (usages === null || usages.some(usage => usage.provider !== OPENROUTER_PROVIDER)) return null
-    if (usages.length === 0) return 0
+  ): Promise<SessionPriceResult> {
+    if (usages === null || usages.some(usage => usage.provider !== OPENROUTER_PROVIDER)) return { ok: true, value: null }
+    if (usages.length === 0) return { ok: true, value: 0 }
 
     const catalog = await this.catalogCache.read(
       () => readModels({ baseURL: options.baseURL, requestTimeoutMs: options.requestTimeoutMs }, SHARED_READ_SIGNAL),
       result => result.ok,
     )
-    if (!catalog.value.ok) return null
+    if (!catalog.value.ok) return { ok: false, error: catalog.value.error }
 
     let total = 0
     for (const usage of usages) {
       const pricing = findModelPricing(catalog.value.value, usage.model)
-      if (pricing === undefined) return null
+      if (pricing === undefined) return { ok: true, value: null }
       const cost = sessionCostUsd(usage.buckets, pricing)
-      if (cost === null) return null
+      if (cost === null) return { ok: true, value: null }
       total += cost
-      if (!Number.isFinite(total)) return null
+      if (!Number.isFinite(total)) return { ok: true, value: null }
     }
-    return total
+    return { ok: true, value: total }
   }
 }
 

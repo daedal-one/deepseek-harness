@@ -37,7 +37,10 @@ type CredentialResolver = { readonly resolve: (ref: unknown) => Promise<{ readon
 interface HarnessOverrides {
   readonly credentials?: CredentialResolver
   readonly modelSelection?: Selection
+  /** Child-owned events used for pricing. */
   readonly events?: readonly SessionEvent[]
+  /** Complete snapshot including an inherited fork prefix. */
+  readonly allEvents?: readonly SessionEvent[]
   readonly keyReply?: (call: number, init: RequestInit | undefined) => Response | Promise<Response>
   readonly modelsReply?: () => Response | Promise<Response>
   readonly keyGate?: Promise<void>
@@ -132,7 +135,8 @@ async function harness(overrides: HarnessOverrides = {}): Promise<{
   contexts.push(ctx)
   const session = {
     id: SESSION_ID,
-    snapshotEvents: () => overrides.events ?? [],
+    snapshotEvents: () => overrides.allEvents ?? overrides.events ?? [],
+    ownEvents: () => overrides.events ?? [],
   } as unknown as Session
   let keyCalls = 0
   let modelsCalls = 0
@@ -300,7 +304,7 @@ describe('OpenRouterSpendService', () => {
     })
   })
 
-  it('degrades to costUsd null when the catalog read fails, without failing the key read', async () => {
+  it('preserves a distinct failure when the catalog read fails after the key read', async () => {
     const { service } = await harness({
       credentials: withKey(),
       modelSelection: { lastUsed: { provider: 'openrouter', model: 'a/b' }, next: null },
@@ -308,7 +312,25 @@ describe('OpenRouterSpendService', () => {
       modelsReply: () => new Response('down', { status: 503 }),
     })
 
-    expect((await successfulRead(service)).session).toEqual({ provider: 'openrouter', model: 'a/b', costUsd: null })
+    await expect(service.read({ sessionId: SESSION_ID }, new AbortController().signal)).resolves.toMatchObject({
+      ok: false,
+      error: { reason: 'unreachable' },
+    })
+  })
+
+  it('prices only child-owned events rather than a fork-inherited parent prefix', async () => {
+    const parent = message(1, { inputTokens: 1000, outputTokens: 500 }, 'openrouter', 'a/b')
+    const child = message(2, { inputTokens: 100, outputTokens: 10 }, 'openrouter', 'c/d')
+    const { service } = await harness({
+      credentials: withKey(),
+      modelSelection: { lastUsed: { provider: 'openrouter', model: 'c/d' }, next: null },
+      allEvents: [parent, child],
+      events: [child],
+    })
+
+    const result = await successfulRead(service)
+    expect(result.session).toMatchObject({ provider: 'openrouter', model: 'c/d' })
+    expect(result.session?.costUsd).toBeCloseTo(0.00012)
   })
 
   it('uses the key cache fetch time for cached snapshots', async () => {
@@ -338,6 +360,27 @@ describe('OpenRouterSpendService', () => {
     expect(keyCalls()).toBe(2)
     const authorization = fetchSpy.mock.calls.map(([, init]) => (init?.headers as Record<string, string>).authorization)
     expect(authorization).toEqual(['Bearer fake-key-a', 'Bearer fake-key-b'])
+  })
+
+  it('clears cached usage when a credential is removed before the same key returns', async () => {
+    let key: string | undefined = 'fake-key-a'
+    const { service, keyCalls } = await harness({
+      credentials: { resolve: async () => key === undefined ? undefined : { value: key } },
+      keyReply: call => jsonResponse({
+        ...KEY_BODY,
+        data: { ...KEY_BODY.data, label: `key-${String(call)}` },
+      }),
+    })
+
+    expect((await successfulRead(service)).key.label).toBe('key-1')
+    key = undefined
+    await expect(service.read({ sessionId: SESSION_ID }, new AbortController().signal)).resolves.toMatchObject({
+      ok: false,
+      error: { reason: 'not-configured' },
+    })
+    key = 'fake-key-a'
+    expect((await successfulRead(service)).key.label).toBe('key-2')
+    expect(keyCalls()).toBe(2)
   })
 
   it('does not cache a failed key read and recovers immediately', async () => {

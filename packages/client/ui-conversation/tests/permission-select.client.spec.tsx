@@ -68,8 +68,10 @@ it('lets an existing session explain its access without offering a switch', () =
     context: { environment: 'host', defaultPreset: 'workspace-write' } }} locked={false} command={command} t={t} />)
   fireEvent.click(view.getByRole('button', { name: 'Access mode, current: Host · Policy reviewed' }))
   expect(view.getByText('Access is fixed · choose another policy in a new session')).toBeTruthy()
-  const choices = view.getAllByRole('menuitem') as HTMLButtonElement[]
-  expect(choices.every(choice => choice.disabled)).toBe(true)
-  fireEvent.click(view.getByRole('menuitem', { name: 'Workspace Write' }))
+  const workspaceWrite = view.getByRole('menuitem', { name: 'Workspace Write' }) as HTMLButtonElement
+  expect(workspaceWrite.disabled).toBe(false)
+  fireEvent.focus(workspaceWrite)
+  expect(view.getByRole('tooltip').textContent).toBe(en['access.preset.workspaceWrite.description'])
+  fireEvent.click(workspaceWrite)
   expect(command).not.toHaveBeenCalled()
 })

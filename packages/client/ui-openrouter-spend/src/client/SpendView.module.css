@@ -111,12 +111,6 @@
   margin: 0;
 }
 
-.failureDetail {
-  color: var(--dsw-alias-label-secondary);
-  font-size: 0.8em;
-  word-break: break-word;
-}
-
 .meta {
   margin: 0;
   color: var(--dsw-alias-label-tertiary);
