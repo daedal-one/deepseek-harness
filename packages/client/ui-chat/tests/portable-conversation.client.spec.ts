@@ -58,6 +58,7 @@ describe('portable Chat business composition', () => {
       expect(value.events.entries().map(definition => definition.kind)).toEqual([
         'inbox-next-step', 'input-message', 'system-message', 'request-prompt', 'assistant-step', 'turn-process',
         'tool-call', 'command', 'compaction', 'model-retry', 'turn-error', 'turn-max-tokens', 'turn-tail', 'workspace-state',
+        'workspace-admission',
       ])
       expect(value.events.fallbackEntry()?.kind).toBe('unknown-surface')
       expect(value.views.entries().map(definition => definition.target)).toEqual(['chat'])

@@ -218,6 +218,11 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
       const result = await shell.run(shell.resolve({ command: 'cat host-only.txt', workdir: f.source }))
       expect(result.exitCode).toBe(0)
       expect(result.stdout.text).toBe('host fixture')
+      expect(await f.ctx.conversationWorkspaces.runForSession(host.agent.id, async () => f.ctx.agents.requireInitiator())).toBe(host.agent)
+      const cancelled = new AbortController()
+      cancelled.abort(new Error('cancelled host operation'))
+      await expect(f.ctx.conversationWorkspaces.runForSession(host.agent.id, async () => host.agent, cancelled.signal))
+        .rejects.toThrow('cancelled host operation')
       host.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Finish.' }], source: { kind: 'user' } }))
       await host.agent.whenIdle()
       expect(host.agent.session.snapshotEvents().some(event => event.type === 'workspace/state')).toBe(false)
@@ -294,6 +299,12 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
     await resumed.dispose()
   })
 
+  it('registers environment guidance before first lazy admission', async () => {
+    const f = await fixture({ environment: true, pinWorkspace: false })
+    await f.turn()
+    expect(JSON.stringify(f.adapter.requests[0]?.messages)).toContain('"environmentId":"test-environment"')
+  })
+
   it('releases the environment lease after stopped-world checkpoint failure', async () => {
     const f = await fixture({ environment: true })
     const publish = broker.publishWorkspaceJson
@@ -339,6 +350,23 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
       cancelled.abort()
       await Promise.allSettled([next, other.dispose(), waiting.dispose()])
     }
+  })
+
+  it('retries idle release after recording its pending state fails', async () => {
+    const f = await fixture({ pinWorkspace: false, retryDelayMs: 25 })
+    const flush = vi.spyOn(f.ctx.sessions, 'flush').mockRejectedValueOnce(new Error('pending state unavailable'))
+    const release = f.ctx.conversationWorkspaces.runForSession(f.handle.agent.id, async () => {
+      const runtime = f.ctx.conversationWorkspaces.capture()
+      vi.spyOn(runtime, 'settle').mockRejectedValueOnce(new Error('writer remains active'))
+    })
+    await expect(release).rejects.toThrow('pending state unavailable')
+    await expect.poll(async () => {
+      try {
+        await f.ctx.conversationWorkspaces.runForSession(f.handle.agent.id, async () => undefined)
+        return true
+      } catch { return false }
+    }, { timeout: 5000 }).toBe(true)
+    expect(flush).toHaveBeenCalled()
   })
 
   it('checkpoints an unclean vacant slot before another conversation reuses it', async () => {
@@ -392,6 +420,35 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
       expect(admission(2)).toEqual(['waiting', 'admitted'])
       expect(f.adapter.requests).toHaveLength(3)
     } finally {
+      for (const handle of handles) handle.agent.cancel({ kind: 'user' })
+      await Promise.all(handles.map(async (handle) => { await handle.agent.whenIdle(); await handle.dispose() }))
+    }
+  })
+
+  it('releases admitted capacity when cancellation lands before turn start', async () => {
+    const f = await fixture({ pinWorkspace: false, script: ['hang', 'hang'] })
+    const handles = [f.handle]
+    for (let index = 1; index < 3; index++) handles.push(await f.ctx.agents.create({
+      sessionId: SessionId(`admission-cancellation-${index}`), meta: { cwd: f.source },
+      agentOptions: { provider: 'mock', model: 'main' },
+    }))
+    const stop = f.ctx.on('session/event', (session, event) => {
+      if (session === f.handle.agent.session && event.type === 'workspace/admission' && event.data.status === 'admitted') {
+        f.handle.agent.cancel({ kind: 'user' })
+      }
+    })
+    try {
+      f.handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Cancel after admission.' }], source: { kind: 'user' } }))
+      await f.handle.agent.whenIdle()
+      expect(f.handle.agent.session.snapshotEvents().filter(event => event.type === 'workspace/admission').map(event => event.data.status))
+        .toEqual(['waiting', 'admitted'])
+      expect(f.handle.agent.session.snapshotEvents().some(event => event.type === 'turn/start')).toBe(false)
+      for (const handle of handles.slice(1)) {
+        handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Use available capacity.' }], source: { kind: 'user' } }))
+      }
+      await expect.poll(() => f.adapter.requests.length).toBe(2)
+    } finally {
+      stop()
       for (const handle of handles) handle.agent.cancel({ kind: 'user' })
       await Promise.all(handles.map(async (handle) => { await handle.agent.whenIdle(); await handle.dispose() }))
     }
@@ -577,22 +634,35 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
   })
 
   it('restores a multi-repository environment after RAM loss and preserves its grants', async () => {
-    const f = await fixture({ environment: true })
+    const f = await fixture({ environment: true, pinWorkspace: false })
     f.ctx.on('user-questions/request', async ({ questions }) => ({ answers: [{ id: questions[0]!.id, selected: ['Approve'] }] }))
     const result = await f.ctx.conversationWorkspaces.requestRepository(f.handle.agent, 'https://github.example/org/second.git', 'fetch', 'Work on the second repository.', new AbortController().signal)
     const relative = result.path!.slice('/workspace/'.length)
-    await writeFile(join(f.execution, relative, 'retained.txt'), 'sandbox change\n')
+    const initial = await f.executionFor(f.handle.agent)
+    await writeFile(join(initial, relative, 'retained.txt'), 'sandbox change\n')
     await f.turn()
     const ctx = await f.restart()
     await rm(join(f.pool, 'workspace'), { recursive: true }); await rm(join(f.pool, 'owner.json'))
     await writeFile(join(f.secondSource, 'input.txt'), 'new host change\n')
     const resumed = await ctx.agents.resume({ resumeSessionId: f.handle.agent.id, agentOptions: { provider: 'mock', model: 'main' } })
     try {
+      expect((await ctx.conversationWorkspaces.requestRepository(resumed.agent, 'https://github.example/org/second.git', 'fetch', 'Reuse access.', new AbortController().signal)).status).toBe('ready')
       const world = await f.executionFor(resumed.agent)
       expect(await readFile(join(world, relative, 'retained.txt'), 'utf8')).toBe('sandbox change\n')
       expect(await readFile(join(world, relative, 'input.txt'), 'utf8')).toBe('initial\n')
-      expect((await ctx.conversationWorkspaces.requestRepository(resumed.agent, 'https://github.example/org/second.git', 'fetch', 'Reuse access.', new AbortController().signal)).status).toBe('ready')
     } finally { await resumed.dispose() }
+  })
+
+  it('rejects child repository requests while allowing the cold parent request', async () => {
+    const f = await fixture({ environment: true, pinWorkspace: false })
+    const child = await f.ctx.agents.create({ sessionId: SessionId('repository-request-child'), parentAgent: f.handle.agent,
+      meta: { cwd: f.source }, agentOptions: { provider: 'mock', model: 'main' } })
+    f.ctx.on('user-questions/request', async ({ questions }) => ({ answers: [{ id: questions[0]!.id, selected: ['Approve'] }] }))
+    try {
+      await expect(f.ctx.conversationWorkspaces.requestRepository(child.agent, 'https://github.example/org/second.git', 'fetch', 'Inspect the second repository.', new AbortController().signal))
+        .rejects.toThrow('ask the parent session')
+      expect((await f.ctx.conversationWorkspaces.requestRepository(f.handle.agent, 'https://github.example/org/second.git', 'fetch', 'Inspect the second repository.', new AbortController().signal)).status).toBe('ready')
+    } finally { await child.dispose() }
   })
 
   it('recovers an attachment interrupted after its physical import but before its checkpoint', async () => {

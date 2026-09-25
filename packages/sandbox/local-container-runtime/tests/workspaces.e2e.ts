@@ -171,7 +171,9 @@ describe.skipIf(!enabled)('conversation workspace real Podman Loader flow', () =
       await first.agent.whenIdle()
       expect(first.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')?.data)
         .toMatchObject({ phase: 'pending', turn: 3 })
-      const world = ctx.agents.withInitiator(first.agent, () => ctx.conversationWorkspaces.capture().containerName)
+      const world = await ctx.conversationWorkspaces.runForSession(
+        first.agent.id, async () => ctx.conversationWorkspaces.capture().containerName,
+      )
       // The test owns the tmpfs roots; this external release proves settlement did not kill the writer.
       const slot = await Promise.all(poolPaths.map(async (slot) => {
         let owner: { workspaceId: string } | undefined

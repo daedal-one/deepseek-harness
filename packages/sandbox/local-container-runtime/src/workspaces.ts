@@ -248,7 +248,7 @@ export class ConversationWorkspaces extends Service {
       }, 'conversation workspace agent binding')
       agent.ctx.systemPrompt.variable('cwd', () => this.forAgent(agent).record.executionPath ?? '/workspace')
       installWorkspaceGuidance(agent)
-      if (this.environment !== undefined) agent.ctx.systemPrompt.context({ name: 'environment:access',
+      if (this.config.environment !== undefined) agent.ctx.systemPrompt.context({ name: 'environment:access',
         order: agent.ctx.systemPrompt.getContextOrder('SANDBOX_POLICY') + 1,
         text: () => this.environment?.guidance() ?? '' })
     })
@@ -288,6 +288,10 @@ export class ConversationWorkspaces extends Service {
         if (workspace.owner === agent) await this.settle(workspace, turn, reason)
       } finally { await this.releaseTurn(agent) }
     })
+    ctx.on('agent/status', ({ agent, status }) => {
+      if (this.hostAgents.has(agent) || status !== 'idle') return
+      void this.releaseTurn(agent).catch((error: unknown) => { ctx.logger.error(error) })
+    })
     ctx.on('agent/pre-step', async ({ agent }, next) => {
       if (this.hostAgents.has(agent)) return await next()
       if (this.forAgent(agent).pending) throw new Error('workspace save is pending; resume after resolving the reported storage or writer error')
@@ -325,7 +329,12 @@ export class ConversationWorkspaces extends Service {
   async runForSession<T>(sessionId: SessionId, operation: () => Promise<T>, signal?: AbortSignal): Promise<T> {
     const agent = this.ctx.agents.get(sessionId)
     if (agent === undefined) throw new Error('open the conversation before accessing its execution workspace')
-    const release = await this.acquireUse(agent, signal ?? this.requestCancellation.signal)
+    const cancellation = signal === undefined
+      ? this.requestCancellation.signal
+      : AbortSignal.any([signal, this.requestCancellation.signal])
+    cancellation.throwIfAborted()
+    if (this.hostAgents.has(agent)) return await this.ctx.agents.withInitiator(agent, operation)
+    const release = await this.acquireUse(agent, cancellation)
     try { return await this.ctx.agents.withInitiator(agent, operation) }
     finally { await release() }
   }
@@ -490,7 +499,8 @@ export class ConversationWorkspaces extends Service {
     if (use.references !== 0) return Promise.resolve()
     if (use.closing !== undefined) return use.closing
     use.abort.abort()
-    use.closing = (async () => {
+    let closing!: Promise<void>
+    closing = Promise.resolve().then(async () => {
       let workspace: Workspace
       try { workspace = await use.ready }
       catch {
@@ -499,7 +509,7 @@ export class ConversationWorkspaces extends Service {
         return
       }
       if (workspace.pending && use.idlePending !== true) {
-        delete use.closing
+        if (use.closing === closing) delete use.closing
         return
       }
       try {
@@ -509,13 +519,16 @@ export class ConversationWorkspaces extends Service {
       } catch (error) {
         use.idlePending = true
         workspace.pending = true
-        this.state(workspace, 'pending', workspace.record.lastTurn, error instanceof Error ? error.message : String(error))
-        await this.ctx.sessions.flush(workspace.owner.session)
-        delete use.closing
-        workspace.retryTimer = setTimeout(() => {
-          void this.releaseIdle(owner, use).catch((failure: unknown) => { this.ctx.logger.error(failure) })
-        }, this.config.retryDelayMs)
-        workspace.retryTimer.unref()
+        try {
+          this.state(workspace, 'pending', workspace.record.lastTurn, error instanceof Error ? error.message : String(error))
+          await this.ctx.sessions.flush(workspace.owner.session)
+        } finally {
+          if (use.closing === closing) delete use.closing
+          workspace.retryTimer = setTimeout(() => {
+            void this.releaseIdle(owner, use).catch((failure: unknown) => { this.ctx.logger.error(failure) })
+          }, this.config.retryDelayMs)
+          workspace.retryTimer.unref()
+        }
         return
       }
       workspace.pending = false
@@ -523,8 +536,9 @@ export class ConversationWorkspaces extends Service {
       for (const agent of workspace.users) this.bindings.delete(agent)
       this.uses.delete(owner.id)
       use.releaseSlot?.()
-    })()
-    return use.closing
+    })
+    use.closing = closing
+    return closing
   }
 
   private async verifyPool(): Promise<void> {
@@ -594,7 +608,14 @@ export class ConversationWorkspaces extends Service {
   ): Promise<RepositoryRequestResult> {
     this.requestCancellation.signal.throwIfAborted()
     const cancellation = AbortSignal.any([signal, this.requestCancellation.signal])
-    const operation = this.requestRepositoryImpl(agent, repository, access, reason, cancellation)
+    const operation = (async () => {
+      if (this.hostAgents.has(agent)) throw new Error('host maintenance conversations do not have a container workspace')
+      const release = await this.acquireUse(agent, cancellation)
+      try {
+        cancellation.throwIfAborted()
+        return await this.requestRepositoryImpl(agent, repository, access, reason, cancellation)
+      } finally { await release() }
+    })()
     this.repositoryRequests.add(operation)
     try { return await operation } finally { this.repositoryRequests.delete(operation) }
   }
