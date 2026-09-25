@@ -586,6 +586,13 @@ async compositionInventory(): Promise<AgentPresetComposition[]>
 async resolve(id?: string): Promise<AgentPreset>
 
 /**
+ * Read the access default captured when an agent joined its profile.
+ * @param agentCtx - scoped context of the agent.
+ * @returns the profile's default, or undefined for server inheritance.
+ */
+permissionPresetFor(agentCtx: Context): string | undefined
+
+/**
  * Compose one agent from a preset: ensure the preset's standing mount, then
  * parent the agent's scope key to it so the mount's registrations and
  * listeners cover this agent.
@@ -1404,6 +1411,23 @@ Source: [`packages/core/agent-default-model/src/types.ts`](../../packages/core/a
 
 ### `agent-preset/*` events
 
+<a id="agent-presetcommitted--serial"></a>
+
+#### `agent-preset/committed` — serial
+
+Apply profile-owned defaults after a blank session commits its selection.
+
+```ts cordis-catalog
+/**
+ * Apply profile-owned defaults after a blank session commits its selection.
+ * @mode serial
+ * @param agent - agent running the committed profile.
+ */
+'agent-preset/committed'(agent: Agent): Promise<void> | void
+```
+
+Source: [`packages/preset/agent-presets/src/index.ts`](../../packages/preset/agent-presets/src/index.ts)
+
 <a id="agent-presetselected--emit"></a>
 
 #### `agent-preset/selected` — emit
@@ -1422,4 +1446,21 @@ One session committed a different agent preset to its durable log. Consumers inv
 ```
 
 Source: [`packages/preset/agent-presets/src/types.ts`](../../packages/preset/agent-presets/src/types.ts)
+
+<a id="agent-presetvalidating--serial"></a>
+
+#### `agent-preset/validating` — serial
+
+Validate a resolved profile before mounting or changing an agent's composition.
+
+```ts cordis-catalog
+/**
+ * Validate a resolved profile before mounting or changing an agent's composition.
+ * @mode serial
+ * @param preset - resolved profile whose defaults must be supported by the server.
+ */
+'agent-preset/validating'(preset: AgentPreset): Promise<void> | void
+```
+
+Source: [`packages/preset/agent-presets/src/index.ts`](../../packages/preset/agent-presets/src/index.ts)
 <!-- END GENERATED cordis-surface -->

@@ -14,6 +14,8 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { z as zod } from 'zod'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
+import type { Agent } from '@deepseek-ai/dsh-agent'
+import type {} from '@deepseek-ai/dsh-agent-presets'
 import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import { SANDBOX_MODES, setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 // Side-effect type import: declaration-merges `ctx.shell` (the capability fact
@@ -25,7 +27,8 @@ import type {} from '@deepseek-ai/dsh-settings'
 // Type-only: resolves the optional projection and command children.
 import type {} from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-commands'
-import type { PermissionSelect, PresetOption } from './types.ts'
+import type { PermissionContext, PermissionSelect, PresetOption } from './types.ts'
+import { executionEnvironment } from './environment.ts'
 
 export type * from './types.ts'
 
@@ -44,6 +47,8 @@ declare module '@deepseek-ai/dsh-session-projection/types' {
 
 declare module '@deepseek-ai/dsh-session/types' {
   interface SessionEventMap {
+    /** Log-only execution placement and profile default observed before publication or a blank profile change. */
+    'permission/context': PermissionContext
     /**
      * Records the selected preset as durable, log-only user intent. The knob
      * events follow in the same turn and control execution; this event stays
@@ -90,11 +95,22 @@ export interface KnobState {
 
 /** Projection state for permission overrides and constructor-seed provenance. */
 interface PermissionProjectionState extends KnobState {
+  /** Captured profile default and observed execution placement. */
+  context: PermissionContext | null
+  /** Whether a model turn has ever started. */
+  started: boolean
   /** Whether the log contains a constructor-seed boundary. */
   seeded: boolean
 }
 
+const contextSchema = zod.object({
+  environment: zod.enum(['host', 'container', 'external', 'unknown']),
+  defaultPreset: zod.string(),
+})
+
 const permissionStateSchema: zod.ZodType<PermissionProjectionState> = zod.object({
+  context: contextSchema.nullable(),
+  started: zod.boolean(),
   preset: zod.string().nullable(),
   sandbox: zod.union([
     zod.literal('read-only'),
@@ -120,6 +136,10 @@ function applyPermissionEvent(
   event: SessionEvent,
 ): PermissionProjectionState {
   switch (event.type) {
+    case 'permission/context':
+      return { ...state, context: event.data }
+    case 'turn/start':
+      return state.started ? state : { ...state, started: true }
     case 'permission/preset':
       return { ...state, preset: event.data.preset }
     case 'sandbox/mode':
@@ -227,6 +247,8 @@ export class PermissionPresetService extends Service {
     // identically (absent), so the cast records exactly that
     // exactOptionalPropertyTypes widening (the Wire<T> precedent).
     const selectSchema = zod.object({
+      context: contextSchema.optional(),
+      canChange: zod.boolean(),
       options: zod.array(zod.object({
         value: zod.string().min(1),
         name: zod.string().min(1),
@@ -236,12 +258,21 @@ export class PermissionPresetService extends Service {
     }) as unknown as zod.ZodType<PermissionSelect>
     ctx.sessionProjections.register({
       key: 'permissions',
-      stateVersion: 2,
+      stateVersion: 3,
       stateSchema: permissionStateSchema,
-      init: () => ({ ...EMPTY_KNOBS, seeded: false }),
+      init: () => ({ ...EMPTY_KNOBS, seeded: false, started: false, context: null }),
       apply: applyPermissionEvent,
-      wire: { viewSchema: selectSchema, view: state => this.selectFor(state) },
+      wire: { viewSchema: selectSchema, view: state => ({
+        ...this.selectFor(state),
+        canChange: !state.started,
+        ...state.context === null ? {} : { context: state.context },
+      }) },
     })
+    ctx.on('agent-preset/validating', (preset) => {
+      if (preset.permissionPreset !== undefined) this.resolve(preset.permissionPreset)
+    })
+    ctx.on('agent/prepare', ({ agent }) => { this.prepareAccess(agent, false) })
+    ctx.on('agent-preset/committed', (agent) => { this.prepareAccess(agent, true) })
     ctx.on('session/created', (session) => {
       this.pinInitialPermission(session)
     })
@@ -267,6 +298,9 @@ export class PermissionPresetService extends Service {
           }
           if (!this.names.includes(name)) {
             return { kind: 'error', text: `unknown preset "${name}" (available: ${this.names.join(', ')})` }
+          }
+          if (this.permissionState(agent.session).started && this.current(agent.session) !== name) {
+            return { kind: 'error', text: 'Access is fixed after the session starts. Start a new session to choose another policy.' }
           }
           this.apply(agent.session, name, (policy) =>{  this.ctx.approval.setPolicy(agent, policy) })
           return { kind: 'success', text: `preset ${name}` }
@@ -349,7 +383,7 @@ export class PermissionPresetService extends Service {
    */
   resolve(name: string): PresetSpec {
     const spec = this.presets[name]
-    if (spec === undefined) {
+    if (!Object.hasOwn(this.presets, name) || spec === undefined) {
       throw new Error(`permission: unknown preset "${name}" (known: ${Object.keys(this.presets).join(', ')})`)
     }
     return spec
@@ -372,9 +406,9 @@ export class PermissionPresetService extends Service {
 
   /**
    * Record a changed preset, then update each changed knob through its own
-   * setter. Selecting the effective preset again appends nothing.
+   * setter before the first turn. Selecting the effective preset again appends nothing.
    * @param session - the session the switch belongs to.
-   * @param name - the preset to switch to; unknown names throw.
+   * @param name - the preset to switch to; unknown names or changes after the first turn throw.
    */
   set(session: Session, name: string): void {
     this.apply(session, name, (policy) =>{  setApprovalPolicy(session, policy) })
@@ -383,6 +417,9 @@ export class PermissionPresetService extends Service {
   /** Apply one preset with the caller-selected live or initialization policy writer. */
   private apply(session: Session, name: string, setApproval: (policy: ApprovalPolicy) => void): void {
     const spec = this.resolve(name)
+    if (this.permissionState(session).started && this.current(session) !== name) {
+      throw new Error('permission: access is fixed after the session starts; start a new session to choose another policy')
+    }
     if (this.current(session) !== name) {
       session.append('permission/preset', { preset: name })
     }
@@ -401,14 +438,14 @@ export class PermissionPresetService extends Service {
    * initialized sessions preserve their effective knob values and only gain
    * the missing durable facts.
    */
-  private pinInitialPermission(session: Session): void {
+  private pinInitialPermission(session: Session, profileDefault?: string): void {
     const state = this.permissionState(session)
     const selected = state.preset
     const sandbox = state.sandbox
     const approval = state.approval
     const seeded = state.seeded
     if (selected === null && sandbox === null && approval === null && !seeded) {
-      const name = this.defaultPreset
+      const name = profileDefault ?? this.defaultPreset
       const spec = this.resolve(name)
       session.append('permission/preset', { preset: name })
       setSandboxMode(session, spec.sandbox)
@@ -425,6 +462,25 @@ export class PermissionPresetService extends Service {
     }
     if (approval === null) {
       setApprovalPolicy(session, this.ctx.approval.config.policy ?? 'ask')
+    }
+  }
+
+  /** Resolve profile defaults before publication; restored logs retain their own permission facts. */
+  private prepareAccess(agent: Agent, profileChanged: boolean): void {
+    const state = this.permissionState(agent.session)
+    const environment = executionEnvironment(this.ctx, agent)
+    if (state.started && state.context !== null && state.context.environment !== 'unknown'
+      && environment !== state.context.environment) {
+      throw new Error('permission: this session cannot resume in a different execution environment; start a new session')
+    }
+    const defaultPreset = !profileChanged && state.context !== null
+      ? state.context.defaultPreset
+      : this.ctx.get('agentPresets')?.permissionPresetFor(agent.ctx) ?? this.defaultPreset
+    if (profileChanged || state.context === null) this.resolve(defaultPreset)
+    if (profileChanged) this.set(agent.session, defaultPreset)
+    else this.pinInitialPermission(agent.session, defaultPreset)
+    if (state.context === null || state.context.environment !== environment || state.context.defaultPreset !== defaultPreset) {
+      agent.session.append('permission/context', { environment, defaultPreset })
     }
   }
 }

@@ -23,15 +23,15 @@ Use this package to choose Web GUI permission presets for future sessions or swi
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this plugin alongside the settings and commands packages; the permission row then appears in General settings, and the `/permission` picker replaces the bare command invocation. The current-session picker is available exactly while the projection key is present; a permission-less composition shows neither picker nor Settings row.
+Mount this plugin alongside the settings and commands packages; the permission row then appears in General settings, and the `/permission` picker replaces the bare command invocation. The current-session picker is available while the projection key is present and the first model turn has not started; a permission-less composition shows neither picker nor Settings row.
 
 ### The picker
 
-A pick submits the `/permission <preset>` command line. The argued path (`/permission <preset>` typed directly) still switches directly; the decoration replaces only the bare invocation. The built-in labels are `Read Only`, `Workspace Write`, and `Full access`; `custom` is display state, never a target.
+A pick submits the `/permission <preset>` command line. The argued path (`/permission <preset>` typed directly) switches before the first model turn and rejects later changes; the decoration replaces only the bare invocation. The built-in labels are `Read Only`, `Workspace Write`, and `Full access`; `custom` is display state, never a target.
 
 ### The Settings row
 
-The row derives its options from the host's dynamic `defaultPreset` enum, uses the same localized labels as the current-session picker, and writes one settings mutation. The value applies only when a later session is created; changing it never switches or rewrites the current session.
+The row derives its options from the host's dynamic `defaultPreset` enum, uses the same localized labels as the current-session picker, and writes one settings mutation. The value applies when a later session has no profile-owned access default; changing it never switches or rewrites the current session.
 
 -----
 

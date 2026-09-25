@@ -30,6 +30,7 @@ import { load } from 'js-yaml'
 import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
 import { expandHomePath } from '@deepseek-ai/dsh-home-paths'
 import { readPresetMetadata } from './metadata.ts'
+import { readPresetAccess } from './access.ts'
 import { PRESET_ID, type AgentPreset, type PresetRoot } from './preset.ts'
 import { classifyRowSpecifier, type RowSpecifier } from './specifier.ts'
 
@@ -303,14 +304,21 @@ export async function scanRoot(root: PresetRoot, harnessBase: string): Promise<A
     if (!child.isDirectory() || !PRESET_ID.test(child.name)) continue
     const directory = join(dir, child.name)
     const path = join(directory, COMPOSITION_FILE)
-    const broken = await isFile(path)
+    let broken = await isFile(path)
       ? await compositionProblem(path, harnessBase)
       : `the composition file ${COMPOSITION_FILE} is missing — the directory still occupies the id; delete it or restore the file`
     // Display text only, and never fatal: a preset with unreadable metadata
     // still mounts, it just shows its id.
     const metadata = await readPresetMetadata(directory)
+    let permissionPreset: string | undefined
+    try {
+      permissionPreset = await readPresetAccess(directory)
+    } catch (error) {
+      broken = `invalid access.yml: ${String(error)}`
+    }
     found.push({
       id: child.name, trust: root.trust, path, ...metadata,
+      ...permissionPreset === undefined ? {} : { permissionPreset },
       ...broken === undefined ? {} : { broken },
     })
   }

@@ -197,6 +197,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['when no configured root supplies that id.'],
       },
       {
+        signature: 'permissionPresetFor(agentCtx: Context): string | undefined',
+        description: 'Read the access default captured when an agent joined its profile.',
+        parameters: [{ name: 'agentCtx', description: 'scoped context of the agent.' }],
+        returns: 'the profile\'s default, or undefined for server inheritance.',
+      },
+      {
         signature: 'async mount(agentCtx: Context, id?: string): Promise<AgentPreset>',
         description: 'Compose one agent from a preset: ensure the preset\'s standing mount, then parent the agent\'s scope key to it so the mount\'s registrations and listeners cover this agent.\n\nCall from the agent factory\'s `setup(agentCtx)`; a rejection there rolls the agent creation back, so a broken preset never yields a half-composed session.',
         parameters: [{ name: 'agentCtx', description: 'the agent\'s scope context.' }, { name: 'id', description: 'the preset id, or `undefined` for {@link defaultId}.' }],
@@ -1637,8 +1643,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'set(session: Session, name: string): void',
-        description: 'Record a changed preset, then update each changed knob through its own setter. Selecting the effective preset again appends nothing.',
-        parameters: [{ name: 'session', description: 'the session the switch belongs to.' }, { name: 'name', description: 'the preset to switch to; unknown names throw.' }],
+        description: 'Record a changed preset, then update each changed knob through its own setter before the first turn. Selecting the effective preset again appends nothing.',
+        parameters: [{ name: 'session', description: 'the session the switch belongs to.' }, { name: 'name', description: 'the preset to switch to; unknown names or changes after the first turn throw.' }],
       },
     ],
   },
@@ -3367,12 +3373,28 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [],
   },
   {
+    name: 'agent-preset/committed',
+    mode: 'serial',
+    signature: '\'agent-preset/committed\'(agent: Agent): Promise<void> | void',
+    summary: 'Apply profile-owned defaults after a blank session commits its selection.',
+    description: 'Apply profile-owned defaults after a blank session commits its selection.',
+    parameters: [{ name: 'agent', description: 'agent running the committed profile.' }],
+  },
+  {
     name: 'agent-preset/selected',
     mode: 'emit',
     signature: '\'agent-preset/selected\'(sessionId: SessionId, agentPreset: string): void',
     summary: 'One session committed a different agent preset to its durable log.',
     description: 'One session committed a different agent preset to its durable log. Consumers invalidate only state derived from that session\'s composition.',
     parameters: [{ name: 'sessionId', description: 'the session whose composition changed.' }, { name: 'agentPreset', description: 'the preset recorded by the committed selection.' }],
+  },
+  {
+    name: 'agent-preset/validating',
+    mode: 'serial',
+    signature: '\'agent-preset/validating\'(preset: AgentPreset): Promise<void> | void',
+    summary: 'Validate a resolved profile before mounting or changing an agent\'s composition.',
+    description: 'Validate a resolved profile before mounting or changing an agent\'s composition.',
+    parameters: [{ name: 'preset', description: 'resolved profile whose defaults must be supported by the server.' }],
   },
   {
     name: 'agent/assistant-stream',
@@ -4000,7 +4022,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'AgentPreset',
-    declaration: 'export interface AgentPreset {\n    readonly id: string;\n    readonly trust: PresetTrust;\n    readonly path: string;\n    readonly name?: string;\n    readonly description?: string;\n    readonly order?: number;\n    readonly broken?: string;\n}',
+    declaration: 'export interface AgentPreset {\n    readonly permissionPreset?: string;\n    readonly id: string;\n    readonly trust: PresetTrust;\n    readonly path: string;\n    readonly name?: string;\n    readonly description?: string;\n    readonly order?: number;\n    readonly broken?: string;\n}',
   },
   {
     name: 'AgentPresetComposition',
@@ -4024,7 +4046,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'AgentPresetRow',
-    declaration: 'export interface AgentPresetRow {\n    readonly id: string;\n    readonly trust: PresetTrust;\n    readonly isDefault: boolean;\n    readonly name?: string;\n    readonly description?: string;\n    readonly broken?: string;\n}',
+    declaration: 'export interface AgentPresetRow {\n    readonly permissionPreset?: string;\n    readonly id: string;\n    readonly trust: PresetTrust;\n    readonly isDefault: boolean;\n    readonly name?: string;\n    readonly description?: string;\n    readonly broken?: string;\n}',
   },
   {
     name: 'AgentResolver',
@@ -4609,6 +4631,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'EpochHeader',
     declaration: 'export interface EpochHeader {\n    config: LlmCallConfig;\n    adapterDefaults?: LlmCallConfigAdapterDefaults;\n    tools?: ToolSchema[];\n}',
+  },
+  {
+    name: 'ExecutionEnvironment',
+    declaration: 'export type ExecutionEnvironment = \'host\' | \'container\' | \'external\' | \'unknown\';',
   },
   {
     name: 'FeedbackCategory',
@@ -5247,8 +5273,12 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type OptionalSessionSeq = SessionSeq | null;',
   },
   {
+    name: 'PermissionContext',
+    declaration: 'export interface PermissionContext {\n    environment: ExecutionEnvironment;\n    defaultPreset: string;\n}',
+  },
+  {
     name: 'PermissionSelect',
-    declaration: 'export interface PermissionSelect {\n    options: PresetOption[];\n    currentValue: string;\n}',
+    declaration: 'export interface PermissionSelect {\n    context?: PermissionContext;\n    canChange?: boolean;\n    options: PresetOption[];\n    currentValue: string;\n}',
   },
   {
     name: 'PodmanControllerExecRequest',

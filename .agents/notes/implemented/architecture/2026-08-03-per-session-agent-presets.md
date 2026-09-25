@@ -27,6 +27,8 @@ Mounting is per-session by default. Measured cost for a twelve-row composition i
 
 Which preset an unnamed session gets is a user setting (`agent-presets.default`) layered over the composition's own `default`, which becomes the `base`. Both layers are needed: the composition value is what a deployment ships and must keep working with no settings provider at all, and the setting is what a person changes without editing a `cordis.yml` they may not own.
 
+Profile-owned access defaults and creation-time overrides follow the [conversation access decision](2026-09-24-conversation-profile-access.md); composition lifetime remains owned here.
+
 ## Consequences
 
 **The effective default is read per resolution, never snapshotted.** A cached value would need a `watch` subscription and a reload path to stay honest, and the resolved scope already re-reads a hot-reloaded document. Reading through is also what makes the boundary correct rather than merely cheap: the new value applies to the next session created, and every running session keeps the composition it was built from. That invariant is the same one the session log enforces from the other side — the header records the id a session was CREATED with and an `agent-preset/selected` event records any later blank-session switch, so a reader resolves the pair (`resolveSessionPreset`) and never the header alone: a resume rebuilds the composition its history was produced under rather than the deployment default at resume time, a cold transcript's presenters resolve in that composition's layer, and the gateway rejects an attempt to adopt a live session under a preset other than the one it currently runs. A snapshot would make the two disagree at exactly the moment the setting changes.

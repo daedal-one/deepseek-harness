@@ -7134,12 +7134,24 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:^
         version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:^
+        version: link:../../core/agent
+      '@deepseek-ai/dsh-agent-presets':
+        specifier: workspace:^
+        version: link:../../preset/agent-presets
       '@deepseek-ai/dsh-commands':
         specifier: workspace:^
         version: link:../commands
+      '@deepseek-ai/dsh-fs':
+        specifier: workspace:^
+        version: link:../../fs/fs
       '@deepseek-ai/dsh-invariants':
         specifier: workspace:^
         version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-local-container-runtime':
+        specifier: workspace:^
+        version: link:../../sandbox/local-container-runtime
       '@deepseek-ai/dsh-sandbox':
         specifier: workspace:^
         version: link:../../sandbox/sandbox
@@ -7158,6 +7170,9 @@ importers:
       '@deepseek-ai/dsh-shell':
         specifier: workspace:^
         version: link:../../shell/shell
+      '@deepseek-ai/dsh-subprocess':
+        specifier: workspace:^
+        version: link:../../subprocess/subprocess
       '@deepseek-ai/dsh-user-approval':
         specifier: workspace:^
         version: link:../user-approval

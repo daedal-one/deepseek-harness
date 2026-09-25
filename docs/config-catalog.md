@@ -175,7 +175,7 @@ export interface PresetRoot {
 export type PresetTrust = 'system' | 'user'
 ```
 
-Source: [`packages/preset/agent-presets/src/preset.ts:52`](../packages/preset/agent-presets/src/preset.ts)
+Source: [`packages/preset/agent-presets/src/preset.ts:54`](../packages/preset/agent-presets/src/preset.ts)
 
 <a id="deepseek-aidsh-agent-tool-presentation"></a>
 
@@ -1923,7 +1923,7 @@ export interface PresetSpec {
 
 Depends on: [`ApprovalPolicy`](subsystems/approval.md) · [`SandboxMode`](subsystems/sandbox.md)
 
-Source: [`packages/interaction/permission-presets/src/index.ts:143`](../packages/interaction/permission-presets/src/index.ts)
+Source: [`packages/interaction/permission-presets/src/index.ts:163`](../packages/interaction/permission-presets/src/index.ts)
 
 <a id="deepseek-aidsh-persona"></a>
 
