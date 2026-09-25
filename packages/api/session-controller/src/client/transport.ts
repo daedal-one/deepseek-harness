@@ -2,6 +2,7 @@
 
 import type {} from '@deepseek-ai/dsh-api-session-controller/remote'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
+import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session/types'
 import {
   RemoteJournalStream,
   RemoteSnapshotStream,
@@ -182,6 +183,10 @@ export class SessionEventStream extends RemoteJournalStream<
       ...(request.maxMessages === undefined ? {} : { maxMessages: request.maxMessages }),
     }, signal)) {
       if (frame.type === 'snapshot') {
+        const version: unknown = frame.header.version
+        if (version !== SESSION_FORMAT_VERSION) {
+          throw new Error(`unsupported Session format ${String(version)}; this client requires ${String(SESSION_FORMAT_VERSION)}`)
+        }
         for (const record of frame.records) assertSessionWireEvent(record.event)
         if (frame.assistantStream === undefined) {
           throw new RemoteError(

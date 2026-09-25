@@ -7,7 +7,10 @@
 
 import { randomUUID } from 'node:crypto'
 import { Context, Service, symbols } from '@deepseek-ai/cordis'
+import type { ConnectionIdentity } from '@deepseek-ai/dsh-client-connection/types'
+import { remoteCompatibilitySchema } from './compatibility-protocol.ts'
 import type { ConnectionRpcHandler } from '@deepseek-ai/dsh-client-connection'
+import { HOST_CAPABILITIES_ENDPOINT, hostCapabilitiesRequestSchema, type HostCapability } from './capabilities-protocol.ts'
 import { Deque } from '@deepseek-ai/dsh-deque'
 import type { WebUpgradeRoute } from '@deepseek-ai/dsh-host-webserver'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
@@ -199,7 +202,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
       connectionCtx.connection.rpc.intercept(
         '/api',
         endpoint => this.claimsEndpoint(endpoint),
-        (endpoint, payload, signal) => this.dispatchRpc(endpoint, payload, signal),
+        (endpoint, payload, signal) => this.dispatchRpc(endpoint, payload, signal, connectionCtx.connection.identity),
       )
     })
     ctx.inject(['connection', 'webServer'], (webCtx) => {
@@ -211,13 +214,23 @@ export class TypertGatewayService extends Service implements TypertGateway {
       webCtx.effect(() => {
         const route: WebUpgradeRoute = {
           path: REMOTE_STREAM_MUX_PATH,
-          handler: (req, socket, head) => {
-            const rejection = webCtx.connection.requestRejection(req)
-            if (rejection !== undefined) {
-              rejectRemoteStreamUpgrade(socket, rejection)
+          handler: async (req, socket, head) => {
+            const authorization = await webCtx.connection.authorizeRequest(req)
+            if (!authorization.ok) {
+              rejectRemoteStreamUpgrade(socket, authorization.status)
               return
             }
-            mux.handleUpgrade(req, socket, head)
+            const lease = authorization.lease
+            const revoke = (): void => { socket.destroy() }
+            const release = (): void => {
+              lease?.signal.removeEventListener('abort', revoke)
+              socket.off('close', release)
+              lease?.dispose()
+            }
+            if (socket.destroyed || lease?.signal.aborted === true) { release(); socket.destroy(); return }
+            socket.once('close', release)
+            lease?.signal.addEventListener('abort', revoke, { once: true })
+            try { mux.handleUpgrade(req, socket, head, lease?.signal) } catch (error) { release(); throw error }
           },
         }
         const unregister = webCtx.webServer.registerUpgrade(route)
@@ -250,7 +263,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
       this.remoteEvents = undefined
       lifetime.abort(error)
     })
-    const registration: RegisteredRemoteEventSource = { lifetime, done, host: { home: host.home } }
+    const registration: RegisteredRemoteEventSource = { lifetime, done, host: { home: host.home, identity: host.identity } }
     this.remoteEvents = registration
     return async () => {
       if (this.remoteEvents === registration) {
@@ -263,7 +276,55 @@ export class TypertGatewayService extends Service implements TypertGateway {
     }
   }
 
+  /**
+   * Inspect strict dispatch prerequisites without resolving identities or invoking methods.
+   * @returns sorted advisory facts; Context receivers remain unknown until invocation.
+   */
+  private capabilities(): readonly HostCapability[] {
+    return this.ctx.typert.local.list().filter(hasStrictCodecs).map((descriptor): HostCapability => {
+      const endpoint = endpointOf(descriptor.namespace, descriptor.method)
+      const base = { endpoint, mode: descriptor.mode ?? 'unary',
+        ...descriptor.wireFingerprint === undefined ? {} : { wireFingerprint: descriptor.wireFingerprint },
+        ...descriptor.semanticRevision === undefined ? {} : { semanticRevision: descriptor.semanticRevision },
+      } as const
+      const unavailable = (reason: Extract<HostCapability, { availability: 'unavailable' }>['reason']): HostCapability => ({
+        ...base, availability: 'unavailable', reason,
+      })
+      for (const parameter of descriptor.parameters) {
+        if (parameter.source !== 'lookup') continue
+        // Registry validation requires a key on every lookup parameter.
+        const provider = this.ctx.typert.lookups.get(parameter.lookup as string)
+        if (provider === undefined || provider.wire !== parameter.wire
+          || (parameter.codec.mode === 'strict' && provider.wireTypeSymbol !== parameter.codec.typeSymbol)) {
+          return unavailable('lookup')
+        }
+      }
+      if (descriptor.invocation.kind === 'context') {
+        const invocation = descriptor.invocation
+        const provider = this.ctx.typert.contexts.getHost(invocation.context)
+        if (provider === undefined || provider.wire !== invocation.wire
+          || (invocation.codec.mode === 'strict' && provider.wireTypeSymbol !== invocation.codec.typeSymbol)) {
+          return unavailable('context')
+        }
+        return { ...base, availability: 'context-required' }
+      }
+      const receiver = this.ctx.get(descriptor.service) as unknown
+      if (!isObject(receiver)) return unavailable('service')
+      try {
+        validateBinding(receiver, descriptor.service, descriptor.namespace, endpoint)
+      } catch (error) {
+        if (!(error instanceof TypertGatewayError)) throw error
+        return unavailable('binding')
+      }
+      if (typeof Reflect.get(receiver, descriptor.implementation ?? descriptor.method) !== 'function') {
+        return unavailable('method')
+      }
+      return { ...base, availability: 'available' }
+    }).sort((left, right) => left.endpoint < right.endpoint ? -1 : 1)
+  }
+
   private claimsEndpoint(endpoint: string): boolean {
+    if (endpoint === HOST_CAPABILITIES_ENDPOINT) return true
     if (endpoint === REMOTE_EVENT_RESULT_ENDPOINT) return true
     const segments = endpoint.split('/')
     if (segments.length !== 2 || segments[0] === '' || segments[1] === '') return false
@@ -297,6 +358,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
    */
   async invoke(request: InvokeRemoteRequest): Promise<unknown> {
     const prepared = await this.prepareInvocation(request)
+    this.assertCompatibility(request, prepared.descriptor, prepared.endpoint)
     if (prepared.descriptor.mode === 'stream') {
       throw new TypertGatewayError(
         'gateway/signature-invalid',
@@ -306,6 +368,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
     }
 
     try {
+      request.signal?.throwIfAborted()
       return await Reflect.apply(prepared.method, prepared.receiver, prepared.args) as unknown
     } catch (error) {
       if (request.signal?.aborted === true) throw remoteCancelled(prepared.endpoint, error)
@@ -320,6 +383,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
    */
   async stream(request: InvokeRemoteRequest): Promise<AsyncIterable<unknown>> {
     const prepared = await this.prepareInvocation(request)
+    this.assertCompatibility(request, prepared.descriptor, prepared.endpoint)
     if (prepared.descriptor.mode !== 'stream') {
       throw new TypertGatewayError(
         'gateway/signature-invalid',
@@ -329,6 +393,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
     }
     let source: unknown
     try {
+      request.signal?.throwIfAborted()
       source = Reflect.apply(prepared.method, prepared.receiver, prepared.args) as unknown
     } catch (error) {
       if (request.signal?.aborted === true) throw remoteCancelled(prepared.endpoint, error)
@@ -353,7 +418,19 @@ export class TypertGatewayService extends Service implements TypertGateway {
     endpoint: string,
     payload: unknown,
     signal: AbortSignal,
+    identity: ConnectionIdentity,
   ): Promise<ConnectionRpcResult> {
+    if (endpoint === HOST_CAPABILITIES_ENDPOINT) {
+      try {
+        if (signal.aborted) throw remoteCancelled(endpoint, signal.reason)
+        if (!hostCapabilitiesRequestSchema.safeParse(payload).success) {
+          throw new TypertGatewayError('gateway/arguments-invalid', endpoint, 'Host capabilities require an empty request')
+        }
+        return { ok: true, value: { version: 3, identity, capabilities: this.capabilities() } }
+      } catch (error) {
+        return rpcFailure(error)
+      }
+    }
     if (endpoint === REMOTE_EVENT_RESULT_ENDPOINT) {
       try {
         const result = parseRemoteEventResultPayload(payload)
@@ -596,7 +673,9 @@ export class TypertGatewayService extends Service implements TypertGateway {
 
   private async prepareInvocation(request: InvokeRemoteRequest): Promise<PreparedInvocation> {
     const endpoint = endpointOf(request.namespace, request.method)
+    if (request.signal?.aborted === true) throw remoteCancelled(endpoint, request.signal.reason)
     const descriptor = this.resolveDescriptor(request.namespace, request.method, endpoint)
+    this.assertCompatibility(request, descriptor, endpoint)
     assertExactArguments(request.args, descriptor, endpoint)
     const receiverContext = await this.resolveReceiverContext(descriptor, request.args, endpoint)
     const receiver = receiverContext.get(descriptor.service) as unknown
@@ -621,6 +700,22 @@ export class TypertGatewayService extends Service implements TypertGateway {
       )
     }
     return { endpoint, descriptor, receiver, args, method: method as (...args: never[]) => unknown }
+  }
+
+  private assertCompatibility(request: InvokeRemoteRequest, descriptor: InvocationDescriptor, endpoint: string): void {
+    const expected = request.compatibility
+    if (expected === undefined) return
+    if (!hasStrictCodecs(descriptor) || this.ctx.typert.local.get(endpoint) !== descriptor
+      || descriptor.wireFingerprint !== expected.wireFingerprint
+      || descriptor.semanticRevision !== expected.semanticRevision) {
+      throw new TypertGatewayError('gateway/api-incompatible', endpoint, 'Remote schema or business revision does not match the Client')
+    }
+    if (expected.identity !== undefined) {
+      const identity = this.ctx.get('connection')?.identity
+      if (identity?.hostId !== expected.identity.hostId || identity.activationId !== expected.identity.activationId) {
+        throw new TypertGatewayError('gateway/api-incompatible', endpoint, 'Remote request belongs to another Host activation')
+      }
+    }
   }
 
   private resolveDescriptor(namespace: string, method: string, endpoint: string): InvocationDescriptor {
@@ -933,6 +1028,12 @@ function parseRemoteEventResultPayload(payload: unknown): ReturnType<typeof pars
   return parseRemoteEventResult(payload.args)
 }
 
+function hasStrictCodecs(descriptor: InvocationDescriptor): boolean {
+  return descriptor.result.mode === 'strict'
+    && descriptor.parameters.every(parameter => parameter.codec.mode === 'strict')
+    && (descriptor.invocation.kind === 'direct' || descriptor.invocation.codec.mode === 'strict')
+}
+
 function remoteRequest(endpoint: string, payload: unknown, signal: AbortSignal): InvokeRemoteRequest {
   const segments = endpoint.split('/')
   if (segments.length !== 2 || segments[0] === '' || segments[1] === '') {
@@ -941,13 +1042,18 @@ function remoteRequest(endpoint: string, payload: unknown, signal: AbortSignal):
   const [namespace, method] = segments as [string, string]
   if (!isObject(payload)
     || !isPlainObject(payload)
-    || Reflect.ownKeys(payload).length !== 1
+    || Reflect.ownKeys(payload).some(key => key !== 'args' && key !== 'compatibility')
     || !Object.hasOwn(payload, 'args')
     || !isObject(payload.args)
     || !isPlainObject(payload.args)) {
-    throw new Error('Remote payload must contain exactly one plain-object args field')
+    throw new Error('Remote payload must contain plain-object args field and optional compatibility expectations')
   }
-  return { namespace, method, args: payload.args, signal }
+  if (!Object.hasOwn(payload, 'compatibility')) return { namespace, method, args: payload.args, signal }
+  const parsed = remoteCompatibilitySchema.safeParse(payload.compatibility)
+  if (!parsed.success) {
+    throw new TypertGatewayError('gateway/api-incompatible', endpoint, 'Invalid Remote compatibility expectations')
+  }
+  return { namespace, method, args: payload.args, signal, compatibility: parsed.data }
 }
 
 function isIterable(value: unknown): value is Iterable<unknown> | AsyncIterable<unknown> {

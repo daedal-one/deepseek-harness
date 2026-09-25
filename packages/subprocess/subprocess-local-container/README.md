@@ -7,7 +7,7 @@ kind: "package-reference"
 
 ## Summary
 
-`dsh-subprocess-local-container` implements `ctx.subprocess` in the execution world owned by `dsh-local-container-runtime`. Each ordinary process or terminal receives one sibling rootless Podman container with the same image, private workspace bind, disabled network, read-only root, private `/tmp`, dropped capabilities, non-root user, and resource controls. Removing that container is the provider's descendant-quiescence primitive. Mount it only with the matching runtime and filesystem provider in an explicit opt-in composition.
+`dsh-subprocess-local-container` implements `ctx.subprocess` in the execution world owned by `dsh-local-container-runtime`. Each ordinary process or terminal receives one sibling rootless Podman container with the same image, private workspace bind, configured private network mode, read-only root, private `/tmp`, dropped capabilities, non-root user, and resource controls. Removing that container is the provider's descendant-quiescence primitive. Mount it only with the matching runtime and filesystem provider in an explicit opt-in composition.
 
 ## Table of Contents
 

@@ -9,13 +9,23 @@
     "src/api-path.ts",
     "src/api-request-trust.ts",
     "src/browser-auth.ts",
+    "src/host-identity-protocol.ts",
+    "src/host-identity.ts",
     "src/http-bridge.ts",
     "src/index.ts",
     "src/loopback-hostname.ts",
     "src/recovery-config.ts",
     "src/rpc-host.ts",
     "src/rpc-schema.ts",
-    "src/rpc.ts"
+    "src/rpc.ts",
+    "src/types.ts",
+    "src/device-protocol.ts",
+    "src/device-access.ts",
+    "src/device-routes.ts",
+    "src/discovery-protocol.ts",
+    "src/discovery-config.ts",
+    "src/discovery-io.ts",
+    "src/host-discovery.ts"
   ],
   "references": [
     {
@@ -38,6 +48,9 @@
     },
     {
       "path": "../../util/brand"
+    },
+    {
+      "path": "../../subprocess/subprocess"
     }
   ]
 }

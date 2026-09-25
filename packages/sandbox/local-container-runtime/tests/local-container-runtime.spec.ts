@@ -17,9 +17,18 @@ import type {
   PodmanInfo,
 } from '@deepseek-ai/dsh-local-container-runtime'
 
+// Fake-engine tests control Linux namespace observations while retaining real temporary-directory ownership.
 vi.mock('node:fs/promises', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:fs/promises')>()
-  return { ...actual, readlink: async (path: string) => path === '/proc/self/ns/pid' ? 'pid:[host]' : path === '/proc/self/ns/ipc' ? 'ipc:[host]' : actual.readlink(path) }
+  const original = await importOriginal<typeof import('node:fs/promises')>()
+  return {
+    ...original,
+    readlink: async (path: Parameters<typeof original.readlink>[0], options?: Parameters<typeof original.readlink>[1]) => {
+      if (path === '/proc/self/ns/pid') return 'pid:[1000]'
+      if (path === '/proc/self/ns/ipc') return 'ipc:[1001]'
+      if (path === '/proc/self/ns/net') return 'net:[1002]'
+      return await original.readlink(path, options)
+    },
+  }
 })
 
 const IMAGE = 'docker.io/example/dsh-runtime@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
@@ -84,7 +93,8 @@ class FakeContainer implements PodmanContainer {
   readonly stop = vi.fn(async (_timeoutSeconds: number): Promise<void> => { this.running = false })
   readonly remove = vi.fn(async (_force: boolean): Promise<void> => {})
   readonly runControl = vi.fn(
-    async (_argv: readonly string[], _maxOutputBytes: number): Promise<{ exitCode: number; output: string }> => this.engine.controlResponse,
+    async (argv: readonly string[], _maxOutputBytes: number): Promise<{ exitCode: number; output: string }> => argv[0] === '/usr/bin/python3'
+      ? { exitCode: this.engine.hostLoopbackAccessible ? 1 : 0, output: '' } : this.engine.controlResponse,
   )
   readonly runController = vi.fn(async (request: PodmanControllerExecRequest): Promise<PodmanControllerExecResult> => {
     return await this.engine.controllerResponse(request)
@@ -97,6 +107,7 @@ class FakeContainer implements PodmanContainer {
 }
 
 class FakeEngine implements PodmanEngine {
+  hostLoopbackAccessible = false
   processWait: Promise<{ statusCode: number }> = Promise.resolve({ statusCode: 0 })
   async containersUsing(): Promise<PodmanContainer[]> { return [] }
   readonly info = vi.fn(async (): Promise<PodmanInfo> => this.infoResponse)
@@ -145,6 +156,7 @@ class FakeEngine implements PodmanEngine {
       'nnp=1',
       'pidns=pid:[1]',
       'ipcns=ipc:[2]',
+      'netns=net:[3]',
       'tmpfstype=tmpfs',
       'tmpfsbytes=67108864',
       'netifs=lo,',
@@ -172,7 +184,7 @@ class FakeEngine implements PodmanEngine {
         Entrypoint: request.Entrypoint,
         Cmd: request.Cmd,
       },
-      HostConfig: request.HostConfig,
+      HostConfig: { ...request.HostConfig, NetworkMode: request.HostConfig.NetworkMode.replace(/:.*/u, '') },
       NetworkDisabled: request.NetworkDisabled,
       Mounts: [
         { Destination: '/workspace', Type: 'bind', Source: source, RW: true },
@@ -205,6 +217,53 @@ async function dispose(fiber: { dispose(): Promise<void> }): Promise<void> {
 }
 
 describe('local-container execution-world validator', () => {
+  it('keeps the engine world alive until its workspace owner finishes shutdown', async () => {
+    const engine = new FakeEngine()
+    const { ctx, fiber } = await mount(engine)
+    const runtime = ctx.localContainerRuntime
+    await runtime.getContainer()
+    const entered = Promise.withResolvers<undefined>()
+    const checkpoint = Promise.withResolvers<undefined>()
+    const owner = vi.fn(async () => { entered.resolve(undefined); await checkpoint.promise })
+    const unregister = runtime.registerWorkspaceOwner(owner)
+    const closing = dispose(fiber)
+    try {
+      await entered.promise
+      expect(engine.container?.stop).not.toHaveBeenCalled()
+      expect(() => runtime.registerWorkspaceOwner(async () => {})).toThrow('disposal')
+    } finally { checkpoint.resolve(undefined); await closing; unregister() }
+    expect(owner).toHaveBeenCalledOnce()
+    expect(engine.container?.stop).toHaveBeenCalledOnce()
+    expect(engine.container?.remove).toHaveBeenCalledOnce()
+  })
+
+  it('uses private outbound networking for the owner and every process', async () => {
+    const engine = new FakeEngine()
+    engine.controlResponse.output = engine.controlResponse.output.replace('netifs=lo,', 'netifs=lo,tap0,')
+    const { ctx } = await mount(engine, config({ network: 'outbound' }))
+    await ctx.localContainerRuntime.getContainer()
+    expect(engine.request).toMatchObject({ NetworkDisabled: false, HostConfig: { NetworkMode: 'slirp4netns:allow_host_loopback=false,cidr=10.0.2.0/24' } })
+    const process = await ctx.localContainerRuntime.createProcess({ argv: ['/bin/true'], cwd: '/workspace', environment: {}, tty: false, stdin: false })
+    process.stream.resume()
+    engine.processContainers[0]?.stream.end()
+    await process.done
+    expect(engine.createContainer.mock.calls[1]?.[0].HostConfig.NetworkMode).toBe(engine.request?.HostConfig.NetworkMode)
+  })
+
+  it('rejects a host network namespace even when the engine reports a private network', async () => {
+    const engine = new FakeEngine()
+    engine.controlResponse.output = engine.controlResponse.output.replace('netns=net:[3]', 'netns=net:[1002]')
+    const { ctx } = await mount(engine, config({ network: 'outbound' }))
+    await expect(ctx.localContainerRuntime.getContainer()).rejects.toThrow('host process, IPC, or network namespace')
+  })
+
+  it('rejects outbound networking that exposes a listening host-loopback socket', async () => {
+    const engine = new FakeEngine()
+    engine.hostLoopbackAccessible = true
+    const { ctx } = await mount(engine, config({ network: 'outbound' }))
+    await expect(ctx.localContainerRuntime.getContainer()).rejects.toThrow('permits host loopback access')
+  })
+
   it('rejects secret and host-home overrides before allocating process containers', async () => {
     const engine = new FakeEngine()
     const ctx = new Context()
@@ -476,6 +535,19 @@ describe('LocalContainerRuntime', () => {
 
     await expect(ctx.localContainerRuntime.getContainer()).rejects.toThrow(message)
     expect(engine.createContainer).not.toHaveBeenCalled()
+    await dispose(fiber)
+  })
+
+  it.each([
+    ['pidns', 'pid:[1]', 'pid:[1000]'],
+    ['ipcns', 'ipc:[2]', 'ipc:[1001]'],
+  ])('rejects a container sharing the host %s namespace', async (field, isolated, shared) => {
+    const engine = new FakeEngine()
+    engine.controlResponse.output = engine.controlResponse.output.replace(`${field}=${isolated}`, `${field}=${shared}`)
+    const { ctx, fiber } = await mount(engine)
+
+    await expect(ctx.localContainerRuntime.getContainer()).rejects.toThrow(/namespace/)
+    expect(engine.container?.remove).toHaveBeenCalledWith(true)
     await dispose(fiber)
   })
 

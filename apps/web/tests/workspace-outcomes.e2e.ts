@@ -16,7 +16,7 @@ it.each([false, true])('keeps workspace return and pending recovery visible with
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
   let handle: Awaited<ReturnType<typeof scaffold.ctx.agents.create>> | undefined
   try {
-    await scaffold.ctx.plugin(WorkspaceOutcomes, { provenance })
+    await scaffold.ctx.plugin(WorkspaceOutcomes, { environment: false, provenance })
     handle = await scaffold.ctx.agents.create({ sessionId: SessionId('workspace-outcomes-browser'),
       meta: { cwd: scaffold.workspaceCwd }, agentOptions: { provider: 'deepseek-official', model: 'deepseek-flash' } })
     handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Reply with exactly: SDK snapshot OK' }], source: { kind: 'user' } }))
@@ -31,7 +31,7 @@ it.each([false, true])('keeps workspace return and pending recovery visible with
     const returned = page.locator('[data-workspace-phase="returned"]')
     await returned.waitFor()
     if (provenance) {
-      expect(await returned.locator(':scope > ul > li').count()).toBe(1)
+      expect(await returned.locator(':scope > div > ul > li').count()).toBe(1)
       expect(await returned.innerText()).toContain('dsh/fix-recovery-111111111111111111111111/turn-1')
       expect(await returned.innerText()).not.toContain('dsh/fix-recovery-222222222222222222222222/turn-1')
       await returned.getByText('Other branches at this commit (1)', { exact: true }).click()

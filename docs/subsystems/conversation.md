@@ -24,6 +24,14 @@ Each Session keeps a monotonic set of active targets. Creating or reading a targ
 
 The shell owns View selection and resolves the registered preferred View or Chat fallback before rendering when a binding is created or selected as current, and after View-roster changes. The assembler receives only the resolved target id and does not select Chat or another default target. A third-party View participates through the same selection and activation operations.
 
+## Portable binding
+
+The ordinary ESM `./client/portable` entry of `ui-conversation` exposes `ConversationBindingModel`, its scheduler interface and the shared assembler and Definition registries. A binding subscribes to the existing contiguous Session event source; it owns no transport or history read. Replacement, prepend, append and Assistant settlement use the same engine as browser views. Missing event-source revisions force a complete replacement. Target sources retain their identity, and first subscription activates the target.
+
+A portable caller supplies asynchronous publication scheduling or passes `null` for immediate streaming updates. One pending callback accumulates streaming changes; an immediate event cancels it and publishes all accumulated state. Scheduler cancellation returns synchronously, and an already-queued late callback cannot publish after cancellation or disposal. The browser adapter retains three animation frames between streaming invalidation and publication. Binding disposal detaches the source and cancels scheduled work; retained snapshots remain readable, while activation and registry rebuild become inert. Callers own their target subscriptions and must unsubscribe them. Definition registries retain Cordis effect ownership; callers rebuild their bindings after registry changes.
+
+The ordinary ESM `ui-chat/client/portable` entry installs Chat through `registerChatConversation`. It receives scoped event/view registries and the shared pure prompt inspectors, and contributes the same ordered business Definitions, unknown-surface fallback and Chat snapshot builder used by the browser plugin. The entry also retains those Definitions' type vocabulary in its declarations. Contributions augment the canonical `ui-conversation/client/types` outlet so browser and portable readers share the same maps. Registry ownership and change notifications remain with Conversation; platform renderers read the published Chat data without projecting Session events themselves.
+
 ## Replayable event families
 
 Choose one stable business id before writing the Definition. Every event that contributes to the same Node must carry that id or derive it independently from its own payload; the client must never assign an update to “the latest unfinished” Context.
@@ -115,7 +123,7 @@ declare module '@deepseek-ai/dsh-client-ui-chat/client' {
   }
 }
 
-declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
+declare module '@deepseek-ai/dsh-client-ui-conversation/client/types' {
   interface ConversationStepDataMap {
     'review-job': ReviewChatData
   }

@@ -1,15 +1,15 @@
 /** Event-local acceptance for raw Session journal responses; payloads remain owner-defined JSON. */
 
 import { validateSessionEventData, validateSurfaceMetadata } from '@deepseek-ai/dsh-session/surface'
-import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
+import { KNOWN_SESSION_EVENT_TYPES, type SessionEvent } from '@deepseek-ai/dsh-session/types'
 import type { SessionWireEvent } from '../types.ts'
 
 /**
- * Reject non-current event envelopes without stripping or normalizing wire fields.
+ * Reject non-current envelopes and unknown required events without stripping wire fields.
  * Range membership and source existence require the durable log and remain Host-owned.
  * @param value - one event received in a follow frame or history page.
  * @returns nothing after narrowing the accepted event envelope.
- * @throws when the envelope or current event-local metadata is invalid.
+ * @throws when the type is unsupported or the envelope or event-local metadata is invalid.
  */
 export function assertSessionWireEvent(value: unknown): asserts value is SessionWireEvent {
   const subject = 'session wire event'
@@ -39,7 +39,10 @@ export function assertSessionWireEvent(value: unknown): asserts value is Session
     || (Object.hasOwn(event, 'ignorable') && event['ignorable'] !== true)) {
     throw new Error(`${subject} has an invalid envelope`)
   }
-  // Event names and payloads are merge-extensible; only event-local owner rules run here.
+  if (!KNOWN_SESSION_EVENT_TYPES.has(event['type']) && event['ignorable'] !== true) {
+    throw new Error(`${subject} type ${JSON.stringify(event['type'])} is unknown to this client and is not marked ignorable`)
+  }
+  // Accepted extension payloads remain opaque; only event-local owner rules run here.
   const current = event as unknown as SessionEvent
   validateSurfaceMetadata(current)
   validateSessionEventData(current, subject)

@@ -7,7 +7,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApprovalPanel } from '../src/client/ApprovalPanel.tsx'
 import type { ApprovalComposerProps } from '../src/client/contract/slots.ts'
-import { PendingApproval } from '../src/client/contract/slots.ts'
+import { PendingApproval } from '../src/client/pending-approval.ts'
 import { apply, inject } from '../src/client/index.ts'
 import { apply as nodeApply } from '../src/index.ts'
 
@@ -40,7 +40,7 @@ interface PluginBench {
   }
 }
 
-function setupPlugin(): PluginBench {
+function setupPlugin(publicationFailure?: Error): PluginBench {
   const ctx = new Context()
   let listener: ApprovalListener | undefined
   let registration: {
@@ -57,6 +57,7 @@ function setupPlugin(): PluginBench {
     delegate: () => Promise<void>,
   ) => {
     _precedence(value)
+    if (publicationFailure !== undefined) throw publicationFailure
     pending.set(value, delegate)
     return () => { pending.delete(value) }
   })
@@ -172,31 +173,28 @@ describe('PendingApproval', () => {
 
     await expect(pending.result).rejects.toBe(reason)
   })
-
-  it('wraps a non-Error answer settlement failure with its cause', async () => {
-    const failure = 'resolve failed'
-    const completion = Promise.withResolvers<'allowed-once' | 'rejected'>()
-    const withResolvers = vi.spyOn(Promise, 'withResolvers').mockImplementationOnce(() => ({
-      promise: completion.promise,
-      resolve: () => { throw failure },
-      reject: completion.reject,
-    }))
-    const pending = new PendingApproval(id('s1'), { toolName: 'write' })
-    withResolvers.mockRestore()
-
-    const settlement = await pending.answer('allowed-once').catch((error: unknown) => error)
-
-    expect(settlement).toBeInstanceOf(Error)
-    expect(settlement).toMatchObject({
-      message: 'pending approval settlement failed',
-      cause: failure,
-    })
-    completion.resolve('allowed-once')
-    await expect(pending.result).resolves.toBe('allowed-once')
-  })
 })
 
 describe('approval Remote Event consumer', () => {
+  it('releases the carrier abort listener when pending publication is refused', async () => {
+    const failure = new Error('pending domain was disposed')
+    const bench = setupPlugin(failure)
+    const scope = createScope(bench.ctx, id('s1'))
+    await scope.fiber.await()
+    const controller = new AbortController()
+    const remove = vi.spyOn(controller.signal, 'removeEventListener')
+    try {
+      await expect(bench.listener.call(scope.ctx, {
+        toolName: 'bash', signal: controller.signal,
+      }, async () => 'unavailable')).rejects.toBe(failure)
+      expect(remove).toHaveBeenCalledOnce()
+      expect(bench.pending.getSnapshot()).toEqual([])
+    } finally {
+      await scope.fiber.dispose()
+      await bench.ctx.fiber.dispose()
+    }
+  })
+
   it('delegates an event that has no Agent scope', async () => {
     const bench = setupPlugin()
     const next = vi.fn(() => Promise.resolve<'unavailable'>('unavailable'))

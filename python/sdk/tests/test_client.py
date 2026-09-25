@@ -1115,7 +1115,7 @@ for line in sys.stdin:
     assert result.events[-1]["data"]["checkpoint"] == 2
 
 
-@pytest.mark.parametrize("scenario", ["workspace-outcomes", "workspace-provenance"])
+@pytest.mark.parametrize("scenario", ["workspace-outcomes", "environment-workspace-outcomes", "workspace-provenance"])
 def test_recorded_workspace_outcomes_match_the_typescript_sdk(tmp_path: Path, scenario: str) -> None:
     fixture = Path(__file__).resolve().parents[3] / f"snapshots/sdk/{scenario}/notifications.expected.jsonl"
     script = tmp_path / "recorded_workspace_runtime.py"

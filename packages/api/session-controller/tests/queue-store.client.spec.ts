@@ -3,6 +3,7 @@
  * change, reconnect re-baselining, pre-instantiation buffering, editable-text
  * projection, and snapshot reference stability.
  */
+import { browserSessionPlatform } from '../src/client/browser.ts'
 import { describe, expect, it, vi } from 'vitest'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, UserMessage } from '@deepseek-ai/dsh-llm/types'
@@ -48,12 +49,12 @@ function makeSession(): Session {
 
 function makeBench(): { api: FakeApiClient; session: Session } {
   const api = new FakeApiClient()
-  return { api, session: new Session(SID, fakeRemote(api)) }
+  return { api, session: new Session(SID, fakeRemote(api), browserSessionPlatform) }
 }
 
 function makeManager(): SessionManager {
   const api = new FakeApiClient()
-  return new SessionManager(fakeRemote(api))
+  return new SessionManager(fakeRemote(api), browserSessionPlatform)
 }
 
 describe('Session queue snapshot intake', () => {
@@ -220,7 +221,7 @@ describe('Session queue snapshot intake', () => {
 describe('queue operation transport', () => {
   it('addresses the session.updateQueue RPC without optimistic local mutation', async () => {
     const api = new FakeApiClient()
-    const session = new Session(SID, fakeRemote(api))
+    const session = new Session(SID, fakeRemote(api), browserSessionPlatform)
     session.handleControlFrame(queueFrame([{ id: 'q-op', body: 'pending' }]))
     const before = session.getSnapshot().queue
 

@@ -18,9 +18,8 @@ import type { Context, Fiber } from '@deepseek-ai/cordis'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import { SessionSeq, type SessionId } from '@deepseek-ai/dsh-session/types'
 import { workspaceTitleOf } from '@deepseek-ai/dsh-util-workspace-path'
-import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import { SESSION_SEARCH_RESULT_LIMIT } from '../../types.ts'
-import type { SessionJob as JobView } from '../../types.ts'
+import type { SessionJob as JobView, SessionCreateRequest } from '../../types.ts'
 import type { SessionProjectionMap } from '@deepseek-ai/dsh-session-projection/types'
 import {
   createSnapshotStore, type SnapshotStore,
@@ -32,8 +31,9 @@ import type { AgentContext, ISessions } from '../contract/sessions.ts'
 import { createScope, scopeOf as scopeTagOf } from '../scope.ts'
 import { SessionManager } from './manager.ts'
 import type { SessionRemotes } from './remotes.ts'
-import type { SessionListPhase, SessionSearchResultItem, SubagentCatalogSnapshot } from './manager.ts'
+import type { SessionListPhase, SessionListSnapshot, SessionSearchResultItem, SubagentCatalogSnapshot } from './manager.ts'
 import type { Session } from './session.ts'
+import type { SessionClientOptions, SessionSelectionStore } from '../platform.ts'
 
 /** Session list row projected from the host list RPC plus live stream increments. */
 export interface SessionSummary {
@@ -74,6 +74,10 @@ export interface SessionListState {
   current: SessionId | undefined
   /** Arrival lifecycle projected 1:1 from the manager snapshot (see SessionListPhase): empty-with-ready means "truly no sessions". */
   phase: SessionListPhase
+  /** Activity of the latest baseline read; continuation activity is `loadingMore`. */
+  state: SessionListSnapshot['state']
+  /** Latest baseline or continuation failure, cleared when the next read begins. */
+  error: RemoteFailure | null
   hasMore?: boolean
   loadingMore?: boolean
   /** Direct durable catalogs keyed by their selected parent address. */
@@ -86,12 +90,6 @@ export interface SessionListState {
   jobsBySession: Readonly<Record<SessionId, readonly JobView[]>>
   /** Current session's catalog-derived address, absent on ordinary navigation. */
   currentAddress: SubagentAddress | undefined
-}
-
-/** Persisted navigation cell: address survives refresh for correct history routing. */
-interface SessionSelection {
-  sessionId?: SessionId
-  subagentAddress?: SubagentAddress
 }
 
 /** Structured session-create failure. */
@@ -201,7 +199,7 @@ export class ClientSessions implements ISessions {
    * selection survives transient list states (reconnect re-pull) and
    * resurfaces when its session returns.
    */
-  private readonly selection: SnapshotStore<SessionSelection>
+  private readonly selection: SessionSelectionStore
 
   private readonly scopes = new Map<SessionId, ScopeRecord>()
   /** In-flight scope drops remain here after records leave `scopes`, so root disposal can await quiescence. */
@@ -219,22 +217,24 @@ export class ClientSessions implements ISessions {
   /**
    * @param ctx - client root context (scope fibers mount under it).
    * @param remote - generated Remote namespaces shared with every Session.
+   * @param options - platform inputs and hydrated navigation for this host.
    */
   constructor(
     private readonly rootCtx: Context,
     remote: SessionRemotes,
+    options: SessionClientOptions,
   ) {
-    this.selection = createSnapshotStore<SessionSelection>(
-      {},
-      { persist: { name: 'dsh.sessions.current' } })
+    this.selection = options.selection
     const restored = this.selection.getSnapshot()
     this.manager = new SessionManager(
       remote,
+      options.platform,
       restored.sessionId,
       restored.subagentAddress,
+      options.historyDetailRetention,
     )
     this.list = createSnapshotStore<SessionListState>({
-      ids: [], byId: {}, current: undefined, phase: 'pending', hasMore: false, loadingMore: false,
+      ids: [], byId: {}, current: undefined, phase: 'pending', state: 'idle', error: null, hasMore: false, loadingMore: false,
       subagentsByParent: {}, jobsBySession: {}, currentAddress: undefined,
     })
     // The manager owns wire truth; the store is its projection. Manager
@@ -411,11 +411,11 @@ export class ClientSessions implements ISessions {
    * draft hand-off) may address the scope synchronously, without waiting a
    * notifier flush. The synchronous projection below makes this structural
    * rather than an accident of microtask ordering.
-   * @param opts - target workspace or directory and an optional preallocated id.
+   * @param opts - target workspace or directory, optional preallocated id and Host-owned profile.
    * @returns the new session id.
    * @throws {SessionCreateError} with the requested id.
    */
-  async create(opts: { workspaceId?: WorkspaceId; cwd?: string; sessionId?: SessionId } = {}): Promise<SessionId> {
+  async create(opts: SessionCreateRequest = {}): Promise<SessionId> {
     const result = await this.manager.create(opts)
     if (!result.ok) throw new SessionCreateError(result.error, opts.sessionId)
     this.projectList()
@@ -588,7 +588,7 @@ export class ClientSessions implements ISessions {
   /** Project the manager's list snapshot into the store (title derivation is display-only). */
   private projectList(): void {
     const {
-      items, current, phase, hasMore, loadingMore, subagentsByParent, jobsBySession, currentAddress,
+      items, current, phase, state, error, hasMore, loadingMore, subagentsByParent, jobsBySession, currentAddress,
     } = this.manager.getListSnapshot()
     const ids: SessionId[] = []
     const byId: Record<SessionId, SessionSummary> = {}
@@ -654,7 +654,7 @@ export class ClientSessions implements ISessions {
         ...(currentAddress === undefined ? {} : { subagentAddress: currentAddress }),
       })
     }
-    this.list.set({ ids, byId, current, phase, hasMore, loadingMore, subagentsByParent, jobsBySession, currentAddress })
+    this.list.set({ ids, byId, current, phase, state, error, hasMore, loadingMore, subagentsByParent, jobsBySession, currentAddress })
     this.pruneScopes()
   }
 

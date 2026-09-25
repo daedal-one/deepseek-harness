@@ -13,7 +13,16 @@
     "src/client/snapshot-stream.ts",
     "src/client/stream-client.ts",
     "src/remote-error-codes.ts",
-    "src/stream-protocol.ts"
+    "src/stream-protocol.ts",
+    "src/client/pinned-generation.ts",
+    "src/client/portable.ts",
+    "src/client/stream-client-browser.ts",
+    "src/client/service.ts",
+    "src/client/shared-api.ts",
+    "src/client/cancellation.ts",
+    "src/capabilities-protocol.ts",
+    "src/client/host-capabilities.ts",
+    "src/compatibility-protocol.ts"
   ],
   "references": [
     {

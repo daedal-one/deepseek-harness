@@ -39,6 +39,24 @@
       "path": "../../util/brand"
     },
     {
+      "path": "../../interaction/user-questions"
+    },
+    {
+      "path": "../../core/tools"
+    },
+    {
+      "path": "../../preset/agent-presets"
+    },
+    {
+      "path": "../../fs/fs"
+    },
+    {
+      "path": "../../subprocess/subprocess"
+    },
+    {
+      "path": "../../shell/shell"
+    },
+    {
       "path": "../../interaction/commands"
     },
     {

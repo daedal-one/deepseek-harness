@@ -172,7 +172,7 @@ function bench(over?: BenchOptions) {
     useSessionPendingInteraction: bindSnapshotSelector(createSnapshotStore(new Map())),
     useResource,
     useSessions: bindSnapshotSelector(createSnapshotStore<SessionListState>({
-      ids: [], byId: {}, current: undefined, phase: 'ready',
+      ids: [], byId: {}, current: undefined, state: 'idle', error: null, phase: 'ready',
       subagentsByParent: {}, jobsBySession: {}, currentAddress: undefined,
     })),
     useWorkspaces: bindSnapshotSelector(createSnapshotStore({

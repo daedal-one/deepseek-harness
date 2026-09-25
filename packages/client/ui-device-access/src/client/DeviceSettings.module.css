@@ -1,0 +1,10 @@
+.section { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.section h2, .section h3, .section p { margin: 0; }
+.identity { overflow-wrap: anywhere; font-size: 12px; color: var(--dsw-alias-label-secondary); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.pairing { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+.pairing svg { width: min(100%, 256px); height: auto; }
+.devices { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.device { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.confirmation { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 8px; }
+.error { color: var(--dsw-alias-state-error-primary); }

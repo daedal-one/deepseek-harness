@@ -2,12 +2,16 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent/types'
-import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 import type {} from '@deepseek-ai/dsh-client-file-upload/client'
-import { createSessionControlStream } from './transport.ts'
-import { ClientSessions } from './sessions/service.ts'
-import type { SessionRemotes } from './sessions/remotes.ts'
 import type {} from '../remote-events.ts'
+import { applySessions, inject as sessionInject } from './portable.ts'
+import { createBrowserSessionClientOptions } from './browser.ts'
+
+export { applySessions, inject as sessionInject } from './portable.ts'
+export { HistoryDetailLimitError } from './history-detail-retention.ts'
+export { PromptAdmission } from './prompt-admission.ts'
+export type { PromptAdmissionState } from './prompt-admission.ts'
+export type { HistoryDetailRetentionPolicy, SessionPlatform, SessionSelection, SessionSelectionStore, SessionClientOptions } from './platform.ts'
 
 export {
   createSessionControlStream,
@@ -81,50 +85,13 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-/** Required Remote and Context projection services. */
-export const inject = [
-  'connection',
-  'fileUpload',
-  'typert',
-  'remote',
-  'remote.commands',
-  'remote.session',
-  'remote.subagents',
-]
+/** Required services for the browser Session and attachment composition. */
+export const inject = [...sessionInject, 'fileUpload']
 
 /**
- * Install Client Session state and its reconnecting control stream.
+ * Install Session state using browser identity, time zone and saved navigation.
  * @param ctx - Client Cordis context.
  */
 export function apply(ctx: Context): void {
-  const remotes = ctx.remote as unknown as SessionRemotes
-  const sessions = new ClientSessions(ctx, remotes)
-  ctx.remote.$on('api-session/added', (summary) => { sessions.handleSessionAdded(summary) })
-  ctx.remote.$on('api-session/removed', (sessionId) => { sessions.handleSessionRemoved(sessionId) })
-  ctx.remote.$on('api-session/status', (sessionId, running) => {
-    sessions.handleSessionStatus(sessionId, running)
-  })
-  ctx.remote.$on('api-session/activity', (sessionId, updatedAt) => {
-    sessions.handleSessionActivity(sessionId, updatedAt)
-  })
-  ctx.remote.$on('api-session/error', (sessionId, message) => {
-    sessions.handleSessionError(sessionId, message)
-  })
-
-  const control = createSessionControlStream(remotes, {
-    accept: (frame) => { sessions.handleControlFrame(frame) },
-    failed: (error) => { console.error('[session-controller] control stream failed:', error) },
-  })
-  control.start()
-  const connection = ctx.get('connection') as ConnectionHandle
-  ctx.effect(() => connection.generation.subscribe(() => {
-    if (connection.generation.getSnapshot() === undefined) sessions.handleDisconnected()
-  }), 'session-controller.client.connection-loss')
-  ctx.on('connection/reset', () => { sessions.handleConnected() })
-  if (ctx.remote.$host.home !== undefined) sessions.handleConnected()
-  ctx.typert.contexts.registerClient('agent', {
-    identity: candidate => sessions.scopeOf(candidate),
-    resolve: sessionId => sessions.resolveAgentScope(sessionId),
-  })
-  ctx.effect(() => async () => { await control.dispose() }, 'session-controller.client.control')
+  applySessions(ctx, createBrowserSessionClientOptions())
 }

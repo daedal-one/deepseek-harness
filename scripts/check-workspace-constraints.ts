@@ -151,7 +151,7 @@ function workspaceManifests(): WorkspaceManifest[] {
 
 const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   // Operators build the digest-pinned runtime image from the published recipe.
-  '@deepseek-ai/dsh-local-container-runtime': ['Containerfile', 'lib/workspaces.js'],
+  '@deepseek-ai/dsh-local-container-runtime': ['Containerfile', 'lib/workspaces.js', 'lib/tool-request-repo-access.js'],
   // Statically linked client libraries keep their stylesheets next to the emitted
   // JavaScript, which imports them by relative path: the compile shell runs
   // them through its own CSS pipeline, so the sheets are published artifacts.
@@ -216,6 +216,9 @@ export function expectedDshPackageFiles(manifest: PackageManifest): readonly str
     // Keyed on the artifact path, not the subpath name: a package's ./client is
     // a browser-safe source channel, not a bundle.
     ...exportDefault(manifest, './client') === './lib/client.js' ? ['lib/client.js'] : [],
+    ...exportDefault(manifest, './client/portable') === './lib/portable.js' ? ['lib/portable.js'] : [],
+    ...hasExportPair(manifest, './client/portable', './lib/client/portable.d.ts', './lib/portable.js')
+      ? ['lib/client/portable.d.ts'] : [],
     // runtime's shell-held loader subpath ships as its own bundle beside the client half.
     ...exportDefault(manifest, './loader') === './lib/loader.js' ? ['lib/loader.js'] : [],
     // A store subpath ships its own bundle (single-entry builds; no shared chunk).

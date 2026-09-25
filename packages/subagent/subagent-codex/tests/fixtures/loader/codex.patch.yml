@@ -1,10 +1,16 @@
 # Named Codex instance patch over the shipped headless profile and the package's
 # public bundle patch. No model or product process starts in this test.
+- id: agent-presets
+  disabled: true
+
 - id: headless-startup
   disabled: true
 
 - id: headless-runner
   disabled: true
+
+- id: tool-jobs
+  disabled: false
 
 - insert:
     - id: fixture

@@ -11,6 +11,9 @@ import { clientRequestSchema } from './rpc-schema.ts'
 import { bridge } from './http-bridge.ts'
 import { isTrustedApiRequest } from './api-request-trust.ts'
 import { API_PATH } from './api-path.ts'
+import type { ConnectionIdentity } from './host-identity-protocol.ts'
+import { deviceRoutes } from './device-routes.ts'
+import type { DeviceAccess } from './device-access.ts'
 import type { BrowserAuth } from './browser-auth.ts'
 import type {
   ConnectionIndexRequest,
@@ -23,6 +26,7 @@ import type {
   ConnectionRpcHandler,
   ConnectionRpcResult,
   ConnectionRequestRejection,
+  ConnectionRequestAuthorization,
   ConnectionTrustRequest,
   HostConnectionHandle,
   HostConnectionRpc,
@@ -66,13 +70,22 @@ export class HostConnectionService extends Service implements HostConnectionHand
    * @param ctx - owning Connection plugin context.
    * @param trustedHosts - deployment authorities accepted by the Host/Origin fence.
    * @param browserAuth - process token and persistent browser-session owner.
+   * @param identity - persisted Host identity and owning root activation.
+   * @param deviceAccess - optional device grant owner for API bearer authentication.
    */
   constructor(
     ctx: Context,
     private readonly trustedHosts: readonly string[],
     private readonly browserAuth: BrowserAuth,
+    readonly identity: ConnectionIdentity,
+    private readonly deviceAccess?: DeviceAccess,
   ) {
     super(ctx, 'connection')
+    if (deviceAccess !== undefined) {
+      for (const route of deviceRoutes(deviceAccess, identity, request => this.requestRejection(request))) {
+        this.registerFetchRoute(ctx, route)
+      }
+    }
   }
 
   /** Generic channel registry scoped to the Context reading this service. */
@@ -104,6 +117,21 @@ export class HostConnectionService extends Service implements HostConnectionHand
   requestRejection(request: ConnectionTrustRequest): ConnectionRequestRejection {
     if (!isTrustedApiRequest(request, this.trustedHosts)) return 403
     return this.browserAuth.isAuthenticated(request) ? undefined : 401
+  }
+
+  /** Authorize API access while retaining any device revocation lifetime. */
+  async authorizeRequest(request: ConnectionTrustRequest): Promise<ConnectionRequestAuthorization> {
+    if (!isTrustedApiRequest(request, this.trustedHosts)) return { ok: false, status: 403 }
+    const headers = request.headers
+    const authorization = headers instanceof Headers ? headers.get('authorization') : headers['authorization']
+    if (authorization !== undefined && authorization !== null) {
+      if (typeof authorization !== 'string' || !authorization.startsWith('Bearer ') || this.deviceAccess === undefined) {
+        return { ok: false, status: 401 }
+      }
+      const lease = await this.deviceAccess.authorize(authorization.slice(7))
+      return lease === undefined ? { ok: false, status: 401 } : { ok: true, lease }
+    }
+    return this.browserAuth.isAuthenticated(request) ? { ok: true } : { ok: false, status: 401 }
   }
 
   /** Authenticate an index request through the process-token exchange or cookie. */

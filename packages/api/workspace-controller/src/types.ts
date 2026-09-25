@@ -28,8 +28,12 @@ export interface WorkspaceView {
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface RemoteErrorDetailsMap {
-    /** The requested directory cannot back a Workspace. */
+    /** This request failed before starting any registration write. */
+    'workspace/create-rejected': { readonly path: string }
+    /** Registration failed; a durable record may still exist. */
     'workspace/invalid-path': { readonly path: string }
+    /** The Host could not determine the current registration at this path. */
+    'workspace/lookup-failed': { readonly path: string }
     /** Another Workspace already uses the requested name. */
     'workspace/name-conflict': { readonly name: string }
     /** The Session or its anchor is not in the Workspace's manual order. */
@@ -52,6 +56,16 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
 /** Existing directory requested for Workspace adoption. */
 export interface WorkspaceCreateRequest {
   readonly path: string
+}
+
+/** Existing Host path queried without registering it. */
+export interface WorkspaceResolveRequest {
+  readonly path: string
+}
+
+/** Current registration at the canonical path; absence is not a mutation receipt. */
+export interface WorkspaceResolveValue {
+  readonly workspace: WorkspaceView | null
 }
 
 /** Created or previously registered Workspace. */

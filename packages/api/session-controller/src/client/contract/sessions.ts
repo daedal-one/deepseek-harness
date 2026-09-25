@@ -7,7 +7,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
+import type { SessionCreateRequest } from '../../types.ts'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { AgentContext } from '../scope.ts'
 import type { SessionSearchResultItem } from '../sessions/manager.ts'
@@ -31,14 +31,10 @@ export interface ISessions {
   loadMore(): Promise<void>
   /**
    * Create or adopt a Session on the Host.
-   * @param opts - target workspace, directory, and optional preallocated identity.
+   * @param opts - target workspace or directory, optional preallocated identity and Host-owned profile.
    * @returns the Session identity after its local binding is addressable.
    */
-  create(opts?: {
-    workspaceId?: WorkspaceId
-    cwd?: string
-    sessionId?: SessionId
-  }): Promise<SessionId>
+  create(opts?: SessionCreateRequest): Promise<SessionId>
   /**
    * Select a session as current.
    * @param id - session id (must exist in the list; unknown ids fail loud).

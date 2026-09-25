@@ -3,6 +3,7 @@
 import { RemoteError, remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 import { RemoteStreamCarrierError } from './stream-client.ts'
+import { combineRemoteCancellation, type RemoteCancellationScope } from './cancellation.ts'
 
 /** One item annotated with the physical Remote-stream generation that delivered it. */
 export interface RemoteStreamItem<Item> {
@@ -37,7 +38,7 @@ export interface RemoteStreamOptions<Item> {
  * opening baseline or cursor.
  */
 export class RemoteStream<Item> implements AsyncIterable<RemoteStreamItem<Item>> {
-  private readonly lifetime = new AbortController()
+  private readonly lifetime: AbortController
   private generationAbort: AbortController | undefined
   private iterator: AsyncGenerator<RemoteStreamItem<Item>> | undefined
   private closing: Promise<void> | undefined
@@ -47,15 +48,28 @@ export class RemoteStream<Item> implements AsyncIterable<RemoteStreamItem<Item>>
   /**
    * @param connection - observable Host generation source used to pace retries.
    * @param options - domain stream opener, end classification, and diagnostics.
+   * @param createController - controller factory; defaults to the platform AbortController.
    */
   constructor(
     private readonly connection: Pick<ConnectionHandle, 'generation'>,
     private readonly options: RemoteStreamOptions<Item>,
-  ) {}
+    private readonly createController: () => AbortController = () => new AbortController(),
+  ) {
+    this.lifetime = createController()
+  }
 
   /** Cancellation lifetime shared by the stream and sibling page requests. */
   get signal(): AbortSignal {
     return this.lifetime.signal
+  }
+
+  /**
+   * Bind a sibling operation to this stream and additional caller lifetimes.
+   * @param signals - generation and caller signals whose cancellation ends the operation.
+   * @returns a portable signal and listener cleanup to dispose when the operation settles.
+   */
+  cancellation(signals: readonly AbortSignal[]): RemoteCancellationScope {
+    return combineRemoteCancellation([this.lifetime.signal, ...signals], this.createController)
   }
 
   /** Interrupt the current generation and immediately request a replacement. */
@@ -103,9 +117,10 @@ export class RemoteStream<Item> implements AsyncIterable<RemoteStreamItem<Item>>
           attempt = 0
         }
         const revision = this.revision
-        const generationAbort = new AbortController()
+        const generationAbort = this.createController()
         this.generationAbort = generationAbort
-        const signal = AbortSignal.any([this.lifetime.signal, generationAbort.signal])
+        const cancellation = combineRemoteCancellation([this.lifetime.signal, generationAbort.signal], this.createController)
+        const signal = cancellation.signal
         const generationId = ++generation
         let accepted = false
         try {
@@ -145,6 +160,7 @@ export class RemoteStream<Item> implements AsyncIterable<RemoteStreamItem<Item>>
           if (!generationAbort.signal.aborted) {
             generationAbort.abort(new Error(`${this.options.name} generation ended`))
           }
+          cancellation.dispose()
         }
       }
     } finally {

@@ -4,8 +4,8 @@
 
 import type { SubagentAddress, SubagentCatalog } from '@deepseek-ai/dsh-subagent/client'
 import { SessionSeq, type SessionId, type SessionSeqCursor } from '@deepseek-ai/dsh-session/types'
-import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import type {
+  SessionCreateRequest,
   SessionControlBaseline,
   SessionControlFrame,
   SessionQueuedItem,
@@ -26,6 +26,8 @@ import { Notifier } from './notifier.ts'
 import { ProjectionValueStore } from './projection-store.ts'
 import { Session } from './session.ts'
 import type { SessionRemotes } from './remotes.ts'
+import { HistoryDetailRetention } from '../history-detail-retention.ts'
+import type { HistoryDetailRetentionPolicy, SessionPlatform } from '../platform.ts'
 
 function sessionSeqCursor(value: number): SessionSeqCursor {
   return value === -1 ? -1 : SessionSeq(value)
@@ -151,15 +153,21 @@ export class SessionManager {
     this.listSnapshotCache = this.buildListSnapshot()
   })
 
+  private readonly historyDetailRetention: HistoryDetailRetention | undefined
+
   /**
    * @param remote - generated Remote namespaces the Session cluster calls.
+   * @param platform - shared request identity and device time zone callbacks.
    * @param restoredSelection - persisted real-Session selection candidate.
    */
   constructor(
     private readonly remote: SessionRemotes,
+    private readonly platform: SessionPlatform,
     restoredSelection?: SessionId,
     restoredAddress?: SubagentAddress,
+    historyDetailRetention?: HistoryDetailRetentionPolicy,
   ) {
+    this.historyDetailRetention = historyDetailRetention === undefined ? undefined : new HistoryDetailRetention(historyDetailRetention)
     this.selected = restoredSelection
     if (restoredAddress !== undefined) this.addresses.set(restoredAddress.childSessionId, restoredAddress)
     this.listSnapshotCache = this.buildListSnapshot()
@@ -327,7 +335,7 @@ export class SessionManager {
     const parentAvailable = address === undefined
       ? undefined
       : this.catalogs.get(address.parentSessionId)?.parentAvailable
-    return new Session(sessionId, this.remote, {
+    return new Session(sessionId, this.remote, this.platform, {
       ...(address === undefined ? {} : {
         address,
         ...catalogAvailability(parentAvailable),
@@ -338,6 +346,7 @@ export class SessionManager {
         this.recordMutation({ kind: 'engaged', sessionId: engaged.sessionId })
       },
       projections: this.projectionStore(sessionId),
+      ...(this.historyDetailRetention === undefined ? {} : { historyDetailRetention: this.historyDetailRetention }),
     })
   }
 
@@ -619,17 +628,16 @@ export class SessionManager {
    * Contract session.create; on success merge into summaries immediately (no
    * wait for the next refresh). A created session is blank by definition
    * (entity birth precedes the first message).
-   * @param opts - target workspace or working directory, plus an optional caller-owned id.
+   * @param opts - target workspace or directory, optional caller-owned id and Host-owned profile.
    * @returns the create result.
   */
   async create(
-    opts: {
-      workspaceId?: WorkspaceId
-      cwd?: string
-      sessionId?: SessionId
-    } = {},
+    opts: SessionCreateRequest = {},
   ): Promise<RemoteResult<{ sessionId: SessionId }>> {
-    const shared = opts.sessionId === undefined ? {} : { sessionId: opts.sessionId }
+    const shared = {
+      ...opts.sessionId === undefined ? {} : { sessionId: opts.sessionId },
+      ...opts.agentPreset === undefined ? {} : { agentPreset: opts.agentPreset },
+    }
     const payload = opts.workspaceId !== undefined
       ? { workspaceId: opts.workspaceId, ...shared }
       : { ...(opts.cwd === undefined ? {} : { cwd: opts.cwd }), ...shared }

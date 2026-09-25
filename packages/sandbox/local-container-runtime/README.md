@@ -7,7 +7,7 @@ kind: "package-reference"
 
 ## Summary
 
-`dsh-local-container-runtime` creates one disposable rootless Podman container for an opt-in isolated execution world. It gives the matching filesystem and subprocess adapters a fixed `/workspace`, a private owner-only backing directory under `/tmp`, and a verified non-root toolchain. It rejects engines, images, and container inspections that cannot prove its network, mount, privilege, and cgroup resource controls. Choose it only with a trusted digest-pinned image and explicitly configured rootless Podman Unix socket. The optional `/workspaces` plugin imports a separate Git repository for each conversation, saves private recovery checkpoints, and returns committed branches automatically. No shipped profile enables either mode.
+`dsh-local-container-runtime` creates one disposable rootless Podman container for an opt-in isolated execution world. It gives the matching filesystem and subprocess adapters a fixed `/workspace`, a private owner-only backing directory under `/tmp`, and a verified non-root toolchain. It rejects engines, images, and inspections that cannot prove configured isolation. Choose it only with a trusted digest-pinned image and explicitly configured rootless Podman Unix socket. The optional `/workspaces` plugin imports isolated Git checkouts, saves private recovery checkpoints, and returns committed branches automatically. Its `environment` configuration gives sessions independent workspace identities and shared, durable repository grants. No shipped profile enables either mode.
 
 ## Table of Contents
 
@@ -58,6 +58,7 @@ Every value is required because these bounds and the Engine endpoint are deploym
 
 | Field | Default | Meaning |
 |---|---|---|
+| `network` | `none` | `outbound` enables rootless internet access with a private network namespace and host-loopback access disabled. |
 | `socketPath` | required | Absolute Unix socket path for the rootless Podman service. Managed sockets must be private paths below `/tmp`. |
 | `manageService` | required | Start and own `podman system service` for this DSH process. |
 | `podmanCommand` | required when managed | Absolute Podman executable used only to start the API service. |
@@ -88,15 +89,35 @@ Successful turns wait for child agents and writers, preserve granular agent comm
 
 Recovery retains the current and previous checkpoint generations, including ignored files, Git objects, refs, and index bytes. A SHA-256 digest verifies the selected generation. Shutdown stops owned writers before capture; an ordinary successful-turn timeout leaves writers running and reports pending. Resume preserves surviving RAM data, or restores the acknowledged checkpoint after RAM loss. Missing or corrupt recovery never silently imports a new source tree. A host crash can lose writes made after the last acknowledged checkpoint. Capacity failures retain the last checkpoint and unacknowledged RAM data.
 
-The opt-in `tests/workspaces.e2e.ts` additionally requires `DSH_WORKSPACE_POOL`, a JSON array of two exclusively reserved tmpfs directories. Its test composition uses the real Loader and rootless engine; only model responses are scripted. Local transaction tests do not establish engine isolation.
+Set `DSH_PODMAN_EGRESS=1` to exercise outbound access and the environment repository tool in real-container tests. The opt-in `tests/workspaces.e2e.ts` additionally requires `DSH_WORKSPACE_POOL`, a JSON array of two exclusively reserved tmpfs directories. Its test composition uses the real Loader and rootless engine; only model responses are scripted. Local transaction tests do not establish engine isolation. The private-remote case in `tests/podman.e2e.ts` also takes `DSH_PRIVATE_REPO_URL`, `DSH_PRIVATE_REPO_SOURCE`, and `DSH_PRIVATE_REPO_FETCH_HELPER`; it verifies an authenticated read with an environment-issued credential and confirms that the controller has no credential environment.
 
-### Saved change lookup
+#### Host maintenance conversations
+
+An operator can admit a fresh maintenance conversation in the same Web Host with `hostSessions`, an array of exact `sessionId`, `preset`, and absolute `cwd` values. Its trusted preset must supply filesystem, subprocess, and shell services in an isolated Cordis group; all three must identify the host execution world. The conversation and its children use that composition without allocating or settling a container workspace. Admission is checked on creation and resume. Scoped shell execution requires explicit admission. Preset-private filesystem and subprocess providers used for instruction loading or reviewed transports do not change ordinary conversation workspace ownership.
+
+Host maintenance has direct host authority and no automatic container checkpoint or Git return. It does not inherit the container-only repository broker or file-preview services. Those operations and contained-world policy assertions refuse the maintenance conversation. Operators retain explicit Session permissions and restart recovery, and hand existing work to a new Session without rewriting recorded headers. Ordinary conversations keep the container lifecycle.
+
+#### Saved change lookup
 
 The workspace service stores immutable versioned receipts under `$DSH_HOME/provenance` by default; `provenanceRoot` selects another absolute host directory shared by all relevant profiles. Keep it outside sandbox execution roots. A receipt records its UUID, repository, source and returned refs, exact observed commits, owner conversation, event interval and turn. Automatic commits carry `DSH-Session` and `DSH-Provenance` trailers. Existing commits keep their hashes; the external receipts associate them with conversations without asserting authorship. Repeated observations can link one commit to several conversations.
 
 With the human command service mounted, `/changes` lists the current conversation's receipts, `/changes all` searches every receipt, and `/changes <text>` matches a conversation id, commit prefix, branch, topic or receipt UUID. `/changes export <text>` returns the same metadata as JSON; use `all` for an unfiltered export. Queries rebuild their view from authoritative receipt files, use configured byte, item and time bounds, and report truncation. Narrow a truncated query before exporting a complete selection. These commands make no model calls.
 
 Receipt lookup survives renamed or deleted branches and deleted transcripts. The event interval identifies evidence only while the corresponding conversation log is retained. Back up the provenance directory together with Session storage. Export contains host repository paths and identifiers, but no transcript text. Export does not publish remotely, synchronize Git notes or restore deleted conversations. The directory is an append-only metadata collection; large collections may require narrower queries or a larger lookup deadline. Pre-existing returns without receipts are not automatically backfilled.
+
+#### Repository remotes and outbound access
+
+Set the runtime's `network: outbound` to allow network requests from ordinary shell, Git, and language-server processes. This grants outbound network effects without per-command review; it is not a GET-only or destination-filtered policy. The runtime uses rootless slirp4netns, publishes no ports, verifies a separate network namespace, and probes a real host-loopback listener before accepting the world. Internet access does not mount host files or enable host process execution.
+
+Configure `workspaces.environment` with a stable `id`, display `name`, `grantLifetimeMs`, a `repositories` catalog, and explicit `initialGrants`. Catalog entries name a canonical host `source`, credential-free HTTPS `url`, `credentialTimeoutMs`, and optional distinct `fetchCredentialCommand` and `pushCredentialCommand` executables. Initial grants are applied only when creating the environment; restart does not restore revoked or expired authority. Sources are isolated copies, never host mounts. Fetch and push helpers must issue credentials limited to the corresponding repository and operations.
+
+An Environment owns grants and live workspace resources. A Workspace owns a repository manifest, checkpoints, and independent result receipts. A Session has a separate durable attachment to a randomly allocated workspace identity. Sessions in one environment share grants and get separate checkouts by default. Closing a chat does not dispose its environment resources; supervisor shutdown coordinates checkpointing and disposal. Pool capacity bounds retained environment workspaces, including closed chats. Each repository has a stable `/workspace/repos/<id>` path, and source paths resolve to its isolated copy.
+
+Mount `@deepseek-ai/dsh-local-container-runtime/tool-request-repo-access` with the workspace plugin, tools, and the human question service. `request_repo_access(repository, access, reason)` derives its environment from the initiating session. It accepts `fetch` or `push`; push requests require a configured push issuer. Optional `environment.remoteRepositories` permits any canonical credential-free HTTPS Git remote, including repositories without a server checkout. Set its `credentialTimeoutMs` and `providers` array; each provider names an exact HTTPS `origin` and optional distinct fetch/push credential commands. Unlisted origins use anonymous access. The approval names the repository, operations, environment-wide scope, and lifetime. Only an unambiguous approval grants access. Rejection, cancellation, missing interaction, and stale approvals do not widen authority. A sufficient current grant is reused. Attachment publishes a recovery receipt before importing; its result distinguishes `ready`, `denied`, and `approved_pending`. Only ready results contain a checkout path.
+
+The environment broker checks the current grant revision for each process admission and discards credential responses after a conflicting change. Each helper receives Git's `get` request for its configured URL and must return `username`, `password`, and `password_expiry_utc` for a repository-scoped token expiring within one hour. Helpers finish their owned children before exiting. Tokens reach ordinary process environments through URL-scoped Git headers; controllers, workspace manifests, checkpoints, and broker diagnostics exclude them. Sandbox processes can read their granted tokens and must not print or persist them. Existing tokens and processes may retain authority for up to one hour after revocation or grant expiry; new issuance stops immediately. Long-running processes need restarting after token expiry. Host signing keys remain outside the sandbox.
+
+Remote-only attachment clones inside an authorized sandbox process, then validates a bounded Git bundle into an environment-owned host checkout. Its deterministic storage path is independent of session identity. Host Git runs without network transport, ambient configuration, or credentials. Repeated attachments reuse this checkout; failed clones can be retried without blocking existing repositories. Empty, shallow, SHA-256, submodule, and LFS repositories retain the importer’s existing limitations. Repository attachment and local Git return do not push remotely. Return receipts are per repository: successful components remain recorded when another destination fails. The environment grants and requestable catalog are included in logged prompt assembly before the next model request. General web access permits unauthenticated public repository reads regardless of managed attachment grants.
 
 ### Trusted runtime image
 
@@ -120,9 +141,9 @@ The test self-skips when either variable is absent. It creates the owner through
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The owner first queries Docker-compatible Engine info and requires rootless mode, cgroup v2, the systemd cgroup driver, and enabled memory, CPU CFS-quota, and PID-limit support. It rejects image-declared volumes before it creates a random mode-0700 directory directly below `/tmp`. Provider adapters use its bounded stdin/stdout controller execution; cancellation or deadline expiry removes the whole world because the Engine API cannot prove individual exec termination.
+Workspace supervisors register their coalesced shutdown with the runtime so the managed engine remains available through checkpointing and child-container disposal. The owner first queries Docker-compatible Engine info and requires rootless mode, cgroup v2, the systemd cgroup driver, and enabled memory, CPU CFS-quota, and PID-limit support. It rejects image-declared volumes before it creates a random mode-0700 directory directly below `/tmp`. Provider adapters use its bounded stdin/stdout controller execution; cancellation or deadline expiry removes the whole world because the Engine API cannot prove individual exec termination. Empty-input controllers run with stdin detached, so an executable probe can exit before stream attachment without racing an input write.
 
-The only configured host bind maps that directory to `/workspace`. The request replaces image process and environment defaults, runs `dsh`, reads the image root-only, uses a bounded `tmpfs` at `/tmp`, disables networking, drops `ALL` capabilities, enables `no-new-privileges`, and applies the configured resource limits. The owner inspects the created container, starts it, then inspects it again before `getContainer()` resolves.
+The only configured host bind maps that directory to `/workspace`. The request replaces image process and environment defaults, runs `dsh`, reads the image root-only, uses a bounded `tmpfs` at `/tmp`, applies the configured private network mode, drops `ALL` capabilities, enables `no-new-privileges`, and applies the configured resource limits. The owner inspects the created container, starts it, then inspects it again before `getContainer()` resolves.
 
 Lifetime expiry and Cordis disposal stop the container, force-remove it when needed, and remove the private directory. Setup rollback and teardown aggregate cleanup failures with the retained container name and id, while the public diagnostics intentionally omit the host backing path.
 
@@ -206,6 +227,20 @@ At most one bounded naming request is attempted for each batch of previously unn
 
 Naming requests are independent of the coding conversation's request prefix.
 
+### Environment repository access
+
+#### What the model sees
+
+The optional repository access tool declares its request and result fields in its tool schema. Logged runtime context names the environment, grant revision, requestable repositories, active operations, and expiry. A ready tool result supplies the attached checkout path; denied or pending results supply no path. Credentials and host source paths are excluded.
+
+#### Token effect
+
+The tool schema adds one declaration. Context grows with the configured catalog and active grants. Approval and attachment produce ordinary tool results; the human approval does not require a model authorization call.
+
+#### KV Cache effect
+
+Grant changes update dynamic runtime context while preserving the static system-prompt prefix.
+
 ## Known Limitations and Deferred Work
 
 <a id="known-limitations-and-deferred-work"></a>
@@ -213,7 +248,8 @@ Naming requests are independent of the coding conversation's request prefix.
 These constraints define the owner package boundary.
 
 - **Explicit opt-in** — without `/workspaces`, matching providers share the disposable boot workspace; conversation repositories require the separate storage configuration.
-- **Git input restrictions** — conversation import requires a SHA-1 repository root with an existing commit. Shallow, sparse, partial, conflicted, submodule, and Git LFS inputs reject before execution. Unsafe symlinks and special files reject import or checkpointing.
+- **Git input restrictions** — conversation import requires a SHA-1 repository root with an existing commit. Shallow, sparse, conflicted, submodule, and Git LFS inputs reject before execution. Partial clones require the selected history to be fully materialized before import. Unsafe symlinks and special files reject import or checkpointing.
+- **Environment scope** — one configured environment per workspace service; configured sources and approved remote-only repositories share the same grant and attachment flow. Shared mutable checkouts are not implemented. Environment revocation is an owner operation; no dedicated Web revocation control is provided.
 - **Historical forks** — forks require their recorded checkpoint to remain among the two retained generations; an expired generation rejects rather than importing current host files.
 - **Per-process output bounds** — the matching subprocess provider applies retained-output and spill bounds; the runtime bounds controller output.
 - **Kernel mount metadata** — Linux `/proc/*/mountinfo` exposes the random host-side bind root to commands; provider paths and diagnostics suppress it, and it grants no host-namespace access.

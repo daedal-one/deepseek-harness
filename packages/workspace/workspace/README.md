@@ -85,7 +85,11 @@ This section explains the design decisions behind the feature and points at the 
 
 ### API behavior
 
+`WorkspacePathInvalidError` identifies path validation failure before registration writes begin and retains the original filesystem or validation error as `cause`. Persistence and rollback failures keep their own types. This guarantee concerns the attempted write; it does not imply that the path has no existing registration ([decision](../../../.agents/notes/implemented/architecture/2026-09-21-workspace-registration-rejection.md)).
+
 The API is one small family with two owners: `WorkspaceRegistry` creates, orders, and deletes projects and manages their session accounting; the `Workspace` entity exposes the display title, directory status, and the session projection. Per-method contracts live in the code, not this README — see [src/index.ts](src/index.ts) and [src/entity.ts](src/entity.ts).
+
+`resolveByPath` reads only registrations in the committed registry order. A pending create can have an internal entity before its durable writes finish; that entity is not a successful lookup. Absence is a current observation, not a receipt proving that an earlier request failed.
 
 ### Source map
 

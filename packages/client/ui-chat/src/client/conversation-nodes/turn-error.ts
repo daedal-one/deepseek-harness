@@ -1,7 +1,6 @@
-import type { Context } from '@deepseek-ai/cordis'
 import type {
   ConversationMatch, ConversationNodeContext, ConversationNodeDefinition, TurnErrorNode,
-} from '@deepseek-ai/dsh-client-ui-conversation/client'
+} from '@deepseek-ai/dsh-client-ui-conversation/client/portable'
 import { chatNode } from './common.ts'
 import { displayFailure } from './event-projection.ts'
 
@@ -86,12 +85,4 @@ export const turnErrorDefinition: ConversationNodeDefinition<TurnErrorState> = {
     }
     return chatNode(context, 'turn-error', node.seq, node)
   },
-}
-
-/**
- * Register the terminal Turn-error business contribution.
- * @param ctx - owning UI Conversation context.
- */
-export function registerTurnErrorConversationNode(ctx: Context): void {
-  ctx.uiConversation.events.register(turnErrorDefinition)
 }

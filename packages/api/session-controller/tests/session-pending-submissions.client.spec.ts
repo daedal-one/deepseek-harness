@@ -1,5 +1,6 @@
 /** Local submission echoes: synchronous insertion, observed/failed retirement, and settlement callbacks. */
 
+import { browserSessionPlatform } from '../src/client/browser.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
@@ -18,7 +19,7 @@ afterEach(() => {
 })
 
 function makeSession(api = new FakeApiClient()): { api: FakeApiClient; session: Session } {
-  return { api, session: new Session(SID, fakeRemote(api)) }
+  return { api, session: new Session(SID, fakeRemote(api), browserSessionPlatform) }
 }
 
 function imageRef(id: string): ImageAttachmentRef {

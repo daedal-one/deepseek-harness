@@ -109,6 +109,10 @@ interface InvocationDescriptor {
   }
   /** Codec for the unary result or each yielded stream item. */
   readonly result: TypertCodec
+  /** Versioned checksum of generated wire schemas and invocation fields; absent means unverified. */
+  readonly wireFingerprint?: string
+  /** Authored business behavior revision; absence does not establish compatibility. */
+  readonly semanticRevision?: number
   /** Source declaration used only for diagnostics. */
   readonly sourceLocation?: InvocationSourceLocation
 }
@@ -148,14 +152,26 @@ interface InvokeRemoteRequest {
   readonly method: string
   /** Named wire values; fields must exactly match the descriptor. */
   readonly args: Readonly<Record<string, unknown>>
+  /** Generated schema and business expectations; omitted by unnegotiated callers. */
+  readonly compatibility?: RemoteCompatibility
   /** Carrier or direct-caller cancellation injected only into cancellation-aware methods. */
   readonly signal?: AbortSignal
 }
 ```
 
 ```ts type-equiv
+/** Generated expectations; native requests also bind the admitted Host activation. */
+interface RemoteCompatibility {
+  readonly wireFingerprint: string
+  readonly semanticRevision: number
+  readonly identity?: ConnectionIdentity | undefined
+}
+```
+
+```ts type-equiv
 /** Stable infrastructure and boundary failures emitted before or after business execution. */
 type TypertGatewayErrorCode =
+  | 'gateway/api-incompatible'
   | 'gateway/ambiguous-endpoint'
   | 'gateway/arguments-invalid'
   | 'gateway/binding-invalid'

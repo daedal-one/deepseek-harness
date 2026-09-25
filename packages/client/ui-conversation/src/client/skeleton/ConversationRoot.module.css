@@ -496,6 +496,7 @@
      may retract their chrome. Views that opt into a composer overlay retain
      the bounded nested box above because their own virtualized regions scroll. */
   .root .scrollBody:not(:has([data-conversation-composer-overlay])) {
+    margin-right: 0;
     overflow-x: clip;
     overflow-y: visible;
     overscroll-behavior-y: auto;
@@ -541,6 +542,10 @@
   .headerUtilities {
     gap: 4px;
     margin-left: 4px;
+  }
+
+  .headerCorner {
+    margin-right: 0;
   }
 
   .tabs {

@@ -6,27 +6,8 @@ import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 import type { ChatSnapshot } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { SessionEventLikeEntry } from '@deepseek-ai/dsh-api-session-controller/client'
-// These Client-only fold modules have no plain-Node package export and are compiled into this worker.
 import { ConversationNodeAssembler } from '../../packages/client/ui-conversation/src/client/conversation/assembler.ts'
-import { inspectRequestPrompt } from '../../packages/client/ui-conversation/src/client/contract/request-inspection.ts'
-import type {
-  ConversationNodeDefinition,
-  ConversationViewDefinition,
-} from '../../packages/client/ui-conversation/src/client/contract/conversation.ts'
-import { assistantDefinition } from '../../packages/client/ui-chat/src/client/conversation-nodes/assistant.ts'
-import { chatViewDefinition } from '../../packages/client/ui-chat/src/client/conversation-nodes/chat-snapshot-builder.ts'
-import { commandDefinition } from '../../packages/client/ui-chat/src/client/conversation-nodes/command.ts'
-import { compactionDefinition } from '../../packages/client/ui-chat/src/client/conversation-nodes/compaction.ts'
-import { unknownFallbackDefinition } from '../../packages/client/ui-chat/src/client/conversation-nodes/fallback.ts'
-import { nextStepInboxDefinition } from '../../packages/client/ui-chat/src/client/conversation-nodes/inbox.ts'
-import { messageDefinition } from '../../packages/client/ui-chat/src/client/conversation-nodes/message.ts'
-import { requestPromptDefinition } from '../../packages/client/ui-chat/src/client/conversation-nodes/request-prompt.ts'
-import { retryDefinition } from '../../packages/client/ui-chat/src/client/conversation-nodes/retry.ts'
-import { toolDefinition } from '../../packages/client/ui-chat/src/client/conversation-nodes/tool.ts'
-import { turnErrorDefinition } from '../../packages/client/ui-chat/src/client/conversation-nodes/turn-error.ts'
-import { turnMaxTokensDefinition } from '../../packages/client/ui-chat/src/client/conversation-nodes/turn-max-tokens.ts'
-import { turnProcessDefinition } from '../../packages/client/ui-chat/src/client/conversation-nodes/turn-process.ts'
-import { turnTailDefinition } from '../../packages/client/ui-chat/src/client/conversation-nodes/turn-tail.ts'
+import { BenchEventDefinitions, BenchViewDefinitions } from './chat-definitions.client.ts'
 import { assertBuiltBenchmarkRuntime } from '../support/built-worker.ts'
 
 const TIME_ZERO = 1_700_000_000_000
@@ -40,37 +21,6 @@ export interface ConversationFoldWorkerReport {
   readonly smallFoldMs: number
   readonly largeFoldMs: number
   readonly scaling: number
-}
-
-class BenchEventDefinitions {
-  readonly definitions: readonly ConversationNodeDefinition[] = [
-    nextStepInboxDefinition,
-    messageDefinition,
-    requestPromptDefinition(inspectRequestPrompt),
-    assistantDefinition,
-    turnProcessDefinition,
-    toolDefinition,
-    commandDefinition,
-    compactionDefinition,
-    retryDefinition,
-    turnErrorDefinition,
-    turnMaxTokensDefinition,
-    turnTailDefinition,
-  ]
-
-  entries(): readonly ConversationNodeDefinition[] {
-    return this.definitions
-  }
-
-  fallbackEntry(): ConversationNodeDefinition {
-    return unknownFallbackDefinition
-  }
-}
-
-class BenchViewDefinitions {
-  entries(): readonly ConversationViewDefinition[] {
-    return [chatViewDefinition]
-  }
 }
 
 function entry(seq: number, type: string, data: unknown, extra: Record<string, unknown> = {}): SessionEventLikeEntry {

@@ -9,6 +9,7 @@ import { randomUUID } from 'node:crypto'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { chmod, lstat, mkdtemp, readlink, rm, unlink } from 'node:fs/promises'
 import { isAbsolute, relative } from 'node:path'
+import { createServer } from 'node:net'
 import type { Duplex } from 'node:stream'
 import { finished } from 'node:stream/promises'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -45,6 +46,7 @@ export type {
   PodmanImageInspect,
   PodmanInfo,
   PodmanMountInspect,
+  WorkspaceGitRemote,
 } from './types.ts'
 
 /** Canonical writable path shared by filesystem and subprocess adapters. */
@@ -76,8 +78,10 @@ const ALLOWED_ENVIRONMENT_NAMES = new Set([
 ])
 const RUNTIME_ENTRYPOINT = ['/usr/bin/env']
 const USERNS_MODE = 'keep-id:uid=1000,gid=1000'
+const OUTBOUND_NETWORK = 'slirp4netns:allow_host_loopback=false,cidr=10.0.2.0/24'
 
 interface ResolvedConfig {
+  network: 'none' | 'outbound'
   socketPath: string
   manageService: boolean
   podmanCommand: string | undefined
@@ -134,6 +138,7 @@ declare module '@deepseek-ai/cordis' {
  */
 export class LocalContainerRuntime extends Service {
   static Config: z<LocalContainerRuntimeConfig> = z.object({
+    network: z.union(['none', 'outbound']).default('none'),
     socketPath: z.string().required(),
     manageService: z.boolean().required(),
     podmanCommand: z.string(),
@@ -159,6 +164,8 @@ export class LocalContainerRuntime extends Service {
   readonly containerName: string = `dsh-local-container-${randomUUID()}`
 
   private readonly config: ResolvedConfig
+  private readonly workspaceOwners = new Set<() => Promise<void>>()
+  private authorizeGit: (() => Promise<string[]>) | undefined
   private readonly rawConfig: LocalContainerRuntimeConfig
   private admissionClosed = false
   private readonly controllers = new Set<Promise<unknown>>()
@@ -209,7 +216,7 @@ export class LocalContainerRuntime extends Service {
    * @returns settled bounded standard streams and exit code.
    */
   async executeController(request: PodmanControllerExecRequest & { readonly deadlineMs: number }): Promise<PodmanControllerExecResult> {
-    if (this.admissionClosed) throw new Error('local-container-runtime: workspace is being saved')
+    this.assertAdmissionOpen()
     const operation = this.runController(request)
     this.controllers.add(operation)
     try { return await operation } finally { this.controllers.delete(operation) }
@@ -278,7 +285,7 @@ export class LocalContainerRuntime extends Service {
    * @returns an attached started handle whose removal proves descendant quiescence.
    */
   async createProcess(request: LocalContainerProcessRequest): Promise<LocalContainerProcessHandle> {
-    if (this.admissionClosed) throw new Error('local-container-runtime: workspace is being saved')
+    this.assertAdmissionOpen()
     this.validateProcessRequest(request)
     request.signal?.throwIfAborted()
     const prior = this.processAllocation
@@ -287,8 +294,7 @@ export class LocalContainerRuntime extends Service {
     await prior
     try {
       this.throwIfDisposing()
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- admission can close while process allocation is awaited
-      if (this.admissionClosed) throw new Error('local-container-runtime: workspace is being saved')
+      this.assertAdmissionOpen()
       if (this.processes.size >= this.config.maxLiveProcesses) {
         throw new Error(`local-container-runtime: process-container limit ${this.config.maxLiveProcesses} reached`)
       }
@@ -300,19 +306,35 @@ export class LocalContainerRuntime extends Service {
     }
   }
 
+  /** Keep the engine available until a workspace supervisor finishes its child worlds.
+   * @param shutdown - coalesced checkpoint and child-container disposal operation.
+   * @returns unregister function, called only after that supervisor has finished shutdown.
+   */
+  registerWorkspaceOwner(shutdown: () => Promise<void>): () => void {
+    this.throwIfDisposing()
+    this.workspaceOwners.add(shutdown)
+    return () => { this.workspaceOwners.delete(shutdown) }
+  }
+
   /**
    * Bind a separately owned workspace to a new isolated world on the same engine.
    * @param directory - trusted supervisor-owned private backing directory.
+   * @param authorize - environment-owned credential issuance checked for each process admission.
    * @returns the verified world and its quiescent container disposer; storage is retained.
    */
-  async createWorkspace(directory: string): Promise<{ runtime: LocalContainerRuntime; dispose(): Promise<void> }> {
+  async createWorkspace(
+    directory: string,
+    authorize?: () => Promise<string[]>,
+  ): Promise<{ runtime: LocalContainerRuntime; dispose(): Promise<void> }> {
     await this.getContainer()
     if (!isAbsolute(directory) || directory.includes(':')) throw new Error('local-container-runtime: invalid workspace directory')
     const metadata = await lstat(directory)
     if (!metadata.isDirectory() || metadata.isSymbolicLink() || (metadata.mode & 0o077) !== 0
       || metadata.uid !== process.getuid?.()) throw new Error('local-container-runtime: workspace must be an owner-only real directory')
+    if (authorize !== undefined && this.config.network !== 'outbound') throw new Error('environment Git credentials require outbound networking')
     const context = new Context()
     const runtime = new LocalContainerRuntime(context, { ...this.rawConfig, manageService: false }, directory)
+    runtime.authorizeGit = authorize
     try { await runtime.getContainer() }
     catch (error) {
       try { await context.fiber.dispose() }
@@ -511,7 +533,7 @@ export class LocalContainerRuntime extends Service {
       throw new Error('local-container-runtime: verified process-container inputs are unavailable')
     }
     const name = `dsh-local-container-process-${randomUUID()}`
-    const environment = this.processEnvironment(request.environment)
+    const environment = [...this.processEnvironment(request.environment), ...await this.authorizeGit?.() ?? []]
     const createRequest: PodmanContainerCreate = {
       name,
       Image: this.config.image,
@@ -521,7 +543,7 @@ export class LocalContainerRuntime extends Service {
       WorkingDir: request.cwd,
       Env: [],
       ReadonlyRootfs: true,
-      NetworkDisabled: true,
+      NetworkDisabled: this.config.network === 'none',
       AttachStdin: request.stdin,
       AttachStdout: true,
       AttachStderr: true,
@@ -597,7 +619,7 @@ export class LocalContainerRuntime extends Service {
       || !sameValues(entrypoint, request.Entrypoint) || !sameValues(config.Cmd, request.Cmd)) {
       throw new Error(`local-container-runtime: Engine changed process-container execution facts (${JSON.stringify({ user: config.User === request.User, cwd: config.WorkingDir === request.WorkingDir, entrypoint: sameValues(entrypoint, request.Entrypoint), command: sameValues(config.Cmd, request.Cmd) })})`)
     }
-    if (host.ReadonlyRootfs !== true || host.NetworkMode !== 'none' || host.Privileged === true
+    if (host.ReadonlyRootfs !== true || !this.matchesNetwork(host.NetworkMode) || host.Privileged === true
       || host.PidMode === 'host' || host.IpcMode === 'host' || (host.Devices?.length ?? 0) > 0) {
       throw new Error('local-container-runtime: process-container isolation controls differ from the verified template')
     }
@@ -645,7 +667,7 @@ export class LocalContainerRuntime extends Service {
 
   private hostConfig(backingDirectory: string): PodmanContainerCreate['HostConfig'] {
     return {
-      NetworkMode: 'none',
+      NetworkMode: this.config.network === 'none' ? 'none' : OUTBOUND_NETWORK,
       UsernsMode: USERNS_MODE,
       PidMode: 'private',
       IpcMode: 'private',
@@ -674,7 +696,7 @@ export class LocalContainerRuntime extends Service {
       WorkingDir: WORKSPACE_PATH,
       Env: [],
       ReadonlyRootfs: true,
-      NetworkDisabled: true,
+      NetworkDisabled: this.config.network === 'none',
       HostConfig: this.hostConfig(backingDirectory),
     }
   }
@@ -715,7 +737,7 @@ export class LocalContainerRuntime extends Service {
       throw new Error('local-container-runtime: Engine did not replace image process defaults')
     }
     if (hostConfig.ReadonlyRootfs !== true) throw new Error('local-container-runtime: Engine did not enable a read-only root filesystem')
-    if (hostConfig.NetworkMode !== 'none') throw new Error('local-container-runtime: Engine did not disable container networking')
+    if (!this.matchesNetwork(hostConfig.NetworkMode)) throw new Error('local-container-runtime: Engine changed the configured private network mode')
     if (hostConfig.Privileged === true || hostConfig.PidMode === 'host' || hostConfig.IpcMode === 'host'
       || (hostConfig.Devices?.length ?? 0) > 0) {
       throw new Error('local-container-runtime: Engine inspection reported privileged, host-namespace, or device access')
@@ -733,9 +755,10 @@ export class LocalContainerRuntime extends Service {
 
   /** Prove effective namespace, privilege, environment, mount, and cgroup controls from the started container. */
   private async verifyEffectiveResourceLimits(container: PodmanContainer): Promise<void> {
-    const [hostPidNamespace, hostIpcNamespace] = await Promise.all([
+    const [hostPidNamespace, hostIpcNamespace, hostNetNamespace] = await Promise.all([
       readlink('/proc/self/ns/pid'),
       readlink('/proc/self/ns/ipc'),
+      readlink('/proc/self/ns/net'),
     ])
     const script = [
       'set -eu',
@@ -749,6 +772,7 @@ export class LocalContainerRuntime extends Service {
       'printf "nnp="; sed -n "s/^NoNewPrivs:[[:space:]]*//p" /proc/self/status',
       'printf "pidns="; readlink /proc/self/ns/pid',
       'printf "ipcns="; readlink /proc/self/ns/ipc',
+      'printf "netns="; readlink /proc/self/ns/net',
       'printf "tmpfstype="; findmnt -n -o FSTYPE /tmp',
       'printf "tmpfsbytes="; df -B1 --output=size /tmp | tail -n 1 | tr -d " "',
       'printf "netifs="; find /sys/class/net -mindepth 1 -maxdepth 1 -printf "%f\\n" | sort | tr "\\n" ","; echo',
@@ -768,15 +792,16 @@ export class LocalContainerRuntime extends Service {
     if (values.get('capeff') !== '0000000000000000' || values.get('nnp') !== '1') {
       throw new Error('local-container-runtime: effective capability or no-new-privileges state is unsafe')
     }
-    if (values.get('pidns') === hostPidNamespace || values.get('ipcns') === hostIpcNamespace) {
-      throw new Error('local-container-runtime: container shares a host process or IPC namespace')
+    if (values.get('pidns') === hostPidNamespace || values.get('ipcns') === hostIpcNamespace
+      || values.get('netns') === undefined || values.get('netns') === hostNetNamespace) {
+      throw new Error('local-container-runtime: container shares a host process, IPC, or network namespace')
     }
     const tmpfsBytes = Number(values.get('tmpfsbytes'))
     if (values.get('tmpfstype') !== 'tmpfs' || !Number.isSafeInteger(tmpfsBytes)
       || tmpfsBytes < 1 || tmpfsBytes > this.config.tmpfsBytes) {
       throw new Error('local-container-runtime: effective /tmp mount is not the configured bounded tmpfs')
     }
-    if (values.get('netifs') !== 'lo,' || values.get('rootwrite') !== '0'
+    if ((this.config.network === 'none' && values.get('netifs') !== 'lo,') || values.get('rootwrite') !== '0'
       || values.get('workspacewrite') !== '1') {
       throw new Error(`local-container-runtime: effective network, root, or workspace control is unsafe (${JSON.stringify({ netifs: values.get('netifs'), rootwrite: values.get('rootwrite'), workspacewrite: values.get('workspacewrite') })})`)
     }
@@ -784,6 +809,7 @@ export class LocalContainerRuntime extends Service {
     if (values.get('pid1env') !== expectedEnvironment) {
       throw new Error('local-container-runtime: runtime process environment is not the configured replacement')
     }
+    if (this.config.network === 'outbound') await this.verifyHostLoopbackIsolation(container)
     if (values.get('memory') !== String(this.config.memoryBytes)
       || values.get('swap') !== '0'
       || values.get('pids') !== String(this.config.pidsLimit)) {
@@ -901,6 +927,9 @@ export class LocalContainerRuntime extends Service {
     } catch (error) {
       readinessFailure = error
     }
+    const owners = await Promise.allSettled([...this.workspaceOwners].map(shutdown => shutdown()))
+    const ownerFailures = owners.flatMap(result => result.status === 'rejected' ? [result.reason as unknown] : [])
+    if (ownerFailures.length > 0) throw new AggregateError(ownerFailures, 'workspace owners did not finish; engine retained for recovery')
     try {
       await this.cleanupOwnedResources()
     } catch (cleanupFailure) {
@@ -924,6 +953,10 @@ export class LocalContainerRuntime extends Service {
   /** Refuse readiness when disposal begins during setup. */
   private throwIfDisposing(): void {
     if (this.disposing) throw new Error('local-container-runtime: disposal began during setup')
+  }
+
+  private assertAdmissionOpen(): void {
+    if (this.admissionClosed) throw new Error('local-container-runtime: workspace is being saved')
   }
 
   /** Remove a known owner directory without following a replaced symlink. */
@@ -953,7 +986,35 @@ export class LocalContainerRuntime extends Service {
   }
 
   /** Resolve parser-owned config into security-checked Engine values. */
+  private matchesNetwork(mode: string | undefined): boolean {
+    return this.config.network === 'none' ? mode === 'none' : mode === 'slirp4netns'
+  }
+
+  private async verifyHostLoopbackIsolation(container: PodmanContainer): Promise<void> {
+    const server = createServer(socket => socket.destroy())
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once('error', reject)
+        server.listen(0, '127.0.0.1', resolve)
+      })
+      const address = server.address()
+      if (address === null || typeof address === 'string') throw new Error('container host-loopback probe did not bind')
+      const result = await container.runControl(['/usr/bin/python3', '-c',
+        'import socket,sys; s=socket.socket(); s.settimeout(float(sys.argv[2])); sys.exit(0 if s.connect_ex(("10.0.2.2",int(sys.argv[1]))) != 0 else 1)',
+        String(address.port), String(this.config.engineRequestTimeoutMs / 1000)], CONTROL_OUTPUT_MAX_BYTES)
+      if (result.exitCode !== 0) throw new Error('local-container-runtime: outbound network permits host loopback access')
+    } finally {
+      if (server.listening) await new Promise<void>((resolve, reject) => {
+        server.close((error) => {
+          if (error === undefined) resolve()
+          else reject(error)
+        })
+      })
+    }
+  }
+
   private resolveConfig(config: LocalContainerRuntimeConfig): ResolvedConfig {
+    const network = config.network ?? 'none'
     if (!isAbsolute(config.socketPath) || config.socketPath.includes('\0')) {
       throw new Error('local-container-runtime: socketPath must be an absolute Unix socket path')
     }
@@ -980,6 +1041,7 @@ export class LocalContainerRuntime extends Service {
     })
     if (environment.length === 0) throw new Error('local-container-runtime: environment must be an explicit non-empty replacement')
     return {
+      network,
       socketPath: config.socketPath,
       manageService: config.manageService,
       podmanCommand: config.podmanCommand,

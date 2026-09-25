@@ -7,6 +7,8 @@ import type {
   WorkspaceArchiveValue,
   WorkspaceCreateRequest,
   WorkspaceCreateValue,
+  WorkspaceResolveRequest,
+  WorkspaceResolveValue,
   WorkspaceDeleteRequest,
   WorkspaceDeleteValue,
   WorkspaceFollowFrame,
@@ -65,6 +67,12 @@ function deferred<T>(): Deferred<T> {
 
 class FakeWorkspaceRemote implements WorkspaceRemote {
   readonly calls: Array<{ readonly method: string; readonly request: unknown }> = []
+  onResolve: (request: WorkspaceResolveRequest, signal?: AbortSignal) => Promise<RemoteResult<WorkspaceResolveValue>> = () =>
+    Promise.resolve(remoteOk({ workspace: null }))
+  resolveByPath(request: WorkspaceResolveRequest, signal?: AbortSignal): Promise<RemoteResult<WorkspaceResolveValue>> {
+    this.record('resolveByPath', request)
+    return this.onResolve(request, signal)
+  }
   onCreate: (request: WorkspaceCreateRequest) => Promise<RemoteResult<WorkspaceCreateValue>> = request =>
     Promise.resolve(remoteOk({ workspace: workspace(request.path.split('/').pop() ?? 'workspace'), created: true }))
   onRename: (request: WorkspaceRenameRequest) => Promise<RemoteResult<WorkspaceValue>> = request =>
@@ -121,6 +129,36 @@ class FakeWorkspaceRemote implements WorkspaceRemote {
     this.calls.push({ method, request })
   }
 }
+
+describe('read-only Workspace lookup', () => {
+  it('does not merge a returned row or change the followed snapshot', async () => {
+    const remote = new FakeWorkspaceRemote()
+    const model = new ClientWorkspaceModel(remote)
+    model.replaceBaseline({ items: [workspace('existing')], archivedSessionIds: [] })
+    const snapshot = model.getSnapshot()
+    const found = workspace('resolved')
+    remote.onResolve = async () => remoteOk({ workspace: found })
+    await expect(model.resolveByPath({ path: '/alias' })).resolves.toEqual(remoteOk({ workspace: found }))
+    expect(model.getSnapshot()).toBe(snapshot)
+    expect(remote.calls).toEqual([{ method: 'resolveByPath', request: { path: '/alias' } }])
+  })
+
+  it('does not resurrect a removed row when a held lookup completes', async () => {
+    const remote = new FakeWorkspaceRemote()
+    const model = new ClientWorkspaceModel(remote)
+    const old = workspace('removed')
+    model.replaceBaseline({ items: [old], archivedSessionIds: [] })
+    const held = deferred<RemoteResult<WorkspaceResolveValue>>()
+    remote.onResolve = () => held.promise
+    const read = model.resolveByPath({ path: old.path })
+    model.removeView(old.workspaceId)
+    const snapshot = model.getSnapshot()
+    held.resolve(remoteOk({ workspace: old }))
+    await read
+    expect(model.getSnapshot()).toBe(snapshot)
+    expect(model.getSnapshot().items).toEqual([])
+  })
+})
 
 function modelFor(remote = new FakeWorkspaceRemote()): ClientWorkspaceModel {
   return new ClientWorkspaceModel(remote)

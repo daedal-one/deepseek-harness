@@ -100,6 +100,10 @@ export function assertServiceableBashConfig(config: Config): void {
  * composition teardown) even across an executor reload.
  */
 export class LocalBashExecutor extends ShellExecutor {
+  override get executionWorld(): symbol | object {
+    return this.ctx.subprocess.executionWorld
+  }
+
   static inject = ['subprocess']
 
   static Config: z<Config> = z.object({

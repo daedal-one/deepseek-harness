@@ -2,9 +2,14 @@
 
 /** Trusted controller; repository bytes never select a host command or pathname. */
 export const WORKSPACE_CONTROLLER = String.raw`
-import os, sys, json, stat, base64, subprocess, hashlib, posixpath
+import os, sys, json, stat, base64, subprocess, hashlib, posixpath, re, shutil
 ROOT='/workspace'
 r=json.load(sys.stdin)
+BASE=ROOT
+if 'repository' in r:
+    if not isinstance(r['repository'],str) or not re.fullmatch(r'repos/[a-f0-9]{16}',r['repository']): raise ValueError('invalid managed repository path')
+    ROOT=BASE+'/'+r['repository']
+    if os.path.realpath(os.path.dirname(ROOT))!=os.path.dirname(ROOT): raise ValueError('managed repository parent was replaced')
 LIMIT=r['maxBytes']; COUNT=r['maxEntries']; TIMEOUT=r['timeoutSeconds']
 env={'PATH':'/usr/bin:/bin','HOME':'/tmp','LANG':'C.UTF-8','GIT_CONFIG_NOSYSTEM':'1','GIT_CONFIG_GLOBAL':'/dev/null','GIT_NO_REPLACE_OBJECTS':'1','GIT_TERMINAL_PROMPT':'0','GIT_AUTHOR_NAME':r['authorName'],'GIT_AUTHOR_EMAIL':r['authorEmail'],'GIT_COMMITTER_NAME':r['authorName'],'GIT_COMMITTER_EMAIL':r['authorEmail']}
 def git(*args, data=None):
@@ -70,6 +75,25 @@ def restore(entries):
         else: raise ValueError('invalid workspace entry kind')
     return {}
 
+def attach():
+    global ROOT
+    destination=ROOT
+    if os.path.lexists(destination):
+        expected=[dict(e,mode=0o700) if e['kind']=='directory' else e for e in r['entries']]
+        if not stat.S_ISDIR(os.lstat(destination).st_mode) or capture()['entries']!=expected: raise ValueError('managed repository path already contains different data')
+        return {}
+    if not isinstance(r['staging'],str) or not re.fullmatch(r'[a-f0-9-]{36}',r['staging']): raise ValueError('invalid repository import identity')
+    temporary=BASE+'/.dsh-import-'+r['staging']
+    os.mkdir(temporary,0o700)
+    ROOT=temporary
+    try:
+        restore(r['entries'])
+        os.rename(temporary,destination)
+    finally:
+        ROOT=destination
+        if os.path.exists(temporary): shutil.rmtree(temporary)
+    return {}
+
 def maintain():
     for special in ('.git','.git/objects','.git/refs'):
         if not stat.S_ISDIR(os.lstat(path(special)).st_mode): raise ValueError('workspace Git directory was replaced')
@@ -109,7 +133,7 @@ def maintain():
             with open(config,'wb') as f: f.write(original)
 try:
     op=r['operation']
-    value=restore(r['entries']) if op=='restore' else capture() if op=='capture' else maintain()
+    value=restore(r['entries']) if op=='restore' else capture() if op=='capture' else attach() if op=='attach' else maintain()
     output=json.dumps({'ok':True,'value':value},separators=(',',':'))
     if len(output.encode())>r['maxOutputBytes']: raise ValueError('workspace response limit exceeded')
     print(output)

@@ -2,6 +2,7 @@
 
 import { homedir } from 'node:os'
 import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-client-connection'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {
   TypertRemoteEventDispatch,
@@ -33,13 +34,13 @@ export type {} from '@deepseek-ai/dsh-api-session-controller/types'
 export { API_REMOTE_FORWARDED_EVENTS } from './remote-events.ts'
 export type { ApiRemoteForwardedEvent } from './types.ts'
 
-/** Required Host service: the Gateway owns the physical Remote stream mux. */
-export const inject = ['typertGateway']
+/** Required Host services: Gateway owns the mux and Connection owns Host identity. */
+export const inject = ['typertGateway', 'connection']
 
 /** Host plugin body registering this application's selected Cordis event source. */
 export function apply(ctx: Context): void {
   ctx.effect(
-    () => ctx.typertGateway.registerRemoteEvents(remoteEventSource(ctx), { home: homedir() }),
+    () => ctx.typertGateway.registerRemoteEvents(remoteEventSource(ctx), { home: homedir(), identity: ctx.connection.identity }),
     'api-remotes: forwarded Cordis event source',
   )
 }

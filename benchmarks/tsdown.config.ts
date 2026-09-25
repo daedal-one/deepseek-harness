@@ -44,7 +44,9 @@ export default defineConfig([
     ...shared,
     entry: {
       'conversation-fold.worker': 'conversation-fold/conversation-fold.worker.client.ts',
+      'history-detail.worker': 'conversation-fold/history-detail.worker.client.ts',
     },
+    outputOptions: { paths: { '@deepseek-ai/dsh-api-gateway/client': '@deepseek-ai/dsh-api-gateway/client/portable' } },
     outDir: '.dsh-build/conversation-fold',
     clean: true,
     tsconfig: 'tsconfig.client.json',

@@ -80,7 +80,7 @@ export interface ISession {
    * @param content - text plus browser-owned temporary image uploads.
    * @param mode - 'queue' appends a turn; 'steer' interrupts the running one.
    * @param signal - optional caller cancellation for the complete admission round-trip.
-   * @param requestId - identity from {@link beginSubmission}; a failed identified prompt retires its echo.
+   * @param requestId - caller-owned identity, optionally from {@link beginSubmission}; failure retires any matching echo.
    * @returns acceptance, or the business error (also mirrored into snapshot.promptError).
    */
   prompt(
@@ -119,20 +119,33 @@ export interface ISession {
   rename(title: string): Promise<RemoteResult<{ title: string; seq: SessionSeq }>>
   /**
    * Extend the history window backwards (older messages pagination).
-   * @returns completion; failures land in snapshot.openState/loadingOlder.
+   * Repeated calls share one completion. Failures retain the accepted window and cursor.
+   * @param signal - optional first caller's lifetime; cancellation suppresses late results and
+   * errors without closing the Session. Coalesced callers share that lifetime and completion.
+   * @returns completion, including cancellation; inspect snapshot.olderError for a failed read.
    */
-  loadOlder(): Promise<void>
+  loadOlder(signal?: AbortSignal): Promise<void>
   /** Retry a failed history load. @returns completion of the new load. */
   retryOpen(): Promise<void>
-  /** Fetch one exact deferred result. @param seq - result sequence. @returns completion of the window update. */
-  loadHistoryDetail(seq: number): Promise<void>
+  /**
+   * Fetch one deferred result from the active history window. Concurrent callers share
+   * completion; failures reject for explicit retry. Replacement or disposal cancels
+   * the read and suppresses its obsolete result or failure. Optional Host-wide retention
+   * restores older compact entries; a complete entry larger than that allowance rejects
+   * with HistoryDetailLimitError without truncation or eviction.
+   * @param seq - result sequence in the active history window.
+   * @param signal - optional first caller's lifetime; cancellation frees the coalescing slot
+   * without closing the Session. Coalesced callers share that lifetime and completion.
+   * @returns completion of hydration or cancellation; already hydrated or absent entries are no-ops.
+   */
+  loadHistoryDetail(seq: number, signal?: AbortSignal): Promise<void>
   /**
    * Page history backwards until the window covers `seq` (inclusive) — the
    * turn-jump loader. Repeated calls while a jump is paging lower its shared
    * target and return the in-flight completion; `snapshot.loadingOlder` is
    * the busy signal for the whole jump.
    * @param seq - durable event seq the window must reach (a turn's `turn/start` seq).
-   * @returns completion once covered, exhausted, superseded, or failed soft.
+   * @returns completion once covered, exhausted, superseded, or failed; inspect snapshot.olderError.
    */
   loadThrough(seq: SessionSeq): Promise<void>
   /**

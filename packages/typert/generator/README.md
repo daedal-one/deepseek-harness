@@ -83,6 +83,16 @@ Host and client are independent TypeScript programs. Direct project references e
 
 `FaceModelEmitter` emits executable JavaScript containing supported Zod schemas and the `TYPERT` contribution, plus a declaration file whose schemas are typed `z.ZodType<SourceType>` through the package's public export; unsupported Zod projections fail. The Host face with Remote methods additionally emits `typert.remote-client.*` projections of Host Remote contracts for the Client. `WorkspaceTypertGenerator` validates each contributor's `package.json`: `./typert` and `./client/typert` (and `./remote` when Remote methods exist) must point at the exact generated files, and the `files` list must include them.
 
+### Business revisions
+
+Remote methods start at `semanticRevision: 1`. Maintainers annotate a Remote method's JSDoc with `@remoteRevision 2` when an externally observable business change becomes incompatible even though its wire schemas may remain identical. The value is one positive safe integer literal; duplicate or invalid annotations fail generation. Increment the revision for changed effects, permission meaning, ordering, deduplication or return-value interpretation that an existing Client cannot safely consume. Preserve it for compatible fixes and implementation-only changes. Never recycle an earlier revision for a different meaning. Direct, scoped and stream methods follow the same policy.
+
+The generator emits the resolved revision in both Host and Client descriptors independently of `wireFingerprint`; changing the annotation alone does not change the schema checksum. Exact equality is the supported business policy. Review of the owning change establishes whether the author incremented it; generation cannot infer semantic compatibility from code. Manually registered descriptors without a revision remain unverified.
+
+### Wire fingerprints
+
+Each generated Remote descriptor carries `wireFingerprint`, formatted as `typert-wire-v1:<sha256>`. Host and Client artifacts use the same endpoint-local projection. The checksum includes resolved Context, argument and result schemas, transitive references, argument order and wire names, lookup/Context selection, absence and cancellation. The canonical projection reuses schema emission, allocates declaration names by first use and excludes paths, source symbol spelling, documentation and unrelated endpoints. Exact matches establish conservative generated-schema equivalence; declaration structure, property/union ordering and readonly parsing effects remain significant. They do not establish business semantics, authorization or supported Session events. A canonical algorithm change requires a new fingerprint version.
+
 ### Catalog projection
 
 The root export includes the model-driven extraction, completeness checks, and deterministic text renderers used by this repository's Cordis catalogs. They accept a `CordisCatalogPolicy`; repository-owned type links, foundation and exemption classifications, and inherited Cordis entries stay in `scripts/gen-cordis-catalog.ts` and are passed in explicitly, so this package contains projection mechanics, not a hidden copy of the repository's documentation taxonomy.

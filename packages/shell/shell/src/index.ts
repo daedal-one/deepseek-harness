@@ -66,6 +66,11 @@ export abstract class ShellExecutor extends Service {
     super(ctx, 'shell')
   }
 
+  /** Execution world used by this executor, or undefined when its provider cannot establish one. */
+  get executionWorld(): symbol | object | undefined {
+    return undefined
+  }
+
   /**
    * The sandbox mode this executor applies by default, or `undefined` when it
    * does not sandbox commands.

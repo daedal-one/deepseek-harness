@@ -1,8 +1,12 @@
-import { access, mkdtemp, readlink, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, readlink, rm, writeFile } from 'node:fs/promises'
 import Dockerode from 'dockerode'
 import { Context } from '@deepseek-ai/cordis'
 import { randomUUID } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
+import { EnvironmentAccess } from '../src/environment-access.ts'
+import { cloneEnvironmentRepository } from '../src/remote-import.ts'
+import { workspaceGit } from '../src/workspace-git.ts'
+import { join } from 'node:path'
 import LocalContainerRuntime from '@deepseek-ai/dsh-local-container-runtime'
 import type { PodmanContainerInspect } from '@deepseek-ai/dsh-local-container-runtime'
 
@@ -17,6 +21,132 @@ async function readAll(stream: NodeJS.ReadableStream): Promise<string> {
 }
 
 describe.skipIf(!enabled)('rootless Podman Engine API runtime owner', () => {
+  it('preserves the workspace owner after concurrent short-lived executable probes', async () => {
+    if (socketPath === undefined || image === undefined) throw new Error('Podman integration environment disappeared')
+    const ctx = new Context()
+    let shutdowns = 0
+    try {
+      await ctx.plugin(LocalContainerRuntime, {
+        socketPath, image, manageService: false, serviceStartupTimeoutMs: 10000,
+        user: 'dsh', environment: { HOME: '/home/dsh', LANG: 'C.UTF-8', PATH: '/usr/local/bin:/usr/bin:/bin' },
+        memoryBytes: 268435456, nanoCpus: 500000000, pidsLimit: 128, tmpfsBytes: 67108864,
+        engineRequestTimeoutMs: 10000, maxLiveProcesses: 4, lifetimeMs: 300000, stopTimeoutSeconds: 2,
+      })
+      const runtime = ctx.localContainerRuntime
+      await runtime.getContainer()
+      runtime.registerWorkspaceOwner(async () => { shutdowns++ })
+      const outcomes = await Promise.allSettled(Array.from({ length: 24 }, (_, index) => runtime.executeController({
+        argv: ['/bin/sh', '-c', 'command -v -- "$1"', 'dsh', `dsh-absent-editor-${index}`],
+        stdin: new Uint8Array(), maxOutputBytes: 1024, deadlineMs: 30000,
+      })))
+      expect(outcomes.map(outcome => outcome.status === 'fulfilled' ? outcome.value.exitCode : String(outcome.reason)))
+        .toEqual(Array.from({ length: 24 }, () => 127))
+      expect(shutdowns).toBe(0)
+      const result = await runtime.executeController({
+        argv: ['/bin/cat'], stdin: Buffer.from('workspace remains available'), maxOutputBytes: 1024, deadlineMs: 30000,
+      })
+      expect(result.exitCode).toBe(0)
+      expect(Buffer.from(result.stdout).toString()).toBe('workspace remains available')
+    } finally { await ctx.fiber.dispose() }
+    expect(shutdowns).toBe(1)
+  })
+
+  it.skipIf(process.env.DSH_PODMAN_EGRESS !== '1')('clones an approved remote absent from the catalog through a sandbox process', async () => {
+    if (socketPath === undefined || image === undefined) throw new Error('Podman integration environment disappeared')
+    const root = await mkdtemp('/tmp/dsh-new-remote-e2e-')
+    const ctx = new Context()
+    let world: Awaited<ReturnType<LocalContainerRuntime['createWorkspace']>> | undefined
+    try {
+      const access = await EnvironmentAccess.open({ id: 'remote-only', name: 'Remote-only test', grantLifetimeMs: 3600000,
+        repositories: [], initialGrants: [], remoteRepositories: { credentialTimeoutMs: 1000, providers: [] } }, root, 16384)
+      const remote = 'https://github.com/octocat/Hello-World.git'
+      await access.approve(remote, 'fetch', { kind: 'user', sessionId: 'qualification', questionId: 'approved', reason: 'Test remote-only import.' }, 0, new AbortController().signal)
+      await ctx.plugin(LocalContainerRuntime, {
+        socketPath, image, network: 'outbound', manageService: false, serviceStartupTimeoutMs: 10000,
+        user: 'dsh', environment: { HOME: '/home/dsh', LANG: 'C.UTF-8', PATH: '/usr/local/bin:/usr/bin:/bin' },
+        memoryBytes: 268435456, nanoCpus: 500000000, pidsLimit: 128, tmpfsBytes: 67108864,
+        engineRequestTimeoutMs: 10000, maxLiveProcesses: 4, lifetimeMs: 300000, stopTimeoutSeconds: 2,
+      })
+      const backing = join(root, 'world'); await mkdir(backing, { mode: 0o700 })
+      world = await ctx.localContainerRuntime.createWorkspace(backing, () => access.authorize())
+      const limits = { gitCommand: '/usr/bin/git', resourceLimitCommand: '/usr/bin/prlimit', gitMemoryBytes: 268435456,
+        maxBytes: 4194304, maxEntries: 1000, timeoutMs: 30000, authorName: 'DSH', authorEmail: 'dsh@localhost' }
+      const repository = access.repository(remote)
+      await cloneEnvironmentRepository(world.runtime, repository, limits, 8388608, new AbortController().signal)
+      expect((await workspaceGit(repository.source, ['remote', 'get-url', 'origin'], limits)).toString().trim()).toBe(remote)
+      expect((await workspaceGit(repository.source, ['status', '--porcelain'], limits)).length).toBe(0)
+      expect((await workspaceGit(repository.source, ['rev-parse', 'HEAD'], limits)).toString().trim()).toMatch(/^[a-f0-9]{40}$/u)
+      expect(await readFile(join(repository.source, '.git/config'), 'utf8')).not.toMatch(/credential|extraHeader/u)
+    } finally { await world?.dispose(); await ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) }
+  })
+
+  it.skipIf(process.env.DSH_PODMAN_EGRESS !== '1')('fetches HTTPS and a public Git remote inside an isolated outbound process', async () => {
+    if (socketPath === undefined || image === undefined) throw new Error('Podman integration environment disappeared')
+    const ctx = new Context()
+    const fiber = await ctx.plugin(LocalContainerRuntime, {
+      socketPath, image, network: 'outbound', manageService: false, serviceStartupTimeoutMs: 10000,
+      user: 'dsh', environment: { HOME: '/home/dsh', LANG: 'C.UTF-8', PATH: '/usr/local/bin:/usr/bin:/bin' },
+      memoryBytes: 268435456, nanoCpus: 500000000, pidsLimit: 128, tmpfsBytes: 67108864,
+      engineRequestTimeoutMs: 10000, maxLiveProcesses: 4, lifetimeMs: 300000, stopTimeoutSeconds: 2,
+    })
+    try {
+      const process = await ctx.localContainerRuntime.createProcess({
+        argv: ['/usr/bin/python3', '-c', [
+          'import os,subprocess,urllib.request',
+          'assert not os.path.exists("/home/carlo/.dsh/.credentials.yaml")',
+          'assert urllib.request.urlopen("https://example.com", timeout=15).status == 200',
+          'r=subprocess.run(["git","ls-remote","https://github.com/octocat/Hello-World.git","HEAD"],check=True,capture_output=True,text=True,timeout=30)',
+          'assert r.stdout.strip().endswith("HEAD")',
+          'print("HTTPS_AND_GIT_OK")',
+        ].join('\n')],
+        cwd: '/workspace', environment: {}, tty: true, rows: 24, cols: 80, stdin: false,
+      })
+      const output = readAll(process.stream)
+      expect(await process.done).toEqual({ exitCode: 0 })
+      expect(await output).toContain('HTTPS_AND_GIT_OK')
+    } finally { await fiber.dispose() }
+  })
+
+  it.skipIf(process.env.DSH_PODMAN_EGRESS !== '1' || process.env.DSH_PRIVATE_REPO_URL === undefined)('reads an approved private repository with environment-issued credentials', async () => {
+    const repository = process.env.DSH_PRIVATE_REPO_URL
+    const source = process.env.DSH_PRIVATE_REPO_SOURCE
+    const credentialCommand = process.env.DSH_PRIVATE_REPO_FETCH_HELPER
+    if (socketPath === undefined || image === undefined || repository === undefined || source === undefined || credentialCommand === undefined) throw new Error('private repository integration configuration is incomplete')
+    const root = await mkdtemp('/tmp/dsh-private-repository-')
+    const ctx = new Context()
+    let world: Awaited<ReturnType<LocalContainerRuntime['createWorkspace']>> | undefined
+    try {
+      const environment = await EnvironmentAccess.open({ id: 'private-repository-e2e', name: 'Private repository E2E', grantLifetimeMs: 3600000,
+        repositories: [{ url: repository, source, fetchCredentialCommand: credentialCommand, credentialTimeoutMs: 15000 }],
+        initialGrants: [{ repository, access: 'fetch' }] }, root, 16384)
+      await ctx.plugin(LocalContainerRuntime, {
+        socketPath, image, network: 'outbound', manageService: false, serviceStartupTimeoutMs: 10000,
+        user: 'dsh', environment: { HOME: '/home/dsh', LANG: 'C.UTF-8', PATH: '/usr/local/bin:/usr/bin:/bin' },
+        memoryBytes: 268435456, nanoCpus: 500000000, pidsLimit: 128, tmpfsBytes: 67108864,
+        engineRequestTimeoutMs: 10000, maxLiveProcesses: 4, lifetimeMs: 300000, stopTimeoutSeconds: 2,
+      })
+      const backing = await mkdtemp('/tmp/dsh-private-repository-world-')
+      try {
+        world = await ctx.localContainerRuntime.createWorkspace(backing, () => environment.authorize())
+        const process = await world.runtime.createProcess({
+          argv: ['/usr/bin/python3', '-c', [
+            'import os,subprocess,sys',
+            'assert not os.path.exists("/home/carlo/.config/daedal-one/github-app/config.json")',
+            'r=subprocess.run(["git","ls-remote",sys.argv[1],"HEAD"],capture_output=True,text=True,timeout=30)',
+            'assert r.returncode == 0 and r.stdout.strip().endswith("HEAD"), "private repository fetch failed"',
+            'print("PRIVATE_REPOSITORY_FETCH_OK")',
+          ].join('\n'), repository],
+          cwd: '/workspace', environment: {}, tty: true, rows: 24, cols: 80, stdin: false,
+        })
+        const output = readAll(process.stream)
+        expect(await process.done).toEqual({ exitCode: 0 })
+        expect(await output).toContain('PRIVATE_REPOSITORY_FETCH_OK')
+        const controller = await world.runtime.executeController({ argv: ['/usr/bin/python3', '-c', 'import os; assert not any(k.startswith("GIT_CONFIG") for k in os.environ)'], stdin: new Uint8Array(), maxOutputBytes: 1024, deadlineMs: 10000 })
+        expect(controller.exitCode).toBe(0)
+      } finally { await world?.dispose(); await rm(backing, { recursive: true, force: true }) }
+    } finally { await ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) }
+  })
+
   it('creates, externally inspects, and removes a rootless constrained container', async () => {
     if (socketPath === undefined || image === undefined) throw new Error('Podman integration environment disappeared before setup')
     const docker = new Dockerode({ socketPath })

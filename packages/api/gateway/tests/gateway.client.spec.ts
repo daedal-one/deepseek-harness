@@ -5,6 +5,7 @@ import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { z } from 'zod'
 import {
   apply as applyConnection,
+  connectionIdentitySchema,
   type ConnectionGeneration,
   type ConnectionGenerationSource,
   type ConnectionHandle,
@@ -22,10 +23,11 @@ import type {
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import type { ClientRemote } from '../src/client/index.ts'
 import { apply, inject, RemoteStream } from '../src/client/index.ts'
-import {
-  RemoteStreamCarrierError,
-  RemoteStreamMuxClient,
-} from '../src/client/stream-client.ts'
+import { RemoteStreamCarrierError } from '../src/client/stream-client.ts'
+import { createBrowserRemoteStreamMux } from '../src/client/stream-client-browser.ts'
+import { applyRemoteClient, createRemoteStreamMux, type RemoteStreamSocket, type RemoteCapabilityRequirement } from '../src/client/portable.ts'
+
+const HOST_IDENTITY = connectionIdentitySchema.parse({ version: 1, hostId: '26e99520-f2d3-4874-84b5-07c5ef24775d', activationId: 'f5292bdb-ebda-41ba-b473-6c587a3c1d02' })
 
 type FixtureApprovalOutcome = 'allowed' | 'unavailable'
 const fixtureContextTag = Symbol('fixture-context-tag')
@@ -304,6 +306,7 @@ async function benchFiber(
   call: ConnectionHandle['rpc']['call'],
   carrier: 'in-process' | 'web' = 'in-process',
   open: NonNullable<ConnectionHandle['rpc']['open']> = () => unexpectedInProcessStream(),
+  install: typeof apply = apply,
 ): Promise<{
   readonly ctx: Context
   readonly client: Fiber
@@ -320,9 +323,10 @@ async function benchFiber(
   ctx.provide('connection', {
     rpc,
     registerGenerationSource: generation.register,
+    generation: generation.state,
     start,
   } as unknown as ConnectionHandle)
-  const client = ctx.plugin({ inject, apply })
+  const client = ctx.plugin({ inject, apply: install })
   await client
   return { ctx, client, generation, start }
 }
@@ -339,6 +343,20 @@ interface GenerationRun {
 }
 
 class GenerationHarness {
+  private snapshot: ConnectionGeneration | undefined
+  private readonly listeners = new Set<() => void>()
+  readonly state = {
+    getSnapshot: (): ConnectionGeneration | undefined => this.snapshot,
+    subscribe: (listener: () => void): (() => void) => {
+      this.listeners.add(listener)
+      return () => { this.listeners.delete(listener) }
+    },
+  }
+  private publish(snapshot: ConnectionGeneration | undefined): void {
+    this.snapshot = snapshot
+    for (const listener of this.listeners) listener()
+  }
+
   private source: ConnectionGenerationSource | undefined
   private active: AbortController | undefined
 
@@ -362,9 +380,9 @@ class GenerationHarness {
     let reportReady!: () => void
     const ready = new Promise<void>((resolve) => { reportReady = resolve })
     const done = Promise.resolve()
-      .then(() => source(controller.signal, reportReady))
+      .then(() => source(controller.signal, (host) => { this.publish({ id: 1, host }); reportReady() }))
       .finally(() => {
-        if (this.active === controller) this.active = undefined
+        if (this.active === controller) { this.active = undefined; this.publish(undefined) }
       })
     void done.catch(() => undefined)
     return {
@@ -423,6 +441,7 @@ async function loaderReadinessBench(
   ctx.provide('connection', {
     rpc: carrier === 'web' ? { call } : { call, open: () => unexpectedInProcessStream() },
     registerGenerationSource: generation.register,
+    generation: generation.state,
     start,
   } as unknown as ConnectionHandle)
   ctx.provide('loader', { await: () => readiness })
@@ -442,6 +461,7 @@ interface EventStreamConnection {
 }
 
 class RemoteEventCarrier {
+  identity = HOST_IDENTITY
   readonly calls: {
     readonly channel: string
     readonly endpoint: string
@@ -487,7 +507,7 @@ class RemoteEventCarrier {
     const abort = (): void => { connection.wake?.() }
     signal.addEventListener('abort', abort, { once: true })
     try {
-      yield { type: 'ready', clientId, host: { home: '/home/fixture' } }
+      yield { type: 'ready', protocolVersion: 1, clientId, host: { home: '/home/fixture', identity: this.identity } }
       while (!signal.aborted) {
         while (connection.items.length > 0) {
           const item = connection.items.shift() as EventStreamItem
@@ -573,12 +593,12 @@ describe('Client Remote transport readiness', () => {
     const remote = ctx.remote
 
     const beforeReady = remote.$host
-    expect(beforeReady).toEqual({ home: undefined, isLoopback: true })
+    expect(beforeReady).toEqual({ home: undefined, identity: undefined, isLoopback: true })
     expect(remote.$host).toBe(beforeReady)
 
     live.snapshot = { id: 1, host: { home: '/hosts/primary' } }
     const afterReady = remote.$host
-    expect(afterReady).toEqual({ home: '/hosts/primary', isLoopback: true })
+    expect(afterReady).toEqual({ home: '/hosts/primary', identity: undefined, isLoopback: true })
     expect(afterReady).not.toBe(beforeReady)
     expect(remote.$host).toBe(afterReady)
 
@@ -635,7 +655,7 @@ describe('Client Remote transport readiness', () => {
         const opening = JSON.parse(replacement.sent[0]!) as { streamId: string }
         replacement.receive({
           type: 'item', streamId: opening.streamId,
-          value: { type: 'ready', clientId: 'recovered-client', host: { home: '/recovered' } },
+          value: { type: 'ready', protocolVersion: 1, clientId: 'recovered-client', host: { home: '/recovered', identity: HOST_IDENTITY } },
         })
         await vi.advanceTimersByTimeAsync(0)
         expect(connection.state.getSnapshot()).toBe('connected')
@@ -749,8 +769,8 @@ describe('Client Typert API', () => {
     expect(combinedSignal).not.toBe(callerAbort.signal)
     const cancellation = new Error('caller cancelled')
     callerAbort.abort(cancellation)
-    expect(combinedSignal?.aborted).toBe(true)
-    expect(combinedSignal?.reason).toBe(cancellation)
+    expect(combinedSignal?.aborted).toBe(false)
+    expect(combinedSignal?.reason).toBeUndefined()
     await expect(ctx.remote.probe.create('', { objective: 'ship' })).rejects.toThrow('rejected "agentId"')
 
     call.mockResolvedValueOnce({ ok: true, value: { ref: 1 } })
@@ -1935,7 +1955,7 @@ describe('Client Typert API', () => {
       socket.receive({
         type: 'item',
         streamId: opened.streamId,
-        value: { type: 'ready', clientId: 'browser-client', host: { home: '/home/browser' } },
+        value: { type: 'ready', protocolVersion: 1, clientId: 'browser-client', host: { home: '/home/browser', identity: HOST_IDENTITY } },
       })
       await run.ready
       socket.receive({
@@ -2005,12 +2025,12 @@ describe('Client Typert API', () => {
     {},
     { type: 'pending' },
     { type: 'ready' },
-    { type: 'ready', clientId: '' },
-    { type: 'ready', clientId: 'client', extra: true },
-    { type: 'ready', clientId: 'client', host: null },
-    { type: 'ready', clientId: 'client', host: {} },
-    { type: 'ready', clientId: 'client', host: { home: 1 } },
-    { type: 'ready', clientId: 'client', host: { home: '/home', extra: true } },
+    { type: 'ready', protocolVersion: 1, clientId: '' },
+    { type: 'ready', protocolVersion: 1, clientId: 'client', extra: true },
+    { type: 'ready', protocolVersion: 1, clientId: 'client', host: null },
+    { type: 'ready', protocolVersion: 1, clientId: 'client', host: {} },
+    { type: 'ready', protocolVersion: 1, clientId: 'client', host: { home: 1 } },
+    { type: 'ready', protocolVersion: 1, clientId: 'client', host: { home: '/home', extra: true } },
     { type: 'emit', event: 'fixture/changed', args: ['too early'] },
   ])('rejects malformed forwarded-event readiness item %#', async (opening) => {
     const open: NonNullable<ConnectionHandle['rpc']['open']> = () => (async function *() {
@@ -2332,7 +2352,7 @@ describe('Client Typert API', () => {
 
 describe('Remote stream client carrier lifecycle', () => {
   it('requires the transport owner to start the physical carrier', async () => {
-    const client = new RemoteStreamMuxClient()
+    const client = createBrowserRemoteStreamMux()
     await expect(client.open('feed/follow', {}, new AbortController().signal)
       [Symbol.asyncIterator]().next()).rejects.toThrow('Remote stream client not started')
     await client.close()
@@ -2341,7 +2361,7 @@ describe('Remote stream client carrier lifecycle', () => {
   it('connects without a logical stream, waits for owner-driven retries, and stops permanently', async () => {
     await withFakeWebSocket('https://harness.example', async () => {
       FakeWebSocket.autoOpen = false
-      const client = new RemoteStreamMuxClient()
+      const client = createBrowserRemoteStreamMux()
       client.start()
       client.start()
       expect(FakeWebSocket.sockets).toHaveLength(1)
@@ -2376,7 +2396,7 @@ describe('Remote stream client carrier lifecycle', () => {
       expect(FakeWebSocket.sockets).toHaveLength(3)
       expect(final.closedWith).toContainEqual({ code: 1000, reason: 'disposed' })
 
-      const stopping = new RemoteStreamMuxClient()
+      const stopping = createBrowserRemoteStreamMux()
       stopping.start()
       const racing = FakeWebSocket.sockets[3]!
       racing.open()
@@ -2388,7 +2408,7 @@ describe('Remote stream client carrier lifecycle', () => {
 
   it('mints a new wire stream id when the same endpoint opens on a replacement socket', async () => {
     await withFakeWebSocket('https://harness.example', async () => {
-      const client = new RemoteStreamMuxClient()
+      const client = createBrowserRemoteStreamMux()
       client.start()
       const first = client.open('feed/follow', { label: 'same' }, new AbortController().signal)
         [Symbol.asyncIterator]()
@@ -2417,7 +2437,7 @@ describe('Remote stream client carrier lifecycle', () => {
   it('replaces an in-flight candidate and an open socket on reconnect', async () => {
     await withFakeWebSocket('https://harness.example', async () => {
       FakeWebSocket.autoOpen = false
-      const client = new RemoteStreamMuxClient()
+      const client = createBrowserRemoteStreamMux()
       client.start()
       const candidate = FakeWebSocket.sockets[0]!
 
@@ -2450,7 +2470,7 @@ describe('Remote stream client carrier lifecycle', () => {
   it('coalesces repeated candidate replacements and drops one queued after close', async () => {
     await withFakeWebSocket('https://harness.example', async () => {
       FakeWebSocket.autoOpen = false
-      const client = new RemoteStreamMuxClient()
+      const client = createBrowserRemoteStreamMux()
       client.start()
       const first = FakeWebSocket.sockets[0]!
 
@@ -2469,7 +2489,7 @@ describe('Remote stream client carrier lifecycle', () => {
   it('shares an in-flight connection and uses the internal ws URL without a browser origin', async () => {
     await withFakeWebSocket(undefined, async () => {
       FakeWebSocket.autoOpen = false
-      const client = new RemoteStreamMuxClient()
+      const client = createBrowserRemoteStreamMux()
       client.start()
       const first = client.open('feed/follow', { label: 'first' }, new AbortController().signal)
         [Symbol.asyncIterator]()
@@ -2495,7 +2515,7 @@ describe('Remote stream client carrier lifecycle', () => {
   it('fails waiters with one socket attempt and lets the owner start the next attempt', async () => {
     await withFakeWebSocket('null', async () => {
       FakeWebSocket.autoOpen = false
-      const closedClient = new RemoteStreamMuxClient()
+      const closedClient = createBrowserRemoteStreamMux()
       closedClient.start()
       const closed = closedClient.open('feed/follow', {}, new AbortController().signal)
         [Symbol.asyncIterator]().next()
@@ -2514,14 +2534,14 @@ describe('Remote stream client carrier lifecycle', () => {
       await expect(replacementStream).resolves.toEqual({ done: true, value: undefined })
       await closedClient.close()
 
-      const disposedClient = new RemoteStreamMuxClient()
+      const disposedClient = createBrowserRemoteStreamMux()
       disposedClient.start()
       const disposed = disposedClient.open('feed/follow', {}, new AbortController().signal)
         [Symbol.asyncIterator]().next()
       await disposedClient.close()
       await expect(disposed).rejects.toThrow('Remote stream client disposed')
 
-      const abortedClient = new RemoteStreamMuxClient()
+      const abortedClient = createBrowserRemoteStreamMux()
       abortedClient.start()
       const abort = new AbortController()
       const aborted = abortedClient.open('feed/follow', {}, abort.signal)[Symbol.asyncIterator]().next()
@@ -2534,7 +2554,7 @@ describe('Remote stream client carrier lifecycle', () => {
 
   it('fails active streams on an invalid frame and ignores later frames', async () => {
     await withFakeWebSocket('https://harness.example', async () => {
-      const client = new RemoteStreamMuxClient()
+      const client = createBrowserRemoteStreamMux()
       client.start()
       const stream = client.open('feed/follow', {}, new AbortController().signal)[Symbol.asyncIterator]()
       const pending = stream.next()
@@ -2556,7 +2576,7 @@ describe('Remote stream client carrier lifecycle', () => {
 
   it('completes a stream and drops a frame racing with cancellation', async () => {
     await withFakeWebSocket('https://harness.example', async () => {
-      const client = new RemoteStreamMuxClient()
+      const client = createBrowserRemoteStreamMux()
       client.start()
       const completed = client.open('feed/follow', {}, new AbortController().signal)
         [Symbol.asyncIterator]()
@@ -2581,7 +2601,7 @@ describe('Remote stream client carrier lifecycle', () => {
 
   it('contains non-Error cancellation reasons and late socket close events', async () => {
     await withFakeWebSocket('http://harness.example', async () => {
-      const cancelledClient = new RemoteStreamMuxClient()
+      const cancelledClient = createBrowserRemoteStreamMux()
       cancelledClient.start()
       const abort = new AbortController()
       const cancelled = cancelledClient.open('feed/follow', {}, abort.signal)[Symbol.asyncIterator]().next()
@@ -2591,7 +2611,7 @@ describe('Remote stream client carrier lifecycle', () => {
       await cancelledClient.close()
 
       FakeWebSocket.dispatchClose = false
-      const disposedClient = new RemoteStreamMuxClient()
+      const disposedClient = createBrowserRemoteStreamMux()
       disposedClient.start()
       const disposed = disposedClient.open('feed/follow', {}, new AbortController().signal)
         [Symbol.asyncIterator]().next()
@@ -2603,6 +2623,213 @@ describe('Remote stream client carrier lifecycle', () => {
       await expect(disposed).rejects.toThrow('Remote stream client disposed')
     })
   })
+})
+
+
+
+function compatible(descriptor: InvocationDescriptor): InvocationDescriptor {
+  return { ...descriptor, wireFingerprint: `typert-wire-v1:${'a'.repeat(64)}`, semanticRevision: 1 }
+}
+
+const nativeRequirements: readonly RemoteCapabilityRequirement[] = [
+  { endpoint: 'probe/create', mode: 'unary', wireFingerprint: `typert-wire-v1:${'a'.repeat(64)}`, semanticRevision: 1 },
+  { endpoint: 'probe/watch', mode: 'stream', wireFingerprint: `typert-wire-v1:${'a'.repeat(64)}`, semanticRevision: 1 },
+]
+
+function nativeCapabilities(identity = HOST_IDENTITY) {
+  return { version: 3, identity, capabilities: nativeRequirements.map(requirement => ({ ...requirement, availability: 'available' })) }
+}
+
+function nativeCall(call: ConnectionHandle['rpc']['call'], identity = () => HOST_IDENTITY): ConnectionHandle['rpc']['call'] {
+  return (channel, endpoint, payload, signal) => endpoint === '$capabilities'
+    ? Promise.resolve({ ok: true, value: nativeCapabilities(identity()) })
+    : call(channel, endpoint, payload, signal)
+}
+
+describe('Portable Client Remote service', () => {
+  it.each(['complete', 'throw', 'return', 'open-error'] as const)(
+    'releases caller cancellation listeners when a stream exits by %s', async (ending) => {
+      const open: NonNullable<ConnectionHandle['rpc']['open']> = () => {
+        if (ending === 'open-error') throw new Error('fixture stream failure')
+        return (async function* () {
+          yield 'first'
+          if (ending === 'throw') throw new Error('fixture stream failure')
+        })()
+      }
+      const { ctx, client } = await benchFiber(vi.fn(), 'in-process', open)
+      const caller = new AbortController()
+      const add = vi.spyOn(caller.signal, 'addEventListener')
+      const remove = vi.spyOn(caller.signal, 'removeEventListener')
+      const dispose = await ctx.remote.$mount({ package: '@fixture/probe', descriptors: [compatible(streamDescriptor())] })
+      const iterator = ctx.remote.probe.watch('topic', caller.signal)[Symbol.asyncIterator]()
+      try {
+        if (ending === 'open-error') await expect(iterator.next()).rejects.toThrow('fixture stream failure')
+        else {
+          await expect(iterator.next()).resolves.toMatchObject({ done: false, value: 'first' })
+          expect(remove).not.toHaveBeenCalled()
+          if (ending === 'throw') await expect(iterator.next()).rejects.toThrow('fixture stream failure')
+          else if (ending === 'return') await iterator.return?.()
+          else await expect(iterator.next()).resolves.toMatchObject({ done: true })
+        }
+        expect(remove).toHaveBeenCalledExactlyOnceWith('abort', add.mock.calls[0]?.[1])
+        expect(caller.signal.aborted).toBe(false)
+      } finally {
+        await iterator.return?.()
+        await dispose()
+        await client.dispose()
+      }
+    },
+  )
+
+  it('releases caller cancellation listeners after successful, rejected and failed calls', async () => {
+    const call = vi.fn<ConnectionHandle['rpc']['call']>()
+    const { ctx, client } = await benchFiber(call)
+    const caller = new AbortController()
+    const add = vi.spyOn(caller.signal, 'addEventListener')
+    const remove = vi.spyOn(caller.signal, 'removeEventListener')
+    const dispose = await ctx.remote.$mount({ package: '@fixture/probe', descriptors: [compatible(directDescriptor())] })
+    try {
+      for (let index = 0; index < 30; index++) {
+        if (index % 3 === 0) call.mockResolvedValueOnce({ ok: true, value: { ref: 'done' } })
+        else if (index % 3 === 1) call.mockRejectedValueOnce(new Error('connection lost'))
+        else call.mockResolvedValueOnce({ ok: false, error: { code: 'internal', message: 'rejected', details: {} } })
+        await ctx.remote.probe.create('agent-1', { objective: 'once' }, caller.signal)
+        expect(remove).toHaveBeenCalledTimes(index + 1)
+      }
+      expect(add).toHaveBeenCalledTimes(30)
+      expect(caller.signal.aborted).toBe(false)
+      for (let index = 0; index < 30; index++) {
+        expect(remove.mock.calls[index]?.[1]).toBe(add.mock.calls[index]?.[1])
+      }
+    } finally {
+      await dispose()
+      await client.dispose()
+    }
+  })
+
+  it('shares generated calls, forwarded events and withdrawal with the Web service', async () => {
+    const call = vi.fn<ConnectionHandle['rpc']['call']>()
+      .mockResolvedValue({ ok: true, value: { ref: 'portable-goal' } })
+    const events = new RemoteEventCarrier()
+    const unusedSocket = vi.fn(() => { throw new Error('in-process streams must retain their carrier') })
+    const eventIdentity = vi.fn(() => 'portable-events')
+    const { ctx, client, generation } = await benchFiber(nativeCall(call), 'in-process', events.open, (scope) => {
+      applyRemoteClient(scope, {
+        baseUrl: 'https://portable.example', createSocket: unusedSocket, randomId: eventIdentity,
+        expectedHostId: HOST_IDENTITY.hostId, requiredCapabilities: nativeRequirements,
+        createAbortController: () => new AbortController(),
+      })
+    })
+    const run = generation.start()
+    try {
+      await run.ready
+      const seen: string[] = []
+      ctx.remote.$on('fixture/changed', (name) => { seen.push(name) })
+      events.emit({ type: 'emit', event: 'fixture/changed', args: ['portable'] })
+      await vi.waitFor(() => { expect(seen).toEqual(['portable']) })
+      const assembly = ctx.plugin(Object.assign(
+        (scope: Context) => scope.remote.$mount({ package: '@fixture/probe', descriptors: [compatible(directDescriptor())] }),
+        { inject: ['remote'] },
+      ))
+      await assembly
+      const retained = ctx.remote.probe.create
+      await expect(retained('agent-1', { objective: 'native call' }))
+        .resolves.toEqual({ ok: true, value: { ref: 'portable-goal' } })
+      expect(call).toHaveBeenCalledExactlyOnceWith('/api', 'probe/create', {
+        args: { agentId: 'agent-1', request: { objective: 'native call' } },
+        compatibility: { wireFingerprint: `typert-wire-v1:${'a'.repeat(64)}`, semanticRevision: 1, identity: HOST_IDENTITY },
+      }, expect.any(AbortSignal))
+      await assembly.dispose()
+      await expect(retained('agent-1', { objective: 'withdrawn' })).resolves.toMatchObject({ ok: false })
+      expect(call).toHaveBeenCalledTimes(1)
+      expect(unusedSocket).not.toHaveBeenCalled()
+      expect(eventIdentity).toHaveBeenCalledOnce()
+    } finally {
+      await client.dispose()
+      await run.done
+    }
+  })
+})
+
+describe('Portable Remote stream transport', () => {
+  it.each(['file:///tmp/host', 'wss://host.example', 'invalid', 'https://user:secret@host.example'])(
+    'rejects unsupported host input %s before creating a socket', (baseUrl) => {
+      const createSocket = vi.fn()
+      expect(() => createRemoteStreamMux({ baseUrl, createSocket, randomId: () => 'unused' })).toThrow()
+      expect(createSocket).not.toHaveBeenCalled()
+    },
+  )
+
+  it('isolates hosts without a page socket global and disposes only the selected host', async () => {
+    await withFakeWebSocket('https://wrong-host.example', async () => {
+      delete (globalThis as WebSocketGlobal).WebSocket
+      const createSocket = (url: string): RemoteStreamSocket =>
+        // EventTarget's base type omits the MessageEvent data emitted by this fixture.
+        new FakeWebSocket(url) as unknown as RemoteStreamSocket
+      const a = createRemoteStreamMux({ baseUrl: 'https://a.example/path', createSocket, randomId: () => 'same-id' })
+      const b = createRemoteStreamMux({ baseUrl: 'http://b.example:3080', createSocket, randomId: () => 'same-id' })
+      a.start()
+      b.start()
+      try {
+        const streamA = a.open('feed/follow', { host: 'a' }, new AbortController().signal)
+        const streamB = b.open('feed/follow', { host: 'b' }, new AbortController().signal)
+        const pendingA = streamA.next()
+        const pendingB = streamB.next()
+        await vi.waitFor(() => { expect(FakeWebSocket.sockets.map(s => s.sent.length)).toEqual([1, 1]) })
+        const [socketA, socketB] = FakeWebSocket.sockets as [FakeWebSocket, FakeWebSocket]
+        expect(socketA.url).toBe('wss://a.example/api/remote.mux')
+        expect(socketB.url).toBe('ws://b.example:3080/api/remote.mux')
+        socketA.receive({ type: 'item', streamId: 'same-id', value: 'a-only' })
+        await expect(pendingA).resolves.toEqual({ done: false, value: 'a-only' })
+        const nextA = expect(streamA.next()).rejects.toThrow('disposed')
+        await a.close()
+        await nextA
+        expect(socketB.readyState).toBe(FakeWebSocket.OPEN)
+        socketB.receive({ type: 'item', streamId: 'same-id', value: 'b-only' })
+        await expect(pendingB).resolves.toEqual({ done: false, value: 'b-only' })
+        socketB.receive({ type: 'end', streamId: 'same-id' })
+        await expect(streamB.next()).resolves.toEqual({ done: true, value: undefined })
+      } finally {
+        await a.close()
+        await b.close()
+      }
+    })
+  })
+
+  it.each(['before-open', 'waiting-for-socket', 'streaming'] as const)(
+    'cancels %s with a native signal lacking reason and throwIfAborted', async (phase) => {
+      await withFakeWebSocket(undefined, async () => {
+        FakeWebSocket.autoOpen = phase !== 'waiting-for-socket'
+        const target = new EventTarget()
+        let aborted = false
+        const signal = {
+          get aborted() { return aborted },
+          addEventListener: target.addEventListener.bind(target),
+          removeEventListener: target.removeEventListener.bind(target),
+        }
+        const abort = (): void => { aborted = true; target.dispatchEvent(new Event('abort')) }
+        const client = createRemoteStreamMux({
+          baseUrl: 'https://native.example', randomId: () => 'native-stream',
+          createSocket: url => new FakeWebSocket(url) as unknown as RemoteStreamSocket,
+        })
+        if (phase === 'before-open') abort()
+        client.start()
+        try {
+          const pending = client.open('feed/follow', {}, signal).next()
+          const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+          if (phase === 'streaming') {
+            await vi.waitFor(() => { expect(FakeWebSocket.sockets[0]?.sent).toHaveLength(1) })
+          }
+          abort()
+          await rejected
+          const sent = FakeWebSocket.sockets[0]!.sent.map(data => JSON.parse(data) as { type: string })
+          expect(sent.map(frame => frame.type)).toEqual(phase === 'streaming' ? ['open', 'cancel'] : [])
+        } finally {
+          await client.close()
+        }
+      })
+    },
+  )
 })
 
 async function withFakeWebSocket(
@@ -2629,3 +2856,289 @@ async function withFakeWebSocket(
     else Object.defineProperty(globalThis, 'location', locationDescriptor)
   }
 }
+
+
+describe('paired native Host generations', () => {
+  function installNative(scope: Context): void {
+    applyRemoteClient(scope, {
+      baseUrl: 'https://paired.example', expectedHostId: HOST_IDENTITY.hostId, requiredCapabilities: nativeRequirements,
+      createSocket: () => { throw new Error('fixture uses the explicit Connection carrier') },
+      randomId: () => 'paired-native', createAbortController: () => new AbortController(),
+    })
+  }
+
+  it('refuses native operations without complete generated evidence before sending', async () => {
+    const call = vi.fn<ConnectionHandle['rpc']['call']>()
+    const events = new RemoteEventCarrier()
+    const { ctx, client, generation } = await benchFiber(nativeCall(call, () => events.identity), 'in-process', events.open, installNative)
+    try {
+      const run = generation.start()
+      await run.ready
+      for (const evidence of [{}, { wireFingerprint: `typert-wire-v1:${'a'.repeat(64)}` }, { semanticRevision: 1 }]) {
+        const unmount = await ctx.remote.$mount({ package: '@fixture/missing', descriptors: [
+          { ...directDescriptor(), ...evidence }, { ...streamDescriptor(), ...evidence },
+        ] })
+        try {
+          await expect(ctx.remote.probe.create('agent-1', { objective: 'refused' })).resolves.toMatchObject({
+            ok: false, error: { code: 'gateway/api-incompatible' },
+          })
+          await expect(ctx.remote.probe.watch('refused')[Symbol.asyncIterator]().next()).rejects.toMatchObject({ code: 'gateway/api-incompatible' })
+          expect(call).not.toHaveBeenCalled()
+        } finally { await unmount() }
+      }
+    } finally { await client.dispose() }
+  })
+
+  const ready = { type: 'ready', protocolVersion: 1, clientId: 'paired-client', host: { home: '/paired', identity: HOST_IDENTITY } }
+
+  it.each([
+    { ...ready, host: { home: '/paired', identity: { ...HOST_IDENTITY, hostId: '00000000-0000-4000-8000-000000000011' } } },
+    { ...ready, host: { home: '/paired' } },
+    { ...ready, host: { home: '/paired', identity: { ...HOST_IDENTITY, activationId: 'invalid' } } },
+    { ...ready, protocolVersion: 2 },
+    { type: 'ready', clientId: 'paired-client', host: ready.host },
+  ])('refuses untrusted readiness before domain calls or event delivery %#', async (opening) => {
+    const call = vi.fn<ConnectionHandle['rpc']['call']>()
+    let advanced = false
+    const open: NonNullable<ConnectionHandle['rpc']['open']> = () => (async function *() {
+      yield opening
+      advanced = true
+      yield { type: 'emit', event: 'fixture/changed', args: ['untrusted'] }
+    })()
+    const { ctx, client, generation } = await benchFiber(call, 'in-process', open, installNative)
+    const unmount = await ctx.remote.$mount({ package: '@fixture/paired', descriptors: [compatible(directDescriptor()), compatible(streamDescriptor())] })
+    const seen = vi.fn()
+    ctx.remote.$on('fixture/changed', seen)
+    try {
+      await expect(ctx.remote.probe.create('agent-1', { objective: 'before readiness' })).resolves.toMatchObject({ ok: false })
+      await expect(ctx.remote.probe.watch('before readiness')[Symbol.asyncIterator]().next()).rejects.toThrow('paired Host')
+      const run = generation.start()
+      await expect(run.done).rejects.toThrow(/paired Host|did not begin with ready|invalid Host identity/)
+      expect(generation.state.getSnapshot()).toBeUndefined()
+      await expect(ctx.remote.probe.create('agent-1', { objective: 'after refusal' })).resolves.toMatchObject({ ok: false })
+      expect(call).not.toHaveBeenCalled()
+      expect(seen).not.toHaveBeenCalled()
+      expect(advanced).toBe(false)
+    } finally {
+      await unmount()
+      await client.dispose()
+    }
+  })
+
+  it.each(['response', 'transport error'])('rejects unary %s after generation loss and reconnects to the same Host', async (settlement) => {
+    const pending = Promise.withResolvers<Awaited<ReturnType<ConnectionHandle['rpc']['call']>>>()
+    const call = vi.fn<ConnectionHandle['rpc']['call']>(() => pending.promise)
+    const events = new RemoteEventCarrier()
+    const { ctx, client, generation } = await benchFiber(nativeCall(call, () => events.identity), 'in-process', events.open, installNative)
+    const unmount = await ctx.remote.$mount({ package: '@fixture/paired', descriptors: [compatible(directDescriptor())] })
+    try {
+      const run = generation.start()
+      await run.ready
+      expect(ctx.remote.$host.identity).toEqual(HOST_IDENTITY)
+      const operation = ctx.remote.probe.create('agent-1', { objective: 'uncertain' })
+      expect(call).toHaveBeenCalledTimes(1)
+      const signal = call.mock.calls[0]![3]!
+      run.abort()
+      await run.done
+      expect(signal.aborted).toBe(true)
+      expect(ctx.remote.$host.identity).toBeUndefined()
+      if (settlement === 'response') pending.resolve({ ok: true, value: { ref: 'late-result' } })
+      else pending.reject(new Error('transport closed'))
+      const outcome = await operation
+      expect(outcome.ok).toBe(false)
+      if (!outcome.ok) expect(outcome.error.message).toContain('generation ended')
+      expect(call).toHaveBeenCalledTimes(1)
+
+      events.identity = { ...HOST_IDENTITY, activationId: connectionIdentitySchema.parse({ ...HOST_IDENTITY, activationId: '00000000-0000-4000-8000-000000000012' }).activationId }
+      const replacement = generation.start()
+      await replacement.ready
+      expect(ctx.remote.$host.identity).toEqual(events.identity)
+      call.mockResolvedValue({ ok: true, value: { ref: 'reconnected' } })
+      await expect(ctx.remote.probe.create('agent-1', { objective: 'new operation' }))
+        .resolves.toEqual({ ok: true, value: { ref: 'reconnected' } })
+      expect(call).toHaveBeenCalledTimes(2)
+    } finally {
+      await unmount()
+      await client.dispose()
+    }
+  })
+
+  it.each(['late item', 'end', 'transport error'])('refuses stream %s after the accepted generation ends', async (settlement) => {
+    const events = new RemoteEventCarrier()
+    const nextItem = Promise.withResolvers<string>()
+    let domainSignal: AbortSignal | undefined
+    let returned = false
+    const open: NonNullable<ConnectionHandle['rpc']['open']> = (channel, endpoint, payload, signal) => {
+      if (endpoint === '$events') return events.open(channel, endpoint, payload, signal)
+      return (async function *() {
+        domainSignal = signal
+        try {
+          yield 'first'
+          const item = await nextItem.promise
+          if (settlement === 'end') return
+          if (settlement === 'transport error') throw new Error('transport closed')
+          yield item
+        } finally { returned = true }
+      })()
+    }
+    const { ctx, client, generation } = await benchFiber(nativeCall(vi.fn()), 'in-process', open, installNative)
+    const unmount = await ctx.remote.$mount({ package: '@fixture/paired-stream', descriptors: [compatible(streamDescriptor())] })
+    try {
+      const run = generation.start()
+      await run.ready
+      const stream = ctx.remote.probe.watch('topic')[Symbol.asyncIterator]()
+      expect(await stream.next()).toEqual({ done: false, value: 'first' })
+      const next = stream.next()
+      const rejected = expect(next).rejects.toThrow('generation ended')
+      run.abort()
+      await run.done
+      expect(domainSignal?.aborted).toBe(true)
+      nextItem.resolve('late')
+      await rejected
+      expect(returned).toBe(true)
+    } finally {
+      nextItem.resolve('cleanup')
+      await unmount()
+      await client.dispose()
+    }
+  })
+})
+
+
+describe('native capability admission', () => {
+  const install = (requirements: readonly RemoteCapabilityRequirement[] = nativeRequirements) => (scope: Context): void => {
+    applyRemoteClient(scope, {
+      baseUrl: 'https://paired.example', expectedHostId: HOST_IDENTITY.hostId, requiredCapabilities: requirements,
+      createSocket: () => { throw new Error('fixture uses the explicit Connection carrier') },
+      randomId: () => 'admission', createAbortController: () => new AbortController(),
+    })
+  }
+
+  it('holds readiness, operations and forwarded events until required capabilities match', async () => {
+    const response = Promise.withResolvers<Awaited<ReturnType<ConnectionHandle['rpc']['call']>>>()
+    const call = vi.fn<ConnectionHandle['rpc']['call']>(() => response.promise)
+    const events = new RemoteEventCarrier()
+    const requirements = nativeRequirements.map(requirement => ({ ...requirement }))
+    const { ctx, client, generation } = await benchFiber(call, 'in-process', events.open, install(requirements))
+    const unmount = await ctx.remote.$mount({ package: '@fixture/admission', descriptors: [compatible(directDescriptor())] })
+    const seen = vi.fn()
+    ctx.remote.$on('fixture/changed', seen)
+    const run = generation.start()
+    try {
+      await vi.waitFor(() => { expect(call).toHaveBeenCalledOnce() })
+      const signal = call.mock.calls[0]![3]!
+      expect(call).toHaveBeenCalledWith('/api', '$capabilities', {}, signal)
+      events.emit({ type: 'emit', event: 'fixture/changed', args: ['after-admission'] })
+      expect(generation.state.getSnapshot()).toBeUndefined()
+      expect(ctx.remote.$host.capabilities).toBeUndefined()
+      expect(seen).not.toHaveBeenCalled()
+      await expect(ctx.remote.probe.create('agent-1', { objective: 'premature' })).resolves.toMatchObject({ ok: false })
+      expect(call).toHaveBeenCalledOnce()
+      // The composition captures requirements before any asynchronous admission.
+      requirements[0]!.semanticRevision = 99
+      requirements.splice(1)
+      const snapshot = nativeCapabilities()
+      response.resolve({ ok: true, value: { ...snapshot, capabilities: [
+        { endpoint: 'optional/read', mode: 'unary', availability: 'unavailable', reason: 'service' },
+        { ...snapshot.capabilities[0], availability: 'context-required' }, snapshot.capabilities[1],
+      ] } })
+      await run.ready
+      await vi.waitFor(() => { expect(seen).toHaveBeenCalledExactlyOnceWith('after-admission') })
+      const facts = ctx.remote.$host
+      expect(facts.capabilities?.capabilities[0]).toMatchObject({ availability: 'unavailable' })
+      expect(ctx.remote.$host).toBe(facts)
+      run.abort()
+      expect(ctx.remote.$host.capabilities).toBeUndefined()
+      await run.done
+      expect(events.activeConnections).toBe(0)
+      expect(signal.aborted).toBe(true)
+      expect(ctx.remote.$host.identity).toBeUndefined()
+    } finally { run.abort(); await run.done; await unmount(); await client.dispose() }
+  })
+
+  it.each([
+    { reason: 'missing', capabilities: [] },
+    { reason: 'mode', capabilities: [{ ...nativeRequirements[0], mode: 'stream', availability: 'available' }] },
+    { reason: 'schema', capabilities: [{ ...nativeRequirements[0], wireFingerprint: `typert-wire-v1:${'b'.repeat(64)}`, availability: 'available' }] },
+    { reason: 'semantics', capabilities: [{ ...nativeRequirements[0], semanticRevision: 2, availability: 'available' }] },
+    { reason: 'unverified schema', capabilities: [{ ...nativeRequirements[0], wireFingerprint: undefined, availability: 'available' }] },
+    { reason: 'unverified semantics', capabilities: [{ ...nativeRequirements[0], semanticRevision: undefined, availability: 'available' }] },
+    { reason: 'unavailable', capabilities: [{ ...nativeRequirements[0], availability: 'unavailable', reason: 'lookup' }] },
+  ])('refuses $reason before readiness or event delivery', async ({ capabilities }) => {
+    const call = vi.fn<ConnectionHandle['rpc']['call']>().mockResolvedValue({ ok: true, value: { ...nativeCapabilities(), capabilities } })
+    const events = new RemoteEventCarrier()
+    const { ctx, client, generation } = await benchFiber(call, 'in-process', events.open, install([nativeRequirements[0]!]))
+    const seen = vi.fn()
+    ctx.remote.$on('fixture/changed', seen)
+    const run = generation.start()
+    try {
+      const refused = expect(run.done).rejects.toMatchObject({ code: 'gateway/api-incompatible', details: { endpoint: 'probe/create' } })
+      await refused
+      expect(generation.state.getSnapshot()).toBeUndefined()
+      expect(ctx.remote.$host.capabilities).toBeUndefined()
+      expect(events.activeConnections).toBe(0)
+      expect(seen).not.toHaveBeenCalled()
+      expect(call).toHaveBeenCalledOnce()
+    } finally { await client.dispose() }
+  })
+
+  it.each([
+    { ok: false, error: { code: 'unauthorized', message: 'authorization expired', details: {} } },
+    { ok: true, value: { ...nativeCapabilities(), identity: { ...HOST_IDENTITY, activationId: '00293014-2e9f-47ef-bc87-98fe20ebceae' } } },
+    { ok: true, value: { ...nativeCapabilities(), version: 4 } },
+  ] as const)('refuses rejected, stale or malformed metadata %#', async (response) => {
+    const call = vi.fn<ConnectionHandle['rpc']['call']>().mockResolvedValue(response)
+    const events = new RemoteEventCarrier()
+    const { ctx, client, generation } = await benchFiber(call, 'in-process', events.open, install())
+    try {
+      await expect(generation.start().done).rejects.toMatchObject({ isDSHRemoteError: true })
+      expect(ctx.remote.$host.capabilities).toBeUndefined()
+      expect(events.activeConnections).toBe(0)
+      expect(call).toHaveBeenCalledOnce()
+    } finally { await client.dispose() }
+  })
+
+  it.each(['resolve', 'reject'] as const)('disposes pending admission and ignores a late %s', async (settlement) => {
+    const response = Promise.withResolvers<Awaited<ReturnType<ConnectionHandle['rpc']['call']>>>()
+    const call = vi.fn<ConnectionHandle['rpc']['call']>(() => response.promise)
+    const events = new RemoteEventCarrier()
+    const { ctx, client, generation } = await benchFiber(call, 'in-process', events.open, install())
+    const run = generation.start()
+    const remote = ctx.remote
+    const publish = vi.fn()
+    const stop = generation.state.subscribe(() => { if (generation.state.getSnapshot()) publish() })
+    try {
+      await vi.waitFor(() => { expect(call).toHaveBeenCalledOnce() })
+      const signal = call.mock.calls[0]![3]!
+      await client.dispose()
+      await run.done
+      expect(signal.aborted).toBe(true)
+      expect(events.activeConnections).toBe(0)
+      if (settlement === 'resolve') response.resolve({ ok: true, value: nativeCapabilities() })
+      else response.reject(new Error('late carrier rejection'))
+      await response.promise.catch(() => undefined)
+      expect(publish).not.toHaveBeenCalled()
+      expect(remote.$host.capabilities).toBeUndefined()
+    } finally { stop(); run.abort(); await run.done; await client.dispose() }
+  })
+
+  it('rechecks every activation and accepts an explicit metadata-only selection', async () => {
+    const events = new RemoteEventCarrier()
+    const call = vi.fn<ConnectionHandle['rpc']['call']>(() => Promise.resolve({ ok: true, value: { version: 3, identity: events.identity, capabilities: [] } }))
+    const { ctx, client, generation } = await benchFiber(call, 'in-process', events.open, install([]))
+    try {
+      const first = generation.start()
+      await first.ready
+      const old = ctx.remote.$host.capabilities
+      first.abort(); await first.done
+      expect(ctx.remote.$host.capabilities).toBeUndefined()
+      events.identity = connectionIdentitySchema.parse({ ...HOST_IDENTITY, activationId: '00293014-2e9f-47ef-bc87-98fe20ebceae' })
+      const second = generation.start()
+      await second.ready
+      expect(call).toHaveBeenCalledTimes(2)
+      expect(ctx.remote.$host.capabilities?.identity).toEqual(events.identity)
+      expect(ctx.remote.$host.capabilities).not.toBe(old)
+      second.abort(); await second.done
+    } finally { await client.dispose() }
+  })
+})

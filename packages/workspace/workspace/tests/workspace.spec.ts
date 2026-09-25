@@ -16,6 +16,7 @@ import WorkspaceRegistry, {
   WorkspaceId,
   WorkspaceMoveInvalidError,
   WorkspaceOrderInvalidError,
+  WorkspacePathInvalidError,
 } from '../src/index.ts'
 import type { WorkspaceDomainState, WorkspaceRecord } from '../src/index.ts'
 import { defaultWorkspaceTitle, fullyQualifiedWorkspacePath } from '../src/paths.ts'
@@ -98,7 +99,7 @@ async function storageContext(pool: MemoryMediaPool, backend: StorageBackend = n
 /** Backend wrapper that injects one selected bootstrap write failure. */
 function selectiveFailureBackend(
   pool: MemoryMediaPool,
-  failure: { putAt?: number; deleteAt?: number; globalAt?: number | readonly number[] },
+  failure: { putAt?: number; deleteAt?: number; globalAt?: number | readonly number[]; beforeGlobal?: () => Promise<void> },
 ): StorageBackend {
   const inner = new MemoryStorageBackend(pool)
   let puts = 0
@@ -121,6 +122,7 @@ function selectiveFailureBackend(
             await unit.deleteRecord(table, key)
           },
           setGlobal: async (value) => {
+            await failure.beforeGlobal?.()
             globals += 1
             const failAt = Array.isArray(failure.globalAt) ? failure.globalAt : [failure.globalAt]
             if (failAt.includes(globals)) throw new Error('selected bootstrap marker failure')
@@ -392,6 +394,43 @@ describe('WorkspaceRegistry create and lookup', () => {
     expect(await registry.resolveByPath(await makeDir('unowned'))).toBeUndefined()
   })
 
+  it.each([false, true])('keeps provisional registration invisible during a held write (failure: %s)', async (fail) => {
+    const dir = await makeDir('held-registration')
+    const pool = new MemoryMediaPool()
+    const failure: Parameters<typeof selectiveFailureBackend>[1] = {}
+    const { registry } = await harness({ pool, backend: selectiveFailureBackend(pool, failure) })
+    let entered!: () => void
+    let release!: () => void
+    const started = new Promise<void>((resolve) => { entered = resolve })
+    const held = new Promise<void>((resolve) => { release = resolve })
+    failure.beforeGlobal = async () => {
+      delete failure.beforeGlobal
+      entered()
+      await held
+    }
+    if (fail) failure.putAt = 1
+    const creation = registry.create(dir).then(
+      workspace => ({ workspace, error: undefined }),
+      (error: unknown) => ({ workspace: undefined, error }),
+    )
+    try {
+      await started
+      expect(await registry.resolveByPath(dir)).toBeUndefined()
+      expect(registry.list()).toEqual([])
+    } finally {
+      release()
+      await creation
+    }
+    const result = await creation
+    if (fail) {
+      expect(result.error).toBeInstanceOf(Error)
+      expect(await registry.resolveByPath(dir)).toBeUndefined()
+    } else {
+      expect(result.workspace).toBeDefined()
+      expect(await registry.resolveByPath(dir)).toBe(result.workspace)
+    }
+  })
+
   it('serializes concurrent same-path creates into one entity', async () => {
     const dir = await makeDir('concurrent')
     const { registry, pool } = await harness()
@@ -419,9 +458,16 @@ describe('WorkspaceRegistry create and lookup', () => {
     const parent = await makeDir('invalid')
     const file = join(parent, 'plain.txt')
     await writeFile(file, 'file')
-    const { registry } = await harness()
-    await expect(registry.create(join(parent, 'missing'))).rejects.toMatchObject({ code: 'ENOENT' })
-    await expect(registry.create(file)).rejects.toThrow(/not a directory/)
+    const { registry, changes } = await harness()
+    const before = changes.length
+    const missing = registry.create(join(parent, 'missing'))
+    await expect(missing).rejects.toBeInstanceOf(WorkspacePathInvalidError)
+    await expect(missing).rejects.toMatchObject({ path: join(parent, 'missing'), cause: { code: 'ENOENT' } })
+    const nonDirectory = registry.create(file)
+    await expect(nonDirectory).rejects.toBeInstanceOf(WorkspacePathInvalidError)
+    await expect(nonDirectory).rejects.toHaveProperty('path', file)
+    await expect(nonDirectory).rejects.toHaveProperty('cause.message', `cannot create a workspace at '${file}': path is not a directory`)
+    expect(changes).toHaveLength(before)
     await expect(registry.resolveByPath(join(parent, 'missing'))).rejects.toMatchObject({ code: 'ENOENT' })
     expect(registry.list()).toEqual([])
   })
@@ -429,7 +475,10 @@ describe('WorkspaceRegistry create and lookup', () => {
   it('rejects a resolvable relative path instead of adopting it from the Host cwd', async () => {
     const { registry } = await harness()
     const fromHostCwd = '.'
-    await expect(registry.create(fromHostCwd)).rejects.toThrow(/fully qualified/)
+    const rejected = registry.create(fromHostCwd)
+    await expect(rejected).rejects.toBeInstanceOf(WorkspacePathInvalidError)
+    await expect(rejected).rejects.toHaveProperty('path', fromHostCwd)
+    await expect(rejected).rejects.toHaveProperty('cause.name', 'TypeError')
     await expect(registry.resolveByPath(fromHostCwd)).rejects.toThrow(/fully qualified/)
     expect(registry.list()).toEqual([])
   })
@@ -441,7 +490,9 @@ describe('WorkspaceRegistry create and lookup', () => {
       pool,
       backend: selectiveFailureBackend(pool, { putAt: 1 }),
     })
-    await expect(result.registry.create(dir)).rejects.toThrow(/selected bootstrap put failure/)
+    const failed = result.registry.create(dir)
+    await expect(failed).rejects.toThrow(/selected bootstrap put failure/)
+    await expect(failed).rejects.not.toBeInstanceOf(WorkspacePathInvalidError)
     expect(result.registry.list()).toEqual([])
     expect(await result.registry.create(dir)).toBeDefined()
   })

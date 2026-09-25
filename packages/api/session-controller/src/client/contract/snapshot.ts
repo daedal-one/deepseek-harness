@@ -98,6 +98,8 @@ export interface SessionSnapshot {
   readonly openError: RemoteFailure | null
   readonly hasMore: boolean
   readonly loadingOlder: boolean
+  /** Latest older-page or turn-jump failure; cleared by an explicit retry or history-owner replacement. */
+  readonly olderError: RemoteFailure | null
   readonly promptError: PromptError | null
   readonly blank: boolean
   readonly lastAgentError: string | null

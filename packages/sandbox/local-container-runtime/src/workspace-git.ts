@@ -5,6 +5,8 @@ import { spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import { chmod, lstat, mkdir, mkdtemp, open, readFile, readdir, readlink, realpath, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import type { WorkspaceGitRemote } from './types.ts'
+import { validateGitRemote } from './git-authorization.ts'
 
 /** Bounded transport entry. Directory entries precede their children. */
 export interface WorkspaceEntry {
@@ -16,6 +18,8 @@ export interface WorkspaceEntry {
 
 /** Host command and transport limits, resolved from deployment configuration. */
 export interface WorkspaceLimits {
+  /** Deployment-owned HTTPS remotes, selected by canonical source checkout. */
+  remotes?: WorkspaceGitRemote[]
   gitCommand: string
   authorName: string
   authorEmail: string
@@ -30,6 +34,8 @@ export interface WorkspaceLimits {
 export interface WorkspaceSeed {
   source: string
   sourceHead: string
+  /** Selected source branch; null records a detached HEAD. */
+  sourceBranch?: string | null
   baseline: string
   sourceStatus: string
   stagedPatch: string
@@ -210,8 +216,13 @@ export async function importWorkspace(source: string, recoveryRoot: string, limi
   if ((await git('ls-files', '-u')).length > 0) throw new Error('resolve the source index conflicts before importing')
   if (/^160000 /mu.test(text(await git('ls-files', '--stage')))) throw new Error('submodules require separate workspace support')
   const configuration = text(await git('config', '--local', '--list'))
-  if (/^(extensions\.partialclone|core\.sparsecheckout|remote\.[^.]+\.promisor)=/imu.test(configuration)) throw new Error('partial and sparse repositories are not supported')
+  if (/^core\.sparsecheckout=/imu.test(configuration)) throw new Error('sparse repositories are not supported')
+  if (/^(extensions\.partialclone|remote\.[^.]+\.promisor)=/imu.test(configuration)
+    && /^\?/mu.test(text(await git('rev-list', '--objects', '--missing=print', 'HEAD')))) {
+    throw new Error('materialize the selected source history before importing a partial clone')
+  }
   const sourceHead = oid(text(await git('rev-parse', 'HEAD')).trim())
+  const sourceBranch = text(await git('branch', '--show-current')).trim() || null
   const sourceStatus = text(await git('status', '--porcelain=v2', '-z', '--untracked-files=all'))
   const stagedPatch = (await git('diff', '--cached', '--binary', '--no-ext-diff', '--no-textconv')).toString('base64')
   const paths = [...new Set(text(await git('ls-files', '--cached', '--others', '--exclude-standard', '-z')).split('\0').filter(Boolean))].sort()
@@ -227,6 +238,15 @@ export async function importWorkspace(source: string, recoveryRoot: string, limi
     await stage('update-ref', 'refs/heads/codex/conversation', sourceHead)
     await stage('config', '--local', 'user.name', limits.authorName)
     await stage('config', '--local', 'user.email', limits.authorEmail)
+    const remote = limits.remotes?.find(candidate => candidate.source === canonical)
+    if (remote !== undefined) {
+      validateGitRemote(remote)
+      await stage('remote', 'add', 'origin', remote.url)
+      if (sourceBranch !== null) {
+        await stage('config', '--local', 'branch.codex/conversation.remote', 'origin')
+        await stage('config', '--local', 'branch.codex/conversation.merge', `refs/heads/${sourceBranch}`)
+      }
+    }
     const signatures = new Map<string, string>(); let bytes = 0
     const copy = async (path: string, write: boolean): Promise<string> => {
       if (!inside(canonical, resolve(canonical, path)) || path.split('/').includes('.git')) throw new Error('invalid source pathname')
@@ -266,6 +286,7 @@ export async function importWorkspace(source: string, recoveryRoot: string, limi
     for (const path of paths) signatures.set(path, await copy(path, true))
     for (const path of paths) if (signatures.get(path) !== await copy(path, false)) throw new Error('source changed during workspace import; retry preparation')
     if (sourceHead !== text(await git('rev-parse', 'HEAD')).trim() || sourceStatus !== text(await git('status', '--porcelain=v2', '-z', '--untracked-files=all'))
+      || sourceBranch !== (text(await git('branch', '--show-current')).trim() || null)
       || stagedPatch !== (await git('diff', '--cached', '--binary', '--no-ext-diff', '--no-textconv')).toString('base64')) throw new Error('source changed during workspace import; retry preparation')
     await stage('add', '--all', '--', '.')
     const tree = text(await stage('write-tree')).trim(); let baseline = sourceHead
@@ -273,7 +294,7 @@ export async function importWorkspace(source: string, recoveryRoot: string, limi
       baseline = oid(text(await workspaceGit(repo, ['commit-tree', tree, '-p', sourceHead], limits, Buffer.from('chore: record conversation input baseline\n\nDSH-Input-Baseline: true\n'))).trim())
       await stage('update-ref', 'refs/heads/codex/conversation', baseline, sourceHead)
     }
-    return { source: canonical, sourceHead, baseline, sourceStatus, stagedPatch, entries: await snapshot(repo, limits) }
+    return { source: canonical, sourceHead, sourceBranch, baseline, sourceStatus, stagedPatch, entries: await snapshot(repo, limits) }
   } finally { await rm(staging, { recursive: true, force: true }) }
 }
 

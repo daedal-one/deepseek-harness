@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import { once } from 'node:events'
+import { Socket } from 'node:net'
+import type { IncomingMessage } from 'node:http'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import WebSocket, { type RawData } from 'ws'
+import WebSocket, { WebSocketServer, type RawData } from 'ws'
 import { Context, Service, symbols } from '@deepseek-ai/cordis'
 import { apply as applyConnection, inject as connectionInject } from '@deepseek-ai/dsh-client-connection'
 import WebServer from '@deepseek-ai/dsh-host-webserver'
@@ -43,7 +45,7 @@ vi.mock('node:crypto', async (importOriginal) => {
 
 const randomUuid = vi.mocked(randomUUID)
 const browserCookies = new WeakMap<Context, string>()
-const REMOTE_HOST = { home: '/home/fixture' } as const
+const REMOTE_HOST = { home: '/home/fixture', identity: { version: 1, hostId: '26e99520-f2d3-4874-84b5-07c5ef24775d', activationId: 'f5292bdb-ebda-41ba-b473-6c587a3c1d02' } as import('@deepseek-ai/dsh-client-connection/types').ConnectionIdentity } as const
 type AgentWireId = TypertContextWire<TypertContextMap['agent']>
 const agentId = (value: string): AgentWireId => value as AgentWireId
 
@@ -279,10 +281,10 @@ describe('Typert Remote streams', () => {
     })).rejects.toThrow('Remote invocation "feed/abortBeforeOpen" was aborted')
 
     const abortedBeforeIteration = new AbortController()
-    abortedBeforeIteration.abort(new Error('cancelled before iteration'))
     const preCancelled = await ctx.typertGateway.stream({
       namespace: 'feed', method: 'sync', args: { label: 'ignored' }, signal: abortedBeforeIteration.signal,
     })
+    abortedBeforeIteration.abort(new Error('cancelled before iteration'))
     await expect(collect(preCancelled)).rejects.toThrow('Remote invocation "feed/sync" was aborted')
   })
 
@@ -294,6 +296,47 @@ describe('Typert Remote streams', () => {
     await expect(ctx.typertGateway.stream({
       namespace: 'feed', method: 'unary', args: { label: 'a' },
     })).rejects.toMatchObject({ code: 'gateway/signature-invalid' } satisfies Partial<TypertGatewayError>)
+  })
+
+  it('cancels logical streams synchronously on revocation and releases their WebSocket lease', async () => {
+    const { ctx, service } = await setup(true)
+    const controller = new AbortController()
+    const dispose = vi.fn()
+    const authorize = vi.spyOn(ctx.connection, 'authorizeRequest').mockResolvedValue({ ok: true, lease: { signal: controller.signal, dispose } })
+    const socket = new WebSocket(`ws://127.0.0.1:${String(ctx.webServer.port)}/api/remote.mux`)
+    try {
+      await once(socket, 'open')
+      const item = once(socket, 'message')
+      sendOpen(socket, 'leased', 'feed/follow', { label: 'phone' })
+      await item
+      expect(service.signals[0]?.aborted).toBe(false)
+      const closed = once(socket, 'close')
+      controller.abort(new Error('device revoked'))
+      expect(service.signals[0]?.aborted).toBe(true)
+      await closed
+      expect(dispose).toHaveBeenCalledOnce()
+    } finally { socket.terminate(); authorize.mockRestore() }
+  })
+
+  it.each(['closed', 'revoked', 'upgrade-failure'] as const)('releases admission leases when a WebSocket is %s', async (reason) => {
+    const registration = vi.spyOn(WebServer.prototype, 'registerUpgrade')
+    const { ctx } = await setup(true)
+    const route = registration.mock.calls.map(([candidate]) => candidate).find(candidate => candidate.path === '/api/remote.mux')!
+    registration.mockRestore()
+    const controller = new AbortController()
+    const dispose = vi.fn()
+    const authorize = vi.spyOn(ctx.connection, 'authorizeRequest').mockResolvedValue({ ok: true, lease: { signal: controller.signal, dispose } })
+    const socket = new Socket()
+    const failure = new Error('upgrade failure')
+    const upgrade = vi.spyOn(WebSocketServer.prototype, 'handleUpgrade').mockImplementation(() => { throw failure })
+    try {
+      if (reason === 'closed') socket.destroy()
+      if (reason === 'revoked') controller.abort()
+      const result = route.handler({} as IncomingMessage, socket, Buffer.alloc(0))
+      if (reason === 'upgrade-failure') await expect(result).rejects.toBe(failure)
+      else { await result; expect(upgrade).not.toHaveBeenCalled() }
+      expect(dispose).toHaveBeenCalledOnce()
+    } finally { socket.destroy(); upgrade.mockRestore(); authorize.mockRestore() }
   })
 
   it('uses the configured WebSocket heartbeat interval', { timeout: 1_000 }, async () => {
@@ -601,8 +644,33 @@ describe('Typert Remote streams', () => {
     await unregister()
   })
 
+  it('publishes the authenticated HTTP identity on the same Host event stream', async () => {
+    const { ctx } = await setup(true)
+    const source = new RemoteEventSourceProbe()
+    const unregister = ctx.typertGateway.registerRemoteEvents(source.source, { home: '/paired', identity: ctx.connection.identity })
+    const client = await openEventClient(ctx, 'identity-generation')
+    try {
+      const response = await fetch(`http://127.0.0.1:${String(ctx.webServer.port)}/api/connection/identity`, {
+        method: 'POST', headers: { 'content-type': 'application/json', cookie: browserCookie(ctx) },
+        body: JSON.stringify({ type: 'client-request', rpcId: 'identity', method: 'connection/identity', payload: {} }),
+      })
+      expect(response.status).toBe(200)
+      const identity = await response.json() as { result: { value: unknown } }
+      expect(client.frames[0]).toMatchObject({ type: 'item', value: {
+        type: 'ready', protocolVersion: 1, host: { home: '/paired', identity: identity.result.value },
+      } })
+      expect(identity.result.value).toEqual(ctx.connection.identity)
+    } finally {
+      const closed = once(client.socket, 'close')
+      client.socket.close()
+      await closed
+      await unregister()
+    }
+  })
+
   it('retries a colliding Remote event Client id before opening the second generation', async () => {
     const { ctx } = await setup(true)
+    randomUuid.mockClear()
     const source = new RemoteEventSourceProbe()
     const unregister = ctx.typertGateway.registerRemoteEvents(source.source, REMOTE_HOST)
     const firstId = '00000000-0000-4000-8000-000000000011' as ReturnType<typeof randomUUID>
@@ -731,6 +799,7 @@ describe('Typert Remote streams', () => {
 
   it('delivers a pending waterfall to the first Client that connects', async () => {
     const { ctx } = await setup(true)
+    randomUuid.mockClear()
     const source = new RemoteEventSourceProbe()
     const unregister = ctx.typertGateway.registerRemoteEvents(source.source, REMOTE_HOST)
     const agent = ctx.extend()

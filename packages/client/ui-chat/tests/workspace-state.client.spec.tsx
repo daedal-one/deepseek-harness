@@ -28,6 +28,17 @@ it('groups identical commits while keeping every returned alias expandable', () 
   expect(result.getByText('dsh/fix-recovery-b/turn-4')).toBeTruthy()
 })
 
+it('keeps equal commit ids in different repositories separate and includes secondary repositories', () => {
+  const first = { remote: 'https://example.test/one', path: '/workspace/one', baseline: 'b'.repeat(40), lastTurn: 4,
+    branches: { 'refs/heads/dsh/one/turn-4': 'a'.repeat(40) } }
+  const second = { ...first, remote: 'https://example.test/two', branches: { 'refs/heads/dsh/two/turn-4': 'a'.repeat(40) } }
+  const result = view({ phase: 'returned', branches: first.branches, repositories: [first, second] })
+  expect(result.getByText(first.remote)).toBeTruthy()
+  expect(result.getByText(second.remote)).toBeTruthy()
+  expect(result.container.querySelectorAll('li')).toHaveLength(2)
+  expect(result.container.querySelector('details')).toBeNull()
+})
+
 it.each(['saving', 'pending', 'checkpointed'] as const)('retains %s outcomes and error detail independently of branches', (phase) => {
   const result = view({ phase, branches: {}, error: 'Destination unavailable' })
   expect(result.getByRole('status').getAttribute('data-workspace-phase')).toBe(phase)

@@ -22,3 +22,7 @@ assignee: carlo
 ## Acceptance
 
 The first-party layout, sidebar, conversation, details, settings, shell, and primitive owners implement the accepted phone interaction without a replacement shell or third-party runtime plugin. Focused component coverage pins drawer state, desktop preservation, and hoverless preview suppression. Assembled browser coverage verifies the phone viewport prevents boundary overscroll, has no horizontal page overflow, keeps navigation, composer, details, and settings usable, and retains focus on the safe action when tool approval replaces the composer.
+
+## Migration publication regression
+
+The phone frame clips horizontal overflow while the document retains vertical Chat scrolling. Header corner controls stay entirely inside the phone viewport. The recorded lifecycle scenario qualifies the settled 390px document width, live reasoning end following, header visibility during scrolling, fixed composer, sidebar and Settings overlays, and desktop reload behavior before migration-branch publication.

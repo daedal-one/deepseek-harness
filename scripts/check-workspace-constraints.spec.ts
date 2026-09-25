@@ -143,3 +143,14 @@ describe('package payload constraints', () => {
     ])
   })
 })
+
+it('publishes declared portable runtime and bundled Client declarations', () => {
+  expect(expectedDshPackageFiles({
+    name: '@deepseek-ai/dsh-client-probe',
+    exports: { './client/portable': { types: './lib/client/portable.d.ts', default: './lib/portable.js' } },
+  })).toEqual(['lib/index.js', 'lib/portable.js', 'lib/client/portable.d.ts', 'lib/types/**/*.d.ts'])
+  expect(expectedDshPackageFiles({
+    name: '@deepseek-ai/dsh-client-probe',
+    exports: { './client/portable': { types: './lib/types/client/portable.d.ts', default: './lib/portable.js' } },
+  })).toEqual(['lib/index.js', 'lib/portable.js', 'lib/types/**/*.d.ts'])
+})

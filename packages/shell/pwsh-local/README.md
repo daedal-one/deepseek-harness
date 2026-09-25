@@ -105,6 +105,8 @@ A call runs through three steps: `resolve()` fills `workdir`/`timeoutMs`/`stdout
 - Executable resolution is a pure function of `(configured, env, platform)` and re-probes the filesystem only when the stored `pwshPath` differs from the one the current executable was resolved from.
 - A background process belongs to the subprocess service: it survives an executor-only reload and is killed and joined when the service disposes.
 
+The executor publishes `executionWorld` when its provider can establish its filesystem/process namespace. The base seam returns `undefined`; local Bash and PowerShell report their subprocess provider’s identity.
+
 </details>
 
 -----

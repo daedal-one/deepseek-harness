@@ -4,7 +4,8 @@ import { useSyncExternalStore } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import { PendingQuestion, type QuestionComposerProps } from '../src/client/contract/slots.ts'
+import { PendingQuestion } from '../src/client/pending-question.ts'
+import type { QuestionComposerProps } from '../src/client/contract/slots.ts'
 import { createQuestionDraftStore } from '../src/client/draft-store.ts'
 import { QuestionComposer, parseRecommendedLabel } from '../src/client/QuestionComposer.tsx'
 import { en, en as copy } from '../src/client/locales.ts'
@@ -40,7 +41,7 @@ const sessionState: SessionState = {
   openState: 'open',
   openError: null,
   hasMore: false,
-  loadingOlder: false,
+  loadingOlder: false, olderError: null,
   promptError: null,
   blank: false,
   lastAgentError: null,
@@ -51,7 +52,7 @@ const sessionList = {
   ids: [SID],
   byId: { [SID]: { id: SID, displayTitle: 'Session', running: false, blank: false, updatedAt: 0 } },
   current: SID,
-  phase: 'ready' as const,
+  state: 'idle' as const, error: null, phase: 'ready' as const,
   subagentsByParent: {},
   jobsBySession: {},
   currentAddress: undefined,

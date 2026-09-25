@@ -32,6 +32,16 @@ function clientConfigs(id = REQUESTING_PACKAGE) {
 }
 
 describe('client bundle build faces', () => {
+  it.each([true, false])('builds portable Client companions only after Client compilation (hostPhase=%s)', (hostPhase) => {
+    const companion = { entry: { portable: 'lib/types/client/portable.js' }, platform: 'neutral' as const }
+    const bundle = clientBundle('@deepseek-ai/dsh-client-test', ['lib/types/index.js'], {
+      hostPhase, clientCompanions: [companion],
+    })
+    expect(bundle({ env: { DSH_BUILD_FACE: 'host' } })).not.toContain(companion)
+    expect(bundle({ env: { DSH_BUILD_FACE: 'client' } })).toContain(companion)
+    expect(bundle({ env: {} })).toContain(companion)
+  })
+
   it('watches source in development and consumes emitted JavaScript in the Client build', () => {
     const bundle = clientBundle('@deepseek-ai/dsh-client-test', ['lib/types/index.js'])
     const development = bundle({ env: {} }).find(config => config.platform === 'browser')
@@ -100,6 +110,8 @@ describe('client bundle purity gate', () => {
     expect(() => resolveId('@deepseek-ai/dsh-token-meter')).toThrow(/purity/)
     expect(() => resolveId('@deepseek-ai/dsh-token-meter/client/internal')).toThrow(/purity/)
     expect(resolveId('@deepseek-ai/dsh-host-open-in-app/shared')).toBeNull()
+    expect(resolveId('@deepseek-ai/dsh-client-connection/identity')).toBeNull()
+    expect(() => resolveId('@deepseek-ai/dsh-client-connection/client')).toThrow('cross-plugin value imports are forbidden')
     expect(() => resolveId('@deepseek-ai/dsh-host-open-in-app')).toThrow(/purity/)
   })
 

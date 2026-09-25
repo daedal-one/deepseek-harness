@@ -4,16 +4,29 @@ import { Service, type Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { RemoteFailure } from '@deepseek-ai/dsh-typert-protocol'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
-import type { WorkspaceView } from '../types.ts'
+import type { WorkspaceResolveRequest, WorkspaceView } from '../types.ts'
 import type { ClientWorkspaceModel, WorkspaceSnapshot } from './model.ts'
 
-/** Structured create failure for callers that distinguish Host business errors. */
+/**
+ * Structured create failure. `workspace/create-rejected` confirms that this
+ * request began no registration write; other codes do not prove that outcome.
+ */
 export class WorkspaceCreateError extends Error {
   override readonly name = 'WorkspaceCreateError'
 
   /** @param rpcError - Host business or folded carrier failure. */
   constructor(readonly rpcError: RemoteFailure) {
     super(`workspace create failed: ${rpcError.code}: ${rpcError.message}`)
+  }
+}
+
+/** Structured read failure; callers must not interpret it as an absent registration. */
+export class WorkspaceResolveError extends Error {
+  override readonly name = 'WorkspaceResolveError'
+
+  /** @param rpcError - Host lookup or folded carrier failure. */
+  constructor(readonly rpcError: RemoteFailure) {
+    super(`workspace lookup failed: ${rpcError.code}: ${rpcError.message}`)
   }
 }
 
@@ -39,6 +52,13 @@ export interface IWorkspaces {
    * @returns the created or idempotently resolved Workspace.
    */
   create(input: { path: string }): Promise<WorkspaceView>
+  /**
+   * Read the current registration at a Host path without registering it.
+   * @param input - fully qualified Host path; only the Host canonicalizes it.
+   * @param signal - caller-owned cancellation.
+   * @returns the current Workspace or null; neither result is a prior request receipt.
+   */
+  resolveByPath(input: WorkspaceResolveRequest, signal?: AbortSignal): Promise<WorkspaceView | null>
   /**
    * Rename a Workspace.
    * @param workspaceId - target Workspace.
@@ -92,6 +112,12 @@ export class WorkspaceController extends Service implements IWorkspaces {
   async create(input: { path: string }): Promise<WorkspaceView> {
     const result = await this.model.create(input)
     if (!result.ok) throw new WorkspaceCreateError(result.error)
+    return result.value.workspace
+  }
+
+  async resolveByPath(input: WorkspaceResolveRequest, signal?: AbortSignal): Promise<WorkspaceView | null> {
+    const result = await this.model.resolveByPath(input, signal)
+    if (!result.ok) throw new WorkspaceResolveError(result.error)
     return result.value.workspace
   }
 

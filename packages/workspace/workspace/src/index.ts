@@ -11,6 +11,8 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import type { SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-persistence'
 import type { DomainGlobal, KvTable } from '@deepseek-ai/dsh-storage-domain'
+import { resolveWorkspaceCreatePath } from './create-path.ts'
+export { WorkspacePathInvalidError } from './create-path.ts'
 import { WorkspaceEntity } from './entity.ts'
 import type { WorkspaceEntityHost } from './entity.ts'
 
@@ -141,7 +143,9 @@ export class WorkspaceRegistry extends Service {
   /**
    * Create or reuse a workspace for an existing directory. The fully qualified
    * path is canonicalized through `fs.realpath`; a relative, nonexistent, or
-   * non-directory path rejects. Repeated calls for the same canonical path
+   * non-directory path rejects with WorkspacePathInvalidError before any
+   * registration write. Persistence failures retain their original type.
+   * Repeated calls for the same canonical path
    * return the existing entity without changing its title.
    * A newly created workspace is prepended to the durable registry order.
    * Different canonical paths may share a display title.
@@ -155,10 +159,7 @@ export class WorkspaceRegistry extends Service {
   // drop the parameter with its @param clause and the `create(path, title?)`
   // lines in this package's README pair.
   async create(path: string, title?: string): Promise<Workspace> {
-    const canonical = await realpathNormalize(path)
-    if (!(await stat(canonical)).isDirectory()) {
-      throw new Error(`cannot create a workspace at '${canonical}': path is not a directory`)
-    }
+    const canonical = await resolveWorkspaceCreatePath(path)
     return await this.enqueueOperation(() => this.createCanonical(canonical, title))
   }
 
@@ -268,17 +269,16 @@ export class WorkspaceRegistry extends Service {
 
   /**
    * Resolve by canonical directory path without creating or mutating a
-   * workspace. A missing path rejects during `realpath`; an existing unowned
+   * workspace. Only registrations in committed registry order are visible;
+   * unfinished create writes do not expose provisional entities. A missing path
+   * rejects during `realpath`; an existing unowned
    * directory returns `undefined`.
    * @param path - Existing directory path in a fully qualified spelling.
    * @returns the workspace owning the canonical path, when one exists.
    */
   async resolveByPath(path: string): Promise<Workspace | undefined> {
     const canonical = await realpathNormalize(path)
-    for (const entity of this.entities.values()) {
-      if (entity.path === canonical) return entity
-    }
-    return undefined
+    return this.list().find(entity => entity.path === canonical)
   }
 
   private async createCanonical(canonical: string, title?: string): Promise<WorkspaceEntity> {

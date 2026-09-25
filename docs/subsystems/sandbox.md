@@ -199,9 +199,19 @@ resolveToolchain(): LocalContainerRuntime
  * @returns the corresponding execution path, or the unchanged non-source path.
  */
 executionPath(path: string): string
+
+/** Request repository authority through the human question provider, then attach an isolated checkout.
+ * @param agent - initiating top-level session; determines the environment and workspace.
+ * @param repository - canonical HTTPS repository URL allowed by environment configuration.
+ * @param access - fetch authority or explicitly approved push authority.
+ * @param reason - task-related reason shown with the complete approval scope.
+ * @param signal - cancellation of the pending question and attachment request.
+ * @returns approval and readiness separately; paths appear only for attached repositories.
+ */
+async requestRepository( agent: Agent, repository: string, access: RepositoryAccess, reason: string, signal: AbortSignal, ): Promise<RepositoryRequestResult>
 ```
 
-Types: [SessionId](core.md)
+Types: [Agent](core.md) · [SessionId](core.md)
 
 Source: [`packages/sandbox/local-container-runtime/src/workspaces.ts`](../../packages/sandbox/local-container-runtime/src/workspaces.ts)
 
@@ -235,12 +245,19 @@ async executeController(request: PodmanControllerExecRequest & { readonly deadli
  */
 async createProcess(request: LocalContainerProcessRequest): Promise<LocalContainerProcessHandle>
 
+/** Keep the engine available until a workspace supervisor finishes its child worlds.
+ * @param shutdown - coalesced checkpoint and child-container disposal operation.
+ * @returns unregister function, called only after that supervisor has finished shutdown.
+ */
+registerWorkspaceOwner(shutdown: () => Promise<void>): () => void
+
 /**
  * Bind a separately owned workspace to a new isolated world on the same engine.
  * @param directory - trusted supervisor-owned private backing directory.
+ * @param authorize - environment-owned credential issuance checked for each process admission.
  * @returns the verified world and its quiescent container disposer; storage is retained.
  */
-async createWorkspace(directory: string): Promise<{ runtime: LocalContainerRuntime; dispose(): Promise<void> }>
+async createWorkspace( directory: string, authorize?: () => Promise<string[]>, ): Promise<{ runtime: LocalContainerRuntime; dispose(): Promise<void> }>
 
 /**
  * Revoke new writes and wait for all existing processes and controllers before capture.
@@ -340,4 +357,6 @@ Source: [`packages/sandbox/local-container-runtime/src/index.ts`](../../packages
 
 The optional [runtime owner](../../packages/sandbox/local-container-runtime/README.md) supplies a verified process-owned workspace to matching filesystem and subprocess providers. `LocalContainerHandle` identifies the owner and canonical workspace; `PodmanControllerExecRequest` and `PodmanControllerExecResult` define bounded controller input, output, cancellation, and deadlines. `LocalContainerProcessRequest` supplies an explicit process, environment, cwd, and terminal dimensions, while `LocalContainerProcessHandle` owns its streams, exit observation, signalling, and removal. The [type declarations](../../packages/sandbox/local-container-runtime/src/types.ts) define these provider-facing values.
 
-The optional conversation-workspace service owns import, recovery, residual commits, and branch return. `ConversationWorkspaceId` identifies one private repository; `WorkspaceState` records its save phase, acknowledged checkpoint, baseline commit, and returned refs independently of `turn/end`. The [shared declarations](../../packages/sandbox/local-container-runtime/src/workspace-types.ts) define the durable receipt; the [configuration and lifecycle](../../packages/sandbox/local-container-runtime/README.md#conversation-repositories) define ownership and limits.
+The optional conversation-workspace service owns import, recovery, residual commits, and branch return. `ConversationWorkspaceId` identifies one private repository; `WorkspaceState` records its save phase, acknowledged checkpoint, baseline commit, and returned refs independently of `turn/end`. `WorkspaceProvenance` records a stable receipt identity, owner conversation and event range, original and returned refs, observed commits and the narrower set of Harness-created commits. The [shared declarations](../../packages/sandbox/local-container-runtime/src/workspace-types.ts) define these durable records; the [configuration and lifecycle](../../packages/sandbox/local-container-runtime/README.md#conversation-repositories) define ownership and limits.
+
+With environment configuration, independently stored session attachments select multi-repository workspace identities. `EnvironmentId` identifies the authority owner, `RepositoryGrant` records an approved repository capability and revision, and `RepositoryAccess` distinguishes fetch from push. `EnvironmentAccessConfig` supplies the operator's requestable catalog and initial grants. Their [declarations](../../packages/sandbox/local-container-runtime/src/environment-types.ts) and [repository access semantics](../../packages/sandbox/local-container-runtime/README.md#repository-remotes-and-outbound-access) define the approval, expiry, and credential limits. `WorkspaceState.repositories` reports independent repository return outcomes.

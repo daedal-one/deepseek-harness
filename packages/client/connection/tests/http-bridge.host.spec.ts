@@ -5,6 +5,52 @@ import { describe, expect, it } from 'vitest'
 import { bridge } from '../src/http-bridge.ts'
 
 describe('HTTP bridge abort', () => {
+  it.each(['before', 'body', 'response'] as const)('contains device revocation during %s handling', async (phase) => {
+    const authorization = new AbortController()
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const headersWritten = Promise.withResolvers<undefined>()
+    const request = Readable.from((async function *() {
+      if (phase === 'body') { entered.resolve(undefined); await release.promise }
+      yield Buffer.from('{}')
+    })()) as unknown as IncomingMessage
+    Object.assign(request, { url: '/api/fixture', method: 'POST', headers: { 'content-type': 'application/json' } })
+    let status: number | undefined
+    const written: Uint8Array[] = []
+    let calls = 0
+    const response = Object.assign(new EventEmitter(), {
+      writableEnded: false,
+      destroy() { response.emit('close') },
+      writeHead(value: number) { status = value; headersWritten.resolve(undefined) },
+      write(value: Uint8Array) { written.push(value); return true },
+      end() {},
+    }) as unknown as ServerResponse
+    if (phase === 'before') authorization.abort()
+    const pending = bridge(request, response, {
+      requestBodyMode: () => 'buffered',
+      fetch: () => {
+        calls += 1
+        return Promise.resolve(new Response(new ReadableStream<Uint8Array>({
+          async pull(controller) {
+            await release.promise
+            controller.enqueue(Uint8Array.of(42))
+            controller.close()
+          },
+        })))
+      },
+    }, 100, authorization.signal)
+    try {
+      if (phase === 'body') await entered.promise
+      if (phase === 'response') await headersWritten.promise
+      authorization.abort(new Error('device revoked'))
+      release.resolve(undefined)
+      await pending
+      expect(written).toEqual([])
+      expect(calls).toBe(phase === 'response' ? 1 : 0)
+      if (phase === 'before') expect(status).toBe(401)
+    } finally { release.resolve(undefined); await pending; request.destroy() }
+  })
+
   it('destroys a declared-oversize request instead of draining it', async () => {
     const destroyed: true[] = []
     const request = Readable.from([]) as unknown as IncomingMessage

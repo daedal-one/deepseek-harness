@@ -1,0 +1,5 @@
+# Pin mock HTTP tests to their DeepSeek adapter.
+- id: agent-default-model
+  config:
+    provider: deepseek-official
+    model: deepseek-flash

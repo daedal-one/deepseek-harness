@@ -1,20 +1,17 @@
-/** Browser wire client: Remote transport and connection generations. */
+/** Browser adapter for the shared per-host Connection. */
+import { BrowserDeviceAdministration, type DeviceAdministrationService } from './device-administration.ts'
 import type { Context } from '@deepseek-ai/cordis'
-import {
-  ConnectionController,
-  type ConnectionRecoveryConfig,
-  type ConnectionGeneration,
-  type ConnectionGenerationSource,
-  type ConnectionSinks,
-  type ConnectionState,
-} from './connection.ts'
+import { createConnection, type ConnectionNetworkSource } from './handle.ts'
 import { createFixtureConnectionRpc } from './fixture.ts'
 import { createWebConnectionRpc, type RpcFetch, type RpcStreamOpen } from './rpc.ts'
 import { isLoopbackHostname } from '../loopback-hostname.ts'
-import type { ClientConnectionRpc } from '../rpc.ts'
 import { resolveConnectionConfig } from '../recovery-config.ts'
 
 declare module '@deepseek-ai/cordis' {
+  interface Context {
+    /** Browser-owner administration over the current page origin; unavailable on private carriers. */
+    connectionDevices: DeviceAdministrationService
+  }
   interface Events {
     /**
      * A connection generation was established. Wire-derived caches must
@@ -50,23 +47,14 @@ export type {
 export type {
   ClientConnectionRpc, ConnectionRpcFailure, ConnectionRpcResult,
 } from '../rpc.ts'
-export type { RpcFetch } from './rpc.ts'
+export type { RpcFetch, RpcFetchResponse } from './rpc.ts'
 
-/** Observable identity and Host facts for the active connection generation. */
-export interface ConnectionGenerationState {
-  /** Active generation, or undefined before readiness and while reconnecting. */
-  getSnapshot(): ConnectionGeneration | undefined
-  /** Subscribe to generation establishment, replacement, and loss. */
-  subscribe(listener: () => void): () => void
-}
-
-/** Observable recovery lifecycle of the owned Connection loop. */
-export interface ConnectionStateSource {
-  /** Current state, or undefined before the first connection outcome. */
-  getSnapshot(): ConnectionState | undefined
-  /** Subscribe to state changes. */
-  subscribe(listener: () => void): () => void
-}
+export type {
+  ConnectionGenerationState,
+  ConnectionHandle,
+  ConnectionLoop,
+  ConnectionStateSource,
+} from './handle.ts'
 
 /** Required services (none — this is the wire root). */
 export const inject: string[] = []
@@ -105,186 +93,60 @@ interface ClientTransportGlobal {
   __DSH_CONNECTION_RECOVERY__?: unknown
 }
 
-/**
- * The ctx.connection service API. API Gateway supplies generation readiness
- * and reset callbacks; Connection stays independent of downstream domain state.
- */
-export interface ConnectionHandle {
-  /**
-   * Whether the privileged surface is reachable: the page authority is
-   * loopback, the transport declares the page owns the Host
-   * ({@link ClientTransportHooks.ownsHost}), or the context is not a browser.
-   */
-  readonly isLoopback: boolean
-  /** Current Remote event generation and the Host facts carried by its opening frame. */
-  readonly generation: ConnectionGenerationState
-  /** Current recovery lifecycle for connection-specific consumers. */
-  readonly state: ConnectionStateSource
-  /** Generic logical RPC channels over the same Connection transport. */
-  readonly rpc: ClientConnectionRpc
-  /** Reset retry progression and replace the current attempt immediately. */
-  reconnect(): void
-  /**
-   * Register the sole source defining Host generations. The source reports
-   * ready only after its incremental listeners are attached.
-   * @param source - long-lived generation source owned by the push carrier.
-   * @returns disposer withdrawing the source and stopping an active loop.
-   */
-  registerGenerationSource(source: ConnectionGenerationSource): () => void
-  /**
-   * Start the connect/reconnect loop with the consumer's state callbacks.
-   * API Gateway owns the loop; a second call throws.
-   * @param sinks - connection-state callbacks.
-   * @param config - explicit timing overrides; omitted fields use Host bootstrap timing.
-   * @returns lifecycle controls for the loop.
-   */
-  start(sinks: ConnectionSinks, config?: ConnectionRecoveryConfig): ConnectionLoop
-}
-
-/** Controls retained by the sole owner of a running connection loop. */
-export interface ConnectionLoop {
-  /** Stop the loop and withdraw its active generation. */
-  stop(): void
-}
-
-interface ConnectionOwner {
-  readonly token: object
-  readonly source: ConnectionGenerationSource
-  readonly controller: ConnectionController
-  readonly stopNetworkWatch: () => void
-}
-
 interface BrowserNetworkTarget {
   readonly navigator?: { readonly onLine?: boolean }
   addEventListener(type: 'online' | 'offline', listener: () => void): void
   removeEventListener(type: 'online' | 'offline', listener: () => void): void
 }
 
-function watchBrowserNetwork(controller: ConnectionController): () => void {
+function browserNetwork(): ConnectionNetworkSource | undefined {
   const browser = (globalThis as { readonly window?: BrowserNetworkTarget }).window
-  const initiallyAvailable = browser?.navigator?.onLine
-  if (browser === undefined || initiallyAvailable === undefined) return () => {}
-  const online = (): void => { controller.setNetworkAvailable(true) }
-  const offline = (): void => { controller.setNetworkAvailable(false) }
-  controller.setNetworkAvailable(initiallyAvailable)
-  browser.addEventListener('online', online)
-  browser.addEventListener('offline', offline)
-  return () => {
-    browser.removeEventListener('online', online)
-    browser.removeEventListener('offline', offline)
+  if (browser?.navigator?.onLine === undefined) return undefined
+  return {
+    getSnapshot: () => browser.navigator?.onLine !== false,
+    subscribe(listener) {
+      browser.addEventListener('online', listener)
+      browser.addEventListener('offline', listener)
+      return () => {
+        browser.removeEventListener('online', listener)
+        browser.removeEventListener('offline', listener)
+      }
+    },
   }
 }
 
 /**
- * Client plugin body: pick physical carriers by page mode and provide ctx.connection.
- * @param ctx - client cordis context.
+ * Mount the shared Connection with browser fixture, transport, and network inputs.
+ * @param ctx - client Cordis context.
  */
 export function apply(ctx: Context): void {
   const pageLocation = typeof location === 'undefined' ? undefined : location
   const fixture = pageLocation !== undefined && new URLSearchParams(pageLocation.search).has('fixture')
-  const fixtureRpc = fixture ? createFixtureConnectionRpc() : undefined
   const transport = (globalThis as ClientTransportGlobal).__DSH_TRANSPORT__
   const recovery = resolveConnectionConfig((globalThis as ClientTransportGlobal).__DSH_CONNECTION_RECOVERY__)
-  const rpc = fixtureRpc ?? createWebConnectionRpc(transport?.fetch, transport?.openStream)
-  let generationSource: ConnectionGenerationSource | undefined
-  let owner: ConnectionOwner | undefined
-  let generationId = 0
-  let generation: ConnectionGeneration | undefined
-  let state: ConnectionState | undefined
-  const generationListeners = new Set<() => void>()
-  const stateListeners = new Set<() => void>()
-  const publishGeneration = (next: ConnectionGeneration | undefined): void => {
-    if (Object.is(generation, next)) return
-    generation = next
-    for (const listener of [...generationListeners]) {
-      try {
-        listener()
-      } catch (error) {
-        console.error('[connection] generation listener threw:', error)
-      }
-    }
-  }
-  const publishState = (next: ConnectionState | undefined): void => {
-    if (state === next) return
-    state = next
-    for (const listener of [...stateListeners]) {
-      try {
-        listener()
-      } catch (error) {
-        console.error('[connection] state listener threw:', error)
-      }
-    }
-  }
-  const releaseOwner = (current: ConnectionOwner): void => {
-    if (owner !== current) return
-    owner = undefined
-    current.stopNetworkWatch()
-    current.controller.stop()
-    publishGeneration(undefined)
-    publishState(undefined)
-  }
-  const handle: ConnectionHandle = {
+  const network = browserNetwork()
+  const connection = createConnection({
+    rpc: fixture ? createFixtureConnectionRpc() : createWebConnectionRpc(transport?.fetch, transport?.openStream),
     isLoopback: transport?.ownsHost === true || pageLocation === undefined || isLoopbackHostname(pageLocation.hostname),
-    generation: {
-      getSnapshot: () => generation,
-      subscribe: (listener) => {
-        generationListeners.add(listener)
-        return () => { generationListeners.delete(listener) }
-      },
-    },
-    state: {
-      getSnapshot: () => state,
-      subscribe: (listener) => {
-        stateListeners.add(listener)
-        return () => { stateListeners.delete(listener) }
-      },
-    },
-    rpc,
-    reconnect() {
-      owner?.controller.reconnect()
-    },
-    registerGenerationSource(source) {
-      if (generationSource !== undefined) {
-        throw new Error('connection: a generation source is already registered')
-      }
-      generationSource = source
-      return () => {
-        if (generationSource !== source) return
-        generationSource = undefined
-        const current = owner
-        if (current?.source === source) releaseOwner(current)
-      }
-    },
-    start(sinks, config) {
-      if (owner !== undefined) throw new Error('connection: the stream loop is already owned by another consumer')
-      const source = generationSource
-      if (source === undefined) throw new Error('connection: no generation source is registered')
-      const token = {}
-      const ownsGeneration = (): boolean => owner?.token === token
-      const controller = new ConnectionController(source, {
-        ...sinks,
-        onConnected: (host) => {
-          const nextGeneration = { id: ++generationId, host }
-          publishGeneration(nextGeneration)
-          if (!ownsGeneration() || !Object.is(generation, nextGeneration)) return
-          sinks.onConnected?.(host)
-        },
-        onStateChange: (state) => {
-          if (state !== 'connected') {
-            publishGeneration(undefined)
-          }
-          if (!ownsGeneration()) return
-          publishState(state)
-          sinks.onStateChange?.(state)
-        },
-      }, { ...recovery, ...config })
-      const current = { token, source, controller, stopNetworkWatch: watchBrowserNetwork(controller) }
-      owner = current
-      controller.start()
-      return {
-        stop: () => { releaseOwner(current) },
-      }
-    },
-  }
-  ctx.provide('connection', handle)
+    recovery,
+    ...network === undefined ? {} : { network },
+  })
+  ctx.provide('connection', connection)
+  const origin = !fixture && transport === undefined && pageLocation !== undefined
+    && (pageLocation.protocol === 'http:' || pageLocation.protocol === 'https:') ? pageLocation.origin : undefined
+  const devices = new BrowserDeviceAdministration({ origin, fetch: (input, init) => fetch(input, init), generation: connection.generation })
+  ctx.provide('connectionDevices', devices)
+  ctx.effect(() => {
+    devices.start()
+    const hide = (): void => { if (document.visibilityState === 'hidden') devices.hideEnrollment() }
+    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', hide)
+    return async () => {
+      if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', hide)
+      await devices.dispose()
+    }
+  }, 'connection: browser device administration')
 }
+
+export * from './device-api.ts'
+
+export type { DeviceAdministrationService, DeviceAdministrationSnapshot, DeviceAdministrationError } from './device-administration.ts'

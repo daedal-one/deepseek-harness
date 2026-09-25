@@ -99,6 +99,8 @@ A call runs through three steps: `resolve()` fills `workdir`/`timeoutMs`/`stdout
 - Environment layering is fixed: terminal overrides first, then the caller's `env`, then the trusted `dshEnv` snapshot last; the subprocess service scrubs ambient credentials and inherited `DSH_*` names independently.
 - A background process belongs to the subprocess service: it survives an executor-only reload and is killed and joined when the service disposes.
 
+The executor publishes `executionWorld` when its provider can establish its filesystem/process namespace. The base seam returns `undefined`; local Bash and PowerShell report their subprocess provider’s identity.
+
 </details>
 
 -----

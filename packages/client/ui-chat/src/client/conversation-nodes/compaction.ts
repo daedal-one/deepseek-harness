@@ -1,7 +1,6 @@
-import type { Context } from '@deepseek-ai/cordis'
 import type {
   CompactionSummaryNode, ConversationMatch, ConversationNodeContext, ConversationNodeDefinition,
-} from '@deepseek-ai/dsh-client-ui-conversation/client'
+} from '@deepseek-ai/dsh-client-ui-conversation/client/portable'
 import type {} from '@deepseek-ai/dsh-compaction/types'
 import { chatNode } from './common.ts'
 import { compactSource, compactSummary, updateCompactionState } from './command.ts'
@@ -54,12 +53,4 @@ export const compactionDefinition: ConversationNodeDefinition<CompactionState> =
     const marker = compactSummary(state.summary, state.checkpoint)
     return chatNode(context, 'compaction', marker.seq, marker)
   },
-}
-
-/**
- * Register the automatic-compaction business contribution.
- * @param ctx - owning UI Conversation context.
- */
-export function registerCompactionConversationNode(ctx: Context): void {
-  ctx.uiConversation.events.register(compactionDefinition)
 }

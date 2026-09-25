@@ -210,15 +210,17 @@ Session identity comes from the scope binding and standard `sessionId` prop. The
 
 ### Pending interactions
 
-Business packages extend `SessionPendingInteractionMap` through declaration merging. Every pending object carries at least a stable `key`, domain `kind`, and `sessionId`; `ui-session` does not import concrete Approval or Question types.
+The renderer-independent `PendingInteractions` registry owns pending domains for one Host. The browser `UiSession` delegates registration and exposes that same observable source. Business packages extend `SessionPendingInteractionMap` through declaration merging. The canonical declaration lives at the type-only `@deepseek-ai/dsh-client-ui-session/client/types` entry, shared by browser and portable consumers. Every pending object carries at least a stable `key`, domain `kind`, and `sessionId`; `ui-session` does not import concrete Approval or Question types.
 
 A business plugin calls `registerPendingInteraction(precedence)` in `apply()` to create a stable registration for its pending domain. The returned per-request publication function publishes one exact object together with its waterfall-delegation callback and returns an idempotent disposer for that object. Plugin teardown removes all published objects before invoking and awaiting their delegation callbacks, so active Host requests cannot remain suspended after their Client answerer unloads.
 
-Concurrent objects with the same key are rejected; replacement requests use a new key. One Session may hold multiple domains or requests at once.
+Concurrent objects with the same key in one domain are rejected; replacement requests use a new key. Released domains reject publication, including during their asynchronous teardown, so late handlers cannot retain invisible requests. A request handler whose publication fails aborts its carrier and observes the carrier result before propagating the failure, including when the request was already aborted. This releases its abort listener without leaving an unhandled rejection. One Session may hold multiple domains or requests at once.
 
 `ui-session` selects each Session's effective object using domain precedence. Higher precedence wins; at equal precedence, the later valid object in traversal order wins.
 
 The aggregate is published as `pendingInteractions: ObservableSnapshot<ReadonlyMap<SessionId, SessionPendingInteraction>>`; `useSessionPendingInteraction` is its React read face.
+
+Portable and browser tests pin precedence, cached snapshot identity, independent owners, contained subscriber errors and withdrawal before awaited delegation. The built portable entry executes with Node builtins and browser globals unavailable; this establishes dependency isolation, not native request delivery or physical-device acceptance.
 
 Session navigation state and composer takeover read the same effective object. They do not maintain separate status maps or takeover rosters.
 
@@ -314,7 +316,7 @@ Other targets use the same registration flow without modifying the renderer, Ses
 
 ### Stable registration
 
-Approval and Question plugin installation separates stable registrations from per-request handling. `apply()` registers locale data, calls `registerPendingInteraction()` once for its pending domain, and registers one stable entry in `conversation.composer`.
+Approval and Question plugin installation separates stable registrations from per-request handling. Each domain has one renderer-independent carrier and Remote-request registration function, used by the browser plugin and portable composition. Event registration and the pending-domain registrar belong to the same contributing Cordis fiber. Slots and locale registration remain browser-owned. `apply()` registers locale data, calls `registerPendingInteraction()` once for its pending domain, and registers one stable entry in `conversation.composer`.
 
 The stable Approval entry also declares its detail child Slot. Concurrent requests and Session count do not add composer entries or redeclare Slots, and every registration follows plugin-fiber disposal.
 
@@ -324,7 +326,7 @@ A Remote Event listener resolves the Session from its own Agent Context. Without
 
 The listener publishes the object through the registered domain publication function, waits for user completion, cancellation, or request-signal abortion, and removes the exact object in `finally`.
 
-One request does not register a Slot, create another lifecycle effect, or mutate the Session snapshot.
+One request does not register a Slot, create another lifecycle effect, or mutate the Session snapshot. Pending carriers and consumer completion barriers use the baseline Promise constructor because the supported iPhone Hermes runtime lacks `Promise.withResolvers`. Native bytecode compilation does not detect missing runtime methods. The portable artifact probe removes that method in its private VM before exercising answers and delegation; the app does not patch global Promise behavior.
 
 Approval exposes allow and reject; Question exposes answer and cancel. User cancellation of a Question returns `ASK_CANCELLED`; interruption of a pending request by `AbortSignal` returns `UserQuestionError(ASK_ABORTED)` rather than leaking the carrier's `AbortError` or an ordinary `Error`.
 

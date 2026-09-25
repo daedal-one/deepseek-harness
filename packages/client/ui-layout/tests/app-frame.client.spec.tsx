@@ -77,7 +77,7 @@ function mountFrame(windowWidth = frameWidth) {
       },
     },
     current: selectedSession,
-    phase: 'ready',
+    state: 'idle', error: null, phase: 'ready',
     subagentsByParent: {},
     jobsBySession: {},
     currentAddress: undefined,

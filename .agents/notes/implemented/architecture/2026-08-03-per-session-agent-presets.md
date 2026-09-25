@@ -27,6 +27,8 @@ Mounting is per-session by default. Measured cost for a twelve-row composition i
 
 Which preset an unnamed session gets is a user setting (`agent-presets.default`) layered over the composition's own `default`, which becomes the `base`. Both layers are needed: the composition value is what a deployment ships and must keep working with no settings provider at all, and the setting is what a person changes without editing a `cordis.yml` they may not own.
 
+The shared Client facade, service and manager use the Host's `SessionCreateRequest` so an explicit `agentPreset` reaches the creation owner alongside the caller's Session identity. A separately declared subset can silently discard the selection and create the default composition. The Host owns profile validation, adoption and persistence; a rejected selection is not retried with a default.
+
 Profile-owned access defaults and creation-time overrides follow the [conversation access decision](2026-09-24-conversation-profile-access.md); composition lifetime remains owned here.
 
 ## Consequences

@@ -22,6 +22,7 @@ async function setup(config: ConstructorParameters<typeof LocalBashExecutor>[1] 
   // A short kill grace via the REAL config path, so escalation tests stay fast.
   await ctx.plugin(LocalBashExecutor, { graceMs: 200, ...config })
   const bash = ctx.shell as LocalBashExecutor
+  expect(bash.executionWorld).toBe(ctx.subprocess.executionWorld)
   return { ctx, bash }
 }
 

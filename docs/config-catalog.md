@@ -215,7 +215,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/api/gateway/src/index.ts:119`](../packages/api/gateway/src/index.ts)
+Source: [`packages/api/gateway/src/index.ts:122`](../packages/api/gateway/src/index.ts)
 
 <a id="deepseek-aidsh-api-session-controller"></a>
 
@@ -387,6 +387,10 @@ export interface ConnectionConfig {
   cookieMaxAgeDays?: number
   /** Maximum buffered JSON body for every `/api` request. Default: 300 MiB. */
   maxRequestBodyBytes?: number
+  /** Explicit enrollment limits; omitted configurations disable device access. */
+  deviceAccess?: DeviceAccessConfig
+  /** Opt-in Host-assisted Tailscale discovery; requires deviceAccess. */
+  discovery?: HostDiscoveryConfig
 }
 
 /** Timing for generation readiness and automatic reconnection. */
@@ -405,9 +409,45 @@ export interface ConnectionRecoveryConfig {
   /** Deadline in ms for readiness, including physical connection setup. Default: 15000. */
   generationReadyTimeoutMs?: number
 }
+
+/** Explicit deployment limits; omission of the whole configuration disables device access. */
+export interface DeviceAccessConfig {
+  /** Elapsed lifetime of a single-use enrollment challenge in milliseconds. */
+  readonly enrollmentTtlMs: number
+  /** Maximum simultaneously outstanding, unexpired challenges. */
+  readonly maxPendingEnrollments: number
+  /** Maximum durable device grants owned by this Host. */
+  readonly maxDevices: number
+}
+
+/** Explicit local status execution and Tailscale probe policy. */
+export interface HostDiscoveryConfig {
+  /** Public display label, without machine paths or credentials. */
+  readonly label: string
+  /** Actual local Tailscale executable, resolved by the Host; no shell or wrapper arguments. */
+  readonly executable: string
+  /** HTTP ports already exposed by the deployment through Tailscale. */
+  readonly ports: number[]
+  /** Maximum address/port probes per scan. */
+  readonly maxProbes: number
+  /** Maximum simultaneous advertisement requests. */
+  readonly concurrency: number
+  /** Maximum time for the local status process. */
+  readonly statusTimeoutMs: number
+  /** Maximum UTF-8 status output bytes. */
+  readonly maxStatusBytes: number
+  /** Maximum lifetime of one advertisement request, including its body. */
+  readonly probeTimeoutMs: number
+  /** Maximum lifetime of the whole scan, including status acquisition. */
+  readonly scanTimeoutMs: number
+  /** Completed result cache lifetime, measured on a monotonic clock. */
+  readonly cacheTtlMs: number
+  /** Maximum advertisement response bytes, regardless of Content-Length. */
+  readonly maxAdvertisementBytes: number
+}
 ```
 
-Source: [`packages/client/connection/src/index.ts:72`](../packages/client/connection/src/index.ts)
+Source: [`packages/client/connection/src/index.ts:82`](../packages/client/connection/src/index.ts)
 
 <a id="deepseek-aidsh-client-hmr"></a>
 
@@ -1088,14 +1128,18 @@ Source: [`packages/host/directory-picker-browse/src/index.ts:181`](../packages/h
 Requires: `webServer` · `connection`
 
 ```ts config-catalog
-/** Plugin config: the dist anchor. */
+/** Distribution anchor and explicit URL entry points. */
 export interface Config {
   /** Absolute path of index.html inside the dist root. */
   distIndex: string
+  /** Named URL prefix, or `/` for the Web shell's fallback seat and injections. */
+  mountPath?: string
+  /** Additional index routes relative to the mount, using ASCII path segments. */
+  indexPaths?: string[]
 }
 ```
 
-Source: [`packages/host/frontend-static/src/index.ts:30`](../packages/host/frontend-static/src/index.ts)
+Source: [`packages/host/frontend-static/src/index.ts:24`](../packages/host/frontend-static/src/index.ts)
 
 <a id="deepseek-aidsh-host-open-in-app"></a>
 
@@ -1663,6 +1707,8 @@ Source: [`packages/llm/llm-retry/src/index.ts:25`](../packages/llm/llm-retry/src
 ```ts config-catalog
 /** The fixed, validated configuration for one runtime owner. */
 export interface LocalContainerRuntimeConfig {
+  /** Offline by default; outbound uses rootless networking with host loopback disabled. */
+  network?: 'none' | 'outbound'
   /** Explicit Unix socket for the rootless Podman service. */
   socketPath: string
   /** Start and own a rootless Podman API service for this DSH process. */
@@ -4028,7 +4074,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 
 - `@deepseek-ai/dsh-acp-app` — requires `cmdlineArgs` ([`packages/bundle/acp-app/src/index.ts`](../packages/bundle/acp-app/src/index.ts))
 - `@deepseek-ai/dsh-agent` ([`packages/core/agent/src/index.ts`](../packages/core/agent/src/index.ts))
-- `@deepseek-ai/dsh-api-remotes` — requires `typertGateway` ([`packages/api/remotes/src/index.ts`](../packages/api/remotes/src/index.ts))
+- `@deepseek-ai/dsh-api-remotes` — requires `typertGateway` · `connection` ([`packages/api/remotes/src/index.ts`](../packages/api/remotes/src/index.ts))
 - `@deepseek-ai/dsh-api-workspace-controller` — requires `typert` · `workspaceRegistry` ([`packages/api/workspace-controller/src/index.ts`](../packages/api/workspace-controller/src/index.ts))
 - `@deepseek-ai/dsh-authorization` — requires `credentials` ([`packages/credentials/authorization/src/index.ts`](../packages/credentials/authorization/src/index.ts))
 - `@deepseek-ai/dsh-client-file-upload` — requires `agents` · `attachments` · `commands` · `connection` ([`packages/client/file-upload/src/index.ts`](../packages/client/file-upload/src/index.ts))
@@ -4044,6 +4090,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-client-ui-conversation` ([`packages/client/ui-conversation/src/index.ts`](../packages/client/ui-conversation/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-cordis` ([`packages/extensions/ui-cordis/src/index.ts`](../packages/extensions/ui-cordis/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-deliverables` — requires `systemPrompt` · `connection` · `sessionQuery` · `sessionController` · `workspaceFiles` · `fs` · `sandboxPolicy` ([`packages/client/ui-deliverables/src/index.ts`](../packages/client/ui-deliverables/src/index.ts))
+- `@deepseek-ai/dsh-client-ui-device-access` ([`packages/client/ui-device-access/src/index.ts`](../packages/client/ui-device-access/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-directory-picker-browse` ([`packages/client/ui-directory-picker-browse/src/index.ts`](../packages/client/ui-directory-picker-browse/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-directory-picker-native` ([`packages/client/ui-directory-picker-native/src/index.ts`](../packages/client/ui-directory-picker-native/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-goal` ([`packages/client/ui-goal/src/index.ts`](../packages/client/ui-goal/src/index.ts))

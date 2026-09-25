@@ -6,6 +6,7 @@ import {
   WorkspaceId,
   WorkspaceMoveInvalidError,
   WorkspaceOrderInvalidError,
+  WorkspacePathInvalidError,
   WorkspaceUnknownSessionError,
 } from '@deepseek-ai/dsh-workspace'
 import { RemoteError, remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
@@ -15,6 +16,8 @@ import type {
   WorkspaceArchiveValue,
   WorkspaceCreateRequest,
   WorkspaceCreateValue,
+  WorkspaceResolveRequest,
+  WorkspaceResolveValue,
   WorkspaceDeleteRequest,
   WorkspaceDeleteValue,
   WorkspaceInsertBeforeRequest,
@@ -38,23 +41,54 @@ export class WorkspaceCommands {
    */
   create(request: WorkspaceCreateRequest): Promise<WorkspaceCreateValue> {
     return this.enqueue(async () => {
+      let existing: Workspace | undefined
       try {
-        const existing = await this.ctx.workspaceRegistry.resolveByPath(request.path)
-        if (existing !== undefined) {
-          return { workspace: workspaceView(existing), created: false }
-        }
+        existing = await this.ctx.workspaceRegistry.resolveByPath(request.path)
+      } catch (error) {
+        if (remoteErrorOf(error) !== undefined) throw error
+        throw new RemoteError(
+          'workspace/create-rejected',
+          `cannot resolve a Workspace at "${request.path}": ${errorMessage(error)}`,
+          { path: request.path },
+          { cause: error },
+        )
+      }
+      if (existing !== undefined) {
+        return { workspace: workspaceView(existing), created: false }
+      }
+      try {
         const workspace = await this.ctx.workspaceRegistry.create(request.path)
         return { workspace: workspaceView(workspace), created: true }
       } catch (error) {
         if (remoteErrorOf(error) !== undefined) throw error
         throw new RemoteError(
-          'workspace/invalid-path',
+          error instanceof WorkspacePathInvalidError ? 'workspace/create-rejected' : 'workspace/invalid-path',
           `cannot create a Workspace at "${request.path}": ${errorMessage(error)}`,
           { path: request.path },
           { cause: error },
         )
       }
     })
+  }
+
+  /**
+   * Read the current registration using Host path canonicalization.
+   * @param request - fully qualified Host path to resolve.
+   * @returns the current Workspace or absence, without registering a directory.
+   */
+  async resolveByPath(request: WorkspaceResolveRequest): Promise<WorkspaceResolveValue> {
+    try {
+      const workspace = await this.ctx.workspaceRegistry.resolveByPath(request.path)
+      return { workspace: workspace === undefined ? null : workspaceView(workspace) }
+    } catch (error) {
+      if (remoteErrorOf(error) !== undefined) throw error
+      throw new RemoteError(
+        'workspace/lookup-failed',
+        `cannot resolve a Workspace at "${request.path}": ${errorMessage(error)}`,
+        { path: request.path },
+        { cause: error },
+      )
+    }
   }
 
   /**

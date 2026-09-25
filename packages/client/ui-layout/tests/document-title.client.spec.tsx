@@ -20,7 +20,7 @@ function titleSources() {
     ids: [sessionId],
     byId: { [sessionId]: { id: sessionId, displayTitle: 'Test', running: false, blank: false, updatedAt: 1 } },
     current: sessionId,
-    phase: 'ready',
+    state: 'idle', error: null, phase: 'ready',
     subagentsByParent: {},
     jobsBySession: {},
     currentAddress: undefined,

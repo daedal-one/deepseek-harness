@@ -126,6 +126,10 @@ export function assertServiceablePwshConfig(config: Config): void {
  * this executor supplies their configured budgets per spawn.
  */
 export class PwshLocalExecutor extends ShellExecutor {
+  override get executionWorld(): symbol | object {
+    return this.ctx.subprocess.executionWorld
+  }
+
   static inject = ['subprocess']
 
   static Config: z<Config> = z.object({

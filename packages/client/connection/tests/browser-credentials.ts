@@ -1,5 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
-import type { CredentialProvider, CredentialRecord } from '@deepseek-ai/dsh-credentials'
+import type { CredentialKey, CredentialProvider, CredentialRecord } from '@deepseek-ai/dsh-credentials'
 
 /** Mutable credential-record double for Connection authentication tests. */
 export class RecordCredentials {
@@ -30,7 +30,25 @@ export class RecordCredentials {
   }
 }
 
+/** Keyed record double serializing mutations like the provider contract. */
+export class KeyedCredentials {
+  readonly records = new Map<CredentialKey, CredentialRecord>()
+
+  readRecord(key: CredentialKey): Promise<CredentialRecord | undefined> { return Promise.resolve(this.records.get(key)) }
+  private pending: Promise<unknown> = Promise.resolve()
+
+  modifyRecord: CredentialProvider['modifyRecord'] = (key, mutate) => {
+    const result = this.pending.then(async () => {
+      const next = await mutate(this.records.get(key))
+      if (next !== undefined) this.records.set(key, next)
+      return this.records.get(key)
+    })
+    this.pending = result.then(() => undefined, () => undefined)
+    return result
+  }
+}
+
 /** Provide the record operations Connection needs during authentication setup. */
 export function provideBrowserCredentials(ctx: Context): void {
-  ctx.provide('credentials', new RecordCredentials() as unknown as CredentialProvider)
+  ctx.provide('credentials', new KeyedCredentials() as unknown as CredentialProvider)
 }

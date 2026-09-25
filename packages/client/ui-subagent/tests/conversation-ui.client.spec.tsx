@@ -60,7 +60,7 @@ function props(
         updatedAt: Date.now(),
       },
     },
-    current: PARENT, phase: 'ready',
+    current: PARENT, state: 'idle', error: null, phase: 'ready',
     subagentsByParent: value === undefined ? nested : { [PARENT]: value, ...nested },
     jobsBySession: {},
     currentAddress: undefined,

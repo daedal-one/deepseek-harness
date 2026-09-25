@@ -840,6 +840,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'path', description: 'source or execution path.' }],
         returns: 'the corresponding execution path, or the unchanged non-source path.',
       },
+      {
+        signature: 'async requestRepository( agent: Agent, repository: string, access: RepositoryAccess, reason: string, signal: AbortSignal, ): Promise<RepositoryRequestResult>',
+        description: 'Request repository authority through the human question provider, then attach an isolated checkout.',
+        parameters: [{ name: 'agent', description: 'initiating top-level session; determines the environment and workspace.' }, { name: 'repository', description: 'canonical HTTPS repository URL allowed by environment configuration.' }, { name: 'access', description: 'fetch authority or explicitly approved push authority.' }, { name: 'reason', description: 'task-related reason shown with the complete approval scope.' }, { name: 'signal', description: 'cancellation of the pending question and attachment request.' }],
+        returns: 'approval and readiness separately; paths appear only for attached repositories.',
+      },
     ],
   },
   {
@@ -1495,9 +1501,15 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'an attached started handle whose removal proves descendant quiescence.',
       },
       {
-        signature: 'async createWorkspace(directory: string): Promise<{ runtime: LocalContainerRuntime; dispose(): Promise<void> }>',
+        signature: 'registerWorkspaceOwner(shutdown: () => Promise<void>): () => void',
+        description: 'Keep the engine available until a workspace supervisor finishes its child worlds.',
+        parameters: [{ name: 'shutdown', description: 'coalesced checkpoint and child-container disposal operation.' }],
+        returns: 'unregister function, called only after that supervisor has finished shutdown.',
+      },
+      {
+        signature: 'async createWorkspace( directory: string, authorize?: () => Promise<string[]>, ): Promise<{ runtime: LocalContainerRuntime; dispose(): Promise<void> }>',
         description: 'Bind a separately owned workspace to a new isolated world on the same engine.',
-        parameters: [{ name: 'directory', description: 'trusted supervisor-owned private backing directory.' }],
+        parameters: [{ name: 'directory', description: 'trusted supervisor-owned private backing directory.' }, { name: 'authorize', description: 'environment-owned credential issuance checked for each process admission.' }],
         returns: 'the verified world and its quiescent container disposer; storage is retained.',
       },
       {
@@ -3225,9 +3237,15 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: '@Remote(\'create\') create(request: WorkspaceCreateRequest): Promise<WorkspaceCreateValue>',
-        description: 'Create or idempotently resolve one Workspace over an existing directory.',
+        description: 'Create or idempotently resolve one Workspace over an existing directory. `workspace/create-rejected` means this request began no registration write. Other failures may leave a durable registration.',
         parameters: [{ name: 'request', description: 'directory path to register.' }],
         returns: 'the Workspace and whether this call created it.',
+      },
+      {
+        signature: '@Remote(\'resolveByPath\') async resolveByPath(request: WorkspaceResolveRequest, signal: AbortSignal): Promise<WorkspaceResolveValue>',
+        description: 'Read the current registration without creating or changing a Workspace.',
+        parameters: [{ name: 'request', description: 'fully qualified Host path to resolve.' }, { name: 'signal', description: 'caller cancellation before and after the filesystem lookup.' }],
+        returns: 'the current registration or absence, not a prior mutation receipt.',
       },
       {
         signature: '@Remote(\'rename\') rename(request: WorkspaceRenameRequest): Promise<WorkspaceValue>',
@@ -3323,7 +3341,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: 'async create(path: string, title?: string): Promise<Workspace>',
-        description: 'Create or reuse a workspace for an existing directory. The fully qualified path is canonicalized through `fs.realpath`; a relative, nonexistent, or non-directory path rejects. Repeated calls for the same canonical path return the existing entity without changing its title. A newly created workspace is prepended to the durable registry order. Different canonical paths may share a display title.',
+        description: 'Create or reuse a workspace for an existing directory. The fully qualified path is canonicalized through `fs.realpath`; a relative, nonexistent, or non-directory path rejects with WorkspacePathInvalidError before any registration write. Persistence failures retain their original type. Repeated calls for the same canonical path return the existing entity without changing its title. A newly created workspace is prepended to the durable registry order. Different canonical paths may share a display title.',
         parameters: [{ name: 'path', description: 'Existing directory to own, in a fully qualified path spelling.' }, { name: 'title', description: 'Display title used only when a new record is created.' }],
         returns: 'the existing or newly durable workspace.',
       },
@@ -3359,7 +3377,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'async resolveByPath(path: string): Promise<Workspace | undefined>',
-        description: 'Resolve by canonical directory path without creating or mutating a workspace. A missing path rejects during `realpath`; an existing unowned directory returns `undefined`.',
+        description: 'Resolve by canonical directory path without creating or mutating a workspace. Only registrations in committed registry order are visible; unfinished create writes do not expose provisional entities. A missing path rejects during `realpath`; an existing unowned directory returns `undefined`.',
         parameters: [{ name: 'path', description: 'Existing directory path in a fully qualified spelling.' }],
         returns: 'the workspace owning the canonical path, when one exists.',
       },
@@ -4642,6 +4660,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface EncodedImageAttachment {\n    mediaType: ImageMediaType;\n    data: string;\n    name?: string;\n}',
   },
   {
+    name: 'EnvironmentId',
+    declaration: 'export type EnvironmentId = Branded<\'EnvironmentId\'>;',
+  },
+  {
     name: 'EpochHeader',
     declaration: 'export interface EpochHeader {\n    config: LlmCallConfig;\n    adapterDefaults?: LlmCallConfigAdapterDefaults;\n    tools?: ToolSchema[];\n}',
   },
@@ -4855,7 +4877,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'InvocationDescriptor',
-    declaration: 'export interface InvocationDescriptor {\n    readonly id: string;\n    readonly service: string;\n    readonly namespace: string;\n    readonly method: string;\n    readonly implementation?: string;\n    readonly mode?: \'stream\';\n    readonly invocation: {\n        readonly kind: \'direct\';\n    } | {\n        readonly kind: \'context\';\n        readonly context: string;\n        readonly wire: string;\n        readonly codec: TypertCodec;\n    };\n    readonly scope?: {\n        readonly context: string;\n        readonly wire: string;\n    };\n    readonly parameters: readonly InvocationParameterDescriptor[];\n    readonly cancellation?: {\n        readonly parameter: \'signal\';\n    };\n    readonly result: TypertCodec;\n    readonly sourceLocation?: InvocationSourceLocation;\n}',
+    declaration: 'export interface InvocationDescriptor {\n    readonly id: string;\n    readonly service: string;\n    readonly namespace: string;\n    readonly method: string;\n    readonly implementation?: string;\n    readonly mode?: \'stream\';\n    readonly invocation: {\n        readonly kind: \'direct\';\n    } | {\n        readonly kind: \'context\';\n        readonly context: string;\n        readonly wire: string;\n        readonly codec: TypertCodec;\n    };\n    readonly scope?: {\n        readonly context: string;\n        readonly wire: string;\n    };\n    readonly parameters: readonly InvocationParameterDescriptor[];\n    readonly cancellation?: {\n        readonly parameter: \'signal\';\n    };\n    readonly result: TypertCodec;\n    readonly wireFingerprint?: string;\n    readonly semanticRevision?: number;\n    readonly sourceLocation?: InvocationSourceLocation;\n}',
   },
   {
     name: 'InvocationParameterDescriptor',
@@ -4867,7 +4889,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'InvokeRemoteRequest',
-    declaration: 'export interface InvokeRemoteRequest {\n    readonly namespace: string;\n    readonly method: string;\n    readonly args: Readonly<Record<string, unknown>>;\n    readonly signal?: AbortSignal;\n}',
+    declaration: 'export interface InvokeRemoteRequest {\n    readonly namespace: string;\n    readonly method: string;\n    readonly args: Readonly<Record<string, unknown>>;\n    readonly compatibility?: RemoteCompatibility;\n    readonly signal?: AbortSignal;\n}',
   },
   {
     name: 'JobDoneListener',
@@ -5035,11 +5057,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LocalContainerRuntime',
-    declaration: 'export class LocalContainerRuntime extends Service {\n    static Config: z<LocalContainerRuntimeConfig>;\n    readonly executionWorld: object;\n    readonly workspacePath: \'/workspace\';\n    readonly containerName: string;\n    constructor(ctx: Context, config: LocalContainerRuntimeConfig, private readonly retainedDirectory?: string);\n    async getContainer(): Promise<LocalContainerHandle>;\n    async executeController(request: PodmanControllerExecRequest & {\n        readonly deadlineMs: number;\n    }): Promise<PodmanControllerExecResult>;\n    async createProcess(request: LocalContainerProcessRequest): Promise<LocalContainerProcessHandle>;\n    async createWorkspace(directory: string): Promise<{\n        runtime: LocalContainerRuntime;\n        dispose(): Promise<void>;\n    }>;\n    async settle<T>(timeoutMs: number, operation: (control: (request: PodmanControllerExecRequest & {\n        readonly deadlineMs: number;\n    }) => Promise<PodmanControllerExecResult>) => Promise<T>, quiesce?: () => Promise<void>): Promise<T>;\n    async cancelProcesses(): Promise<void>;\n    async recoverWorkspace(directory: string): Promise<void>;\n    get diagnostics(): LocalContainerDiagnostics;\n}',
+    declaration: 'export class LocalContainerRuntime extends Service {\n    static Config: z<LocalContainerRuntimeConfig>;\n    readonly executionWorld: object;\n    readonly workspacePath: \'/workspace\';\n    readonly containerName: string;\n    constructor(ctx: Context, config: LocalContainerRuntimeConfig, private readonly retainedDirectory?: string);\n    async getContainer(): Promise<LocalContainerHandle>;\n    async executeController(request: PodmanControllerExecRequest & {\n        readonly deadlineMs: number;\n    }): Promise<PodmanControllerExecResult>;\n    async createProcess(request: LocalContainerProcessRequest): Promise<LocalContainerProcessHandle>;\n    registerWorkspaceOwner(shutdown: () => Promise<void>): () => void;\n    async createWorkspace(directory: string, authorize?: () => Promise<string[]>): Promise<{\n        runtime: LocalContainerRuntime;\n        dispose(): Promise<void>;\n    }>;\n    async settle<T>(timeoutMs: number, operation: (control: (request: PodmanControllerExecRequest & {\n        readonly deadlineMs: number;\n    }) => Promise<PodmanControllerExecResult>) => Promise<T>, quiesce?: () => Promise<void>): Promise<T>;\n    async cancelProcesses(): Promise<void>;\n    async recoverWorkspace(directory: string): Promise<void>;\n    get diagnostics(): LocalContainerDiagnostics;\n}',
   },
   {
     name: 'LocalContainerRuntimeConfig',
-    declaration: 'export interface LocalContainerRuntimeConfig {\n    socketPath: string;\n    manageService: boolean;\n    podmanCommand?: string;\n    serviceStartupTimeoutMs: number;\n    image: string;\n    user: string;\n    environment: Record<string, string>;\n    memoryBytes: number;\n    nanoCpus: number;\n    pidsLimit: number;\n    tmpfsBytes: number;\n    engineRequestTimeoutMs: number;\n    maxLiveProcesses: number;\n    lifetimeMs: number;\n    stopTimeoutSeconds: number;\n}',
+    declaration: 'export interface LocalContainerRuntimeConfig {\n    network?: \'none\' | \'outbound\';\n    socketPath: string;\n    manageService: boolean;\n    podmanCommand?: string;\n    serviceStartupTimeoutMs: number;\n    image: string;\n    user: string;\n    environment: Record<string, string>;\n    memoryBytes: number;\n    nanoCpus: number;\n    pidsLimit: number;\n    tmpfsBytes: number;\n    engineRequestTimeoutMs: number;\n    maxLiveProcesses: number;\n    lifetimeMs: number;\n    stopTimeoutSeconds: number;\n}',
   },
   {
     name: 'LspHover',
@@ -5446,6 +5468,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface RedactedSecret {\n    path: string[];\n    set: boolean;\n}',
   },
   {
+    name: 'RemoteCompatibility',
+    declaration: 'export interface RemoteCompatibility {\n    readonly wireFingerprint: string;\n    readonly semanticRevision: number;\n    readonly identity?: ConnectionIdentity | undefined;\n}',
+  },
+  {
     name: 'RemoteError',
     declaration: 'export class RemoteError<Code extends RemoteErrorCode = RemoteErrorCode> extends Error {\n    readonly isDSHRemoteError: true;\n    constructor(readonly code: Code, message: string, readonly details: RemoteErrorDetailsMap[Code], options?: ErrorOptions);\n}',
   },
@@ -5459,11 +5485,19 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RemoteEventHostInfo',
-    declaration: 'export interface RemoteEventHostInfo {\n    readonly home: string;\n}',
+    declaration: 'export interface RemoteEventHostInfo {\n    readonly identity: ConnectionIdentity;\n    readonly home: string;\n}',
   },
   {
     name: 'ReplayEnvelope',
     declaration: 'export interface ReplayEnvelope {\n    response: unknown;\n    blocks?: readonly unknown[];\n}',
+  },
+  {
+    name: 'RepositoryAccess',
+    declaration: 'export type RepositoryAccess = \'fetch\' | \'push\';',
+  },
+  {
+    name: 'RepositoryRequestResult',
+    declaration: 'export interface RepositoryRequestResult {\n    status: \'ready\' | \'denied\' | \'approved_pending\';\n    repository: string;\n    access: RepositoryAccess;\n    environmentId: EnvironmentId;\n    path?: string;\n    error?: string;\n}',
   },
   {
     name: 'RequestContext',
@@ -7140,6 +7174,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'WorkspaceRenameRequest',
     declaration: 'export interface WorkspaceRenameRequest {\n    readonly workspaceId: WorkspaceId;\n    readonly title: string;\n}',
+  },
+  {
+    name: 'WorkspaceResolveRequest',
+    declaration: 'export interface WorkspaceResolveRequest {\n    readonly path: string;\n}',
+  },
+  {
+    name: 'WorkspaceResolveValue',
+    declaration: 'export interface WorkspaceResolveValue {\n    readonly workspace: WorkspaceView | null;\n}',
   },
   {
     name: 'WorkspaceValue',

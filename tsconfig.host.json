@@ -7,6 +7,17 @@
     "noEmit": true,
     "rewriteRelativeImportExtensions": false
   },
+  // Owner enrollment uses these context-free Connection leaves without browser Context augmentation.
+  "files": [
+    "packages/client/connection/src/client/portable.ts",
+    "packages/client/connection/src/client/handle.ts",
+    "packages/client/connection/src/client/connection.ts",
+    "packages/client/connection/src/client/rpc-caller.ts",
+    "packages/client/connection/src/client/host-identity.ts",
+    "packages/client/connection/src/client/device-access.ts",
+    "packages/client/connection/src/client/device-api.ts",
+    "packages/client/connection/src/client/host-discovery.ts"
+  ],
   "include": [
     "apps/web/tests/daedal-handoff.e2e.ts",
     "apps/web/tests/workspace-outcomes.e2e.ts",
@@ -39,6 +50,7 @@
     "apps/web/tests/document-preview.e2e.ts",
     "apps/web/tests/plugin-config.e2e.ts",
     "apps/web/tests/settings-chrome.e2e.ts",
+    "apps/web/tests/device-access.e2e.ts",
     "apps/web/tests/models-settings.e2e.ts",
     "apps/web/tests/codex-account.e2e.ts",
     "apps/web/tests/local-recovery.e2e.ts",

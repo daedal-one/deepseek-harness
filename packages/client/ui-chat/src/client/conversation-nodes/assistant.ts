@@ -1,8 +1,7 @@
-import type { Context } from '@deepseek-ai/cordis'
 import type {
   AssistantBlock, AssistantMessageNode, ConversationLocation, ConversationMatch,
   ConversationNodeContext, ConversationNodeDefinition,
-} from '@deepseek-ai/dsh-client-ui-conversation/client'
+} from '@deepseek-ai/dsh-client-ui-conversation/client/portable'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-llm-retry/types'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
@@ -19,7 +18,7 @@ declare module '../contract/chat-nodes.ts' {
   }
 }
 
-declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
+declare module '@deepseek-ai/dsh-client-ui-conversation/client/types' {
   interface ConversationStepDataMap {
     /** Streaming, settled, or interrupted Assistant material for this Step. */
     'assistant-step': AssistantChatData
@@ -352,12 +351,4 @@ export const assistantDefinition: ConversationNodeDefinition<AssistantState> = {
       visibility: settled?.interrupted === true || visible ? 'visible' : 'hidden',
     })
   },
-}
-
-/**
- * Register the Assistant lifecycle business contribution.
- * @param ctx - owning UI Conversation context.
- */
-export function registerAssistantConversationNode(ctx: Context): void {
-  ctx.uiConversation.events.register(assistantDefinition)
 }
