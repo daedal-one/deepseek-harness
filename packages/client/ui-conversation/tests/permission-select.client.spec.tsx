@@ -31,7 +31,6 @@ it('uses locale fallbacks for built-ins and keeps host descriptions authoritativ
       { value: 'read-only', name: 'read-only' },
       { value: 'workspace-write', name: 'workspace-write', description: hostDescription },
       { value: 'danger-full-access', name: 'danger-full-access' },
-      { value: 'custom', name: 'custom' },
     ],
     currentValue: 'read-only',
     context: { environment: 'host', defaultPreset: 'read-only' },
@@ -60,9 +59,6 @@ it('uses locale fallbacks for built-ins and keeps host descriptions authoritativ
   expect(view.getByRole('tooltip').textContent)
     .toBe('Read, edit, and run commands within the displayed environment without routine approval. This policy does not grant access beyond that environment. Use only for trusted tasks.')
   fireEvent.blur(fullAccess)
-
-  const custom = view.getByRole('menuitem', { name: 'Custom' })
-  fireEvent.focus(custom)
   expect(view.queryByRole('tooltip')).toBeNull()
 })
 
@@ -72,8 +68,10 @@ it('lets an existing session explain its access without offering a switch', () =
     context: { environment: 'host', defaultPreset: 'workspace-write' } }} locked={false} command={command} t={t} />)
   fireEvent.click(view.getByRole('button', { name: 'Access mode, current: Host · Policy reviewed' }))
   expect(view.getByText('Access is fixed · choose another policy in a new session')).toBeTruthy()
-  const choices = view.getAllByRole('menuitem') as HTMLButtonElement[]
-  expect(choices.every(choice => choice.disabled)).toBe(true)
-  fireEvent.click(view.getByRole('menuitem', { name: 'Workspace Write' }))
+  const workspaceWrite = view.getByRole('menuitem', { name: 'Workspace Write' }) as HTMLButtonElement
+  expect(workspaceWrite.disabled).toBe(false)
+  fireEvent.focus(workspaceWrite)
+  expect(view.getByRole('tooltip').textContent).toBe(en['access.preset.workspaceWrite.description'])
+  fireEvent.click(workspaceWrite)
   expect(command).not.toHaveBeenCalled()
 })

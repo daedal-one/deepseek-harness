@@ -272,6 +272,8 @@
       "@deepseek-ai/dsh-local-container-runtime/vm-previews": ["./packages/sandbox/local-container-runtime/src/vm-previews.ts"],
       "@deepseek-ai/dsh-local-container-runtime/workspaces": ["./packages/sandbox/local-container-runtime/src/workspaces.ts"],
       "@deepseek-ai/dsh-local-container-runtime/workspace-types": ["./packages/sandbox/local-container-runtime/src/workspace-types.ts"],
+      // ui-openrouter-spend carries the client-ui npm prefix its directory omits.
+      "@deepseek-ai/dsh-client-ui-openrouter-spend": ["./packages/client/ui-openrouter-spend/src"],
       // BEGIN generated package aliases — pnpm run gen-tsconfig-paths
       "@deepseek-ai/dsh-acp": ["./packages/acp/acp/src"],
       "@deepseek-ai/dsh-acp-app": ["./packages/bundle/acp-app/src"],
@@ -296,7 +298,6 @@
       "@deepseek-ai/dsh-bash-sandbox": ["./packages/shell/bash-sandbox/src"],
       "@deepseek-ai/dsh-brand": ["./packages/util/brand/src"],
       "@deepseek-ai/dsh-chunked-list": ["./packages/util/chunked-list/src"],
-      "@deepseek-ai/dsh-client-ui-openrouter-spend": ["./packages/client/ui-openrouter-spend/src"],
       "@deepseek-ai/dsh-cmdline": ["./packages/boot/cmdline/src"],
       "@deepseek-ai/dsh-code-runtime": ["./packages/code-runtime/code-runtime/src"],
       "@deepseek-ai/dsh-code-runtime-worker-thread": ["./packages/code-runtime/code-runtime-worker-thread/src"],

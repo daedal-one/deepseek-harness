@@ -1,5 +1,7 @@
 /** Shared money formatting for the Spend view. */
 
+import type { SpendKey } from './locales.ts'
+
 /**
  * Deterministic USD precision for every spend row: two decimal digits on a
  * whole-dollar value, up to four sub-dollar digits otherwise (a 0.00005 USD
@@ -16,7 +18,7 @@ const USD = new Intl.NumberFormat('en-US', {
  * @param value - amount in USD.
  * @returns the localized amount string.
  */
-export function formatUsd(t: (key: string, params?: Record<string, unknown>) => string, value: number): string {
+export function formatUsd(t: (key: SpendKey, params?: Record<string, unknown>) => string, value: number): string {
   return t('money.usd', { amount: USD.format(value) })
 }
 
@@ -28,7 +30,7 @@ export function formatUsd(t: (key: string, params?: Record<string, unknown>) => 
  * @returns the localized amount string or the no-limit wording.
  */
 export function formatUsdOptional(
-  t: (key: string, params?: Record<string, unknown>) => string,
+  t: (key: SpendKey, params?: Record<string, unknown>) => string,
   value: number | null,
 ): string {
   return value === null ? t('money.none') : formatUsd(t, value)

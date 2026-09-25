@@ -128,7 +128,6 @@ export function SpendView({ load, useStore, t }: SpendViewProps): ReactNode {
       {state.status === 'failed' ? (
         <div className={css.failure}>
           <p role="alert">{failureMessage(state.failure, t)}</p>
-          <p className={css.failureDetail}>{state.failure.detail}</p>
         </div>
       ) : null}
       {state.status === 'ready' ? (

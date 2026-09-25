@@ -116,7 +116,6 @@ export function PermissionSelect({ value, locked, command, t }: PermissionSelect
         id: option.value,
         label: permissionLabel(option.value, option.name, t),
         icon: permissionGlyph(option.value),
-        disabled: !canChange,
         ...tooltip === undefined ? {} : { tooltip },
       }
     })

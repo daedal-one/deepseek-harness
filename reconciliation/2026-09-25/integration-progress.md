@@ -38,16 +38,35 @@ Fetched `origin` with pruning and tags before integration. Verified these candid
 - `ad1132bb56` merges exact local admission tip `aa7efccb559bf20fc415322d132c64e0a5a03cc8` with semantic conflict resolution over the prepared release.
 - `d960250068` completes off-page search hydration, caller-owned fork result identity validation, and cancellation-observation regression coverage.
 - `47b864a467` closes combined admission lifecycle gaps found by adversarial post-merge review.
+- `0c887e778a` ports exact benchmark candidate `1f61cb40d25c667f450bd06321b067e72505f192` under a completed, accepted benchmark intent rather than retaining its WIP commit label.
+- `d884d4134a` integrates exact OpenRouter turn-3 candidate `a8620a9fc2c69eac5e41db4560b12b78266b0ab9` with pricing, attribution, credential-cache, limit-display, Loader-profile, and keyless expected-output repairs; turn-2 remains superseded.
+- `6fee7a5327` selectively ports exact access-hover candidate `e9f3c858dafb1605e9e4e856fc6fc96c74b3a45a` over the newer environment-aware `PermissionSelect` without restoring its old generic selector.
 
 ## Repairs and validation
 
 - Workspace admission resolution preserves host identity/world checks and host bypass, environment and multi-repository grants, provenance, `close()`/`registerWorkspaceOwner`, settlement ordering, lazy allocation, FIFO capacity, parent/child ownership, per-owner use, cancellation-aware operations, durable admission status, quiescent checkpoint-before-release, resumed waiter cancellation, and target namespaces.
 - Follow-up review repaired host `runForSession`, lazy environment guidance, pre-turn cancellation capacity release, cold repository requests, pending-status flush retry scheduling, and stale portable/client tests.
 - Daedal residual repair hydrates search summaries outside the retained page before rendering, refuses mismatched caller-owned fork identities, and observes late listener rejection after per-event cancellation.
-- Source and focused tests are present, but no package tests have run yet because this worktree has no dependencies and `pnpm` is not installed as a standalone binary. Dependency/tool bootstrap remains pending.
+- OpenRouter repair rejects blank prices, prices only child-owned settled usage at durable actual routes, refuses unsupported mixed/unattributed history, clears successful-only caches on credential changes or disappearance, retains actual fetch time, preserves catalog failure classes, withholds Host diagnostics from UI copy, and renders configured and remaining limits separately.
+- Access descriptions are locale-owned, prefer host descriptions, preserve environment/policy separation, and state that Full access cannot escape the displayed environment.
+- `git diff --cached --check` passed after every conflict resolution. Dependency installs use per-command host temporary storage because a persistent full install exceeds the 1 GiB workspace.
+- Daedal focused Vitest: six files, 349 tests passed (`gateway.client`, session manager/service/fork, UI workspace apply/browser).
+- OpenRouter focused Vitest: nine files, 120 tests passed after adversarial fixes for credential disappearance, fork-owned usage, catalog failures, locale-only diagnostics, and limits.
+- Access tooltip Vitest: three files, 123 tests passed; the final fixed-session focus behavior was rerun in the 120-test combined set.
+- Benchmark source-plane Vitest: three files, 80 tests passed. Built benchmark controls remain pending because native/build prerequisites are unavailable.
+- Admission helper and environment Vitest: 23 tests passed. The combined `workspaces.spec.ts` cannot initialize because the native flock binding is absent; building it is blocked by missing `musl-gcc`.
+- `gen-persistence-catalog`, `verify-persistence-catalog`, and `verify-tsconfig-paths` passed; generated persistence files are current.
+- `doc-sync` completed 20 gates and failed 12 under the filtered install: missing unselected workspace dependencies, OOM-killed compiler gates, absent VitePress, and existing export-JSDoc findings. The one candidate-owned tsconfig alias failure was repaired and its focused gate now passes.
+- The repository has no installed `spec` command, so `spec lint` is unavailable in this checkout. Targeted typecheck found two spending-client type defects that were repaired; complete typecheck still requires generated Remote artifacts and a full dependency/build environment.
+
+## Publication
+
+- Initially published `daedal/reconcile-20260925-integration` at `903396517b619d3c3ca12c03019d91ab5aa6cfcc` after refreshing `origin/master` at `452c2e3e16ecde300bfad142dc4286f83c0a02e3`; no force update or hook bypass was used.
+- Pull-request creation is blocked in this environment: `gh` is not installed, browser automation is unavailable, and the repository-access grant authorizes Git push without exposing an API credential through `git credential fill`. GitHub reports no workflow run for the pushed branch because no PR exists.
 
 ## Remaining issues
 
-- Repair and qualify eligible VM runtime, OpenRouter spending, access hover, and benchmark candidates.
+- Development VM source repair continues on `daedal/reconcile-20260925-development-vm`; real Incus/Docker/Compose qualification is unavailable because `incus` is absent.
+- Run remaining build, generated-Remote, full typecheck, snapshot, and documentation checks through CI or a sufficiently provisioned workspace before any merge.
+- OpenRouter exact-head real-profile GIF evidence cannot be captured without deploying/restarting this existing server or starting another server, both prohibited by this task; keep the candidate unmerged if that repository requirement cannot be satisfied externally.
 - Native-loop commit `9690b85674` is not eligible to port as written: it is a Forge/spec-only status edit with unavailable deployment evidence and is covered by the explicit Forge/Intellect exclusion.
-- Linux Incus/Docker/Compose qualification is currently unavailable because `incus` is absent; do not claim VM runtime qualification without it.

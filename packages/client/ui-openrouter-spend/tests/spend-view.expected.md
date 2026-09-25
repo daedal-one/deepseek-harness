@@ -5,4 +5,3 @@ unlimited-configured-limit: Unlimited
 unlimited-remaining-limit: Unlimited
 unpriceable-session: The routed model has no OpenRouter catalog price, so the session cost cannot be estimated.
 failure: The OpenRouter API rejected the key.
-failure-detail: fixture unauthorized

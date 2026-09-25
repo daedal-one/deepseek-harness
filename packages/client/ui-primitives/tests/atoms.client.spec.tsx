@@ -121,7 +121,9 @@ describe('Menu', () => {
       expect(screen.getByRole('tooltip').textContent).toBe('Explains Child.')
       fireEvent.mouseLeave(child)
       expect(screen.queryByRole('tooltip')).toBeNull()
-      fireEvent.focus(child)
+      fireEvent.focus(parent)
+      const focusedChild = screen.getByRole('menuitem', { name: 'Child' })
+      fireEvent.focus(focusedChild)
       expect(screen.getByRole('tooltip').textContent).toBe('Explains Child.')
     } finally {
       vi.useRealTimers()

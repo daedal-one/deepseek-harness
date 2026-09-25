@@ -16,7 +16,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import { SpendView, type SpendViewInjected } from './SpendView.tsx'
-import { en, NS } from './locales.ts'
+import { en, NS, type SpendKey } from './locales.ts'
 import { createSpendStore } from './store.ts'
 
 export { NS } from './locales.ts'
