@@ -30,7 +30,22 @@ async function bench() {
   const renameSession = vi.fn(async (title: string) => ({ ok: true, value: { title, seq: 1 } }))
   const binding = vi.fn(() => ({ session: { rename: renameSession } }))
   const fork = vi.fn(async () => 'forked' as never)
+  const loadSummary = vi.fn(async (_sessionId: string, _signal: AbortSignal) => ({ ok: true as const, value: true }))
   const subscribe = () => () => {}
+  let sessionList = {
+    ids: [], byId: {}, current: undefined, phase: 'ready',
+    subagentsByParent: {}, jobsBySession: {}, currentAddress: undefined,
+  }
+  const admitSummary = (sessionId: string) => {
+    sessionList = {
+      ...sessionList,
+      ids: [...sessionList.ids, sessionId as never],
+      byId: {
+        ...sessionList.byId,
+        [sessionId]: { id: sessionId, displayTitle: sessionId, running: false, blank: false, updatedAt: 0 },
+      },
+    }
+  }
   ctx.provide('workspaces', {
     list: {
       getSnapshot: () => ({
@@ -47,16 +62,14 @@ async function bench() {
   } as never)
   ctx.provide('sessions', {
     list: {
-      getSnapshot: () => ({
-        ids: [], byId: {}, current: undefined, phase: 'ready',
-        subagentsByParent: {}, jobsBySession: {}, currentAddress: undefined,
-      }),
+      getSnapshot: () => sessionList,
       subscribe,
     },
     create: vi.fn(async () => 'created' as never),
     open,
     clear,
     search,
+    loadSummary,
     searchResultLimit: 20,
     binding,
     fork,
@@ -73,7 +86,7 @@ async function bench() {
   ctx.provide('locale', locale)
   return {
     ctx, slots: ctx.get('slots') as SlotRegistry, locale, create, rename,
-    insertSessionBefore, open, clear, selectPanel, search, renameSession, binding, fork, pickDirectory,
+    insertSessionBefore, open, clear, selectPanel, search, loadSummary, admitSummary, sessionList: () => sessionList, renameSession, binding, fork, pickDirectory,
   }
 }
 
@@ -153,6 +166,69 @@ describe('ui-workspace apply', () => {
     const picker = (b.slots.entries('conversation.hero.workspace')[0]!.inject as () => WorkspacePickerInjected)()
     await picker.createWorkspace({ path: '/tmp/project' })
     expect(b.create).toHaveBeenCalledWith({ path: '/tmp/project' })
+  })
+
+  it('loads absent content hits, admitting present summaries and filtering confirmed absence', async () => {
+    const b = await bench()
+    b.search.mockResolvedValueOnce({
+      ok: true,
+      value: {
+        items: [
+          { sessionId: 'off-page' as never, snippet: 'visible after summary load' },
+          { sessionId: 'absent' as never, snippet: 'confirmed missing' },
+        ],
+        hasMore: false,
+      },
+    })
+    const signal = new AbortController().signal
+    b.loadSummary.mockImplementation(async (sessionId, receivedSignal) => {
+      expect(receivedSignal).toBe(signal)
+      if (sessionId === 'off-page') {
+        b.admitSummary(sessionId)
+        return { ok: true, value: true }
+      }
+      return { ok: true, value: false }
+    })
+    declare(b.slots, 'sidebar.workspaces')
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    const browser = (b.slots.entries('sidebar.workspaces')[0]!.inject as () => WorkspaceBrowserInjected)()
+
+    await expect(browser.searchSessions('visible', signal)).resolves.toEqual({
+      items: [{ sessionId: 'off-page', snippet: 'visible after summary load' }],
+      hasMore: false,
+    })
+    expect(b.loadSummary).toHaveBeenCalledTimes(2)
+    expect(b.sessionList().byId).toHaveProperty('off-page')
+  })
+
+  it('propagates a structured summary failure from an off-page content hit', async () => {
+    const b = await bench()
+    const failure = new RemoteError('gateway/internal', 'summary unavailable', {})
+    b.search.mockResolvedValueOnce({
+      ok: true,
+      value: { items: [{ sessionId: 'off-page' as never, snippet: 'match' }], hasMore: false },
+    })
+    b.loadSummary.mockResolvedValueOnce({ ok: false, error: failure })
+    declare(b.slots, 'sidebar.workspaces')
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    const browser = (b.slots.entries('sidebar.workspaces')[0]!.inject as () => WorkspaceBrowserInjected)()
+
+    await expect(browser.searchSessions('match', new AbortController().signal)).rejects.toBe(failure)
+  })
+
+  it('propagates cancellation from an off-page summary load', async () => {
+    const b = await bench()
+    const cancellation = new RemoteError('gateway/cancelled', 'summary read cancelled', {})
+    b.search.mockResolvedValueOnce({
+      ok: true,
+      value: { items: [{ sessionId: 'off-page' as never, snippet: 'match' }], hasMore: false },
+    })
+    b.loadSummary.mockResolvedValueOnce({ ok: false, error: cancellation })
+    declare(b.slots, 'sidebar.workspaces')
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    const browser = (b.slots.entries('sidebar.workspaces')[0]!.inject as () => WorkspaceBrowserInjected)()
+
+    await expect(browser.searchSessions('match', new AbortController().signal)).rejects.toBe(cancellation)
   })
 
   it('declares the two directory-flow holes and reports their occupancy per surface', async () => {

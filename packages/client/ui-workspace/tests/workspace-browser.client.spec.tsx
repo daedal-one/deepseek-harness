@@ -754,6 +754,36 @@ describe('WorkspaceBrowser', () => {
     }
   })
 
+  it('renders and opens an off-page content hit after its summary is admitted', async () => {
+    vi.useFakeTimers()
+    try {
+      const open = vi.fn()
+      const searchSessions = vi.fn(async () => ({
+        items: [{ sessionId: sid('off-page'), snippet: 'loaded summary hit' }], hasMore: false,
+      }))
+      const b = mount({
+        useSessions: hook(sessionState([])),
+        useWorkspaces: hook(workspaceState([workspace('research', [], 'Research Workspace')])),
+        open,
+        searchSessions,
+      })
+      const input = screen.getByPlaceholderText<HTMLInputElement>('Search sessions...')
+      fireEvent.change(input, { target: { value: 'loaded summary' } })
+      await act(async () => { await vi.advanceTimersByTimeAsync(250) })
+      expect(screen.queryByText('Off-page notes')).toBeNull()
+
+      rerender(b, {
+        useSessions: hook(sessionState([summary('off-page', 1, { displayTitle: 'Off-page notes' })])),
+        useWorkspaces: hook(workspaceState([workspace('research', ['off-page'], 'Research Workspace')])),
+      })
+      expect(screen.getByText('Off-page notes')).toBeTruthy()
+      fireEvent.click(screen.getByRole('treeitem'))
+      expect(open).toHaveBeenCalledWith(sid('off-page'))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('waits for authoritative Workspace membership before revealing a grouped search result', async () => {
     const sessions = sessionState([
       summary('newest-1', 6),

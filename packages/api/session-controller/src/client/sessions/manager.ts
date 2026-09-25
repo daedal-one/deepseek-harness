@@ -764,10 +764,32 @@ export class SessionManager {
   /**
    * Dispatch a fork to the exact caller-owned identity without retry or title changes.
    * @param request - source, optional integer anchor, and fresh child identity.
-   * @returns the Host result; only confirmed publication adds a local summary.
+   * @returns the Host result; a mismatched success becomes `gateway/result-invalid`, and only matching publication adds a local summary.
    */
-  forkTo(request: SessionForkToRequest): Promise<RemoteResult<SessionForkValue>> {
-    return this.forkRequest(request.sessionId, () => this.remote.session.forkTo(request))
+  async forkTo(request: SessionForkToRequest): Promise<RemoteResult<SessionForkValue>> {
+    const source = this.summaries.find(summary => summary.sessionId === request.sessionId)
+    const result = await this.remote.session.forkTo(request)
+    if (result.ok && result.value.sessionId !== request.childSessionId) {
+      return {
+        ok: false,
+        error: new RemoteError(
+          'gateway/result-invalid',
+          'session.forkTo returned a child identity different from the requested identity',
+          { endpoint: 'session/forkTo' },
+        ),
+      }
+    }
+    const childId = result.ok
+      ? result.value.sessionId
+      : workspaceAttachSessionId(result.error)
+    if (childId === request.childSessionId) {
+      this.recordMutation({ kind: 'upsert', summary: {
+        sessionId: childId, updatedAt: Date.now(), running: false, blank: false,
+        parentSessionId: request.sessionId,
+        ...(source?.cwd !== undefined ? { cwd: source.cwd } : {}),
+      } })
+    }
+    return result
   }
 
   private async forkRequest(

@@ -106,8 +106,10 @@ export type WorkspaceBrowserInjected = {
   /** Open a real Session. */
   open: (sessionId: SessionId) => void
   /**
-   * Search current visible conversation messages. The Host fixes the result
-   * bound; `hasMore` means the query needs narrowing.
+   * Search current visible conversation messages. The adapter resolves each
+   * off-page hit through the shared Session list before returning it, filters
+   * only confirmed absence, and preserves structured failures and cancellation.
+   * The Host fixes the result bound; `hasMore` means the query needs narrowing.
    */
   searchSessions: (
     query: string,

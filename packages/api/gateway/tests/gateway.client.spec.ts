@@ -1889,6 +1889,40 @@ describe('Client Typert API', () => {
     await client.dispose()
   })
 
+  it('observes a non-cooperative deferred listener rejection after a Host event cancellation', async () => {
+    const { ctx, client, carrier, run, call } = await eventBench()
+    const target = ctx.extend()
+    ctx.typert.contexts.registerClient('agent', {
+      identity: candidate => candidate === target ? agentId('agent-non-cooperative') : undefined,
+      resolve: id => id === 'agent-non-cooperative' ? target : undefined,
+    })
+    const response = Promise.withResolvers<FixtureApprovalOutcome>()
+    const observed = vi.spyOn(response.promise, 'then')
+    const entered = Promise.withResolvers<AbortSignal>()
+    const unhandled = vi.fn()
+    process.on('unhandledRejection', unhandled)
+    target.remote.$on('fixture/approval', (request) => {
+      entered.resolve(request.signal as AbortSignal)
+      return response.promise
+    })
+    try {
+      carrier.emit(approvalFrame('event-non-cooperative', 'agent-non-cooperative', 'wait'))
+      const deliverySignal = await entered.promise
+      carrier.emit({ type: 'cancel', eventId: 'event-non-cooperative' })
+      await vi.waitFor(() => { expect(deliverySignal.aborted).toBe(true) })
+      expect(observed).toHaveBeenCalledWith(expect.any(Function), expect.any(Function))
+      response.reject(new Error('listener rejected after Host cancellation'))
+      await new Promise<void>(resolve => { setImmediate(resolve) })
+      expect(call).not.toHaveBeenCalled()
+      expect(unhandled).not.toHaveBeenCalled()
+    } finally {
+      process.off('unhandledRejection', unhandled)
+      run.abort()
+      await run.done
+      await client.dispose()
+    }
+  })
+
   it('drops a settled listener result when cancellation wins before reply', async () => {
     const { ctx, client, carrier, call } = await eventBench()
     const target = ctx.extend()

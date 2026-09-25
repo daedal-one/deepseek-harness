@@ -80,8 +80,14 @@ export function apply(ctx: Context): void {
 
   const searchSessions: WorkspaceBrowserInjected['searchSessions'] = async (query, signal) => {
     const result = await sessions.search(query, signal)
-    if (!result.ok) throw new Error(result.error.message)
-    return result.value
+    if (!result.ok) throw result.error
+    const items = await Promise.all(result.value.items.map(async (item) => {
+      if (sessions.list.getSnapshot().byId[item.sessionId] !== undefined) return item
+      const summary = await sessions.loadSummary(item.sessionId, signal)
+      if (!summary.ok) throw summary.error
+      return summary.value ? item : undefined
+    }))
+    return { ...result.value, items: items.filter(item => item !== undefined) }
   }
 
   // Stable per-surface occupancy sources (the renderer's hook cache keys by

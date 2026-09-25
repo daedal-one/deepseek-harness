@@ -1458,6 +1458,41 @@ describe('forkTo exact requested identity', () => {
     expect(b.api.callsOf('session.forkTo')).toHaveLength(1)
   })
 
+  it('rejects a mismatched success identity without publishing a fork child', async () => {
+    const b = bench()
+    b.api.onForkTo = () => Promise.resolve(ok({ sessionId: sid('wrong-child') }))
+
+    await expect(b.svc.forkTo({ sessionId: sid('source'), childSessionId: sid('requested-child') }))
+      .rejects.toMatchObject({
+        requestedSessionId: 'requested-child',
+        rpcError: { code: 'gateway/result-invalid' },
+      })
+    expect(b.svc.binding(sid('wrong-child'))).toBeUndefined()
+    expect(b.svc.binding(sid('requested-child'))).toBeUndefined()
+    expect(b.svc.list.getSnapshot().ids).toEqual([])
+  })
+
+  it('preserves a mismatched attachment failure without publishing a fork child', async () => {
+    const b = bench()
+    b.api.onForkTo = () => Promise.resolve(err(new RemoteError(
+      'session/workspace-attach-failed',
+      'attachment failed elsewhere',
+      { sessionId: sid('wrong-child'), workspaceId: 'ws' },
+    )))
+
+    await expect(b.svc.forkTo({ sessionId: sid('source'), childSessionId: sid('requested-child') }))
+      .rejects.toMatchObject({
+        requestedSessionId: 'requested-child',
+        rpcError: {
+          code: 'session/workspace-attach-failed',
+          details: { sessionId: 'wrong-child', workspaceId: 'ws' },
+        },
+      })
+    expect(b.svc.binding(sid('wrong-child'))).toBeUndefined()
+    expect(b.svc.binding(sid('requested-child'))).toBeUndefined()
+    expect(b.svc.list.getSnapshot().ids).toEqual([])
+  })
+
   it('retains an unattached published child while reporting the attachment failure', async () => {
     const b = bench()
     b.api.onForkTo = () => Promise.resolve(err(new RemoteError('session/workspace-attach-failed', 'attachment failed', {

@@ -728,6 +728,35 @@ describe('remaining branches', () => {
     })])
   })
 
+  it('rejects a forkTo success with a mismatched child identity without publishing either row', async () => {
+    const api = new FakeApiClient()
+    const requested = 'owned-child' as SessionId
+    api.onForkTo = () => Promise.resolve(ok({ sessionId: S2 }))
+    const manager = new SessionManager(fakeRemote(api), browserSessionPlatform)
+
+    await expect(manager.forkTo({ sessionId: S1, childSessionId: requested })).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'gateway/result-invalid' },
+    })
+    expect(manager.getListSnapshot().items).toEqual([])
+  })
+
+  it('preserves a mismatched forkTo attachment failure without publishing either row', async () => {
+    const api = new FakeApiClient()
+    const requested = 'owned-child' as SessionId
+    const failure = new RemoteError('session/workspace-attach-failed', 'forked elsewhere', {
+      sessionId: S2, workspaceId: 'w1',
+    })
+    api.onForkTo = () => Promise.resolve(err(failure))
+    const manager = new SessionManager(fakeRemote(api), browserSessionPlatform)
+
+    await expect(manager.forkTo({ sessionId: S1, childSessionId: requested })).resolves.toEqual({
+      ok: false,
+      error: failure,
+    })
+    expect(manager.getListSnapshot().items).toEqual([])
+  })
+
   it('reconciles a preallocated id after an ordinary transport failure', async () => {
     const api = new FakeApiClient()
     api.onCreate = () => Promise.reject(new Error('response lost'))
