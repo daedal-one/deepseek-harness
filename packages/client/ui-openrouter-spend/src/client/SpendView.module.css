@@ -1,0 +1,138 @@
+/* Spend view: a two-block projection of one Host reading. */
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 16px;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-layer-1);
+  overflow-y: auto;
+}
+
+.status {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.block {
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+
+.blockHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.block h2,
+.block > h2 {
+  margin: 0 0 8px;
+  font-size: 0.9em;
+  font-weight: 600;
+}
+
+.blockHeader h2 {
+  margin: 0;
+}
+
+.keyMeta {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 0.8em;
+}
+
+.tag {
+  border: 1px solid var(--dsw-alias-border-l3);
+  border-radius: 4px;
+  padding: 0 4px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 0.9em;
+}
+
+.rows {
+  margin: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.row dt {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.row dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.sessionModel {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 0.8em;
+}
+
+.sessionProvider {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.sessionValue {
+  margin: 4px 0 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.failure {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.failure p {
+  margin: 0;
+}
+
+.failureDetail {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 0.8em;
+  word-break: break-word;
+}
+
+.meta {
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 0.8em;
+}
+
+.refresh {
+  align-self: flex-start;
+  border: 1px solid var(--dsw-alias-border-l3);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  padding: 4px 12px;
+  cursor: pointer;
+}
+
+.refresh:hover {
+  border-color: var(--dsw-alias-border-l4);
+}
