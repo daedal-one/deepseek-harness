@@ -33,15 +33,21 @@ Fetched `origin` with pruning and tags before integration. Verified these candid
 
 ## Imported commits
 
-Pending.
+- `27001edeba` merges exact prepared release tip `61ffa1c53d0085bf6d87af7df90da2ae1efc4b6b` while retaining refreshed master.
+- `f16990b36f` merges exact Daedal tip `7c9f5a3779e4f3d3b0ba8a260a0f45f6c463eb31`.
+- `ad1132bb56` merges exact local admission tip `aa7efccb559bf20fc415322d132c64e0a5a03cc8` with semantic conflict resolution over the prepared release.
+- `d960250068` completes off-page search hydration, caller-owned fork result identity validation, and cancellation-observation regression coverage.
+- `47b864a467` closes combined admission lifecycle gaps found by adversarial post-merge review.
 
 ## Repairs and validation
 
-Pending.
+- Workspace admission resolution preserves host identity/world checks and host bypass, environment and multi-repository grants, provenance, `close()`/`registerWorkspaceOwner`, settlement ordering, lazy allocation, FIFO capacity, parent/child ownership, per-owner use, cancellation-aware operations, durable admission status, quiescent checkpoint-before-release, resumed waiter cancellation, and target namespaces.
+- Follow-up review repaired host `runForSession`, lazy environment guidance, pre-turn cancellation capacity release, cold repository requests, pending-status flush retry scheduling, and stale portable/client tests.
+- Daedal residual repair hydrates search summaries outside the retained page before rendering, refuses mismatched caller-owned fork identities, and observes late listener rejection after per-event cancellation.
+- Source and focused tests are present, but no package tests have run yet because this worktree has no dependencies and `pnpm` is not installed as a standalone binary. Dependency/tool bootstrap remains pending.
 
 ## Remaining issues
 
-- Reconcile workspace FIFO admission with prepared release lifecycle semantics.
-- Repair and qualify eligible Daedal residuals, VM runtime, OpenRouter spending, access hover, and benchmark candidates.
-- Validate native-loop documentation claims before retaining any additional commit.
-- Linux Incus/Docker/Compose qualification may remain externally blocked if this account cannot access the Incus daemon; do not claim VM runtime qualification without it.
+- Repair and qualify eligible VM runtime, OpenRouter spending, access hover, and benchmark candidates.
+- Native-loop commit `9690b85674` is not eligible to port as written: it is a Forge/spec-only status edit with unavailable deployment evidence and is covered by the explicit Forge/Intellect exclusion.
+- Linux Incus/Docker/Compose qualification is currently unavailable because `incus` is absent; do not claim VM runtime qualification without it.
