@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import clsx from 'clsx'
 import type { PermissionSelect as PermissionSelectValue } from '@deepseek-ai/dsh-permission-presets/client'
-import { IconChevronDownOutline14, Menu, RiskConfirmation } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconChevronDownOutline14, Menu, RiskConfirmation, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ComposerBarProps } from '../contract/slots.ts'
 import { en } from '../locales.ts'
@@ -47,6 +47,18 @@ const BUILT_IN_PERMISSION_NAMES = new Map<string, string>([
   [FULL_ACCESS, en['access.preset.fullAccess']],
 ])
 
+function permissionDescription(
+  value: string,
+  description: string | undefined,
+  t: ComposerBarProps['t'],
+): string | undefined {
+  if (description !== undefined) return description
+  if (value === 'read-only') return t('access.preset.readOnly.description')
+  if (value === 'workspace-write') return t('access.preset.workspaceWrite.description')
+  if (value === FULL_ACCESS) return t('access.preset.fullAccess.description')
+  return undefined
+}
+
 function permissionLabel(
   value: string,
   name: string,
@@ -89,6 +101,7 @@ export function PermissionSelect({ value, locked, command, t }: PermissionSelect
   const currentLabel = current === undefined
     ? permissionLabel(currentValue, currentValue, t)
     : permissionLabel(current.value, current.name, t)
+  const currentDescription = permissionDescription(currentValue, current?.description, t)
   const busy = pick !== null || confirmation !== null
   const canChange = value.canChange !== false
   const environment = value.context?.environment ?? 'unknown'
@@ -98,12 +111,13 @@ export function PermissionSelect({ value, locked, command, t }: PermissionSelect
   const choices: MenuEntry[] = value.options
     .filter(o => o.value !== 'custom')
     .map((option) => {
-      const icon = permissionGlyph(option.value)
+      const tooltip = permissionDescription(option.value, option.description, t)
       return {
         id: option.value,
         label: permissionLabel(option.value, option.name, t),
-        icon,
+        icon: permissionGlyph(option.value),
         disabled: !canChange,
+        ...tooltip === undefined ? {} : { tooltip },
       }
     })
 
@@ -157,20 +171,27 @@ export function PermissionSelect({ value, locked, command, t }: PermissionSelect
         onClose={() => { setOpen(false) }}
         side="top"
         anchor={
-          <button
-            type="button"
-            className={css.trigger}
-            aria-label={t('input.accessMode', { name: accessLabel })}
-            title={accessLabel}
-            disabled={locked || busy}
-            onClick={() => { setOpen(!open) }}
+          <Tooltip
+            label={currentDescription ?? ''}
+            side="top"
+            delayMs={400}
+            disabled={open || currentDescription === undefined}
+            maxWidth={320}
           >
-            <span className={css.triggerIcon} aria-hidden>{environmentGlyph(environment)}</span>
-            <span className={css.triggerLabel}>{currentLabel}</span>
-            <span className={clsx(css.chevron, open && css.chevronOpen)} aria-hidden>
-              <IconChevronDownOutline14 />
-            </span>
-          </button>
+            <button
+              type="button"
+              className={css.trigger}
+              aria-label={t('input.accessMode', { name: accessLabel })}
+              disabled={locked || busy}
+              onClick={() => { setOpen(!open) }}
+            >
+              <span className={css.triggerIcon} aria-hidden>{environmentGlyph(environment)}</span>
+              <span className={css.triggerLabel}>{currentLabel}</span>
+              <span className={clsx(css.chevron, open && css.chevronOpen)} aria-hidden>
+                <IconChevronDownOutline14 />
+              </span>
+            </button>
+          </Tooltip>
         }
       />
       <RiskConfirmation
