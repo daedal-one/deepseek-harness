@@ -107,6 +107,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'A Daedal-only tool reviews the task and fixed destination with the human before dispatch to a separate host profile.',
   },
   {
+    key: 'developmentVms',
+    pkg: 'local-container-runtime',
+    title: 'Conversation development VM lifecycle',
+    mode: 'core',
+    consumers: ['local-container-runtime'],
+    note: 'Opt-in guest execution, source writer barriers, and durable Docker storage for conversation workspaces.',
+  },
+  {
     key: 'conversationWorkspaces',
     pkg: 'local-container-runtime',
     title: 'Conversation Git workspace lifecycle',

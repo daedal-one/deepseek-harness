@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process'
 import { cp, mkdtemp, mkdir, open, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { PassThrough } from 'node:stream'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import Group from '@deepseek-ai/cordis-plugin-group'
@@ -21,7 +22,9 @@ import Tools from '@deepseek-ai/dsh-tools'
 import Commands from '@deepseek-ai/dsh-commands'
 import { tryLockExclusive } from '@deepseek-ai/node-addon-system/flock'
 import UserQuestions from '@deepseek-ai/dsh-user-questions'
-import type { LocalContainerRuntime } from '../src/index.ts'
+import type { LocalContainerRuntime, WorkspaceCheckpointRuntime, WorkspaceExecutionRuntime } from '../src/index.ts'
+import { developmentVmReference, sameDevelopmentVmReference, type DevelopmentVmReference } from '../src/vm-engine.ts'
+import type { DevelopmentVmOpenRequest } from '../src/vm.ts'
 import * as RepoAccessTool from '../src/tool-request-repo-access.ts'
 import Workspaces, { type ConversationWorkspaceConfig } from '../src/workspaces.ts'
 import type { PodmanControllerExecRequest, PodmanControllerExecResult } from '../src/types.ts'
@@ -52,6 +55,8 @@ async function fixture(options: {
   message?: boolean
   failAfterCommit?: boolean
   retryDelayMs?: number
+  preview?: { socket: PassThrough; ports: number[] }
+  developmentVmProfile?: 'vm-a' | 'vm-b'
   script?: ConstructorParameters<typeof MockAdapter>[0]
 } = {}) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'dsh-workspaces-')))
@@ -84,6 +89,40 @@ async function fixture(options: {
     [new URL('../../../shell/bash-local/src/index.ts', import.meta.url).href, HostShell],
   ])
   const [hostFs, hostSubprocess, hostShell] = [...hostModules.keys()]
+  const vmSelections: string[] = []
+  const vmProviders = new Map<string, {
+    readonly identity: DevelopmentVmReference
+    assertReference(reference: unknown): asserts reference is DevelopmentVmReference
+    recover(): Promise<void>
+    retention(): WorkspaceCheckpointRuntime
+    open(base: WorkspaceExecutionRuntime, request: DevelopmentVmOpenRequest): Promise<{ runtime: WorkspaceExecutionRuntime; dispose(): Promise<void> }>
+  }>()
+  for (const [index, profile] of ['vm-a', 'vm-b'].entries()) {
+    const identity = developmentVmReference({
+      command: '/usr/bin/incus', pythonCommand: '/usr/bin/python3', devicesRoot: '/var/lib/incus/devices',
+      project: profile, storage: profile, network: profile, acl: profile, hostAddresses: ['203.0.113.1'],
+      image: String(index + 1).repeat(64), workspaceUid: 1000, workspaceGid: 1000, maxInstances: 2,
+      cpus: 2, memoryBytes: 1024, diskBytes: 4096, timeoutMs: 1000, readinessPollMs: 10, maxOutputBytes: 8192,
+    })
+    const retention: WorkspaceCheckpointRuntime = {
+      async checkpoint() {}, async discardCheckpoint() {}, async pruneCheckpoints() {},
+    }
+    const provider = {
+      identity,
+      assertReference(reference: unknown): asserts reference is DevelopmentVmReference {
+        if (!sameDevelopmentVmReference(reference, identity)) throw new Error('fixture VM profile mismatch')
+      },
+      async recover() {},
+      retention: () => retention,
+      async open(base: WorkspaceExecutionRuntime, _request: DevelopmentVmOpenRequest) {
+        vmSelections.push(profile)
+        Object.assign(base, retention)
+        return { runtime: base, async dispose() {} }
+      },
+    }
+    vmProviders.set(profile, provider)
+    hostModules.set(profile, { name: `fixture-${profile}`, apply(scope: Context) { scope.provide('developmentVms', provider as never) } })
+  }
   if (options.maintenance === true) {
     for (const id of ['maintenance', 'incomplete', 'internal']) {
       const directory = join(presetRoot, id); await mkdir(directory, { recursive: true })
@@ -93,7 +132,16 @@ async function fixture(options: {
           { name: hostFs, config: { cwd: source } },
           ...(id === 'maintenance' ? [{ name: hostSubprocess }, { name: hostShell }] : []),
           ...(id === 'internal' ? [{ name: hostSubprocess }] : []),
-        ] }]))
+        ] }, ...id === 'maintenance' && options.developmentVmProfile !== undefined ? [{ name: 'cordis:group', group: true,
+          isolate: { developmentVms: true }, config: [{ name: options.developmentVmProfile }] }] : []]))
+    }
+  }
+  if (options.developmentVmProfile !== undefined) {
+    for (const profile of vmProviders.keys()) {
+      const directory = join(presetRoot, profile); await mkdir(directory, { recursive: true })
+      await writeFile(join(directory, 'preset.yml'), `name: ${profile}\ndescription: Private VM fixture preset.\n`)
+      await writeFile(join(directory, 'agent.cordis.yml'), JSON.stringify([{ name: 'cordis:group', group: true,
+        isolate: { developmentVms: true }, config: [{ name: profile }] }]))
     }
   }
   let ctx = new Context()
@@ -131,6 +179,9 @@ async function fixture(options: {
         executionWorld: {},
         executeController: (request: PodmanControllerExecRequest) => execute(directory, request),
         async cancelProcesses() {},
+        ...options.preview === undefined ? {} : {
+          connectPreview: async (port: number) => { options.preview!.ports.push(port); return options.preview!.socket },
+        },
         async settle<T>(_timeout: number, operation: (
           control: (request: PodmanControllerExecRequest) => Promise<PodmanControllerExecResult>,
         ) => Promise<T>) {
@@ -142,7 +193,7 @@ async function fixture(options: {
     },
   }
   const boot = async () => {
-    if (options.maintenance === true) {
+    if (options.maintenance === true || options.developmentVmProfile !== undefined) {
       ctx.baseUrl = new URL('../../../../apps/raw/', import.meta.url).href
       await ctx.plugin(Loader)
       ctx.loader.builtins.include = Include
@@ -158,14 +209,17 @@ async function fixture(options: {
     await ctx.plugin(Persistence, { root: join(root, 'sessions'), compression: 'none' })
     await ctx.plugin(LlmRuntime); await ctx.plugin(AgentRegistry); await ctx.plugin(SystemPrompt); await ctx.plugin(Tools)
     await ctx.plugin(UserQuestions)
-    if (options.maintenance === true) await ctx.plugin(AgentPresets, { default: 'maintenance', roots: [{ path: presetRoot, trust: 'user' }], includeShippedRoot: false, includeUserRoot: false })
+    if (options.maintenance === true || options.developmentVmProfile !== undefined) await ctx.plugin(AgentPresets, { default: options.maintenance === true ? 'maintenance' : options.developmentVmProfile!, roots: [{ path: presetRoot, trust: 'user' }], includeShippedRoot: false, includeUserRoot: false })
     await ctx.plugin(LocalStorageWorkspaces, config); await ctx.plugin(AgentLoop, { agents: [] })
   }
   await boot()
   disposers.push(async () => { await unpinAll(); await ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) })
   const adapter = new MockAdapter(options.script ?? [textResponse('Done.'), textResponse('feat: retain changes'), textResponse(JSON.stringify({ HEAD: 'finish-task', 'refs/heads/codex/conversation': 'finish-task' })), textResponse('No further changes.')])
   ctx.llm.registerAdapter(['mock'], adapter)
-  const handle = await ctx.agents.create({ sessionId: SessionId(`test-${root.split('/').at(-1)}`), meta: { cwd: source }, agentOptions: { provider: 'mock', model: 'main' } })
+  const handle = await ctx.agents.create({ sessionId: SessionId(`test-${root.split('/').at(-1)}`),
+    meta: { cwd: source, ...options.developmentVmProfile === undefined ? {} : { agentPreset: options.developmentVmProfile } },
+    agentOptions: { provider: 'mock', model: 'main' },
+    ...options.developmentVmProfile === undefined ? {} : { setup: async (scope: Context) => { await ctx.agentPresets.mount(scope, options.developmentVmProfile!) } } })
   const pin = async (agent: Agent): Promise<string> => {
     const existing = pins.get(agent)
     if (existing !== undefined) return existing.execution
@@ -201,7 +255,7 @@ async function fixture(options: {
     ctx.llm.registerAdapter(['mock'], adapter)
     return ctx
   }
-  return { ctx, root, source, secondSource, pool, recovery, execution, config, handle, turn, adapter, executionFor, restart, unpinAll, worlds }
+  return { ctx, root, source, secondSource, pool, recovery, execution, config, handle, turn, adapter, executionFor, restart, unpinAll, worlds, vmSelections, vmProviders }
 }
 
 describe.skipIf(process.platform === 'win32')('conversation workspace transaction lifecycle', () => {
@@ -237,6 +291,36 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
         setup: async (ctx) => { await f.ctx.agentPresets.mount(ctx, 'maintenance') } })
       try { expect(child.agent.session.snapshotEvents().some(event => event.type === 'workspace/state')).toBe(false) }
       finally { await child.dispose() }
+    } finally { await host.dispose() }
+  })
+
+  it('selects development VMs from the effective profile and requires children to share that provider', async () => {
+    const f = await fixture({ developmentVmProfile: 'vm-a' })
+    expect(serviceForAgent(f.ctx, f.handle.agent, 'developmentVms')).toBe(f.vmProviders.get('vm-a'))
+    expect(f.vmSelections).toEqual(['vm-a'])
+    const receipt = f.handle.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')
+    if (receipt?.type !== 'workspace/state') throw new Error('missing VM workspace state')
+    const state = JSON.parse(await readFile(join(f.recovery, receipt.data.workspaceId, 'state.json'), 'utf8')) as { developmentVm: DevelopmentVmReference }
+    expect(sameDevelopmentVmReference(state.developmentVm, f.vmProviders.get('vm-a')!.identity)).toBe(true)
+    const child = await f.ctx.agents.create({ sessionId: SessionId('vm-profile-child'), parentAgent: f.handle.agent,
+      meta: { cwd: f.source, agentPreset: 'vm-a' }, agentOptions: { provider: 'mock', model: 'main' },
+      setup: async (scope) => { await f.ctx.agentPresets.mount(scope, 'vm-a') } })
+    try { expect(await f.executionFor(child.agent)).toBe(f.execution) } finally { await child.dispose() }
+    await expect(f.ctx.agents.create({ sessionId: SessionId('vm-profile-mismatch'), parentAgent: f.handle.agent,
+      meta: { cwd: f.source, agentPreset: 'vm-b' }, agentOptions: { provider: 'mock', model: 'main' },
+      setup: async (scope) => { await f.ctx.agentPresets.mount(scope, 'vm-b') } })).rejects.toThrow('does not share')
+  })
+
+  it('bypasses an effective-profile VM provider for explicitly admitted host sessions', async () => {
+    const f = await fixture({ maintenance: true, developmentVmProfile: 'vm-a' })
+    const selected = f.vmSelections.length
+    const host = await f.ctx.agents.create({ sessionId: SessionId('maintenance-root'),
+      meta: { cwd: f.source, agentPreset: 'maintenance' }, agentOptions: { provider: 'mock', model: 'main' },
+      setup: async (scope) => { await f.ctx.agentPresets.mount(scope, 'maintenance') } })
+    try {
+      expect(serviceForAgent(f.ctx, host.agent, 'developmentVms')).toBeDefined()
+      expect(f.vmSelections).toHaveLength(selected)
+      expect(host.agent.session.snapshotEvents().some(event => event.type === 'workspace/state')).toBe(false)
     } finally { await host.dispose() }
   })
 
@@ -318,6 +402,18 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
     finally { await lease.close() }
   })
 
+
+  it('retains preview admission until the connected tunnel closes', async () => {
+    const socket = new PassThrough()
+    const ports: number[] = []
+    const f = await fixture({ pinWorkspace: false, preview: { socket, ports } })
+    const connected = await f.ctx.conversationWorkspaces.connectPreviewForSession(f.handle.agent.id, 8080)
+    expect(connected).toBe(socket)
+    expect(ports).toEqual([8080])
+    expect(JSON.parse(await readFile(join(f.pool, 'owner.json'), 'utf8'))).toMatchObject({ clean: false })
+    socket.destroy()
+    await expect.poll(async () => JSON.parse(await readFile(join(f.pool, 'owner.json'), 'utf8'))).toMatchObject({ clean: true })
+  })
 
   it('retains capacity after a failed idle checkpoint and admits the waiter only after recovery', async () => {
     const f = await fixture({ retryDelayMs: 2_147_483_647 })
@@ -812,20 +908,112 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
     expect(f.adapter.requests.filter(request => request.purpose === 'workspace-commit')).toHaveLength(1)
   })
 
+  it('orders paired artifacts and guest retention before promotion, then prunes source last', async () => {
+    const f = await fixture()
+    const ready = f.handle.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')
+    if (ready?.type !== 'workspace/state') throw new Error('missing prepared workspace')
+    const directory = join(f.recovery, ready.data.workspaceId)
+    const runtime = f.ctx.agents.withInitiator(f.handle.agent, () => f.ctx.conversationWorkspaces.capture()) as WorkspaceExecutionRuntime
+    const events: string[] = []
+    runtime.checkpoint = async generation => { events.push(`guest:${generation}`) }
+    runtime.discardCheckpoint = async generation => { events.push(`guest-discard:${generation}`) }
+    runtime.pruneCheckpoints = async generation => {
+      if (generation >= 3) expect(await readFile(join(directory, 'checkpoint-1.json'))).toBeDefined()
+      events.push(`guest-prune:${generation}`)
+    }
+    const publish = broker.publishWorkspaceJson
+    const promoted = new Set<number>()
+    vi.spyOn(broker, 'publishWorkspaceJson').mockImplementation(async (path, value, maxBytes) => {
+      const artifact = /checkpoint-(\d+)\.json$/u.exec(path)
+      if (artifact !== null) events.push(`artifact:${artifact[1]}`)
+      await publish(path, value, maxBytes)
+      const generation = path.endsWith('/state.json') && typeof (value as { checkpoint?: unknown }).checkpoint === 'number'
+        ? Number((value as { checkpoint: number }).checkpoint) : undefined
+      if (generation !== undefined && generation > 1 && !promoted.has(generation)) {
+        promoted.add(generation); events.push(`promote:${generation}`)
+      }
+    })
+    await writeFile(join(f.execution, 'result.txt'), 'result\n')
+    expect((await f.turn())?.data).toMatchObject({ phase: 'returned' })
+    const first = Number(events.find(event => event.startsWith('artifact:'))?.split(':')[1])
+    expect(events.indexOf(`artifact:${first}`)).toBeLessThan(events.indexOf(`guest:${first}`))
+    expect(events.indexOf(`guest:${first}`)).toBeLessThan(events.indexOf(`promote:${first}`))
+    expect(events.indexOf(`promote:${first}`)).toBeLessThan(events.indexOf(`guest-prune:${first}`))
+    if (events.some(event => /^guest-prune:(?:[3-9]|\d{2,})$/u.test(event))) {
+      await expect(readFile(join(directory, 'checkpoint-1.json'))).rejects.toMatchObject({ code: 'ENOENT' })
+    }
+  })
 
-  it.each(['candidate', 'message', 'committed', 'returned'].flatMap(phase => ['before', 'after'].map(edge => ({ phase, edge }))))(
-    'recovers a restart $edge $phase publication without duplicate commits or subject calls', async ({ phase, edge }) => {
-      const f = await fixture({ message: true, retryDelayMs: 2_147_483_647 })
+
+  it.each(['artifact', 'guest', 'promotion', 'prune'].flatMap(phase => ['before', 'after'].map(edge => ({ phase, edge }))))(
+    'recovers a failure $edge paired checkpoint $phase without conflicting retained identities', async ({ phase, edge }) => {
+      const f = await fixture({ retryDelayMs: 25, developmentVmProfile: 'vm-a' })
+      const runtime = f.ctx.agents.withInitiator(f.handle.agent, () => f.ctx.conversationWorkspaces.capture()) as WorkspaceExecutionRuntime
+      const retained = new Map<number, string>()
+      const pruned = new Set<number>()
+      let interrupted = false
+      runtime.checkpoint = async (generation, hash) => {
+        const matches = phase === 'guest' && !interrupted && generation === 2
+        if (matches && edge === 'before') { interrupted = true; throw new Error('injected guest checkpoint failure') }
+        const existing = retained.get(generation)
+        if (existing !== undefined && existing !== hash) throw new Error('duplicate retained identity')
+        retained.set(generation, hash)
+        if (matches) { interrupted = true; throw new Error('injected guest checkpoint acknowledgement loss') }
+      }
+      runtime.discardCheckpoint = async (generation, hash) => {
+        const existing = retained.get(generation)
+        if (existing !== undefined && existing !== hash) throw new Error('discard identity mismatch')
+        retained.delete(generation)
+      }
+      runtime.pruneCheckpoints = async (generation) => {
+        const matches = phase === 'prune' && !interrupted && generation === 2
+        if (matches && edge === 'before') { interrupted = true; throw new Error('injected prune failure') }
+        pruned.add(generation)
+        if (matches) { interrupted = true; throw new Error('injected prune acknowledgement loss') }
+      }
+      const publish = broker.publishWorkspaceJson
+      vi.spyOn(broker, 'publishWorkspaceJson').mockImplementation(async (path, value, maxBytes) => {
+        const checkpoint = typeof (value as { checkpoint?: unknown }).checkpoint === 'number'
+          ? Number((value as { checkpoint: number }).checkpoint) : undefined
+        const matches = !interrupted && (phase === 'artifact'
+          ? path.endsWith('/checkpoint-2.json')
+          : phase === 'promotion' && path.endsWith('/state.json') && checkpoint === 2)
+        if (matches && edge === 'before') { interrupted = true; throw new Error(`injected ${phase} failure`) }
+        await publish(path, value, maxBytes)
+        if (matches) { interrupted = true; throw new Error(`injected ${phase} acknowledgement loss`) }
+      })
+      await writeFile(join(f.execution, 'result.txt'), 'result\n')
+      expect((await f.turn())?.data).toMatchObject({ phase: 'pending' })
+      expect(interrupted).toBe(true)
+      await expect.poll(() => f.handle.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')?.data,
+        { timeout: 5000 }).toMatchObject({ phase: 'returned' })
+      const receipt = f.handle.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')
+      if (receipt?.type !== 'workspace/state') throw new Error('missing returned workspace')
+      const state = JSON.parse(await readFile(join(f.recovery, receipt.data.workspaceId, 'state.json'), 'utf8')) as { checkpoint: number; checkpointHash: string }
+      expect(retained.get(state.checkpoint)).toBe(state.checkpointHash)
+      expect(pruned.has(state.checkpoint)).toBe(true)
+      await expect(readFile(join(f.recovery, receipt.data.workspaceId, 'checkpoint.pending.json'))).rejects.toMatchObject({ code: 'ENOENT' })
+      expect((await workspaceGit(f.execution, ['rev-list', '--count', 'HEAD'], f.config)).toString().trim()).toBe('2')
+      expect(f.handle.agent.session.snapshotEvents().filter(event => event.type === 'workspace/provenance')).toHaveLength(1)
+    },
+  )
+
+  it.each(['candidate', 'message', 'committed', 'branch', 'provenance', 'event', 'lastTurn'].flatMap(phase => ['before', 'after'].map(edge => ({ phase, edge }))))(
+    'recovers a restart $edge $phase publication without duplicate durable side effects', async ({ phase, edge }) => {
+      const f = await fixture({ message: true, retryDelayMs: 2_147_483_647, developmentVmProfile: 'vm-a' })
       const publish = broker.publishWorkspaceJson
       let interrupted = false
       const failure = vi.spyOn(broker, 'publishWorkspaceJson').mockImplementation(async (path, value, maxBytes) => {
-        const record = value as { lastTurn: number; transaction?: { message?: string; oid?: string } }
+        const record = value as { lastTurn: number; transaction?: { message?: string; oid?: string; branchesReturned?: true; provenanceSaved?: true; eventRecorded?: true } }
         const transaction = record.transaction
         const matches = path.endsWith('/state.json') && !interrupted && (phase === 'candidate'
           ? transaction !== undefined && transaction.message === undefined
           : phase === 'message' ? transaction?.message !== undefined && transaction.oid === undefined
-            : phase === 'committed' ? transaction?.oid !== undefined
-              : record.lastTurn === 1 && transaction === undefined)
+            : phase === 'committed' ? transaction?.oid !== undefined && transaction.branchesReturned !== true
+              : phase === 'branch' ? transaction?.branchesReturned === true && transaction.provenanceSaved !== true
+                : phase === 'provenance' ? transaction?.provenanceSaved === true && transaction.eventRecorded !== true
+                  : phase === 'event' ? transaction?.eventRecorded === true
+                    : record.lastTurn === 1 && transaction === undefined)
         if (matches && edge === 'before') { interrupted = true; throw new Error('injected crash before publication') }
         await publish(path, value, maxBytes)
         if (matches) { interrupted = true; throw new Error('injected crash after publication') }
@@ -844,13 +1032,14 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
       // Reconstruct the exact durable bytes at the interruption, excluding orderly-shutdown publications.
       await rm(directory, { recursive: true }); await cp(crashImage, directory, { recursive: true })
       const resumed = await ctx.agents.resume({ resumeSessionId: f.handle.agent.id,
-        agentOptions: { provider: 'mock', model: 'main' } })
+        agentOptions: { provider: 'mock', model: 'main' },
+        setup: async (scope: Context) => { await ctx.agentPresets.mount(scope, 'vm-a') } })
       await f.executionFor(resumed.agent)
       try {
         await expect.poll(() => resumed.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')?.data,
           { timeout: 5000 }).toMatchObject({ phase: 'returned' })
         expect((await workspaceGit(f.execution, ['rev-list', '--count', 'HEAD'], f.config)).toString().trim()).toBe('2')
-        if (phase === 'committed' || phase === 'returned') {
+        if (['committed', 'branch', 'provenance', 'event', 'lastTurn'].includes(phase)) {
           expect(await workspaceGit(f.execution, ['rev-parse', 'HEAD'], f.config)).toEqual(committed)
         }
         expect(f.adapter.requests.filter(request => request.purpose === 'workspace-commit'))
@@ -860,6 +1049,7 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
         for (const [ref, oid] of Object.entries(receipt.data.branches)) {
           expect((await workspaceGit(f.source, ['rev-parse', ref], f.config)).toString().trim()).toBe(oid)
         }
+        expect(resumed.agent.session.snapshotEvents().filter(event => event.type === 'workspace/provenance')).toHaveLength(1)
       } finally { await resumed.dispose() }
     },
   )
@@ -895,6 +1085,18 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
     if (execution === undefined) throw new Error('missing recovered workspace')
     expect(await readFile(join(execution, 'unfinished.txt'), 'utf8')).toBe('recover me')
     await resumed.dispose()
+  })
+
+  it('rejects a legacy string VM identity instead of guessing provider compatibility', async () => {
+    const f = await fixture()
+    await f.turn(); await f.handle.dispose()
+    const stateEvent = f.handle.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')
+    if (stateEvent?.type !== 'workspace/state') throw new Error('missing workspace state')
+    const statePath = join(f.recovery, stateEvent.data.workspaceId, 'state.json')
+    const state = JSON.parse(await readFile(statePath, 'utf8')) as Record<string, unknown>
+    await writeFile(statePath, JSON.stringify({ ...state, developmentVm: 'test/test' }))
+    await expect(f.ctx.agents.resume({ resumeSessionId: f.handle.agent.id,
+      agentOptions: { provider: 'mock', model: 'main' } })).rejects.toThrow('VM descriptor')
   })
 
   it('refuses a corrupt acknowledged checkpoint instead of reimporting the source', async () => {

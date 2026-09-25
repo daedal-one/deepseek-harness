@@ -16,6 +16,8 @@ This decision extends the [local container execution-world proposal](../../propo
 
 When `environment` is configured, the [environment repository access decision](2026-09-22-container-outbound-repository-access.md) supersedes this decision’s single-repository ownership and session-bound resource lifetime. Import, checkpoint integrity, and independent Git return rules remain applicable.
 
+The [development VM decision](2026-09-21-conversation-development-vm.md) extends execution and service lifetime while retaining this Git transaction owner.
+
 ## Coding-agent experience
 
 The agent starts in `/workspace` with repository contents, usable Git history, a normal task branch, and an explicitly configured non-secret commit identity. All reported working directories, tool paths, project instruction discovery, and repository inspection refer to that execution namespace. The host retains the source repository identity separately. Global instruction configuration points inside `/workspace/.dsh`; the host home is never mounted. Project instructions are read from the imported workspace so edits and nested discovery stay coherent.

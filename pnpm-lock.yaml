@@ -8287,6 +8287,9 @@ importers:
       dockerode:
         specifier: ^5.0.1
         version: 5.0.1(supports-color@9.4.0)
+      tldts:
+        specifier: ^7.4.5
+        version: 7.4.5
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:^
@@ -8294,9 +8297,15 @@ importers:
       '@deepseek-ai/dsh-agent-presets':
         specifier: workspace:^
         version: link:../../preset/agent-presets
+      '@deepseek-ai/dsh-client-connection':
+        specifier: workspace:^
+        version: link:../../client/connection
       '@deepseek-ai/dsh-fs':
         specifier: workspace:^
         version: link:../../fs/fs
+      '@deepseek-ai/dsh-host-webserver':
+        specifier: workspace:^
+        version: link:../../host/webserver
       '@deepseek-ai/dsh-session-persistence':
         specifier: workspace:^
         version: link:../../session/session-persistence

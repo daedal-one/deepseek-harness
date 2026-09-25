@@ -9,13 +9,24 @@ import type { EnvironmentId } from '../../src/environment-types.ts'
 
 export const name = 'snapshot-workspace-outcomes'
 export const inject = ['agents', 'systemPrompt']
-export const Config = z.object({ environment: z.boolean().default(false), provenance: z.boolean().default(false), admission: z.boolean().default(false) })
+export interface Config {
+  environment: boolean
+  provenance: boolean
+  admission: boolean
+  pendingError: string
+}
+export const Config: z<Config> = z.object({
+  environment: z.boolean().default(false),
+  provenance: z.boolean().default(false),
+  admission: z.boolean().default(false),
+  pendingError: z.string().default('Result branch changed outside this conversation.'),
+})
 
 /** Register deterministic storage receipts around a real completed coding turn.
  * @param ctx - shipped SDK profile scope.
- * @param config - whether to include environment, provenance, and admission receipts.
+ * @param config - included receipts and scenario-owned save diagnostic.
  */
-export function apply(ctx: Context, config: { environment: boolean; provenance: boolean; admission: boolean }): void {
+export function apply(ctx: Context, config: Config): void {
   ctx.on('agent/prepare', ({ agent }) => { installWorkspaceGuidance(agent) })
   ctx.on('agent/turn-starting', async ({ agent }, next) => {
     if (config.admission) {
@@ -33,7 +44,7 @@ export function apply(ctx: Context, config: { environment: boolean; provenance: 
         { remote: 'https://github.example/org/second.git', path: '/workspace/repos/2222222222222222', baseline: 'e'.repeat(40), lastTurn: 0, branches: {} },
       ] } : {} }
     agent.session.append('workspace/state', state)
-    agent.session.append('workspace/state', { ...state, phase: 'pending', error: 'Result branch changed outside this conversation.' })
+    agent.session.append('workspace/state', { ...state, phase: 'pending', error: config.pendingError })
     const branches = config.provenance ? {
       'refs/heads/dsh/fix-recovery-111111111111111111111111/turn-1': 'd'.repeat(40),
       'refs/heads/dsh/fix-recovery-222222222222222222222222/turn-1': 'd'.repeat(40),

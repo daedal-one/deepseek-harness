@@ -81,7 +81,7 @@ This matrix shows which packages dispatch each harness-owned event and which pac
 | `workflow/log` | `emit` | [`packages/workflow/workflow/src/index.ts:58`](../packages/workflow/workflow/src/index.ts) | [`workflow`](../packages/workflow/workflow) (`events.dispatch`) | - |
 | `workflow/phase` | `emit` | [`packages/workflow/workflow/src/index.ts:51`](../packages/workflow/workflow/src/index.ts) | [`workflow`](../packages/workflow/workflow) (`events.dispatch`) | - |
 | `workflow/start` | `emit` | [`packages/workflow/workflow/src/index.ts:43`](../packages/workflow/workflow/src/index.ts) | [`workflow`](../packages/workflow/workflow) (`events.dispatch`) | [`workflow`](../packages/workflow/workflow) |
-| `workspace/quiesce` | `serial` | [`packages/sandbox/local-container-runtime/src/index.ts:127`](../packages/sandbox/local-container-runtime/src/index.ts) | [`local-container-runtime`](../packages/sandbox/local-container-runtime) (`serial`) | [`lsp-stdio`](../packages/lsp/lsp-stdio) |
+| `workspace/quiesce` | `serial` | [`packages/sandbox/local-container-runtime/src/index.ts:129`](../packages/sandbox/local-container-runtime/src/index.ts) | [`local-container-runtime`](../packages/sandbox/local-container-runtime) (`serial`) | [`lsp-stdio`](../packages/lsp/lsp-stdio) |
 
 ## Non-harness or undeclared event strings seen in package source
 

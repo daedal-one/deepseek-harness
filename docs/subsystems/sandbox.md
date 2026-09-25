@@ -185,15 +185,23 @@ async lookupChanges(query: string, signal: AbortSignal): Promise<{ records: Work
  */
 async runForSession<T>(sessionId: SessionId, operation: () => Promise<T>, signal?: AbortSignal): Promise<T>
 
+/** Connect a preview while retaining the selected conversation's execution lease until socket close.
+ * @param sessionId - selected live conversation identity.
+ * @param port - validated guest-loopback port.
+ * @param signal - cancellation while waiting for workspace capacity.
+ * @returns connected tunnel whose close releases the workspace lease.
+ */
+async connectPreviewForSession(sessionId: SessionId, port: number, signal?: AbortSignal): Promise<Duplex>
+
 /** Capture the exact initiating conversation's world for one operation.
  * @returns an operation-local runtime; missing ownership rejects rather than using another workspace.
  */
-capture(): LocalContainerRuntime
+capture(): WorkspaceExecutionRuntime
 
 /** Resolve the executable lookup world before launching a process.
  * @returns the conversation world when attributed, otherwise the verified boot toolchain.
  */
-resolveToolchain(): LocalContainerRuntime
+resolveToolchain(): WorkspaceExecutionRuntime
 
 /** Resolve source path aliases only for the initiating conversation.
  * @param path - source or execution path.
@@ -215,6 +223,32 @@ async requestRepository( agent: Agent, repository: string, access: RepositoryAcc
 Types: [Agent](core.md) · [SessionId](core.md)
 
 Source: [`packages/sandbox/local-container-runtime/src/workspaces.ts`](../../packages/sandbox/local-container-runtime/src/workspaces.ts)
+
+<a id="ctxdevelopmentvms--developmentvms"></a>
+
+### `ctx.developmentVms` — `DevelopmentVms`
+
+Adds durable VM execution to supervisor-owned conversation workspaces.
+
+```ts cordis-catalog
+/** Quiesce a retained guest before the workspace owner touches its RAM slot.
+ * @param id - workspace identity derived by the trusted supervisor.
+ */
+async recover(id: ConversationWorkspaceId): Promise<void>
+
+/** Bind a prepared repository to its conversation's retained development VM.
+ * @param base - isolated maintenance controller for the private source directory.
+ * @param id - supervisor-derived workspace identity.
+ * @param directory - prepared, private memory-backed source directory.
+ * @param generation - acknowledged source recovery generation.
+ * @param retained - whether unacknowledged RAM source survived and is still owned.
+ * @param required - whether durable recovery already acknowledges this VM.
+ * @returns runtime and disposer; disposal retains durable guest storage.
+ */
+async open( base: WorkspaceExecutionRuntime, id: ConversationWorkspaceId, directory: string, generation: number, retained: boolean, required: boolean, ): Promise<{ runtime: WorkspaceExecutionRuntime; dispose(): Promise<void> }>
+```
+
+Source: [`packages/sandbox/local-container-runtime/src/vm.ts`](../../packages/sandbox/local-container-runtime/src/vm.ts)
 
 <a id="ctxlocalcontainerruntime--localcontainerruntime"></a>
 
@@ -361,3 +395,5 @@ The optional [runtime owner](../../packages/sandbox/local-container-runtime/READ
 The optional conversation-workspace service owns import, recovery, residual commits, and branch return. `ConversationWorkspaceId` identifies one private repository; `WorkspaceState` records its save phase, acknowledged checkpoint, baseline commit, and returned refs independently of `turn/end`. `WorkspaceProvenance` records a stable receipt identity, owner conversation and event range, original and returned refs, observed commits and the narrower set of Harness-created commits. The [shared declarations](../../packages/sandbox/local-container-runtime/src/workspace-types.ts) define these durable records; the [configuration and lifecycle](../../packages/sandbox/local-container-runtime/README.md#conversation-repositories) define ownership and limits.
 
 With environment configuration, independently stored session attachments select multi-repository workspace identities. `EnvironmentId` identifies the authority owner, `RepositoryGrant` records an approved repository capability and revision, and `RepositoryAccess` distinguishes fetch from push. `EnvironmentAccessConfig` supplies the operator's requestable catalog and initial grants. Their [declarations](../../packages/sandbox/local-container-runtime/src/environment-types.ts) and [repository access semantics](../../packages/sandbox/local-container-runtime/README.md#repository-remotes-and-outbound-access) define the approval, expiry, and credential limits. `WorkspaceState.repositories` reports independent repository return outcomes.
+
+The opt-in development VM provider implements `WorkspaceExecutionRuntime` for conversation-owned Linux guests and is selected from the admitted agent's effective profile. Filesystem, subprocess, terminal, and preview operations share its execution-world identity. `WorkspaceCheckpointRuntime` pairs durable VM snapshots with source artifact identities through promotion and pruning; the [runtime declarations](../../packages/sandbox/local-container-runtime/src/types.ts) own these provider-neutral interfaces. The [development VM reference](../../packages/sandbox/local-container-runtime/README.md#development-vms) defines host configuration, save barriers, networking, and preview authentication.

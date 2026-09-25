@@ -823,13 +823,19 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the operation result; cold conversations must be opened first.',
       },
       {
-        signature: 'capture(): LocalContainerRuntime',
+        signature: 'async connectPreviewForSession(sessionId: SessionId, port: number, signal?: AbortSignal): Promise<Duplex>',
+        description: 'Connect a preview while retaining the selected conversation\'s execution lease until socket close.',
+        parameters: [{ name: 'sessionId', description: 'selected live conversation identity.' }, { name: 'port', description: 'validated guest-loopback port.' }, { name: 'signal', description: 'cancellation while waiting for workspace capacity.' }],
+        returns: 'connected tunnel whose close releases the workspace lease.',
+      },
+      {
+        signature: 'capture(): WorkspaceExecutionRuntime',
         description: 'Capture the exact initiating conversation\'s world for one operation.',
         parameters: [],
         returns: 'an operation-local runtime; missing ownership rejects rather than using another workspace.',
       },
       {
-        signature: 'resolveToolchain(): LocalContainerRuntime',
+        signature: 'resolveToolchain(): WorkspaceExecutionRuntime',
         description: 'Resolve the executable lookup world before launching a process.',
         parameters: [],
         returns: 'the conversation world when attributed, otherwise the verified boot toolchain.',
@@ -967,6 +973,35 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Prepare every currently registered field from one immutable base request. Preparation failures reject before HTTP dispatch. Field values are cloned and frozen; providers retain no mutable alias to the outgoing request.',
         parameters: [{ name: 'request', description: 'exact serialized request facts before extension fields.' }],
         returns: 'detached fields and their idempotent joint acceptance transaction.',
+      },
+    ],
+  },
+  {
+    key: 'developmentVms',
+    summary: 'Adds durable VM execution to supervisor-owned conversation workspaces.',
+    description: 'Adds durable VM execution to supervisor-owned conversation workspaces.',
+    methods: [
+      {
+        signature: 'assertReference(reference: unknown): asserts reference is DevelopmentVmReference',
+        description: 'Require a durable record to name this exact effective-profile provider.',
+        parameters: [{ name: 'reference', description: 'untrusted persisted VM identity.' }],
+      },
+      {
+        signature: 'async recover(id: ConversationWorkspaceId, reference?: unknown): Promise<void>',
+        description: 'Quiesce a retained guest before the workspace owner touches its RAM slot.',
+        parameters: [{ name: 'id', description: 'workspace identity derived by the trusted supervisor.' }, { name: 'reference', description: 'persisted provider identity, when recovery already acknowledged a VM.' }],
+      },
+      {
+        signature: 'async open( base: WorkspaceExecutionRuntime, request: DevelopmentVmOpenRequest, ): Promise<{ runtime: WorkspaceExecutionRuntime; dispose(): Promise<void> }>',
+        description: 'Bind a prepared repository to its conversation\'s retained development VM.',
+        parameters: [{ name: 'base', description: 'isolated maintenance controller for the private source directory.' }, { name: 'request', description: 'source generation, provider identity, and process authorization issuer.' }],
+        returns: 'runtime and disposer; disposal retains durable guest storage.',
+      },
+      {
+        signature: 'retention(id: ConversationWorkspaceId, reference: unknown): WorkspaceCheckpointRuntime',
+        description: 'Expose paired snapshot operations for a stopped displaced workspace.',
+        parameters: [{ name: 'id', description: 'retained workspace identity.' }, { name: 'reference', description: 'persisted exact provider identity.' }],
+        returns: 'checkpoint operations that never start guest execution.',
       },
     ],
   },
@@ -4547,6 +4582,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type DeepSeekLlmApiJson = null | boolean | number | string | DeepSeekLlmApiJson[] | {\n    [key: string]: DeepSeekLlmApiJson;\n};',
   },
   {
+    name: 'DevelopmentVmDescriptor',
+    declaration: 'export interface DevelopmentVmDescriptor {\n    version: 1;\n    project: string;\n    storage: string;\n    network: string;\n    acl: string;\n    image: string;\n    workspaceUid: number;\n    workspaceGid: number;\n    cpus: number;\n    memoryBytes: number;\n    diskBytes: number;\n    maxInstances: number;\n    networkPolicy: DevelopmentVmNetworkPolicy;\n}',
+  },
+  {
+    name: 'DevelopmentVmNetworkPolicy',
+    declaration: 'export interface DevelopmentVmNetworkPolicy {\n    version: 1;\n    ipv4: \'private-rfc1918-nat\';\n    ipv6: \'disabled\';\n    defaultIngress: \'reject\';\n    defaultEgress: \'reject\';\n    hostAddresses: string[];\n    deniedNetworks: string[];\n    publicTcpPorts: [80, 443];\n    dnsResolvers: [\'1.1.1.1/32\', \'8.8.8.8/32\'];\n}',
+  },
+  {
+    name: 'DevelopmentVmOpenRequest',
+    declaration: 'export interface DevelopmentVmOpenRequest {\n    id: ConversationWorkspaceId;\n    directory: string;\n    generation: number;\n    checkpointHash: string;\n    retained: boolean;\n    reference?: DevelopmentVmReference;\n    authorize?: () => Promise<readonly string[]>;\n}',
+  },
+  {
+    name: 'DevelopmentVmReference',
+    declaration: 'export interface DevelopmentVmReference {\n    descriptor: DevelopmentVmDescriptor;\n    fingerprint: string;\n}',
+  },
+  {
     name: 'DiffCallView',
     declaration: 'export interface DiffCallView {\n    card: \'diff\';\n    title: string;\n    diffs: FileDiff[];\n    locations?: FileLocation[];\n}',
   },
@@ -5056,7 +5107,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LocalContainerProcessHandle',
-    declaration: 'export interface LocalContainerProcessHandle {\n    readonly id: string;\n    readonly stream: Duplex;\n    readonly tty: boolean;\n    readonly done: Promise<{\n        exitCode: number | null;\n        error?: string;\n    }>;\n    resize(rows: number, cols: number): Promise<void>;\n    inspect(argv: readonly string[], maxOutputBytes: number): Promise<{\n        exitCode: number;\n        output: string;\n    }>;\n    signal(signal: string): Promise<void>;\n    terminate(): Promise<void>;\n    waitForRemoval(signal?: AbortSignal): Promise<boolean>;\n}',
+    declaration: 'export interface LocalContainerProcessHandle {\n    readonly id: string;\n    readonly stream: Duplex;\n    readonly tty: boolean;\n    readonly done: Promise<{\n        exitCode: number | null;\n        error?: string;\n    }>;\n    resize(rows: number, cols: number): Promise<void>;\n    inspect(argv: readonly string[], maxOutputBytes: number): Promise<{\n        exitCode: number;\n        output: string;\n    }>;\n    signal(signal: string): Promise<void>;\n    terminate(): Promise<void>;\n    inspectTerminalForeground?(): Promise<{\n        processGroupId: number;\n        inputWaiting: boolean;\n    } | undefined>;\n    signalTerminalForeground?(signal: string): Promise<number>;\n    waitForRemoval(signal?: AbortSignal): Promise<boolean>;\n}',
   },
   {
     name: 'LocalContainerProcessRequest',
@@ -7125,6 +7176,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'WorkspaceDirectoryListing',
     declaration: 'export interface WorkspaceDirectoryListing {\n    readonly path: string;\n    readonly entries: readonly WorkspaceDirectoryEntry[];\n    readonly truncated: boolean;\n}',
+  },
+  {
+    name: 'WorkspaceCheckpointRuntime',
+    declaration: 'export interface WorkspaceCheckpointRuntime {\n    checkpoint(generation: number, checkpointHash: string): Promise<void>;\n    discardCheckpoint?(generation: number, checkpointHash: string): Promise<void>;\n    pruneCheckpoints(generation: number): Promise<void>;\n}',
+  },
+  {
+    name: 'WorkspaceExecutionRuntime',
+    declaration: 'export interface WorkspaceExecutionRuntime {\n    readonly executionWorld: object;\n    readonly containerName: string;\n    executeController(request: PodmanControllerExecRequest & {\n        readonly deadlineMs: number;\n    }): Promise<PodmanControllerExecResult>;\n    createProcess(request: LocalContainerProcessRequest): Promise<LocalContainerProcessHandle>;\n    settle<T>(timeoutMs: number, operation: (control: (request: PodmanControllerExecRequest & {\n        readonly deadlineMs: number;\n    }) => Promise<PodmanControllerExecResult>) => Promise<T>, quiesce?: () => Promise<void>): Promise<T>;\n    cancelProcesses(): Promise<void>;\n    connectPreview?(port: number): Promise<Duplex>;\n    checkpoint?: WorkspaceCheckpointRuntime[\'checkpoint\'];\n    discardCheckpoint?: WorkspaceCheckpointRuntime[\'discardCheckpoint\'];\n    pruneCheckpoints?: WorkspaceCheckpointRuntime[\'pruneCheckpoints\'];\n}',
   },
   {
     name: 'WorkspaceFileBytes',

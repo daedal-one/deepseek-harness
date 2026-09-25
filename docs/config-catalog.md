@@ -1742,7 +1742,7 @@ export interface LocalContainerRuntimeConfig {
 }
 ```
 
-Source: [`packages/sandbox/local-container-runtime/src/types.ts:290`](../packages/sandbox/local-container-runtime/src/types.ts)
+Source: [`packages/sandbox/local-container-runtime/src/types.ts:294`](../packages/sandbox/local-container-runtime/src/types.ts)
 
 <a id="deepseek-aidsh-lsp-stdio"></a>
 
@@ -2973,7 +2973,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/subprocess/subprocess-local-container/src/index.ts:37`](../packages/subprocess/subprocess-local-container/src/index.ts)
+Source: [`packages/subprocess/subprocess-local-container/src/index.ts:38`](../packages/subprocess/subprocess-local-container/src/index.ts)
 
 <a id="deepseek-aidsh-system-prompt"></a>
 

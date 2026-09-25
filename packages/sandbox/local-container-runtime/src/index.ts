@@ -32,6 +32,8 @@ import type {
 } from './types.ts'
 
 export type {
+  WorkspaceCheckpointRuntime,
+  WorkspaceExecutionRuntime,
   LocalContainerDiagnostics,
   LocalContainerHandle,
   LocalContainerProcessHandle,

@@ -1,7 +1,7 @@
 /** Sandbox-only remote cloning and bounded transfer into environment-owned repositories. @module */
 import { mkdir, mkdtemp, rename, rm, writeFile, lstat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import type { LocalContainerRuntime } from './index.ts'
+import type { WorkspaceExecutionRuntime } from './types.ts'
 import { validateGitRemote } from './git-authorization.ts'
 import { workspaceGit } from './workspace-git.ts'
 import type { WorkspaceLimits } from './workspace-git.ts'
@@ -33,7 +33,7 @@ with tempfile.TemporaryDirectory(prefix='dsh-remote-') as directory:
  * @param signal - request cancellation; cancellation terminates the clone process.
  */
 export async function cloneEnvironmentRepository(
-  runtime: LocalContainerRuntime, repository: EnvironmentRepository, limits: WorkspaceLimits, maxOutputBytes: number, signal: AbortSignal,
+  runtime: WorkspaceExecutionRuntime, repository: EnvironmentRepository, limits: WorkspaceLimits, maxOutputBytes: number, signal: AbortSignal,
 ): Promise<void> {
   validateGitRemote({ ...repository, credentialTimeoutMs: repository.credentialTimeoutMs })
   signal.throwIfAborted()
