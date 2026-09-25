@@ -96,6 +96,13 @@
     - id: plugin-inventory
       name: '@deepseek-ai/dsh-host-plugin-inventory'
 
+    # OpenRouter expense readings for the Web client: the configured inference
+    # key's spend and limit, priced per session. No management key is used.
+    - id: openrouter-spend
+      name: '@deepseek-ai/dsh-openrouter-spend'
+      config:
+        credentialRef: OPENROUTER_API_KEY
+
     # Session commands, cold reads, and live control over Typert Remote.
     - id: session-controller
       name: '@deepseek-ai/dsh-api-session-controller'
@@ -346,3 +353,6 @@
 
     - id: ui-trajectory
       name: '@deepseek-ai/dsh-client-ui-trajectory'
+
+    - id: ui-openrouter-spend
+      name: '@deepseek-ai/dsh-client-ui-openrouter-spend'
