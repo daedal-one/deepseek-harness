@@ -63,8 +63,8 @@ Fetched `origin` with pruning and tags before integration. Verified these candid
 
 ## Publication
 
-- Published `daedal/reconcile-20260925-integration` through `6bf786e46e` after refreshing `origin/master` at `452c2e3e16ecde300bfad142dc4286f83c0a02e3`; no force update or hook bypass was used.
-- Published the repaired but runtime-unqualified VM candidate separately as `daedal/reconcile-20260925-development-vm` at `6dd9c5df5b` (`391d25c283` is the repair commit). It contains the integration branch but is not part of the integration branch.
+- Published `daedal/reconcile-20260925-integration` after refreshing `origin/master` at `452c2e3e16ecde300bfad142dc4286f83c0a02e3`; `caaaa7320e` is its last product repair before record-only updates. No force update or hook bypass was used.
+- Published the repaired but runtime-unqualified VM candidate separately as `daedal/reconcile-20260925-development-vm`; `391d25c283` is the repair commit. The VM branch merges the integration branch, but the integration branch does not contain the VM candidate.
 - Pull-request creation is blocked in this environment: `gh` is not installed, browser automation is unavailable, and the repository-access grant authorizes Git push without exposing an API credential through `git credential fill`. GitHub reports no workflow run for the pushed branch because no PR exists.
 
 ## Remaining issues
