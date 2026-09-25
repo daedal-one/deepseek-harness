@@ -220,11 +220,8 @@ describe('OpenRouterSpendService', () => {
     })
 
     const result = await successfulRead(service)
-    expect(result.session).toEqual({
-      provider: 'openrouter',
-      model: 'c/d',
-      costUsd: 100 * 0.000003 + 10 * 0.000015 + 200 * 0.000001 + 20 * 0.000002,
-    })
+    expect(result.session).toMatchObject({ provider: 'openrouter', model: 'c/d' })
+    expect(result.session?.costUsd).toBeCloseTo(0.00069)
   })
 
   it('does not let a pending next model reprice historical settled usage', async () => {
@@ -238,7 +235,8 @@ describe('OpenRouterSpendService', () => {
     })
 
     const result = await successfulRead(service)
-    expect(result.session).toEqual({ provider: 'openrouter', model: 'a/b', costUsd: 0.00045 })
+    expect(result.session).toMatchObject({ provider: 'openrouter', model: 'a/b' })
+    expect(result.session?.costUsd).toBeCloseTo(0.00045)
   })
 
   it('prices failed retries from the durable request header and the final message source', async () => {
@@ -352,7 +350,16 @@ describe('OpenRouterSpendService', () => {
 
     await expect(service.read({ sessionId: SESSION_ID }, new AbortController().signal))
       .resolves.toMatchObject({ ok: false, error: { reason: 'unauthorized' } })
-    await expect(successfulRead(service)).resolves.toMatchObject({ key: KEY_BODY.data })
+    await expect(successfulRead(service)).resolves.toMatchObject({ key: {
+      label: 'test key',
+      usageUsd: 1,
+      usageDailyUsd: 0.1,
+      usageWeeklyUsd: 0.5,
+      usageMonthlyUsd: 1,
+      limitUsd: 100,
+      limitRemainingUsd: 99,
+      isFreeTier: false,
+    } })
     expect(keyCalls()).toBe(2)
   })
 

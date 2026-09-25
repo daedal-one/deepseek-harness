@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { readFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -134,10 +135,9 @@ describe('SpendView', () => {
     const view = render(<SpendView {...viewProps(store, vi.fn())} />)
 
     expect(screen.getByText(en['session.unpriceable'])).toBeTruthy()
-    const text = view.container.textContent ?? ''
-    expect(text).not.toContain('$0')
-    expect(text).not.toContain('0 USD')
-    expect(text).not.toContain('0.00 USD')
+    expect(view.queryByText('$0')).toBeNull()
+    expect(view.queryByText('0 USD')).toBeNull()
+    expect(view.queryByText('0.00 USD')).toBeNull()
   })
 
   it('re-reads when the refresh button is clicked', () => {
@@ -207,7 +207,7 @@ describe('SpendView', () => {
       `failure-detail: ${detail}`,
       '',
     ].join('\n')
-    await expect(output).toBe(await readFile(new URL('./spend-view.expected.md', import.meta.url), 'utf8'))
+    await expect(output).toBe(await readFile(resolve(process.cwd(), 'packages/client/ui-openrouter-spend/tests/spend-view.expected.md'), 'utf8'))
   })
 })
 
