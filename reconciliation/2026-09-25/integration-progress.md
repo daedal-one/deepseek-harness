@@ -58,15 +58,18 @@ Fetched `origin` with pruning and tags before integration. Verified these candid
 - `gen-persistence-catalog`, `verify-persistence-catalog`, and `verify-tsconfig-paths` passed; generated persistence files are current.
 - `doc-sync` completed 20 gates and failed 12 under the filtered install: missing unselected workspace dependencies, OOM-killed compiler gates, absent VitePress, and existing export-JSDoc findings. The one candidate-owned tsconfig alias failure was repaired and its focused gate now passes.
 - The repository has no installed `spec` command, so `spec lint` is unavailable in this checkout. Targeted typecheck found two spending-client type defects that were repaired; complete typecheck still requires generated Remote artifacts and a full dependency/build environment.
+- Development VM repair targeted typecheck passed, and four source-plane Vitest files passed 36 tests for engine scoping/identity, lifecycle and checkpoint semantics, process authorization, and preview authentication. Real Incus, Docker, Compose, browser, recovery, and network evidence remains unavailable.
+- Python SDK tests could not start because the host Python lacks `pytest`, `pip`, and `ensurepip`; no Python result is claimed.
 
 ## Publication
 
-- Initially published `daedal/reconcile-20260925-integration` at `903396517b619d3c3ca12c03019d91ab5aa6cfcc` after refreshing `origin/master` at `452c2e3e16ecde300bfad142dc4286f83c0a02e3`; no force update or hook bypass was used.
+- Published `daedal/reconcile-20260925-integration` through `6bf786e46e` after refreshing `origin/master` at `452c2e3e16ecde300bfad142dc4286f83c0a02e3`; no force update or hook bypass was used.
+- Published the repaired but runtime-unqualified VM candidate separately as `daedal/reconcile-20260925-development-vm` at `6dd9c5df5b` (`391d25c283` is the repair commit). It contains the integration branch but is not part of the integration branch.
 - Pull-request creation is blocked in this environment: `gh` is not installed, browser automation is unavailable, and the repository-access grant authorizes Git push without exposing an API credential through `git credential fill`. GitHub reports no workflow run for the pushed branch because no PR exists.
 
 ## Remaining issues
 
-- Development VM source repair continues on `daedal/reconcile-20260925-development-vm`; real Incus/Docker/Compose qualification is unavailable because `incus` is absent.
+- Development VM source repair is conflict-free and recoverable on `daedal/reconcile-20260925-development-vm`; do not merge it until real Incus/Docker/Compose/browser/recovery/network qualification is supplied.
 - Run remaining build, generated-Remote, full typecheck, snapshot, and documentation checks through CI or a sufficiently provisioned workspace before any merge.
 - OpenRouter exact-head real-profile GIF evidence cannot be captured without deploying/restarting this existing server or starting another server, both prohibited by this task; keep the candidate unmerged if that repository requirement cannot be satisfied externally.
 - Native-loop commit `9690b85674` is not eligible to port as written: it is a Forge/spec-only status edit with unavailable deployment evidence and is covered by the explicit Forge/Intellect exclusion.
