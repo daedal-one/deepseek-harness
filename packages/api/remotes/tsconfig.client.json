@@ -55,6 +55,9 @@
       "path": "../../llm/llm"
     },
     {
+      "path": "../../llm/openrouter-spend"
+    },
+    {
       "path": "../../preset/agent-presets"
     },
     {
