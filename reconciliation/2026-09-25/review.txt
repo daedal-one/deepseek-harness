@@ -1,0 +1,678 @@
+# DSH branch reconciliation — 2026-09-25
+
+Reference: origin/master 452c2e3e16. GitHub refreshed without pruning; eight live GitHub branches, 23 local branches, no open PRs. Server checkout additionally inspected. No branches merged, deleted, rebased, or pushed. Merge previews use a temporary bare object database and do not change working files. This is a history, scope, duplication and textual-conflict audit, not full code or runtime qualification.
+
+## Recommended integration order
+
+1. Preserve dirty worktrees and the unpublished local master admission commit.
+2. Use codex/host-handoff-release-20260925 as the candidate integration base, retaining all current remote master changes.
+3. Integrate origin/codex/daedal-dsh, then reconcile admission aa7efccb55 and development VM 42d1e4a50e with explicit lifecycle review.
+4. Recover/review server-only OpenRouter spend UI and benchmark work. Reconcile access hover copy with current permission UI.
+5. Validate the assembled result before publication/deployment; archive redundant refs only after all residual work is accounted for.
+
+## Complete local and GitHub inventory
+
+### codex/conversation-profile-access
+
+Local tip: `77e317dd918ba58e7b82aa1d33ab41ddc2476245`. Behind/ahead origin/master: 7/62 (ancestry counts, not semantic novelty). GitHub: no same-name branch.
+
+Alias of published host-maintenance-server, not the completed access feature. Preserve its 40 dirty entries; reconcile with profile-access-ui before retiring.
+
+Unique-history commit sample:
+
+```text
+77e317dd91 feat(sandbox): deploy descriptive branches and conversation provenance
+fa443353f8 feat(daedal): add confirmed host maintenance handoff
+8f5b236efd fix(sandbox): preserve preset internal service scopes
+ee8ad76911 feat(sandbox): admit scoped host maintenance conversations
+cb82c51477 fix(sandbox): detach empty controller input
+dfc283f24d feat(sandbox): add environment-owned repository access
+3fa173803d docs(spec): mark host maintenance deployment complete
+af9a78dc99 merge: preserve companion capabilities in host-maintenance release
+3244b1ab10 feat: add explicit host-maintenance profile defaults
+4f08c83fb9 fix(web): keep phone conversation inside the viewport
+096b7ca4f5 fix(workspace): distinguish rejection before registration writes
+7f6b311e46 feat(workspace): expose read-only canonical registration lookup
+f9b05abb2b fix(client): preserve selected Session creation profile
+7e2c64b482 Merge published conversation workspaces into Daedal migration
+a6bef71641 fix(client): cancel history reads with their conversation view
+ca59f9f11f feat(client): bound retained history details across sessions
+```
+
+Branch contribution from merge base: 550 changed paths.
+
+### codex/customizable-harness-branding
+
+Local tip: `eb9f0075767ee7b5a5dfa00dd5cd43a019c6f571`. Behind/ahead origin/master: 4176/1 (ancestry counts, not semantic novelty). GitHub: `eb9f0075767ee7b5a5dfa00dd5cd43a019c6f571`.
+
+Hold. Old editable branding implementation; current master has deployment branding slots. 76 conflict paths; port only deliberately retained functionality.
+
+Unique-history commit sample:
+
+```text
+eb9f007576 feat(web): add customizable harness branding
+```
+
+Branch contribution from merge base: 112 changed paths.
+
+### codex/daedal-dsh
+
+Local tip: `05a28a1b0438ba1c0eb91e8e919886dcb818a0e9`. Behind/ahead origin/master: 7/55 (ancestry counts, not semantic novelty). GitHub: `7c9f5a3779e4f3d3b0ba8a260a0f45f6c463eb31`.
+
+Integrate latest GitHub tip. Local branch is three commits behind. Remote adds off-page search, caller-owned forks, and cancellation observation beyond the prepared release.
+
+Unique-history commit sample:
+
+```text
+05a28a1b04 feat(session): fork to a caller-owned child identity
+2aa3f7932b feat(client): load off-page Session summaries for search
+4f08c83fb9 fix(web): keep phone conversation inside the viewport
+096b7ca4f5 fix(workspace): distinguish rejection before registration writes
+7f6b311e46 feat(workspace): expose read-only canonical registration lookup
+f9b05abb2b fix(client): preserve selected Session creation profile
+7e2c64b482 Merge published conversation workspaces into Daedal migration
+a6bef71641 fix(client): cancel history reads with their conversation view
+ca59f9f11f feat(client): bound retained history details across sessions
+702a32e989 fix(client): cancel deferred history detail reads
+7619c4fc22 fix(client): expose and own older-history paging failures
+f974042844 docs: record qualified native client and device access
+752e8d433d test: restore merged profile regression fixtures
+4557df30a4 Merge container execution support into Daedal DSH migration
+8a3f74a1bb Merge latest DSH tools and policy changes into migration
+382ff0ca1d test(web): restore Models and sidebar regression coverage
+```
+
+Branch contribution from merge base: 427 changed paths.
+
+### codex/deadal-intellect-profile
+
+Local tip: `be2c8d70f14e441c81430592353144b63d93eefe`. Behind/ahead origin/master: 18/2 (ancestry counts, not semantic novelty). GitHub: no same-name branch.
+
+Hold. Separate conversational Intellect verification profile plus older V4.1 migration. Model migration already has an adapted master version; evaluate profile independently.
+
+Unique-history commit sample:
+
+```text
+be2c8d70f1 feat(llm): migrate shipped model defaults to DeepSeek V4.1 Flash
+a3ad679ba2 feat: add conversational Deadal-intellect verification profiles
+```
+
+Branch contribution from merge base: 629 changed paths.
+
+### codex/deferred-tools-command-rules
+
+Local tip: `d4d63d120a3ff9611c26bc38869a520869e9a38b`. Behind/ahead origin/master: 13/0 (ancestry counts, not semantic novelty). GitHub: no same-name branch.
+
+Already ancestor of current remote master; retirement candidate after worktree checks.
+
+Branch contribution from merge base: 0 changed paths.
+
+### codex/deploy-daedal-styling
+
+Local tip: `4f08c83fb9905a8af7168beca67ec2bf25eb774e`. Behind/ahead origin/master: 7/53 (ancestry counts, not semantic novelty). GitHub: no same-name branch.
+
+Included by the prepared host-handoff release. Retire after that release is reconciled.
+
+Unique-history commit sample:
+
+```text
+4f08c83fb9 fix(web): keep phone conversation inside the viewport
+096b7ca4f5 fix(workspace): distinguish rejection before registration writes
+7f6b311e46 feat(workspace): expose read-only canonical registration lookup
+f9b05abb2b fix(client): preserve selected Session creation profile
+7e2c64b482 Merge published conversation workspaces into Daedal migration
+a6bef71641 fix(client): cancel history reads with their conversation view
+ca59f9f11f feat(client): bound retained history details across sessions
+702a32e989 fix(client): cancel deferred history detail reads
+7619c4fc22 fix(client): expose and own older-history paging failures
+f974042844 docs: record qualified native client and device access
+752e8d433d test: restore merged profile regression fixtures
+4557df30a4 Merge container execution support into Daedal DSH migration
+8a3f74a1bb Merge latest DSH tools and policy changes into migration
+382ff0ca1d test(web): restore Models and sidebar regression coverage
+68284837df feat(connection): discover opted-in Tailscale hosts
+8a8a41953b feat(client): observe authoritative prompt admission
+```
+
+Branch contribution from merge base: 417 changed paths.
+
+### codex/development-vm
+
+Local tip: `42d1e4a50e597e75c370d653c9612fce10a506e5`. Behind/ahead origin/master: 7/1 (ancestry counts, not semantic novelty). GitHub: `42d1e4a50e597e75c370d653c9612fce10a506e5`.
+
+Priority integration. Incus development VMs, Docker/Compose, previews, snapshots and Git return. Eight conflicts against master; fifteen against prepared host release.
+
+Unique-history commit sample:
+
+```text
+42d1e4a50e feat(sandbox): add conversation development VMs
+```
+
+Branch contribution from merge base: 51 changed paths.
+
+### codex/fix-rebased-ci-20260910
+
+Local tip: `d0b5ea12392d80a0cfbbd2a14b9005d8f40a649c`. Behind/ahead origin/master: 19/0 (ancestry counts, not semantic novelty). GitHub: no same-name branch.
+
+Already ancestor of current remote master; retirement candidate.
+
+Branch contribution from merge base: 0 changed paths.
+
+### codex/forge-agent-runtime
+
+Local tip: `7f298bb51e471c97dcfa209688e4ecd2da49034a`. Behind/ahead origin/master: 4139/0 (ancestry counts, not semantic novelty). GitHub: no same-name branch.
+
+Already ancestor of current remote master; retirement candidate.
+
+Branch contribution from merge base: 0 changed paths.
+
+### codex/forge-agent-runtime-main
+
+Local tip: `6cff864f505fe1d95953dce81a4a4e598faf56c3`. Behind/ahead origin/master: 4134/1 (ancestry counts, not semantic novelty). GitHub: no same-name branch.
+
+Optional small port: OCI Forge Intellect revision metadata. Clean textual merge, but review against present image pipeline.
+
+Unique-history commit sample:
+
+```text
+6cff864f50 build(forge): retain exact adapter provenance
+```
+
+Branch contribution from merge base: 3 changed paths.
+
+### codex/forge-browser-integration
+
+Local tip: `a5fe4035aae1d970afdf5217d986093af1e31198`. Behind/ahead origin/master: 4134/12 (ancestry counts, not semantic novelty). GitHub: `a5fe4035aae1d970afdf5217d986093af1e31198`.
+
+Hold for independent modernization. Twelve old commits for toolchain, workspace recovery/publication, confinement and evidence. Twenty conflicts with master.
+
+Unique-history commit sample:
+
+```text
+a5fe4035aa Match Forge adapter evidence to native Intellect action tools v2
+bd5d45c79a feat(forge): refresh bound remote branches without changing local work
+c34aab0a6d fix(runtime): use isolated musl Bun for confined development
+a186f9b55c Bind recovered Forge execution separately from accepted intent
+47c2a5e665 Confine Forge Code tools to registered workspaces
+1f5ce4c6b9 fix(runtime): enable the adapter plugin loader
+0f83567209 feat(forge): publish approved managed workspace branches
+0476d33663 fix(runtime): include Rust formatting and lint components
+e430ff0a2a fix(runtime): keep cleared-environment tool caches inside lease temp
+75c73aca85 fix(forge): retain specification baselines and build integrated runtime
+3b71cb54d3 fix(forge): reopen persisted coding workspaces without reconciliation
+30b872b2da feat(runtime): supply native Forge development toolchains
+```
+
+Branch contribution from merge base: 58 changed paths.
+
+### codex/host-handoff-release-20260925
+
+Local tip: `61ffa1c53d0085bf6d87af7df90da2ae1efc4b6b`. Behind/ahead origin/master: 0/64 (ancestry counts, not semantic novelty). GitHub: no same-name branch.
+
+Best existing reconciliation base. Contains current origin/master plus deployed Daedal/host changes; 64 additional commits, 480 changed files. Not a small handoff-only change.
+
+Unique-history commit sample:
+
+```text
+61ffa1c53d merge: align host deployment with validated master
+2857cb3087 merge: integrate master access policies with host handoff
+77e317dd91 feat(sandbox): deploy descriptive branches and conversation provenance
+fa443353f8 feat(daedal): add confirmed host maintenance handoff
+8f5b236efd fix(sandbox): preserve preset internal service scopes
+ee8ad76911 feat(sandbox): admit scoped host maintenance conversations
+cb82c51477 fix(sandbox): detach empty controller input
+dfc283f24d feat(sandbox): add environment-owned repository access
+3fa173803d docs(spec): mark host maintenance deployment complete
+af9a78dc99 merge: preserve companion capabilities in host-maintenance release
+3244b1ab10 feat: add explicit host-maintenance profile defaults
+4f08c83fb9 fix(web): keep phone conversation inside the viewport
+096b7ca4f5 fix(workspace): distinguish rejection before registration writes
+7f6b311e46 feat(workspace): expose read-only canonical registration lookup
+f9b05abb2b fix(client): preserve selected Session creation profile
+7e2c64b482 Merge published conversation workspaces into Daedal migration
+```
+
+Branch contribution from merge base: 480 changed paths.
+
+### codex/host-maintenance
+
+Local tip: `3244b1ab1060566f0cc864f5f4b6930c08a495e8`. Behind/ahead origin/master: 7/1 (ancestry counts, not semantic novelty). GitHub: `3244b1ab1060566f0cc864f5f4b6930c08a495e8`.
+
+Feature implementation files match current master; adapted commit exists there. Also included by release branch. No separate feature merge needed.
+
+Unique-history commit sample:
+
+```text
+3244b1ab10 feat: add explicit host-maintenance profile defaults
+```
+
+Branch contribution from merge base: 18 changed paths.
+
+### codex/host-maintenance-server
+
+Local tip: `0e4ae9dfe322646706fa371dfe3ed84a0c2b968c`. Behind/ahead origin/master: 7/60 (ancestry counts, not semantic novelty). GitHub: `77e317dd918ba58e7b82aa1d33ab41ddc2476245`.
+
+Local and GitHub histories diverge. Prefer prepared release lineage; preserve and reconcile dirty local work rather than wholesale merge this branch.
+
+Unique-history commit sample:
+
+```text
+0e4ae9dfe3 feat(daedal): complete confirmed host maintenance handoff
+906c79b82f feat(sandbox): name saved branches and retain conversation provenance
+cb82c51477 fix(sandbox): detach empty controller input
+dfc283f24d feat(sandbox): add environment-owned repository access
+3fa173803d docs(spec): mark host maintenance deployment complete
+af9a78dc99 merge: preserve companion capabilities in host-maintenance release
+3244b1ab10 feat: add explicit host-maintenance profile defaults
+4f08c83fb9 fix(web): keep phone conversation inside the viewport
+096b7ca4f5 fix(workspace): distinguish rejection before registration writes
+7f6b311e46 feat(workspace): expose read-only canonical registration lookup
+f9b05abb2b fix(client): preserve selected Session creation profile
+7e2c64b482 Merge published conversation workspaces into Daedal migration
+a6bef71641 fix(client): cancel history reads with their conversation view
+ca59f9f11f feat(client): bound retained history details across sessions
+702a32e989 fix(client): cancel deferred history detail reads
+7619c4fc22 fix(client): expose and own older-history paging failures
+```
+
+Branch contribution from merge base: 539 changed paths.
+
+### codex/native-loop-main-host
+
+Local tip: `9690b856743ab04559696597cfac800fe5676293`. Behind/ahead origin/master: 7/61 (ancestry counts, not semantic novelty). GitHub: no same-name branch.
+
+Only additional commit beyond prepared release is acceptance documentation. Textual merge is clean; verify historical claims before retaining.
+
+Unique-history commit sample:
+
+```text
+9690b85674 docs(spec): record native main Host loop acceptance
+8f5b236efd fix(sandbox): preserve preset internal service scopes
+ee8ad76911 feat(sandbox): admit scoped host maintenance conversations
+cb82c51477 fix(sandbox): detach empty controller input
+dfc283f24d feat(sandbox): add environment-owned repository access
+3fa173803d docs(spec): mark host maintenance deployment complete
+af9a78dc99 merge: preserve companion capabilities in host-maintenance release
+3244b1ab10 feat: add explicit host-maintenance profile defaults
+4f08c83fb9 fix(web): keep phone conversation inside the viewport
+096b7ca4f5 fix(workspace): distinguish rejection before registration writes
+7f6b311e46 feat(workspace): expose read-only canonical registration lookup
+f9b05abb2b fix(client): preserve selected Session creation profile
+7e2c64b482 Merge published conversation workspaces into Daedal migration
+a6bef71641 fix(client): cancel history reads with their conversation view
+ca59f9f11f feat(client): bound retained history details across sessions
+702a32e989 fix(client): cancel deferred history detail reads
+```
+
+Branch contribution from merge base: 489 changed paths.
+
+### codex/pre-upstream-rebase-20260909
+
+Local tip: `9a27dd4f11c994ff236ba14c00573f2e64207ff0`. Behind/ahead origin/master: 4134/1 (ancestry counts, not semantic novelty). GitHub: no same-name branch.
+
+Same tip as docs/paseo-acp-poc. Historical backup; Paseo proof adapted into current master at apps/cli/config/examples/paseo.
+
+Unique-history commit sample:
+
+```text
+9a27dd4f11 docs(acp): add Paseo compatibility proof
+```
+
+Branch contribution from merge base: 5 changed paths.
+
+### docs/paseo-acp-poc
+
+Local tip: `9a27dd4f11c994ff236ba14c00573f2e64207ff0`. Behind/ahead origin/master: 4134/1 (ancestry counts, not semantic novelty). GitHub: no same-name branch.
+
+Proof already adapted into master at new paths. Do not merge old example launchers back.
+
+Unique-history commit sample:
+
+```text
+9a27dd4f11 docs(acp): add Paseo compatibility proof
+```
+
+Branch contribution from merge base: 5 changed paths.
+
+### codex/profile-access-main
+
+Local tip: `3e2f9ea793e9ae54f3c931c67a8af00c3a6bdd55`. Behind/ahead origin/master: 5/0 (ancestry counts, not semantic novelty). GitHub: no same-name branch.
+
+Already ancestor of current remote master; retirement candidate.
+
+Branch contribution from merge base: 0 changed paths.
+
+### codex/profile-access-ui
+
+Local tip: `8d7b6034fd035131c13ffd01630d23868d2412e7`. Behind/ahead origin/master: 7/63 (ancestry counts, not semantic novelty). GitHub: `8d7b6034fd035131c13ffd01630d23868d2412e7`.
+
+Access implementation matches master in inspected source modules. Remaining merge conflicts against release are two intent/documentation files; reconcile those only.
+
+Unique-history commit sample:
+
+```text
+8d7b6034fd feat(access): bind conversation policies to profiles
+77e317dd91 feat(sandbox): deploy descriptive branches and conversation provenance
+fa443353f8 feat(daedal): add confirmed host maintenance handoff
+8f5b236efd fix(sandbox): preserve preset internal service scopes
+ee8ad76911 feat(sandbox): admit scoped host maintenance conversations
+cb82c51477 fix(sandbox): detach empty controller input
+dfc283f24d feat(sandbox): add environment-owned repository access
+3fa173803d docs(spec): mark host maintenance deployment complete
+af9a78dc99 merge: preserve companion capabilities in host-maintenance release
+3244b1ab10 feat: add explicit host-maintenance profile defaults
+4f08c83fb9 fix(web): keep phone conversation inside the viewport
+096b7ca4f5 fix(workspace): distinguish rejection before registration writes
+7f6b311e46 feat(workspace): expose read-only canonical registration lookup
+f9b05abb2b fix(client): preserve selected Session creation profile
+7e2c64b482 Merge published conversation workspaces into Daedal migration
+a6bef71641 fix(client): cancel history reads with their conversation view
+```
+
+Branch contribution from merge base: 587 changed paths.
+
+### codex/rebase-upstream-20260909
+
+Local tip: `d535aa79f6f2f245f2c583eed5654a55e11d7d63`. Behind/ahead origin/master: 20/0 (ancestry counts, not semantic novelty). GitHub: no same-name branch.
+
+Already ancestor of current remote master; retirement candidate.
+
+Branch contribution from merge base: 0 changed paths.
+
+### codex/restore-codex-account-auth
+
+Local tip: `30d8637df1b7ce1c0bf08aa6f377a2a348b97ef5`. Behind/ahead origin/master: 14/0 (ancestry counts, not semantic novelty). GitHub: no same-name branch.
+
+Already ancestor of current remote master; retirement candidate.
+
+Branch contribution from merge base: 0 changed paths.
+
+### codex/workspace-flow-design
+
+Local tip: `3a8a470db2c3f11b5421791cb1447adccb4c1aa4`. Behind/ahead origin/master: 8/0 (ancestry counts, not semantic novelty). GitHub: no same-name branch.
+
+Already ancestor of current remote master; retirement candidate.
+
+Branch contribution from merge base: 0 changed paths.
+
+### master
+
+Local tip: `aa7efccb559bf20fc415322d132c64e0a5a03cc8`. Behind/ahead origin/master: 6/1 (ancestry counts, not semantic novelty). GitHub: `452c2e3e16ecde300bfad142dc4286f83c0a02e3`.
+
+Local master has unpublished aa7efccb55 workspace-execution admission, 40 files. Six commits behind origin/master. Preserve and integrate; clean merge against origin/master, eight conflicts against prepared release.
+
+Unique-history commit sample:
+
+```text
+aa7efccb55 fix(sandbox): queue workspace execution without blocking chats
+```
+
+Branch contribution from merge base: 40 changed paths.
+
+## Server-only branches
+
+Server checkout /home/carlo/devel/deepseek-harness has 24 local branches (22 generated result refs, feat/benchmarking, master). These refs are absent from GitHub. Its master is 4348c72ef92; the running service uses a separate release directory.
+
+| Branch | Tip |
+|---|---|
+| `dsh/009a0e66773f48ee8fc5531c88435f64/b5180223165af3583fd07242/turn-1` | `e9f3c858daf` |
+| `dsh/009a0e66773f48ee8fc5531c88435f64/b5180223165af3583fd07242/turn-2` | `e9f3c858daf` |
+| `dsh/009a0e66773f48ee8fc5531c88435f64/fea75a8f85579853e482953b/turn-1` | `e9f3c858daf` |
+| `dsh/009a0e66773f48ee8fc5531c88435f64/fea75a8f85579853e482953b/turn-2` | `e9f3c858daf` |
+| `dsh/503d02c8d4a640b1bd21767c39a5e490/b5180223165af3583fd07242/turn-1` | `4348c72ef92` |
+| `dsh/503d02c8d4a640b1bd21767c39a5e490/b5180223165af3583fd07242/turn-2` | `4348c72ef92` |
+| `dsh/503d02c8d4a640b1bd21767c39a5e490/b5180223165af3583fd07242/turn-3` | `4348c72ef92` |
+| `dsh/503d02c8d4a640b1bd21767c39a5e490/b5180223165af3583fd07242/turn-4` | `4348c72ef92` |
+| `dsh/503d02c8d4a640b1bd21767c39a5e490/b5180223165af3583fd07242/turn-5` | `4348c72ef92` |
+| `dsh/503d02c8d4a640b1bd21767c39a5e490/b5180223165af3583fd07242/turn-6` | `4348c72ef92` |
+| `dsh/503d02c8d4a640b1bd21767c39a5e490/fea75a8f85579853e482953b/turn-1` | `4348c72ef92` |
+| `dsh/503d02c8d4a640b1bd21767c39a5e490/fea75a8f85579853e482953b/turn-2` | `4348c72ef92` |
+| `dsh/503d02c8d4a640b1bd21767c39a5e490/fea75a8f85579853e482953b/turn-3` | `4348c72ef92` |
+| `dsh/503d02c8d4a640b1bd21767c39a5e490/fea75a8f85579853e482953b/turn-4` | `4348c72ef92` |
+| `dsh/503d02c8d4a640b1bd21767c39a5e490/fea75a8f85579853e482953b/turn-5` | `4348c72ef92` |
+| `dsh/503d02c8d4a640b1bd21767c39a5e490/fea75a8f85579853e482953b/turn-6` | `4348c72ef92` |
+| `dsh/f1c706ee356149bd9c7838777a5a2e5c/b5180223165af3583fd07242/turn-1` | `4348c72ef92` |
+| `dsh/f1c706ee356149bd9c7838777a5a2e5c/fea75a8f85579853e482953b/turn-1` | `4348c72ef92` |
+| `dsh/openrouter-expense-monitoring-0ef7b51ef4193ce39a39bd9e/turn-2` | `5541613ddcb` |
+| `dsh/openrouter-expense-monitoring-0ef7b51ef4193ce39a39bd9e/turn-3` | `a8620a9fc2c` |
+| `dsh/openrouter-expense-monitoring-20f504c806ea06c64fb4678c/turn-2` | `5541613ddcb` |
+| `dsh/openrouter-expense-monitoring-20f504c806ea06c64fb4678c/turn-3` | `a8620a9fc2c` |
+| `feat/benchmarking` | `1f61cb40d25` |
+| `master` | `4348c72ef92` |
+
+- e9f3c858daf: access-mode hover descriptions, ten files. Overlaps the newer profile access selector; port selectively.
+- 5541613ddcb: first expense-monitoring variant, 41 files. a8620a9fc2c is an alternate revised commit, not its descendant; do not merge both.
+- a8620a9fc2c: preferred expense-monitoring candidate, 45 files; adds generated catalog updates, client slot adjustments and service fixes/tests. Requires fresh validation.
+- 1f61cb40d25: coding-delivery benchmark, 22 files. Commit says WIP but TASK says done; qualification unresolved. It is not a 100-agent load benchmark.
+- Fourteen generated refs point to unchanged server master: no new code to merge. Preserve provenance as needed.
+
+## Textual merge previews
+
+### origin/master + codex/development-vm
+
+8 conflicting paths:
+
+- `docs/capability-seams.md`
+- `packages/sandbox/local-container-runtime/README.md`
+- `packages/sandbox/local-container-runtime/package.json`
+- `packages/sandbox/local-container-runtime/tests/fixtures/workspace-outcomes.ts`
+- `packages/sandbox/local-container-runtime/tests/workspaces.e2e.ts`
+- `packages/sandbox/local-container-runtime/tsconfig.json`
+- `scripts/gen-cordis-catalog.ts`
+- `scripts/gen-doc-graphs.ts`
+
+### origin/master + master
+
+Clean textual merge.
+
+
+### origin/master + codex/deadal-intellect-profile
+
+16 conflicting paths:
+
+- `apps/cli/package.json`
+- `docs/capability-seams.md`
+- `docs/event-producer-consumer.md`
+- `docs/module-graph.md`
+- `docs/tool-catalog.md`
+- `packages/integration/README.md`
+- `packages/sdk/client/tests/sdk-client.spec.ts`
+- `pnpm-lock.yaml`
+- `scripts/gen-doc-graphs.ts`
+- `scripts/gen-tool-catalog.ts`
+- `snapshots/sdk/bash-tool/notifications.expected.jsonl`
+- `snapshots/sdk/bash-tool/session.v3.jsonl`
+- `snapshots/session/bash-tool-turn/session.v3.jsonl`
+- `snapshots/web/lifecycle-chrome/hero.expected.md`
+- `snapshots/web/lifecycle-chrome/plan-active.expected.md`
+- `snapshots/web/permission-policy-context/session.v3.jsonl`
+
+### origin/master + codex/customizable-harness-branding
+
+76 conflicting paths:
+
+- `apps/web/index.html`
+- `apps/web/tests/assembled-boot.ts`
+- `apps/web/tests/scaffold.ts`
+- `apps/web/tests/settings-chrome.e2e.ts`
+- `apps/web/tests/smoke-real.e2e.ts`
+- `apps/web/tests/snapshots/settings-chrome/dialog.expected.md`
+- `docs/config-catalog.i18n.yaml`
+- `docs/config-catalog.md`
+- `docs/config-catalog.zh.md`
+- `packages/bundle/web-app/README.i18n.yaml`
+- `packages/bundle/web-app/README.md`
+- `packages/bundle/web-app/README.zh.md`
+- `packages/bundle/web-app/package.json`
+- `packages/client/README.i18n.yaml`
+- `packages/client/README.md`
+- `packages/client/README.zh.md`
+- `packages/client/ui-conversation/README.i18n.yaml`
+- `packages/client/ui-conversation/README.md`
+- `packages/client/ui-conversation/README.zh.md`
+- `packages/client/ui-conversation/package.json`
+- `packages/client/ui-conversation/src/client/apply.ts`
+- `packages/client/ui-conversation/src/client/contract/slots.ts`
+- `packages/client/ui-conversation/src/client/skeleton/ConversationRoot.tsx`
+- `packages/client/ui-conversation/src/client/skeleton/EmptyHero.tsx`
+- `packages/client/ui-conversation/tests/apply-inject.client.spec.tsx`
+- `packages/client/ui-conversation/tests/assembly-surfaces.client.spec.tsx`
+- `packages/client/ui-conversation/tests/chat-apply.client.spec.tsx`
+- `packages/client/ui-conversation/tests/skeleton.client.spec.tsx`
+- `packages/client/ui-conversation/tsconfig.json`
+- `packages/client/ui-primitives/README.i18n.yaml`
+- `packages/client/ui-primitives/README.md`
+- `packages/client/ui-primitives/README.zh.md`
+- `packages/client/ui-primitives/src/BrandWordmark.tsx`
+- `packages/client/ui-primitives/src/index.ts`
+- `packages/client/ui-primitives/tests/icons.client.spec.tsx`
+- `packages/client/ui-sidebar/README.i18n.yaml`
+- `packages/client/ui-sidebar/README.md`
+- `packages/client/ui-sidebar/README.zh.md`
+- `packages/client/ui-sidebar/package.json`
+- `packages/client/ui-sidebar/src/client/SidebarRoot.module.css`
+- `packages/client/ui-sidebar/src/client/SidebarRoot.tsx`
+- `packages/client/ui-sidebar/src/client/contract/slots.ts`
+- `packages/client/ui-sidebar/src/client/index.ts`
+- `packages/client/ui-sidebar/tests/__snapshots__/sidebar-snapshot.client.spec.tsx.snap`
+- `packages/client/ui-sidebar/tests/apply.client.spec.tsx`
+- `packages/client/ui-sidebar/tests/pointer-scrollbars.client.spec.tsx`
+- `packages/client/ui-sidebar/tests/sidebar-root.client.spec.tsx`
+- `packages/client/ui-sidebar/tests/sidebar-snapshot.client.spec.tsx`
+- `packages/client/ui-sidebar/tsconfig.json`
+- `packages/client/ui-tool/tests/assembly-surfaces.client.spec.tsx`
+- `packages/client/ui-tool/tests/chat-code-subcalls.client.spec.tsx`
+- `packages/client/ui-tool/tests/toolview-slot.client.spec.tsx`
+- `packages/client/web/README.i18n.yaml`
+- `packages/client/web/README.md`
+- `packages/client/web/README.zh.md`
+- `packages/client/web/package.json`
+- `packages/client/web/src/AppRoot.tsx`
+- `packages/client/web/src/DocumentTitle.tsx`
+- `packages/client/web/src/app-shell.ts`
+- `packages/client/web/src/app.tsx`
+- `packages/client/web/tests/app-root.client.spec.tsx`
+- `packages/client/web/tests/app-shell.client.spec.tsx`
+- `packages/client/web/tests/app.client.spec.tsx`
+- `packages/client/web/tests/document-title.client.spec.tsx`
+- `packages/client/web/tsconfig.json`
+- `packages/extensions/cordis-client-runner/src/client/slot-catalog.ts`
+- `packages/host/apiproxy/README.i18n.yaml`
+- `packages/host/apiproxy/README.md`
+- `packages/host/apiproxy/README.zh.md`
+- `packages/host/apiproxy/src/api-proxy.ts`
+- `packages/host/apiproxy/tests/api-proxy-config.spec.ts`
+- `pnpm-lock.yaml`
+- `scripts/gen-cordis-catalog.ts`
+- `scripts/verify-package-readme-model-experience.ts`
+- `snapshots/web/lifecycle-chrome/hero.expected.md`
+- `snapshots/web/lifecycle-chrome/plan-active.expected.md`
+
+### origin/master + codex/forge-browser-integration
+
+20 conflicting paths:
+
+- `.agents/notes/implemented/feature/2026-08-24-forge-session-process-boundary.md`
+- `apps/cli/src/profile-boot.ts`
+- `docs/subsystems/core.md`
+- `docs/subsystems/workspace.md`
+- `docs/tool-catalog.md`
+- `native/landlock-run/README.md`
+- `native/landlock-run/packages/entry/README.md`
+- `native/landlock-run/packages/entry/package.json`
+- `native/system/CHANGELOG.md`
+- `native/system/package.json`
+- `native/system/packages/linux-arm64/package.json`
+- `native/system/packages/linux-x64/package.json`
+- `native/system/test/entry.test.js`
+- `native/system/test/launcher.test.js`
+- `packages/integration/forge-project-workspaces/README.md`
+- `packages/integration/forge-project-workspaces/package.json`
+- `packages/integration/forge-session-adapter/README.md`
+- `packages/web/web-fetch-http/src/provider.ts`
+- `scripts/gen-tool-catalog.ts`
+- `scripts/verify-package-readme-model-experience.ts`
+
+### origin/master + codex/forge-agent-runtime-main
+
+Clean textual merge.
+
+
+### origin/master + docs/paseo-acp-poc
+
+2 conflicting paths:
+
+- `.agents/notes/implemented/testing/2026-06-19-acp-snapshot-tests.md`
+- `examples/acp-agent/README.md`
+
+### codex/host-handoff-release-20260925 + origin/codex/daedal-dsh
+
+Clean textual merge.
+
+
+### codex/host-handoff-release-20260925 + codex/host-maintenance-server
+
+7 conflicting paths:
+
+- `.agents/notes/implemented/architecture/2026-09-21-host-maintenance-profiles.md`
+- `packages/sandbox/local-container-runtime/README.md`
+- `packages/sandbox/local-container-runtime/src/workspaces.ts`
+- `packages/sandbox/local-container-runtime/tests/workspaces.e2e.ts`
+- `packages/sandbox/local-container-runtime/tests/workspaces.spec.ts`
+- `packages/sandbox/local-container-runtime/tsconfig.json`
+- `snapshots/session/daedal-host-handoff/session.v3.jsonl`
+
+### codex/host-handoff-release-20260925 + codex/profile-access-ui
+
+2 conflicting paths:
+
+- `.agents/notes/implemented/architecture/2026-09-24-conversation-profile-access.md`
+- `.specs/tasks/conversation-profile-access.spec.md`
+
+### codex/host-handoff-release-20260925 + codex/native-loop-main-host
+
+Clean textual merge.
+
+
+### codex/host-handoff-release-20260925 + master
+
+8 conflicting paths:
+
+- `.specs/sandbox/conversation-git-workspace.spec.md`
+- `docs/persistence-catalog.md`
+- `packages/client/ui-chat/README.md`
+- `packages/client/ui-chat/src/client/conversation-nodes/workspace.ts`
+- `packages/sandbox/local-container-runtime/src/workspaces.ts`
+- `packages/sandbox/local-container-runtime/tests/fixtures/workspace-outcomes.ts`
+- `packages/sandbox/local-container-runtime/tests/workspaces.e2e.ts`
+- `packages/sandbox/local-container-runtime/tests/workspaces.spec.ts`
+
+### codex/host-handoff-release-20260925 + codex/development-vm
+
+15 conflicting paths:
+
+- `.agents/notes/implemented/architecture/2026-09-20-conversation-git-workspace.md`
+- `docs/capability-seams.md`
+- `docs/event-producer-consumer.md`
+- `docs/subsystems/sandbox.md`
+- `packages/sandbox/local-container-runtime/README.md`
+- `packages/sandbox/local-container-runtime/package.json`
+- `packages/sandbox/local-container-runtime/src/workspaces.ts`
+- `packages/sandbox/local-container-runtime/tests/fixtures/workspace-outcomes.ts`
+- `packages/sandbox/local-container-runtime/tests/workspaces.e2e.ts`
+- `packages/sandbox/local-container-runtime/tsconfig.json`
+- `packages/sandbox/local-container-runtime/tsdown.config.ts`
+- `pnpm-lock.yaml`
+- `scripts/check-workspace-constraints.ts`
+- `scripts/gen-cordis-catalog.ts`
+- `scripts/gen-doc-graphs.ts`
+
+## Uncommitted work and cleanup constraints
+
+- Current checkout: 81 status entries; mixed admission and access changes, including an untracked Python environment.
+- /private/tmp/dsh-profile-access-publish: 40 status entries; profile-access publication staging.
+- /private/tmp/daedal-handoff-deploy-20260923 and /private/tmp/dsh-handoff-validation: 26 entries each; handoff changes.
+- Native-loop and Daedal worktrees each contain an untracked .dev/ directory.
+- Server checkout contains untracked oom; not inspected or assumed disposable.
+- Several registered /private/tmp worktrees are missing. Their branches still retain commits. Do not confuse missing directories with merged work.
+- No additional tests or CI qualification were performed for these branch combinations. Clean textual merges do not establish compatibility.

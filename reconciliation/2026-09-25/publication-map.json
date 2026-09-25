@@ -1,0 +1,117 @@
+[
+  {
+    "source": "codex/conversation-profile-access",
+    "sha": "77e317dd918ba58e7b82aa1d33ab41ddc2476245",
+    "destination": "codex/conversation-profile-access"
+  },
+  {
+    "source": "codex/customizable-harness-branding",
+    "sha": "eb9f0075767ee7b5a5dfa00dd5cd43a019c6f571",
+    "destination": "codex/customizable-harness-branding"
+  },
+  {
+    "source": "codex/daedal-dsh",
+    "sha": "05a28a1b0438ba1c0eb91e8e919886dcb818a0e9",
+    "destination": "codex/reconcile-20260925/local-daedal-dsh"
+  },
+  {
+    "source": "codex/deadal-intellect-profile",
+    "sha": "be2c8d70f14e441c81430592353144b63d93eefe",
+    "destination": "codex/deadal-intellect-profile"
+  },
+  {
+    "source": "codex/deferred-tools-command-rules",
+    "sha": "d4d63d120a3ff9611c26bc38869a520869e9a38b",
+    "destination": "codex/deferred-tools-command-rules"
+  },
+  {
+    "source": "codex/deploy-daedal-styling",
+    "sha": "4f08c83fb9905a8af7168beca67ec2bf25eb774e",
+    "destination": "codex/deploy-daedal-styling"
+  },
+  {
+    "source": "codex/development-vm",
+    "sha": "42d1e4a50e597e75c370d653c9612fce10a506e5",
+    "destination": "codex/development-vm"
+  },
+  {
+    "source": "codex/fix-rebased-ci-20260910",
+    "sha": "d0b5ea12392d80a0cfbbd2a14b9005d8f40a649c",
+    "destination": "codex/fix-rebased-ci-20260910"
+  },
+  {
+    "source": "codex/forge-agent-runtime",
+    "sha": "7f298bb51e471c97dcfa209688e4ecd2da49034a",
+    "destination": "codex/forge-agent-runtime"
+  },
+  {
+    "source": "codex/forge-agent-runtime-main",
+    "sha": "6cff864f505fe1d95953dce81a4a4e598faf56c3",
+    "destination": "codex/forge-agent-runtime-main"
+  },
+  {
+    "source": "codex/forge-browser-integration",
+    "sha": "a5fe4035aae1d970afdf5217d986093af1e31198",
+    "destination": "codex/forge-browser-integration"
+  },
+  {
+    "source": "codex/host-handoff-release-20260925",
+    "sha": "61ffa1c53d0085bf6d87af7df90da2ae1efc4b6b",
+    "destination": "codex/host-handoff-release-20260925"
+  },
+  {
+    "source": "codex/host-maintenance",
+    "sha": "3244b1ab1060566f0cc864f5f4b6930c08a495e8",
+    "destination": "codex/host-maintenance"
+  },
+  {
+    "source": "codex/host-maintenance-server",
+    "sha": "0e4ae9dfe322646706fa371dfe3ed84a0c2b968c",
+    "destination": "codex/reconcile-20260925/local-host-maintenance-server"
+  },
+  {
+    "source": "codex/native-loop-main-host",
+    "sha": "9690b856743ab04559696597cfac800fe5676293",
+    "destination": "codex/native-loop-main-host"
+  },
+  {
+    "source": "codex/pre-upstream-rebase-20260909",
+    "sha": "9a27dd4f11c994ff236ba14c00573f2e64207ff0",
+    "destination": "codex/pre-upstream-rebase-20260909"
+  },
+  {
+    "source": "codex/profile-access-main",
+    "sha": "3e2f9ea793e9ae54f3c931c67a8af00c3a6bdd55",
+    "destination": "codex/profile-access-main"
+  },
+  {
+    "source": "codex/profile-access-ui",
+    "sha": "8d7b6034fd035131c13ffd01630d23868d2412e7",
+    "destination": "codex/profile-access-ui"
+  },
+  {
+    "source": "codex/rebase-upstream-20260909",
+    "sha": "d535aa79f6f2f245f2c583eed5654a55e11d7d63",
+    "destination": "codex/rebase-upstream-20260909"
+  },
+  {
+    "source": "codex/restore-codex-account-auth",
+    "sha": "30d8637df1b7ce1c0bf08aa6f377a2a348b97ef5",
+    "destination": "codex/restore-codex-account-auth"
+  },
+  {
+    "source": "codex/workspace-flow-design",
+    "sha": "3a8a470db2c3f11b5421791cb1447adccb4c1aa4",
+    "destination": "codex/workspace-flow-design"
+  },
+  {
+    "source": "docs/paseo-acp-poc",
+    "sha": "9a27dd4f11c994ff236ba14c00573f2e64207ff0",
+    "destination": "docs/paseo-acp-poc"
+  },
+  {
+    "source": "master",
+    "sha": "aa7efccb559bf20fc415322d132c64e0a5a03cc8",
+    "destination": "codex/reconcile-20260925/local-master"
+  }
+]

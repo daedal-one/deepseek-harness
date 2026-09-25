@@ -1,0 +1,104 @@
+[
+  {
+    "name": "current",
+    "path": "/Users/carlo/Devel/daedal-one/infrastracture/deepseek-harness",
+    "head": "0e4ae9dfe322646706fa371dfe3ed84a0c2b968c",
+    "excluded": [
+      "python/sdk/.venv"
+    ],
+    "files": [
+      {
+        "path": "current.staged.patch.gz",
+        "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+        "bytes": 0,
+        "compression": "gzip"
+      },
+      {
+        "path": "current.unstaged.patch.gz",
+        "sha256": "b1c6d7d6229fb67ed1db4b9433d17bce33337b051af6ff21c7369021dc3ed8e1",
+        "bytes": 333982,
+        "compression": "gzip"
+      },
+      {
+        "path": "current.untracked.json",
+        "sha256": "8160d323443f6c233d79eb039dc63bfb24dff9bc6036e72317d1b8b6d8171795",
+        "entries": 14
+      }
+    ]
+  },
+  {
+    "name": "handoff-deploy",
+    "path": "/private/tmp/daedal-handoff-deploy-20260923",
+    "head": "8f5b236efd727a6c72f666cd0c088c0d84931532",
+    "excluded": [],
+    "files": [
+      {
+        "path": "handoff-deploy.staged.patch.gz",
+        "sha256": "05f8dd5ed5293f475e7961cda233071a1f1999ad69b4ca6e20d7fef45a5d8f9d",
+        "bytes": 40953,
+        "compression": "gzip"
+      },
+      {
+        "path": "handoff-deploy.unstaged.patch.gz",
+        "sha256": "0de8ee98cbcbf13bbc81a010a1eef2bb4804253e273b0cce1048e0daa53d3b6c",
+        "bytes": 544,
+        "compression": "gzip"
+      },
+      {
+        "path": "handoff-deploy.untracked.json",
+        "sha256": "5295c908d958a3e04705bcd98f0e6c959f822057ce1aa8dc086e248b97bfed08",
+        "entries": 22
+      }
+    ]
+  },
+  {
+    "name": "handoff-validation",
+    "path": "/private/tmp/dsh-handoff-validation",
+    "head": "906c79b82f2f682b73819d5cc9247c09dadabe17",
+    "excluded": [],
+    "files": [
+      {
+        "path": "handoff-validation.staged.patch.gz",
+        "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+        "bytes": 0,
+        "compression": "gzip"
+      },
+      {
+        "path": "handoff-validation.unstaged.patch.gz",
+        "sha256": "1218447923408937fd9822d8641b2c1234fda3f56a9b4130206ee4d34affa946",
+        "bytes": 40515,
+        "compression": "gzip"
+      },
+      {
+        "path": "handoff-validation.untracked.json",
+        "sha256": "790695b206a80908fcc18d829eaaec1a3d884ffd08b6ed3c95dc739a9aafa7ed",
+        "entries": 22
+      }
+    ]
+  },
+  {
+    "name": "access-staging",
+    "path": "/private/tmp/dsh-profile-access-publish",
+    "head": "77e317dd918ba58e7b82aa1d33ab41ddc2476245",
+    "excluded": [],
+    "files": [
+      {
+        "path": "access-staging.staged.patch.gz",
+        "sha256": "2074c5430c4b8fdfc171096e83c469a8575f040777a968ba63997111d019aa2a",
+        "bytes": 176900,
+        "compression": "gzip"
+      },
+      {
+        "path": "access-staging.unstaged.patch.gz",
+        "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+        "bytes": 0,
+        "compression": "gzip"
+      },
+      {
+        "path": "access-staging.untracked.json",
+        "sha256": "29a19fc7f66fb8edf44dfecc0a43b5edbaab828c17ea9c1ade029dd89b445760",
+        "entries": 11
+      }
+    ]
+  }
+]

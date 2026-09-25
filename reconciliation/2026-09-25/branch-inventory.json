@@ -1,0 +1,448 @@
+[
+  {
+    "names": [
+      "codex/conversation-profile-access",
+      "origin/codex/host-maintenance-server"
+    ],
+    "sha": "77e317dd918ba58e7b82aa1d33ab41ddc2476245",
+    "behind_ahead": "7\t62",
+    "commits": "77e317dd91 feat(sandbox): deploy descriptive branches and conversation provenance\nfa443353f8 feat(daedal): add confirmed host maintenance handoff\n8f5b236efd fix(sandbox): preserve preset internal service scopes\nee8ad76911 feat(sandbox): admit scoped host maintenance conversations\ncb82c51477 fix(sandbox): detach empty controller input\ndfc283f24d feat(sandbox): add environment-owned repository access\n3fa173803d docs(spec): mark host maintenance deployment complete\naf9a78dc99 merge: preserve companion capabilities in host-maintenance release\n3244b1ab10 feat: add explicit host-maintenance profile defaults\n4f08c83fb9 fix(web): keep phone conversation inside the viewport\n096b7ca4f5 fix(workspace): distinguish rejection before registration writes\n7f6b311e46 feat(workspace): expose read-only canonical registration lookup\nf9b05abb2b fix(client): preserve selected Session creation profile\n7e2c64b482 Merge published conversation workspaces into Daedal migration\na6bef71641 fix(client): cancel history reads with their conversation view\nca59f9f11f feat(client): bound retained history details across sessions",
+    "files": 550,
+    "paths": [
+      ".agents/notes/implemented/architecture/2026-08-03-per-session-agent-presets.md",
+      ".agents/notes/implemented/architecture/2026-08-16-shared-agent-plane.md",
+      ".agents/notes/implemented/architecture/2026-08-18-session-history-and-event-transport.md",
+      ".agents/notes/implemented/architecture/2026-08-20-client-session-conversation-ownership.md",
+      ".agents/notes/implemented/architecture/2026-08-30-retain-ignorable-external-session-events.md",
+      ".agents/notes/implemented/architecture/2026-09-15-generated-wire-fingerprints.md",
+      ".agents/notes/implemented/architecture/2026-09-15-host-capability-discovery.md",
+      ".agents/notes/implemented/architecture/2026-09-15-host-connection-identity.md",
+      ".agents/notes/implemented/architecture/2026-09-15-portable-client-connections.md",
+      ".agents/notes/implemented/architecture/2026-09-16-device-enrollment-and-revocation.md",
+      ".agents/notes/implemented/architecture/2026-09-16-native-generation-admission.md",
+      ".agents/notes/implemented/architecture/2026-09-16-portable-chat-composition.md"
+    ]
+  },
+  {
+    "names": [
+      "codex/customizable-harness-branding",
+      "origin/codex/customizable-harness-branding"
+    ],
+    "sha": "eb9f0075767ee7b5a5dfa00dd5cd43a019c6f571",
+    "behind_ahead": "4176\t1",
+    "commits": "eb9f007576 feat(web): add customizable harness branding",
+    "files": 112,
+    "paths": [
+      ".agents/notes/implemented/feature/2026-08-16-user-controlled-browser-branding.i18n.yaml",
+      ".agents/notes/implemented/feature/2026-08-16-user-controlled-browser-branding.md",
+      ".agents/notes/implemented/feature/2026-08-16-user-controlled-browser-branding.zh.md",
+      "apps/web/index.html",
+      "apps/web/public/manifest.webmanifest",
+      "apps/web/tests/assembled-boot.ts",
+      "apps/web/tests/pwa-manifest.e2e.ts",
+      "apps/web/tests/scaffold.ts",
+      "apps/web/tests/settings-chrome.e2e.ts",
+      "apps/web/tests/smoke-real.e2e.ts",
+      "apps/web/tests/snapshots/lifecycle-chrome/hero.expected.md",
+      "apps/web/tests/snapshots/lifecycle-chrome/plan-active.expected.md"
+    ]
+  },
+  {
+    "names": [
+      "codex/daedal-dsh"
+    ],
+    "sha": "05a28a1b0438ba1c0eb91e8e919886dcb818a0e9",
+    "behind_ahead": "7\t55",
+    "commits": "05a28a1b04 feat(session): fork to a caller-owned child identity\n2aa3f7932b feat(client): load off-page Session summaries for search\n4f08c83fb9 fix(web): keep phone conversation inside the viewport\n096b7ca4f5 fix(workspace): distinguish rejection before registration writes\n7f6b311e46 feat(workspace): expose read-only canonical registration lookup\nf9b05abb2b fix(client): preserve selected Session creation profile\n7e2c64b482 Merge published conversation workspaces into Daedal migration\na6bef71641 fix(client): cancel history reads with their conversation view\nca59f9f11f feat(client): bound retained history details across sessions\n702a32e989 fix(client): cancel deferred history detail reads\n7619c4fc22 fix(client): expose and own older-history paging failures\nf974042844 docs: record qualified native client and device access\n752e8d433d test: restore merged profile regression fixtures\n4557df30a4 Merge container execution support into Daedal DSH migration\n8a3f74a1bb Merge latest DSH tools and policy changes into migration\n382ff0ca1d test(web): restore Models and sidebar regression coverage",
+    "files": 427,
+    "paths": [
+      ".agents/notes/implemented/architecture/2026-08-03-per-session-agent-presets.md",
+      ".agents/notes/implemented/architecture/2026-08-16-shared-agent-plane.md",
+      ".agents/notes/implemented/architecture/2026-08-18-session-history-and-event-transport.md",
+      ".agents/notes/implemented/architecture/2026-08-20-client-session-conversation-ownership.md",
+      ".agents/notes/implemented/architecture/2026-08-30-retain-ignorable-external-session-events.md",
+      ".agents/notes/implemented/architecture/2026-09-15-generated-wire-fingerprints.md",
+      ".agents/notes/implemented/architecture/2026-09-15-host-capability-discovery.md",
+      ".agents/notes/implemented/architecture/2026-09-15-host-connection-identity.md",
+      ".agents/notes/implemented/architecture/2026-09-15-portable-client-connections.md",
+      ".agents/notes/implemented/architecture/2026-09-16-device-enrollment-and-revocation.md",
+      ".agents/notes/implemented/architecture/2026-09-16-native-generation-admission.md",
+      ".agents/notes/implemented/architecture/2026-09-16-portable-chat-composition.md"
+    ]
+  },
+  {
+    "names": [
+      "codex/deadal-intellect-profile"
+    ],
+    "sha": "be2c8d70f14e441c81430592353144b63d93eefe",
+    "behind_ahead": "18\t2",
+    "commits": "be2c8d70f1 feat(llm): migrate shipped model defaults to DeepSeek V4.1 Flash\na3ad679ba2 feat: add conversational Deadal-intellect verification profiles",
+    "files": 629,
+    "paths": [
+      ".agents/notes/implemented/architecture/2026-08-17-openrouter-agent-model-settings.md",
+      ".agents/notes/implemented/architecture/2026-09-10-deadal-intellect-verification.md",
+      ".agents/notes/implemented/architecture/2026-09-10-deepseek-v4-1-flash-model-migration.md",
+      ".specs/integration/intellect-verification.spec.md",
+      ".specs/tasks/intellect-verification.spec.md",
+      "apps/cli/README.md",
+      "apps/cli/config/examples/paseo/cordis.yml",
+      "apps/cli/package.json",
+      "apps/cli/tests/built-bin.e2e.ts",
+      "apps/cli/tests/profiles/acp/tests/fixtures/image-offload.cordis.yml",
+      "apps/cli/tests/profiles/acp/tests/goal-expected/goal-round-driver/session.expected.jsonl",
+      "apps/cli/tests/profiles/acp/tests/goal-expected/goal-round-driver/stdout.expected.jsonl"
+    ]
+  },
+  {
+    "names": [
+      "codex/deferred-tools-command-rules"
+    ],
+    "sha": "d4d63d120a3ff9611c26bc38869a520869e9a38b",
+    "behind_ahead": "13\t0",
+    "commits": "",
+    "files": 0,
+    "paths": []
+  },
+  {
+    "names": [
+      "codex/deploy-daedal-styling"
+    ],
+    "sha": "4f08c83fb9905a8af7168beca67ec2bf25eb774e",
+    "behind_ahead": "7\t53",
+    "commits": "4f08c83fb9 fix(web): keep phone conversation inside the viewport\n096b7ca4f5 fix(workspace): distinguish rejection before registration writes\n7f6b311e46 feat(workspace): expose read-only canonical registration lookup\nf9b05abb2b fix(client): preserve selected Session creation profile\n7e2c64b482 Merge published conversation workspaces into Daedal migration\na6bef71641 fix(client): cancel history reads with their conversation view\nca59f9f11f feat(client): bound retained history details across sessions\n702a32e989 fix(client): cancel deferred history detail reads\n7619c4fc22 fix(client): expose and own older-history paging failures\nf974042844 docs: record qualified native client and device access\n752e8d433d test: restore merged profile regression fixtures\n4557df30a4 Merge container execution support into Daedal DSH migration\n8a3f74a1bb Merge latest DSH tools and policy changes into migration\n382ff0ca1d test(web): restore Models and sidebar regression coverage\n68284837df feat(connection): discover opted-in Tailscale hosts\n8a8a41953b feat(client): observe authoritative prompt admission",
+    "files": 417,
+    "paths": [
+      ".agents/notes/implemented/architecture/2026-08-03-per-session-agent-presets.md",
+      ".agents/notes/implemented/architecture/2026-08-16-shared-agent-plane.md",
+      ".agents/notes/implemented/architecture/2026-08-18-session-history-and-event-transport.md",
+      ".agents/notes/implemented/architecture/2026-08-20-client-session-conversation-ownership.md",
+      ".agents/notes/implemented/architecture/2026-08-30-retain-ignorable-external-session-events.md",
+      ".agents/notes/implemented/architecture/2026-09-15-generated-wire-fingerprints.md",
+      ".agents/notes/implemented/architecture/2026-09-15-host-capability-discovery.md",
+      ".agents/notes/implemented/architecture/2026-09-15-host-connection-identity.md",
+      ".agents/notes/implemented/architecture/2026-09-15-portable-client-connections.md",
+      ".agents/notes/implemented/architecture/2026-09-16-device-enrollment-and-revocation.md",
+      ".agents/notes/implemented/architecture/2026-09-16-native-generation-admission.md",
+      ".agents/notes/implemented/architecture/2026-09-16-portable-chat-composition.md"
+    ]
+  },
+  {
+    "names": [
+      "codex/development-vm",
+      "origin/codex/development-vm"
+    ],
+    "sha": "42d1e4a50e597e75c370d653c9612fce10a506e5",
+    "behind_ahead": "7\t1",
+    "commits": "42d1e4a50e feat(sandbox): add conversation development VMs",
+    "files": 51,
+    "paths": [
+      ".agents/notes/implemented/architecture/2026-09-20-conversation-git-workspace.md",
+      ".agents/notes/implemented/architecture/2026-09-21-conversation-development-vm.md",
+      ".specs/sandbox/development-vm.spec.md",
+      ".specs/tasks/development-vm.spec.md",
+      "THIRD_PARTY_NOTICES.md",
+      "docs/capability-seams.md",
+      "docs/config-catalog.md",
+      "docs/event-producer-consumer.md",
+      "docs/subsystems/sandbox.md",
+      "packages/extensions/tool-cordis/src/api-catalog.ts",
+      "packages/sandbox/local-container-runtime/README.md",
+      "packages/sandbox/local-container-runtime/package.json"
+    ]
+  },
+  {
+    "names": [
+      "codex/fix-rebased-ci-20260910"
+    ],
+    "sha": "d0b5ea12392d80a0cfbbd2a14b9005d8f40a649c",
+    "behind_ahead": "19\t0",
+    "commits": "",
+    "files": 0,
+    "paths": []
+  },
+  {
+    "names": [
+      "codex/forge-agent-runtime"
+    ],
+    "sha": "7f298bb51e471c97dcfa209688e4ecd2da49034a",
+    "behind_ahead": "4139\t0",
+    "commits": "",
+    "files": 0,
+    "paths": []
+  },
+  {
+    "names": [
+      "codex/forge-agent-runtime-main"
+    ],
+    "sha": "6cff864f505fe1d95953dce81a4a4e598faf56c3",
+    "behind_ahead": "4134\t1",
+    "commits": "6cff864f50 build(forge): retain exact adapter provenance",
+    "files": 3,
+    "paths": [
+      ".agents/notes/implemented/architecture/2026-08-17-forge-session-adapter.md",
+      ".specs/tasks/forge-runtime-integration.spec.md",
+      "containers/forge-runtime/Dockerfile"
+    ]
+  },
+  {
+    "names": [
+      "codex/forge-browser-integration",
+      "origin/codex/forge-browser-integration"
+    ],
+    "sha": "a5fe4035aae1d970afdf5217d986093af1e31198",
+    "behind_ahead": "4134\t12",
+    "commits": "a5fe4035aa Match Forge adapter evidence to native Intellect action tools v2\nbd5d45c79a feat(forge): refresh bound remote branches without changing local work\nc34aab0a6d fix(runtime): use isolated musl Bun for confined development\na186f9b55c Bind recovered Forge execution separately from accepted intent\n47c2a5e665 Confine Forge Code tools to registered workspaces\n1f5ce4c6b9 fix(runtime): enable the adapter plugin loader\n0f83567209 feat(forge): publish approved managed workspace branches\n0476d33663 fix(runtime): include Rust formatting and lint components\ne430ff0a2a fix(runtime): keep cleared-environment tool caches inside lease temp\n75c73aca85 fix(forge): retain specification baselines and build integrated runtime\n3b71cb54d3 fix(forge): reopen persisted coding workspaces without reconciliation\n30b872b2da feat(runtime): supply native Forge development toolchains",
+    "files": 58,
+    "paths": [
+      ".agents/notes/implemented/architecture/2026-08-17-forge-session-adapter.md",
+      ".agents/notes/implemented/feature/2026-08-18-forge-hub-code-workspaces.md",
+      ".agents/notes/implemented/feature/2026-08-24-forge-session-process-boundary.md",
+      ".specs/_config.toml",
+      ".specs/integration/forge-runtime.spec.md",
+      ".specs/integration/forge-session-adapter.spec.md",
+      ".specs/tasks/forge-runtime-integration.spec.md",
+      "AGENTS.md",
+      "apps/cli/src/profile-boot.ts",
+      "apps/cli/tests/profile-roots.spec.ts",
+      "apps/web/vite.config.ts",
+      "containers/forge-runtime/Dockerfile"
+    ]
+  },
+  {
+    "names": [
+      "codex/host-handoff-release-20260925"
+    ],
+    "sha": "61ffa1c53d0085bf6d87af7df90da2ae1efc4b6b",
+    "behind_ahead": "0\t64",
+    "commits": "61ffa1c53d merge: align host deployment with validated master\n2857cb3087 merge: integrate master access policies with host handoff\n77e317dd91 feat(sandbox): deploy descriptive branches and conversation provenance\nfa443353f8 feat(daedal): add confirmed host maintenance handoff\n8f5b236efd fix(sandbox): preserve preset internal service scopes\nee8ad76911 feat(sandbox): admit scoped host maintenance conversations\ncb82c51477 fix(sandbox): detach empty controller input\ndfc283f24d feat(sandbox): add environment-owned repository access\n3fa173803d docs(spec): mark host maintenance deployment complete\naf9a78dc99 merge: preserve companion capabilities in host-maintenance release\n3244b1ab10 feat: add explicit host-maintenance profile defaults\n4f08c83fb9 fix(web): keep phone conversation inside the viewport\n096b7ca4f5 fix(workspace): distinguish rejection before registration writes\n7f6b311e46 feat(workspace): expose read-only canonical registration lookup\nf9b05abb2b fix(client): preserve selected Session creation profile\n7e2c64b482 Merge published conversation workspaces into Daedal migration",
+    "files": 480,
+    "paths": [
+      ".agents/notes/implemented/architecture/2026-08-03-per-session-agent-presets.md",
+      ".agents/notes/implemented/architecture/2026-08-16-shared-agent-plane.md",
+      ".agents/notes/implemented/architecture/2026-08-18-session-history-and-event-transport.md",
+      ".agents/notes/implemented/architecture/2026-08-20-client-session-conversation-ownership.md",
+      ".agents/notes/implemented/architecture/2026-08-30-retain-ignorable-external-session-events.md",
+      ".agents/notes/implemented/architecture/2026-09-15-generated-wire-fingerprints.md",
+      ".agents/notes/implemented/architecture/2026-09-15-host-capability-discovery.md",
+      ".agents/notes/implemented/architecture/2026-09-15-host-connection-identity.md",
+      ".agents/notes/implemented/architecture/2026-09-15-portable-client-connections.md",
+      ".agents/notes/implemented/architecture/2026-09-16-device-enrollment-and-revocation.md",
+      ".agents/notes/implemented/architecture/2026-09-16-native-generation-admission.md",
+      ".agents/notes/implemented/architecture/2026-09-16-portable-chat-composition.md"
+    ]
+  },
+  {
+    "names": [
+      "codex/host-maintenance",
+      "origin/codex/host-maintenance"
+    ],
+    "sha": "3244b1ab1060566f0cc864f5f4b6930c08a495e8",
+    "behind_ahead": "7\t1",
+    "commits": "3244b1ab10 feat: add explicit host-maintenance profile defaults",
+    "files": 18,
+    "paths": [
+      ".agents/notes/implemented/architecture/2026-09-21-host-maintenance-profiles.md",
+      ".specs/sandbox/host-maintenance.spec.md",
+      ".specs/tasks/host-maintenance.spec.md",
+      "apps/cli/README.md",
+      "apps/cli/reference/README.md",
+      "apps/cli/src/dump-config.ts",
+      "apps/cli/src/profile-boot.ts",
+      "apps/cli/src/profile-sandbox.ts",
+      "apps/cli/tests/built-bin.e2e.ts",
+      "apps/cli/tests/profile-sandbox.spec.ts",
+      "packages/boot/app-boot/README.md",
+      "packages/boot/app-boot/src/profile.ts",
+      "packages/boot/app-boot/tests/profile.spec.ts",
+      "packages/util/package-manifest/README.md",
+      "packages/util/package-manifest/src/types.ts",
+      "snapshots/session/bash-tool-turn/session.v3.jsonl",
+      "snapshots/session/bash-tool-turn/snapshot.yml",
+      "snapshots/session/headless.snapshot.ts"
+    ]
+  },
+  {
+    "names": [
+      "codex/host-maintenance-server"
+    ],
+    "sha": "0e4ae9dfe322646706fa371dfe3ed84a0c2b968c",
+    "behind_ahead": "7\t60",
+    "commits": "0e4ae9dfe3 feat(daedal): complete confirmed host maintenance handoff\n906c79b82f feat(sandbox): name saved branches and retain conversation provenance\ncb82c51477 fix(sandbox): detach empty controller input\ndfc283f24d feat(sandbox): add environment-owned repository access\n3fa173803d docs(spec): mark host maintenance deployment complete\naf9a78dc99 merge: preserve companion capabilities in host-maintenance release\n3244b1ab10 feat: add explicit host-maintenance profile defaults\n4f08c83fb9 fix(web): keep phone conversation inside the viewport\n096b7ca4f5 fix(workspace): distinguish rejection before registration writes\n7f6b311e46 feat(workspace): expose read-only canonical registration lookup\nf9b05abb2b fix(client): preserve selected Session creation profile\n7e2c64b482 Merge published conversation workspaces into Daedal migration\na6bef71641 fix(client): cancel history reads with their conversation view\nca59f9f11f feat(client): bound retained history details across sessions\n702a32e989 fix(client): cancel deferred history detail reads\n7619c4fc22 fix(client): expose and own older-history paging failures",
+    "files": 539,
+    "paths": [
+      ".agents/notes/implemented/architecture/2026-08-03-per-session-agent-presets.md",
+      ".agents/notes/implemented/architecture/2026-08-16-shared-agent-plane.md",
+      ".agents/notes/implemented/architecture/2026-08-18-session-history-and-event-transport.md",
+      ".agents/notes/implemented/architecture/2026-08-20-client-session-conversation-ownership.md",
+      ".agents/notes/implemented/architecture/2026-08-30-retain-ignorable-external-session-events.md",
+      ".agents/notes/implemented/architecture/2026-09-15-generated-wire-fingerprints.md",
+      ".agents/notes/implemented/architecture/2026-09-15-host-capability-discovery.md",
+      ".agents/notes/implemented/architecture/2026-09-15-host-connection-identity.md",
+      ".agents/notes/implemented/architecture/2026-09-15-portable-client-connections.md",
+      ".agents/notes/implemented/architecture/2026-09-16-device-enrollment-and-revocation.md",
+      ".agents/notes/implemented/architecture/2026-09-16-native-generation-admission.md",
+      ".agents/notes/implemented/architecture/2026-09-16-portable-chat-composition.md"
+    ]
+  },
+  {
+    "names": [
+      "codex/native-loop-main-host"
+    ],
+    "sha": "9690b856743ab04559696597cfac800fe5676293",
+    "behind_ahead": "7\t61",
+    "commits": "9690b85674 docs(spec): record native main Host loop acceptance\n8f5b236efd fix(sandbox): preserve preset internal service scopes\nee8ad76911 feat(sandbox): admit scoped host maintenance conversations\ncb82c51477 fix(sandbox): detach empty controller input\ndfc283f24d feat(sandbox): add environment-owned repository access\n3fa173803d docs(spec): mark host maintenance deployment complete\naf9a78dc99 merge: preserve companion capabilities in host-maintenance release\n3244b1ab10 feat: add explicit host-maintenance profile defaults\n4f08c83fb9 fix(web): keep phone conversation inside the viewport\n096b7ca4f5 fix(workspace): distinguish rejection before registration writes\n7f6b311e46 feat(workspace): expose read-only canonical registration lookup\nf9b05abb2b fix(client): preserve selected Session creation profile\n7e2c64b482 Merge published conversation workspaces into Daedal migration\na6bef71641 fix(client): cancel history reads with their conversation view\nca59f9f11f feat(client): bound retained history details across sessions\n702a32e989 fix(client): cancel deferred history detail reads",
+    "files": 489,
+    "paths": [
+      ".agents/notes/implemented/architecture/2026-08-03-per-session-agent-presets.md",
+      ".agents/notes/implemented/architecture/2026-08-16-shared-agent-plane.md",
+      ".agents/notes/implemented/architecture/2026-08-18-session-history-and-event-transport.md",
+      ".agents/notes/implemented/architecture/2026-08-20-client-session-conversation-ownership.md",
+      ".agents/notes/implemented/architecture/2026-08-30-retain-ignorable-external-session-events.md",
+      ".agents/notes/implemented/architecture/2026-09-15-generated-wire-fingerprints.md",
+      ".agents/notes/implemented/architecture/2026-09-15-host-capability-discovery.md",
+      ".agents/notes/implemented/architecture/2026-09-15-host-connection-identity.md",
+      ".agents/notes/implemented/architecture/2026-09-15-portable-client-connections.md",
+      ".agents/notes/implemented/architecture/2026-09-16-device-enrollment-and-revocation.md",
+      ".agents/notes/implemented/architecture/2026-09-16-native-generation-admission.md",
+      ".agents/notes/implemented/architecture/2026-09-16-portable-chat-composition.md"
+    ]
+  },
+  {
+    "names": [
+      "codex/pre-upstream-rebase-20260909",
+      "docs/paseo-acp-poc"
+    ],
+    "sha": "9a27dd4f11c994ff236ba14c00573f2e64207ff0",
+    "behind_ahead": "4134\t1",
+    "commits": "9a27dd4f11 docs(acp): add Paseo compatibility proof",
+    "files": 5,
+    "paths": [
+      ".agents/notes/implemented/testing/2026-06-19-acp-snapshot-tests.md",
+      "examples/acp-agent/README.md",
+      "examples/acp-agent/paseo/README.md",
+      "examples/acp-agent/paseo/prepare.mjs",
+      "examples/acp-agent/paseo/run-dsh-acp-replay.sh"
+    ]
+  },
+  {
+    "names": [
+      "codex/profile-access-main"
+    ],
+    "sha": "3e2f9ea793e9ae54f3c931c67a8af00c3a6bdd55",
+    "behind_ahead": "5\t0",
+    "commits": "",
+    "files": 0,
+    "paths": []
+  },
+  {
+    "names": [
+      "codex/profile-access-ui",
+      "origin/codex/profile-access-ui"
+    ],
+    "sha": "8d7b6034fd035131c13ffd01630d23868d2412e7",
+    "behind_ahead": "7\t63",
+    "commits": "8d7b6034fd feat(access): bind conversation policies to profiles\n77e317dd91 feat(sandbox): deploy descriptive branches and conversation provenance\nfa443353f8 feat(daedal): add confirmed host maintenance handoff\n8f5b236efd fix(sandbox): preserve preset internal service scopes\nee8ad76911 feat(sandbox): admit scoped host maintenance conversations\ncb82c51477 fix(sandbox): detach empty controller input\ndfc283f24d feat(sandbox): add environment-owned repository access\n3fa173803d docs(spec): mark host maintenance deployment complete\naf9a78dc99 merge: preserve companion capabilities in host-maintenance release\n3244b1ab10 feat: add explicit host-maintenance profile defaults\n4f08c83fb9 fix(web): keep phone conversation inside the viewport\n096b7ca4f5 fix(workspace): distinguish rejection before registration writes\n7f6b311e46 feat(workspace): expose read-only canonical registration lookup\nf9b05abb2b fix(client): preserve selected Session creation profile\n7e2c64b482 Merge published conversation workspaces into Daedal migration\na6bef71641 fix(client): cancel history reads with their conversation view",
+    "files": 587,
+    "paths": [
+      ".agents/notes/implemented/architecture/2026-08-03-per-session-agent-presets.md",
+      ".agents/notes/implemented/architecture/2026-08-16-shared-agent-plane.md",
+      ".agents/notes/implemented/architecture/2026-08-18-session-history-and-event-transport.md",
+      ".agents/notes/implemented/architecture/2026-08-20-client-session-conversation-ownership.md",
+      ".agents/notes/implemented/architecture/2026-08-30-retain-ignorable-external-session-events.md",
+      ".agents/notes/implemented/architecture/2026-09-15-generated-wire-fingerprints.md",
+      ".agents/notes/implemented/architecture/2026-09-15-host-capability-discovery.md",
+      ".agents/notes/implemented/architecture/2026-09-15-host-connection-identity.md",
+      ".agents/notes/implemented/architecture/2026-09-15-portable-client-connections.md",
+      ".agents/notes/implemented/architecture/2026-09-16-device-enrollment-and-revocation.md",
+      ".agents/notes/implemented/architecture/2026-09-16-native-generation-admission.md",
+      ".agents/notes/implemented/architecture/2026-09-16-portable-chat-composition.md"
+    ]
+  },
+  {
+    "names": [
+      "codex/rebase-upstream-20260909"
+    ],
+    "sha": "d535aa79f6f2f245f2c583eed5654a55e11d7d63",
+    "behind_ahead": "20\t0",
+    "commits": "",
+    "files": 0,
+    "paths": []
+  },
+  {
+    "names": [
+      "codex/restore-codex-account-auth"
+    ],
+    "sha": "30d8637df1b7ce1c0bf08aa6f377a2a348b97ef5",
+    "behind_ahead": "14\t0",
+    "commits": "",
+    "files": 0,
+    "paths": []
+  },
+  {
+    "names": [
+      "codex/workspace-flow-design"
+    ],
+    "sha": "3a8a470db2c3f11b5421791cb1447adccb4c1aa4",
+    "behind_ahead": "8\t0",
+    "commits": "",
+    "files": 0,
+    "paths": []
+  },
+  {
+    "names": [
+      "master"
+    ],
+    "sha": "aa7efccb559bf20fc415322d132c64e0a5a03cc8",
+    "behind_ahead": "6\t1",
+    "commits": "aa7efccb55 fix(sandbox): queue workspace execution without blocking chats",
+    "files": 40,
+    "paths": [
+      ".agents/notes/implemented/architecture/2026-09-20-conversation-git-workspace.md",
+      ".agents/notes/implemented/architecture/2026-09-25-workspace-execution-admission.md",
+      ".specs/sandbox/conversation-git-workspace.spec.md",
+      ".specs/tasks/workspace-execution-admission.spec.md",
+      "apps/web/tests/workspace-outcomes.e2e.ts",
+      "docs/config-catalog.md",
+      "docs/event-producer-consumer.md",
+      "docs/persistence-catalog.md",
+      "docs/subsystems/sandbox.md",
+      "packages/api/workspace-files/README.md",
+      "packages/api/workspace-files/package.json",
+      "packages/api/workspace-files/src/changes.ts"
+    ]
+  },
+  {
+    "names": [
+      "origin",
+      "origin/master"
+    ],
+    "sha": "452c2e3e16ecde300bfad142dc4286f83c0a02e3",
+    "behind_ahead": "0\t0",
+    "commits": "",
+    "files": 0,
+    "paths": []
+  },
+  {
+    "names": [
+      "origin/codex/daedal-dsh"
+    ],
+    "sha": "7c9f5a3779e4f3d3b0ba8a260a0f45f6c463eb31",
+    "behind_ahead": "6\t57",
+    "commits": "7c9f5a3779 Observe Remote promises through cancellation\n33204affd6 Merge workspace provenance into Daedal migration\n05a28a1b04 feat(session): fork to a caller-owned child identity\n2aa3f7932b feat(client): load off-page Session summaries for search\n4f08c83fb9 fix(web): keep phone conversation inside the viewport\n096b7ca4f5 fix(workspace): distinguish rejection before registration writes\n7f6b311e46 feat(workspace): expose read-only canonical registration lookup\nf9b05abb2b fix(client): preserve selected Session creation profile\n7e2c64b482 Merge published conversation workspaces into Daedal migration\na6bef71641 fix(client): cancel history reads with their conversation view\nca59f9f11f feat(client): bound retained history details across sessions\n702a32e989 fix(client): cancel deferred history detail reads\n7619c4fc22 fix(client): expose and own older-history paging failures\nf974042844 docs: record qualified native client and device access\n752e8d433d test: restore merged profile regression fixtures\n4557df30a4 Merge container execution support into Daedal DSH migration",
+    "files": 429,
+    "paths": [
+      ".agents/notes/implemented/architecture/2026-08-03-per-session-agent-presets.md",
+      ".agents/notes/implemented/architecture/2026-08-16-shared-agent-plane.md",
+      ".agents/notes/implemented/architecture/2026-08-18-session-history-and-event-transport.md",
+      ".agents/notes/implemented/architecture/2026-08-20-client-session-conversation-ownership.md",
+      ".agents/notes/implemented/architecture/2026-08-30-retain-ignorable-external-session-events.md",
+      ".agents/notes/implemented/architecture/2026-09-15-generated-wire-fingerprints.md",
+      ".agents/notes/implemented/architecture/2026-09-15-host-capability-discovery.md",
+      ".agents/notes/implemented/architecture/2026-09-15-host-connection-identity.md",
+      ".agents/notes/implemented/architecture/2026-09-15-portable-client-connections.md",
+      ".agents/notes/implemented/architecture/2026-09-16-device-enrollment-and-revocation.md",
+      ".agents/notes/implemented/architecture/2026-09-16-native-generation-admission.md",
+      ".agents/notes/implemented/architecture/2026-09-16-portable-chat-composition.md"
+    ]
+  }
+]
