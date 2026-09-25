@@ -38,16 +38,22 @@ Fetched `origin` with pruning and tags before integration. Verified these candid
 - `ad1132bb56` merges exact local admission tip `aa7efccb559bf20fc415322d132c64e0a5a03cc8` with semantic conflict resolution over the prepared release.
 - `d960250068` completes off-page search hydration, caller-owned fork result identity validation, and cancellation-observation regression coverage.
 - `47b864a467` closes combined admission lifecycle gaps found by adversarial post-merge review.
+- `0c887e778a` ports exact benchmark candidate `1f61cb40d25c667f450bd06321b067e72505f192` under a completed, accepted benchmark intent rather than retaining its WIP commit label.
+- `d884d4134a` integrates exact OpenRouter turn-3 candidate `a8620a9fc2c69eac5e41db4560b12b78266b0ab9` with pricing, attribution, credential-cache, limit-display, Loader-profile, and keyless expected-output repairs; turn-2 remains superseded.
+- `6fee7a5327` selectively ports exact access-hover candidate `e9f3c858dafb1605e9e4e856fc6fc96c74b3a45a` over the newer environment-aware `PermissionSelect` without restoring its old generic selector.
 
 ## Repairs and validation
 
 - Workspace admission resolution preserves host identity/world checks and host bypass, environment and multi-repository grants, provenance, `close()`/`registerWorkspaceOwner`, settlement ordering, lazy allocation, FIFO capacity, parent/child ownership, per-owner use, cancellation-aware operations, durable admission status, quiescent checkpoint-before-release, resumed waiter cancellation, and target namespaces.
 - Follow-up review repaired host `runForSession`, lazy environment guidance, pre-turn cancellation capacity release, cold repository requests, pending-status flush retry scheduling, and stale portable/client tests.
 - Daedal residual repair hydrates search summaries outside the retained page before rendering, refuses mismatched caller-owned fork identities, and observes late listener rejection after per-event cancellation.
-- Source and focused tests are present, but no package tests have run yet because this worktree has no dependencies and `pnpm` is not installed as a standalone binary. Dependency/tool bootstrap remains pending.
+- OpenRouter repair rejects blank prices, attributes settled usage to durable actual routes, refuses unsupported mixed/unattributed history, invalidates successful-only caches on credential fingerprint changes, retains actual fetch time, and renders configured and remaining limits separately.
+- Access descriptions are locale-owned, prefer host descriptions, preserve environment/policy separation, and state that Full access cannot escape the displayed environment.
+- `git diff --cached --check` passed after every conflict resolution. Full and filtered dependency installations both failed with `ENOSPC` in the 1 GiB workspace and their partial caches were removed; no Vitest, typecheck, build, catalog, doc-sync, or spec-lint result is claimed yet.
 
 ## Remaining issues
 
-- Repair and qualify eligible VM runtime, OpenRouter spending, access hover, and benchmark candidates.
+- Development VM source repair continues on `daedal/reconcile-20260925-development-vm`; real Incus/Docker/Compose qualification is unavailable because `incus` is absent.
+- Run repository checks through CI or a workspace with sufficient dependency capacity before any merge.
+- OpenRouter exact-head real-profile GIF evidence cannot be captured without deploying/restarting this existing server or starting another server, both prohibited by this task; keep the candidate unmerged if that repository requirement cannot be satisfied externally.
 - Native-loop commit `9690b85674` is not eligible to port as written: it is a Forge/spec-only status edit with unavailable deployment evidence and is covered by the explicit Forge/Intellect exclusion.
-- Linux Incus/Docker/Compose qualification is currently unavailable because `incus` is absent; do not claim VM runtime qualification without it.
