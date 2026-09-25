@@ -309,6 +309,12 @@ export interface SessionForkRequest {
   readonly atSeq?: number
 }
 
+/** Fork into a fresh caller-owned identity; an existing identity is never adopted or overwritten. */
+export interface SessionForkToRequest extends SessionForkRequest {
+  /** Fresh identity retained by the caller before dispatch; absence after failure cannot authorize replay. */
+  readonly childSessionId: SessionId
+}
+
 /** Identity of a newly forked Session. */
 export interface SessionForkValue {
   readonly sessionId: SessionId

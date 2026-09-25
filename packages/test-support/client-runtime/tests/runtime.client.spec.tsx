@@ -180,6 +180,9 @@ describe('sessions', () => {
     await expect(runtime.sessions.fork({
       sessionId: 's1' as SessionId, atSeq: 7, increaseTitle: true,
     })).resolves.toBe('s1')
+    await expect(runtime.sessions.forkTo({ sessionId: 's1' as SessionId, childSessionId: 'child' as SessionId }))
+      .resolves.toBe('child')
+    expect(runtime.sessions.binding('child')).toBeUndefined()
     expect(runtime.sessions.calls).toEqual([
       { method: 'openSubagent', args: [address] },
       { method: 'setSubagentCatalogOpen', args: ['s2', true] },
@@ -187,8 +190,26 @@ describe('sessions', () => {
       { method: 'open', args: ['s1'] },
       { method: 'clear', args: [] },
       { method: 'fork', args: [{ sessionId: 's1', atSeq: 7, increaseTitle: true }] },
+      { method: 'forkTo', args: [{ sessionId: 's1', childSessionId: 'child' }] },
     ])
     await runtime.dispose()
+  })
+
+  it('resolves declared summary identities and cancellation without inventing fixture rows', async () => {
+    const runtime = await SlotTestRuntime.create()
+    try {
+      await runtime.sessions.add({ id: 'fixture-hit' })
+      const signal = new AbortController().signal
+      const before = runtime.sessions.list.getSnapshot()
+      await expect(runtime.sessions.loadSummary('fixture-hit' as SessionId, signal)).resolves.toEqual({ ok: true, value: true })
+      await expect(runtime.sessions.loadSummary('missing' as SessionId, signal)).resolves.toEqual({ ok: true, value: false })
+      const abort = new AbortController()
+      abort.abort()
+      await expect(runtime.sessions.loadSummary('fixture-hit' as SessionId, abort.signal)).resolves.toMatchObject({ ok: false, error: { code: 'gateway/cancelled' } })
+      expect(runtime.sessions.list.getSnapshot()).toBe(before)
+    } finally {
+      await runtime.dispose()
+    }
   })
 
   it('answers search with an empty page until a scenario declares hits, recording every call', async () => {

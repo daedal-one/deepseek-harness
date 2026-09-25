@@ -142,6 +142,7 @@ export class FakeApiClient {
     }))
   onRename: (payload: unknown) => Promise<RemoteResult<{ title: string; seq: number }>> = () => Promise.resolve(ok({ title: 'fk-renamed', seq: 0 }))
   onFork: (payload: unknown) => Promise<RemoteResult<{ sessionId: SessionId }>> = () => Promise.resolve(ok({ sessionId: 'fk-fork' as SessionId }))
+  onForkTo: (payload: unknown) => Promise<RemoteResult<{ sessionId: SessionId }>> = () => Promise.reject(new Error('forkTo response is not programmed'))
   onHistory: (payload: { sessionId: SessionId; throughSeq?: number; beforeSeq?: number; maxMessages?: number }, signal?: AbortSignal)
   => Promise<RemoteResult<SessionPage & { readonly projections?: SessionProjectionBaseline }>> =
     () => Promise.resolve(ok({ records: [], hasMore: false }))
@@ -238,6 +239,7 @@ export class FakeApiClient {
         ),
         rename: payload => this.record('session.rename', payload, this.onRename(payload)),
         fork: payload => this.record('session.fork', payload, this.onFork(payload)),
+        forkTo: payload => this.record('session.forkTo', payload, this.onForkTo(payload)),
         prompt: payload => this.record('session.prompt', payload, this.onPrompt(payload)),
         attachment: payload => this.record('session.attachment', payload, this.onAttachment(payload)),
         updateQueue: payload => this.record('session.updateQueue', payload, this.onUpdateQueue(payload)),

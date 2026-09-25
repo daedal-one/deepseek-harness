@@ -1805,6 +1805,62 @@ describe('Client Typert API', () => {
     await client.dispose()
   })
 
+  it.each(['fulfilled', 'rejected'] as const)(
+    'observes a %s listener Promise after synchronous generation cancellation', async (settlement) => {
+      const { ctx, client, carrier, run, call } = await eventBench()
+      const target = ctx.extend()
+      ctx.typert.contexts.registerClient('agent', {
+        identity: candidate => candidate === target ? agentId('agent-sync-cancel') : undefined,
+        resolve: id => id === 'agent-sync-cancel' ? target : undefined,
+      })
+      const response = Promise.withResolvers<FixtureApprovalOutcome>()
+      const observed = vi.spyOn(response.promise, 'then')
+      const cancelled = new Error('listener synchronously cancelled its generation')
+      target.remote.$on('fixture/approval', () => {
+        run.abort(cancelled)
+        if (settlement === 'fulfilled') response.resolve('allowed')
+        else response.reject(new Error('listener rejected after synchronous cancellation'))
+        return response.promise
+      })
+      try {
+        carrier.emit(approvalFrame('event-sync-cancel', 'agent-sync-cancel', 'cancel now'))
+        await expect(run.done).resolves.toBeUndefined()
+        expect(run.signal.reason).toBe(cancelled)
+        // The real owner, not a test catch, must observe the already-supplied Promise.
+        expect(observed).toHaveBeenCalledWith(expect.any(Function), expect.any(Function))
+        expect(call).not.toHaveBeenCalled()
+        expect(carrier.activeConnections).toBe(0)
+      } finally { run.abort(); await run.done; await client.dispose() }
+    },
+  )
+
+  it('observes a late listener rejection after pending generation cancellation', async () => {
+    const { ctx, client, carrier, run, call } = await eventBench()
+    const target = ctx.extend()
+    ctx.typert.contexts.registerClient('agent', {
+      identity: candidate => candidate === target ? agentId('agent-late-cancel') : undefined,
+      resolve: id => id === 'agent-late-cancel' ? target : undefined,
+    })
+    const response = Promise.withResolvers<FixtureApprovalOutcome>()
+    const entered = Promise.withResolvers<undefined>()
+    const observed = vi.spyOn(response.promise, 'then')
+    target.remote.$on('fixture/approval', () => {
+      entered.resolve(undefined)
+      return response.promise
+    })
+    try {
+      carrier.emit(approvalFrame('event-late-cancel', 'agent-late-cancel', 'wait'))
+      await entered.promise
+      expect(observed).toHaveBeenCalledWith(expect.any(Function), expect.any(Function))
+      run.abort(new Error('generation cancelled during listener work'))
+      await run.done
+      response.reject(new Error('listener settled after its owner cancelled'))
+      await Promise.resolve()
+      expect(call).not.toHaveBeenCalled()
+      expect(carrier.activeConnections).toBe(0)
+    } finally { run.abort(); await run.done; await client.dispose() }
+  })
+
   it('cancels a pending Client listener without returning a late result', async () => {
     const { ctx, client, carrier, call } = await eventBench()
     const target = ctx.extend()
@@ -3013,6 +3069,28 @@ describe('native capability admission', () => {
       randomId: () => 'admission', createAbortController: () => new AbortController(),
     })
   }
+
+  it('observes cancelled admission when a ready frame arrives after synchronous teardown', async () => {
+    const cancelled = new Error('generation cancelled at ready delivery')
+    let cancel = (): void => { throw new Error('fixture generation has not started') }
+    const call = vi.fn<ConnectionHandle['rpc']['call']>()
+    const open: NonNullable<ConnectionHandle['rpc']['open']> = () => (async function *() {
+      cancel()
+      yield { type: 'ready', protocolVersion: 1, clientId: 'already-cancelled', host: { home: '/home/fixture', identity: HOST_IDENTITY } }
+    })()
+    const { ctx, client, generation } = await benchFiber(call, 'in-process', open, install())
+    const publish = vi.fn()
+    const stop = generation.state.subscribe(() => { if (generation.state.getSnapshot()) publish() })
+    const run = generation.start()
+    cancel = () => { run.abort(cancelled) }
+    try {
+      await expect(run.done).resolves.toBeUndefined()
+      expect(run.signal.reason).toBe(cancelled)
+      expect(call).not.toHaveBeenCalled()
+      expect(publish).not.toHaveBeenCalled()
+      expect(ctx.remote.$host.capabilities).toBeUndefined()
+    } finally { stop(); run.abort(); await run.done; await client.dispose() }
+  })
 
   it('holds readiness, operations and forwarded events until required capabilities match', async () => {
     const response = Promise.withResolvers<Awaited<ReturnType<ConnectionHandle['rpc']['call']>>>()

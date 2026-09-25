@@ -36,6 +36,7 @@ import type {
   SessionFollowFrame,
   SessionFollowRequest,
   SessionForkRequest,
+  SessionForkToRequest,
   SessionForkValue,
   SessionListRequest,
   SessionListCursor,
@@ -375,6 +376,17 @@ export class SessionController extends TypertRemoteService {
   @Remote('fork')
   fork(request: SessionForkRequest): Promise<SessionForkValue> {
     return this.commands.fork(request)
+  }
+
+  /**
+   * Fork one completed-turn prefix into a fresh caller-owned Session identity.
+   * @param request - source, optional integer anchor, and child identity retained before dispatch.
+   * @returns the published child identity after Workspace attachment, without a title change.
+   * @throws after partial publication; existing identities are never adopted or overwritten.
+   */
+  @Remote('forkTo')
+  forkTo(request: SessionForkToRequest): Promise<SessionForkValue> {
+    return this.commands.forkTo(request)
   }
 
   /**

@@ -1,4 +1,5 @@
 /** Test-owned Session Controller faces over declarative fixtures. */
+import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import type { Context } from '@deepseek-ai/cordis'
 import type { AttachmentIdType } from '@deepseek-ai/dsh-attachment'
 import {
@@ -9,7 +10,7 @@ import type {
   SessionEventLikeEntry, SessionLiveEventEntry, SessionSearchResultItem,
   SessionSnapshot, SessionSummary, SubmissionHandle,
 } from '@deepseek-ai/dsh-api-session-controller/client'
-import type { SessionRequestId } from '@deepseek-ai/dsh-api-session-controller/types'
+import type { SessionRequestId, SessionForkToRequest } from '@deepseek-ai/dsh-api-session-controller/types'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { ObservableSnapshot, SnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -211,7 +212,7 @@ export class TestSessions implements ISessions {
   /** Calls observed on the service-level face, newest last. */
   readonly calls: {
     method: 'create' | 'open' | 'openSubagent' | 'setSubagentCatalogOpen' | 'refreshSubagents'
-      | 'clear' | 'refresh' | 'loadMore' | 'search' | 'fork'
+      | 'clear' | 'refresh' | 'loadMore' | 'loadSummary' | 'search' | 'fork' | 'forkTo'
     args: unknown[]
   }[] = []
 
@@ -505,6 +506,19 @@ export class TestSessions implements ISessions {
   }
 
   /**
+   * Resolve an already declared fixture row without creating metadata.
+   * @param id - requested fixture Session identity.
+   * @param signal - caller cancellation signal.
+   * @returns whether the fixture declares the Session, or a cancellation failure.
+   */
+  loadSummary(id: SessionId, signal: AbortSignal): ReturnType<ISessions['loadSummary']> {
+    this.calls.push({ method: 'loadSummary', args: [id, signal] })
+    return Promise.resolve(signal.aborted
+      ? { ok: false, error: new RemoteError('gateway/cancelled', 'Session summary read was cancelled', {}) }
+      : { ok: true, value: this.list.getSnapshot().byId[id] !== undefined })
+  }
+
+  /**
    * Replace the sidebar-search result page (the call is still recorded).
    * @param impl - hits for a query, as the Host would rank them.
    */
@@ -534,6 +548,16 @@ export class TestSessions implements ISessions {
   fork(opts: { sessionId: SessionId; atSeq?: number; increaseTitle?: boolean }): Promise<SessionId> {
     this.calls.push({ method: 'fork', args: [opts] })
     return Promise.resolve(opts.sessionId)
+  }
+
+  /**
+   * Record the exact fork destination without fabricating a fixture Session.
+   * @param request - source, integer anchor, and caller-owned destination.
+   * @returns the requested child identity; no fixture row is created.
+   */
+  forkTo(request: SessionForkToRequest): Promise<SessionId> {
+    this.calls.push({ method: 'forkTo', args: [request] })
+    return Promise.resolve(request.childSessionId)
   }
 
   /**

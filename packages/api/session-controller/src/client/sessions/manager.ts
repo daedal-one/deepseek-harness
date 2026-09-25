@@ -6,6 +6,8 @@ import type { SubagentAddress, SubagentCatalog } from '@deepseek-ai/dsh-subagent
 import { SessionSeq, type SessionId, type SessionSeqCursor } from '@deepseek-ai/dsh-session/types'
 import type {
   SessionCreateRequest,
+  SessionForkToRequest,
+  SessionForkValue,
   SessionControlBaseline,
   SessionControlFrame,
   SessionQueuedItem,
@@ -15,7 +17,7 @@ import type {
 } from '../../types.ts'
 import { mergeOrderedBaseline } from '../ordered-baseline.ts'
 import { isRemoteFailure } from '@deepseek-ai/dsh-api-gateway/client'
-import type { RemoteFailure, RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import { RemoteError, type RemoteFailure, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { SessionListEntry, TitledSessionSummary } from './lineage.ts'
 import { flattenLineage } from './lineage.ts'
 // Type-only merge edge: the title domain's client-namespace outlet declares
@@ -96,6 +98,13 @@ type SessionListMutation =
   /** Local first-send flip: the sender clears blank without waiting for a host frame. */
   | { kind: 'engaged'; sessionId: SessionId }
 
+interface SummaryRead {
+  readonly id: SessionId
+  readonly abort: AbortController
+  readonly mutations: SessionListMutation[]
+  readonly done: Promise<RemoteResult<boolean>>
+}
+
 /** Instance cluster + frame entry + the session list. */
 export class SessionManager {
   private readonly sessions = new Map<SessionId, Session>()
@@ -127,6 +136,8 @@ export class SessionManager {
   private listLoadingMore = false
   /** Mutations arriving after a list request starts are replayed over its response. */
   private listMutations: SessionListMutation[] | null = null
+  private readonly summaryReads = new Set<SummaryRead>()
+  private readonly summaryLifetime = new AbortController()
   private readonly addresses = new Map<SessionId, SubagentAddress>()
   private readonly catalogs = new Map<SessionId, SubagentCatalogSnapshot>()
   private readonly catalogInflight = new Map<SessionId, CatalogInflight>()
@@ -264,9 +275,11 @@ export class SessionManager {
 
   /**
    * Stop owned timers and every remaining Session instance.
-   * @returns when every Session Remote iterator has completed teardown.
+   * @returns when every Session Remote iterator and owned summary read has settled.
    */
   async dispose(): Promise<void> {
+    this.summaryLifetime.abort()
+    this.cancelSummaryReads()
     for (const timer of this.catalogDebounce.values()) clearTimeout(timer)
     this.catalogDebounce.clear()
     this.catalogStale.clear()
@@ -274,7 +287,10 @@ export class SessionManager {
     const sessions = [...this.sessions.values()]
     this.sessions.clear()
     for (const session of sessions) void this.startSessionDisposal(session)
-    await this.drainSessionDisposals()
+    await Promise.all([
+      this.drainSessionDisposals(),
+      Promise.allSettled([...this.summaryReads].map(read => read.done)),
+    ])
   }
 
   private startSessionDisposal(session: Session): Promise<void> {
@@ -603,6 +619,69 @@ export class SessionManager {
 
 
   /**
+   * Admit only the requested summary through the list mutation owner.
+   * @param id - requested Host Session identity.
+   * @param signal - initiating caller lifetime.
+   * @returns presence after replaying live mutations, or a structured failure.
+   */
+  loadSummary(id: SessionId, signal: AbortSignal): Promise<RemoteResult<boolean>> {
+    const abort = new AbortController()
+    const cancel = (): void => { abort.abort() }
+    signal.addEventListener('abort', cancel, { once: true })
+    if (signal.aborted || this.summaryLifetime.signal.aborted) cancel()
+    const read: SummaryRead = {
+      id, abort, mutations: [],
+      done: Promise.resolve().then(() => this.readSummary(read)).finally(() => {
+        signal.removeEventListener('abort', cancel)
+        this.summaryReads.delete(read)
+      }),
+    }
+    this.summaryReads.add(read)
+    return read.done
+  }
+
+  private cancelSummaryReads(): void {
+    for (const read of this.summaryReads) read.abort.abort()
+  }
+
+  private async readSummary(read: SummaryRead): Promise<RemoteResult<boolean>> {
+    const currentRead = (): boolean => !read.abort.signal.aborted
+    const cancelled = (): RemoteResult<boolean> => ({
+      ok: false,
+      error: new RemoteError('gateway/cancelled', 'Session summary read was cancelled', {}),
+    })
+    if (!currentRead()) return cancelled()
+    try {
+      const result = await this.remote.session.list({ includeSessionId: read.id }, read.abort.signal)
+      if (!currentRead()) return cancelled()
+      if (!result.ok) return result
+      const summary = result.value.items.find(item => item.sessionId === read.id)
+      let rows = summary === undefined ? [] : [summary]
+      for (const mutation of read.mutations) rows = applyMutation(rows, mutation)
+      const current = rows[0]
+      if (current === undefined) return { ok: true, value: false }
+      this.mergeSummary(current)
+      const block = current.projections
+      if (block !== undefined) {
+        const store = this.projectionStore(read.id)
+        const values = block.values as Record<string, unknown>
+        for (const key of Object.keys(values)) store.apply(key, values[key], sessionSeqCursor(block.asOfSeq))
+      }
+      const session = this.sessions.get(read.id)
+      const admitted = this.summaries.find(item => item.sessionId === read.id)
+      if (session !== undefined && admitted !== undefined) {
+        session.handleBlank(admitted.blank)
+        session.handleRunning(admitted.running)
+      }
+      return { ok: true, value: true }
+    } catch (error) {
+      if (!currentRead()) return cancelled()
+      if (!isRemoteFailure(error)) throw error
+      return { ok: false, error }
+    }
+  }
+
+  /**
    * Search visible session message content without adding transient query
    * state to the list snapshot.
    * @param query - non-blank literal phrase.
@@ -676,18 +755,34 @@ export class SessionManager {
   async fork(
     opts: { sessionId: SessionId; atSeq?: SessionSeq },
   ): Promise<RemoteResult<{ sessionId: SessionId }>> {
-    const source = this.summaries.find(s => s.sessionId === opts.sessionId)
-    const result = await this.remote.session.fork({
+    return this.forkRequest(opts.sessionId, () => this.remote.session.fork({
       sessionId: opts.sessionId,
       ...opts.atSeq === undefined ? {} : { atSeq: opts.atSeq },
-    })
+    }))
+  }
+
+  /**
+   * Dispatch a fork to the exact caller-owned identity without retry or title changes.
+   * @param request - source, optional integer anchor, and fresh child identity.
+   * @returns the Host result; only confirmed publication adds a local summary.
+   */
+  forkTo(request: SessionForkToRequest): Promise<RemoteResult<SessionForkValue>> {
+    return this.forkRequest(request.sessionId, () => this.remote.session.forkTo(request))
+  }
+
+  private async forkRequest(
+    sourceId: SessionId,
+    dispatch: () => Promise<RemoteResult<SessionForkValue>>,
+  ): Promise<RemoteResult<SessionForkValue>> {
+    const source = this.summaries.find(s => s.sessionId === sourceId)
+    const result = await dispatch()
     const childId = result.ok
       ? result.value.sessionId
       : workspaceAttachSessionId(result.error)
     if (childId !== undefined) {
       this.recordMutation({ kind: 'upsert', summary: {
         sessionId: childId, updatedAt: Date.now(), running: false, blank: false,
-        parentSessionId: opts.sessionId,
+        parentSessionId: sourceId,
         ...(source?.cwd !== undefined ? { cwd: source.cwd } : {}),
       } })
     }
@@ -707,6 +802,10 @@ export class SessionManager {
   /** Apply immediately and retain for replay when a list response is in flight. */
   private recordMutation(mutation: SessionListMutation): void {
     this.listMutations?.push(mutation)
+    const id = mutation.kind === 'upsert' ? mutation.summary.sessionId : mutation.sessionId
+    for (const read of this.summaryReads) {
+      if (read.id === id) read.mutations.push(mutation)
+    }
     this.summaries = applyMutation(this.summaries, mutation)
     // Eager edge reconciliation — a snapshot-build-time pass would miss consecutive status frames.
     this.syncCompletedNotifications()
@@ -868,6 +967,7 @@ export class SessionManager {
 
   /** Mark resident open transcripts as waiting for the next Host baseline. */
   handleDisconnected(): void {
+    this.cancelSummaryReads()
     for (const session of this.sessions.values()) session.handleDisconnected()
   }
 
@@ -876,6 +976,7 @@ export class SessionManager {
    * Opened Session follow streams resume independently through API Gateway.
    */
   handleConnected(): void {
+    this.cancelSummaryReads()
     void this.refreshList()
     const selectedAddress = this.selected === undefined ? undefined : this.addresses.get(this.selected)
     if (selectedAddress !== undefined) void this.refreshSubagents(selectedAddress.parentSessionId)
