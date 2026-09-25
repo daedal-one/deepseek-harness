@@ -20,6 +20,7 @@
  */
 
 import type {} from '@deepseek-ai/dsh-local-container-runtime/workspaces'
+import type {} from '@deepseek-ai/dsh-agent'
 import { posix, win32 } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
@@ -236,7 +237,7 @@ export class WorkspaceFiles extends TypertRemoteService {
     range: WorkspaceFileRange,
     signal: AbortSignal,
   ): Promise<WorkspaceFileText> {
-    return await this.withWorkspace(workspaceFileScope, async () => {
+    return await this.withWorkspace(workspaceFileScope, signal, async () => {
       const { offset, limit } = this.resolvePage(range)
       const { target, info } = await this.locateFile(workspaceFileScope, path, signal)
       const page = await this.cutPage(target, offset, limit, signal, path)
@@ -264,7 +265,7 @@ export class WorkspaceFiles extends TypertRemoteService {
     range: WorkspaceByteRange,
     signal: AbortSignal,
   ): Promise<WorkspaceFileBytes> {
-    return await this.withWorkspace(workspaceFileScope, async () => {
+    return await this.withWorkspace(workspaceFileScope, signal, async () => {
       const { offset, length } = this.resolveWindow(range, path)
       const { target, info } = await this.locateFile(workspaceFileScope, path, signal)
       const data = await this.ctx.fs.readByteRange(target, { offset, length }, signal)
@@ -283,7 +284,7 @@ export class WorkspaceFiles extends TypertRemoteService {
    */
   @Remote
   async readAll(workspaceFileScope: WorkspaceFileScope, path: string, signal: AbortSignal): Promise<WorkspaceFileBytes> {
-    return await this.withWorkspace(workspaceFileScope, async () => {
+    return await this.withWorkspace(workspaceFileScope, signal, async () => {
       const { target, info } = await this.locateFile(workspaceFileScope, path, signal)
       const limit = this.config.maxFileBytes
       if (info.size !== undefined && info.size > limit) {
@@ -313,7 +314,7 @@ export class WorkspaceFiles extends TypertRemoteService {
     relativePath: string,
     signal: AbortSignal,
   ): Promise<WorkspaceFileBytes> {
-    return await this.withWorkspace(workspaceFileScope, async () => {
+    return await this.withWorkspace(workspaceFileScope, signal, async () => {
       const relative = relativePath.replace(/\\/g, '/')
       if (relative.length === 0 || relative.startsWith('/') || /^[a-z][a-z\d+.-]*:/iu.test(relative) || relative.includes(NUL)) {
         throw new RemoteError('gateway/bad-request', 'relativePath must be a relative filesystem path', {})
@@ -335,7 +336,7 @@ export class WorkspaceFiles extends TypertRemoteService {
    */
   @Remote
   async stat(workspaceFileScope: WorkspaceFileScope, path: string, signal: AbortSignal): Promise<WorkspaceFileStat> {
-    return await this.withWorkspace(workspaceFileScope, async () => {
+    return await this.withWorkspace(workspaceFileScope, signal, async () => {
       const { target, info } = await this.locateFile(workspaceFileScope, path, signal)
       return this.statOf(target, info)
 
@@ -351,7 +352,7 @@ export class WorkspaceFiles extends TypertRemoteService {
    */
   @Remote
   async list(workspaceFileScope: WorkspaceFileScope, path: string, signal: AbortSignal): Promise<WorkspaceDirectoryListing> {
-    return await this.withWorkspace(workspaceFileScope, async () => {
+    return await this.withWorkspace(workspaceFileScope, signal, async () => {
       const { root, workspaceRoot, entry } = await this.inspect(workspaceFileScope, path, signal)
       if (entry.type !== 'directory') {
         throw new RemoteError(
@@ -382,8 +383,16 @@ export class WorkspaceFiles extends TypertRemoteService {
    */
   @Remote({ mode: 'stream' })
   changes(workspaceFileScope: WorkspaceFileScope, signal: AbortSignal): AsyncIterable<WorkspaceFileWatchFrame> {
-    const iterator = this.feed.follow(workspaceFileScope.workspaceRoot, signal)[Symbol.asyncIterator]()
-    const next = () => this.withWorkspace(workspaceFileScope, () => iterator.next())
+    const iterator = this.feed.follow(workspaceFileScope.workspaceRoot, signal,
+      () => this.withWorkspace(workspaceFileScope, signal,
+        () => this.ctx.fs.resolve(workspaceFileScope.workspaceRoot, { signal })),
+    )[Symbol.asyncIterator]()
+    const next = () => {
+      if (this.ctx.get('conversationWorkspaces') === undefined) return iterator.next()
+      const agent = this.ctx.agents.get(workspaceFileScope.sessionId)
+      if (agent === undefined) throw new Error('open the conversation before observing its workspace')
+      return this.ctx.agents.withInitiator(agent, () => iterator.next())
+    }
     return {
       async *[Symbol.asyncIterator]() {
         try {
@@ -397,9 +406,9 @@ export class WorkspaceFiles extends TypertRemoteService {
     }
   }
 
-  private withWorkspace<T>(scope: WorkspaceFileScope, operation: () => T): T {
+  private withWorkspace<T>(scope: WorkspaceFileScope, signal: AbortSignal, operation: () => Promise<T>): Promise<T> {
     const workspaces = this.ctx.get('conversationWorkspaces')
-    return workspaces === undefined ? operation() : workspaces.runForSession(scope.sessionId, operation)
+    return workspaces === undefined ? operation() : workspaces.runForSession(scope.sessionId, operation, signal)
   }
 
   /** Apply the page defaults and caps here, so the request never carries them implicitly. */

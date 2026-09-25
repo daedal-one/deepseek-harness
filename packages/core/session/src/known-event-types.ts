@@ -84,6 +84,7 @@ export const KNOWN_SESSION_EVENT_TYPES: ReadonlySet<string> = new Set([
   'turn/start',
   'user/message',
   'web/openrouter-search-llm-request',
+  'workspace/admission',
   'workspace/branch-name-request',
   'workspace/commit-message-request',
   'workspace/provenance',

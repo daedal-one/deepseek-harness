@@ -86,7 +86,7 @@ describe.skipIf(!enabled)('conversation workspace real Podman Loader flow', () =
         { name: 'container-fs', config: { cwdAliases: [], maxFileBytes: 65536, diffBasisMaxBytes: 32768, maxControllerOutputBytes: 200000, operationTimeoutMs: 10000 } },
         { name: 'container-subprocess', config: { cwdAliases: [], controlOutputBytes: 4096, controlTimeoutMs: 10000 } },
         { name: 'presets', config: { default: 'maintenance', roots: [{ path: presetRoot, trust: 'user' }], includeShippedRoot: false, includeUserRoot: false } },
-        { name: 'workspaces', config: { ...limits, hostSessions: [{ sessionId: maintenanceId, preset: 'maintenance', cwd: source }], ...(environment ? { environment: { id: 'e2e-environment', name: 'E2E environment', grantLifetimeMs: 3600000, repositories: [{ source, url: 'https://github.example/org/first.git', credentialTimeoutMs: 1000 }, { source: secondSource, url: 'https://github.example/org/second.git', credentialTimeoutMs: 1000 }], initialGrants: [{ repository: 'https://github.example/org/first.git', access: 'fetch' }] } } : {}), poolPaths, slotBytes: 67108864, slotInodes: 20000, recoveryRoot: join(root, 'recovery'), provenanceRoot: join(root, 'provenance'), maxOutputBytes: 8388608, settleTimeoutMs: 10000, retryDelayMs: 1000, messageProvider: 'mock', messageModel: 'cheap', messageInputBytes: 4096, messageOutputTokens: 64, messageTimeoutMs: 10000 } },
+        { name: 'workspaces', config: { ...limits, hostSessions: [{ sessionId: maintenanceId, preset: 'maintenance', cwd: source }], ...(environment ? { environment: { id: 'e2e-environment', name: 'E2E environment', grantLifetimeMs: 3600000, repositories: [{ source, url: 'https://github.example/org/first.git', credentialTimeoutMs: 1000 }, { source: secondSource, url: 'https://github.example/org/second.git', credentialTimeoutMs: 1000 }], initialGrants: [{ repository: 'https://github.example/org/first.git', access: 'fetch' }] } } : {}), poolPaths, slotBytes: 67108864, slotInodes: 20000, recoveryRoot: join(root, 'recovery'), provenanceRoot: join(root, 'provenance'), maxOutputBytes: 8388608, settleTimeoutMs: 10000, retryDelayMs: 1000, messageProvider: 'mock-metadata', messageModel: 'cheap', messageInputBytes: 4096, messageOutputTokens: 64, messageTimeoutMs: 10000 } },
         { name: 'instructions', config: { dshHome: '/workspace/.dsh', maxBytes: 4096 } },
         ...(environment ? [{ name: 'repo-access' }] : []),
         { name: 'fs-tools' }, { name: 'loop', config: { agents: [] } },
@@ -97,8 +97,12 @@ describe.skipIf(!enabled)('conversation workspace real Podman Loader flow', () =
       await ctx.loader.create({ name: 'cordis:include', config: { path: pathToFileURL(configPath).href } }); await ctx.loader.await()
       let approvals = 0
       ctx.on('user-questions/request', async ({ questions }) => { approvals++; return { answers: [{ id: questions[0]!.id, selected: ['Approve'] }] } })
-      const adapter = new MockAdapter([...(environment ? [toolCallResponse('attach-repository', 'request_repo_access', { repository: 'https://github.example/org/second.git', access: 'fetch', reason: 'The user requested work across both repositories.' })] : []), toolCallResponse('workspace-write', 'write', { file_path: 'result.txt', content: 'agent result\n' }), textResponse('Done.'), textResponse('feat: add result'), textResponse(JSON.stringify({ HEAD: 'add-result', 'refs/heads/codex/conversation': 'add-result' })), textResponse('No further changes.'), textResponse('Background work remains active.'), textResponse('chore: retain background output'), 'hang'])
+      const adapter = new MockAdapter([...(environment ? [toolCallResponse('attach-repository', 'request_repo_access', { repository: 'https://github.example/org/second.git', access: 'fetch', reason: 'The user requested work across both repositories.' })] : []), toolCallResponse('workspace-write', 'write', { file_path: 'result.txt', content: 'agent result\n' }), textResponse('Done.'), textResponse('No further changes.'), textResponse('Background work remains active.'), 'hang'])
       ctx.llm.registerAdapter(['mock'], adapter)
+      const names = textResponse(JSON.stringify({ HEAD: 'workspace-result', 'refs/heads/codex/conversation': 'workspace-result' }))
+      ctx.llm.registerAdapter(['mock-metadata'], new MockAdapter([
+        textResponse('feat: add result'), names, textResponse('chore: retain background output'),
+      ]))
       maintenance = await ctx.agents.create({ sessionId: maintenanceId, meta: { cwd: source, agentPreset: 'maintenance' },
         agentOptions: { provider: 'mock', model: 'main' }, setup: async (scope) => { await ctx.agentPresets.mount(scope, 'maintenance') } })
       const hostFileSystem = serviceForAgent(ctx, maintenance.agent, 'fs')!
@@ -109,13 +113,13 @@ describe.skipIf(!enabled)('conversation workspace real Podman Loader flow', () =
       const id = SessionId(`workspace-e2e-${randomUUID()}`)
       first = await ctx.agents.create({ sessionId: id, meta: { cwd: source, agentPreset: 'internal' }, agentOptions: { provider: 'mock', model: 'main' }, setup: async (scope) => { await ctx.agentPresets.mount(scope, 'internal') } })
       second = await ctx.agents.create({ sessionId: SessionId(`workspace-e2e-${randomUUID()}`), meta: { cwd: source }, agentOptions: { provider: 'mock', model: 'main' } })
-      const read = async (agent: Agent, path: string) => ctx.agents.withInitiator(
-        agent, async () => ctx.fs.readText(await ctx.fs.resolve(path, { cwd: source })),
+      const read = async (agent: Agent, path: string) => ctx.conversationWorkspaces.runForSession(
+        agent.id, async () => ctx.fs.readText(await ctx.fs.resolve(path, { cwd: source })),
       )
       expect(await read(first.agent, 'input.txt')).toBe('user edits\n')
       expect(await read(first.agent, 'untracked.txt')).toBe('user input\n')
       await expect(read(first.agent, 'ignored')).rejects.toThrow()
-      const command = async (agent: Agent, code: string) => ctx.agents.withInitiator(agent, async () => {
+      const command = async (agent: Agent, code: string) => ctx.conversationWorkspaces.runForSession(agent.id, async () => {
         const process = ctx.subprocess.spawn({ argv: ['/bin/sh', '-c', code], cwd: source,
           stdio: { stdin: 'ignore', stdout: { maxBytes: 4096 }, stderr: { maxBytes: 4096 } }, graceMs: 1000 })
         const result = await process.done
@@ -154,26 +158,40 @@ describe.skipIf(!enabled)('conversation workspace real Podman Loader flow', () =
       await first.agent.whenIdle()
       expect(await command(first.agent, 'git rev-parse HEAD')).toBe(committed)
       expect(first.agent.session.snapshotEvents().filter(event => event.type === 'workspace/commit-message-request')).toHaveLength(1)
-      const writer = ctx.agents.withInitiator(first.agent, () => ctx.subprocess.spawn({
-        argv: ['/bin/sh', '-c', 'while [ ! -f release-writer ]; do sleep 0.05; done; printf retained >background.txt; rm release-writer'],
-        cwd: source, stdio: { stdin: 'ignore', stdout: { maxBytes: 4096 }, stderr: { maxBytes: 4096 } }, graceMs: 1000,
-      }))
+      let writer: ReturnType<typeof ctx.subprocess.spawn> | undefined
+      const writerAgent = first.agent
+      const unwatch = ctx.on('agent/pre-step', ({ agent }, next) => {
+        if (agent === writerAgent && writer === undefined) writer = ctx.subprocess.spawn({
+          argv: ['/bin/sh', '-c', 'while [ ! -f release-writer ]; do sleep 0.05; done; printf retained >background.txt; rm release-writer'],
+          cwd: source, stdio: { stdin: 'ignore', stdout: { maxBytes: 4096 }, stderr: { maxBytes: 4096 } }, graceMs: 1000,
+        })
+        return next()
+      })
       first.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Finish while the background writer remains active.' }], source: { kind: 'user' } }))
       await first.agent.whenIdle()
       expect(first.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')?.data)
         .toMatchObject({ phase: 'pending', turn: 3 })
       const world = ctx.agents.withInitiator(first.agent, () => ctx.conversationWorkspaces.capture().containerName)
       // The test owns the tmpfs roots; this external release proves settlement did not kill the writer.
-      const slot = await Promise.all(poolPaths.map(async slot => ({ slot, owner: JSON.parse(await readFile(join(slot, 'owner.json'), 'utf8')) as { workspaceId: string } })))
-      const backing = slot.find(slot => slot.owner.workspaceId === receipt.data.workspaceId)?.slot
+      const slot = await Promise.all(poolPaths.map(async (slot) => {
+        let owner: { workspaceId: string } | undefined
+        try { owner = JSON.parse(await readFile(join(slot, 'owner.json'), 'utf8')) as { workspaceId: string } }
+        catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
+        return { slot, owner }
+      }))
+      const backing = slot.find(slot => slot.owner?.workspaceId === receipt.data.workspaceId)?.slot
       if (backing === undefined) throw new Error('writer workspace slot missing')
       const executionSource = ctx.agents.withInitiator(first.agent, () => ctx.conversationWorkspaces.executionPath(source))
       await writeFile(join(backing, 'workspace', executionSource.slice('/workspace'.length), 'release-writer'), '')
+      if (writer === undefined) throw new Error('background writer did not start')
       expect((await writer.done).exitCode).toBe(0)
+      unwatch()
       const savedAgent = first.agent
       await expect.poll(() => savedAgent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')?.data,
         { timeout: 15000 }).toMatchObject({ phase: 'returned', turn: 3 })
-      expect(ctx.agents.withInitiator(first.agent, () => ctx.conversationWorkspaces.capture().containerName)).toBe(world)
+      await ctx.conversationWorkspaces.runForSession(first.agent.id, async () => {
+        expect(ctx.conversationWorkspaces.capture().containerName).not.toBe(world)
+      })
       expect(await read(first.agent, 'background.txt')).toBe('retained')
       const started = Promise.withResolvers<undefined>()
       const secondId = second.agent.id

@@ -28,3 +28,14 @@ export const WorkspaceStateNodeView = memo(function WorkspaceStateNodeView({ nod
     {error !== undefined && <details><summary>{t('workspace.details')}</summary><pre>{error}</pre></details>}
   </div>
 })
+
+/** Render durable execution waiting or failure.
+ * @param props - admission node and localized copy.
+ * @returns the admission status and optional error detail.
+ */
+export const WorkspaceAdmissionNodeView = memo(function WorkspaceAdmissionNodeView({ node, t }: ChatNodeViewProps<'workspace-admission'>) {
+  return <div role="status" data-workspace-admission={node.data.status}>
+    <p>{t(node.data.status === 'failed' ? 'workspace.admissionFailed' : 'workspace.waiting')}</p>
+    {node.data.error !== undefined && <details><summary>{t('workspace.details')}</summary><pre>{node.data.error}</pre></details>}
+  </div>
+})

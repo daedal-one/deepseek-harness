@@ -15,7 +15,7 @@ import { inspectSystemPrompt } from '../../ui-conversation/src/client/contract/s
 import { AssistantStreamAccumulator } from '@deepseek-ai/dsh-llm/assistant-stream'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import { hasAssistantReplyContent } from '../src/client/contract/assistant-content.ts'
-import { workspaceDefinition } from '../src/client/conversation-nodes/workspace.ts'
+import { workspaceDefinition, workspaceAdmissionDefinition } from '../src/client/conversation-nodes/workspace.ts'
 import { assistantDefinition } from '../src/client/conversation-nodes/assistant.ts'
 import { chatViewDefinition } from '../src/client/conversation-nodes/chat-snapshot-builder.ts'
 import { commandDefinition } from '../src/client/conversation-nodes/command.ts'
@@ -37,6 +37,7 @@ import type {
 
 const DEFINITIONS: readonly ConversationNodeDefinition[] = [
   workspaceDefinition,
+  workspaceAdmissionDefinition,
   nextStepInboxDefinition,
   messageDefinition,
   systemMessageDefinition(inspectSystemPrompt),
@@ -2467,6 +2468,16 @@ describe('built-in conversation node Definitions', () => {
 
 
 describe('workspace return receipts', () => {
+  it.each(['admitted', 'cancelled'])('shows capacity waiting before a turn and removes it when %s', (status) => {
+    const waiting = at(0, 'workspace/admission', { id: 'admission-1', status: 'waiting' })
+    const value = assembler([waiting])
+    expect(node(snapshot(value), 'workspace-admission')?.data).toMatchObject({ status: 'waiting' })
+    value.append(at(1, 'workspace/admission', { id: 'admission-1', status }))
+    value.flush()
+    expect(node(snapshot(value), 'workspace-admission')?.visibility).toBe('hidden')
+    expect(snapshot(value).order).not.toContain(node(snapshot(value), 'workspace-admission')?.key)
+  })
+
   it('keeps model completion separate from pending return and replaces progress on retry', () => {
     const base = { workspaceId: 'a'.repeat(32), turn: 1, baseline: 'b'.repeat(40), checkpoint: 1, branches: {} }
     const value = assembler([

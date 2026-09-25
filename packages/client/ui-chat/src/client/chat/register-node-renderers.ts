@@ -1,4 +1,4 @@
-import { WorkspaceStateNodeView } from './WorkspaceStateNodeView.tsx'
+import { WorkspaceAdmissionNodeView, WorkspaceStateNodeView } from './WorkspaceStateNodeView.tsx'
 import type { Context } from '@deepseek-ai/cordis'
 import { NS } from '../locale.ts'
 import { AssistantNodeView } from './AssistantNodeView.tsx'
@@ -16,6 +16,8 @@ import { TurnTailNodeView } from './TurnTailNodeView.tsx'
  * @param ctx - owning UI Conversation context.
  */
 export function registerChatNodeRenderers(ctx: Context): void {
+  ctx.slots.inject('conversation.chat.node', () => ctx.slots.register(
+    { name: 'conversation.chat.node', key: 'workspace-admission', locale: NS }, WorkspaceAdmissionNodeView))
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register(
     { name: 'conversation.chat.node', key: 'workspace-state', locale: NS }, WorkspaceStateNodeView))
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register(

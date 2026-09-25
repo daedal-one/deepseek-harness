@@ -37,6 +37,9 @@
     },
     {
       "path": "../../sandbox/local-container-runtime"
+    },
+    {
+      "path": "../../core/agent"
     }
   ]
 }

@@ -47,6 +47,29 @@ function open(
 }
 
 describe('workspaceFiles.changes — frames', () => {
+  it('releases execution capacity after resolving the root while observation stays open', async () => {
+    let active = 0
+    let admitted = 0
+    const signals: AbortSignal[] = []
+    harness.ctx.provide('conversationWorkspaces', {
+      async runForSession<T>(_id: string, operation: () => Promise<T>, signal: AbortSignal) {
+        signals.push(signal)
+        active++; admitted++
+        try { return await operation() } finally { active-- }
+      },
+    } as never)
+    harness.ctx.provide('agents', { get: () => ({}), withInitiator: (_agent: unknown, operation: () => unknown) => operation() } as never)
+    const stream = open(harness.endpoint())
+    await expect(stream.next()).resolves.toMatchObject({ value: { kind: 'ready' } })
+    expect(active).toBe(0)
+    const next = stream.next()
+    const absolutePath = await observe(join(harness.workspace, 'later.txt'), present('later'))
+    await expect(next).resolves.toMatchObject({ value: { change: { absolutePath } } })
+    expect(active).toBe(0)
+    expect(admitted).toBe(1)
+    expect(signals).toEqual([stream.controller.signal])
+  })
+
   it('acknowledges the resolved root before draining observations queued during root resolution', async () => {
     const service = harness.endpoint()
     const fs = harness.ctx.fs

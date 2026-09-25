@@ -56,6 +56,8 @@ Chat restores semantic anchors across history prepend and renderer remounts. Pin
 <a id="model-experience"></a>
 ## Saved workspace branches
 
+`workspace/admission` displays waiting before the first turn or model request. Admission and cancellation remove that status; failures show the recorded error. Each wait has its own identity, so reconnect and pagination preserve the correct conversation state.
+
 Workspace return cards group equal commit tips within each repository and retain alternate branch names in an expandable list. Different repositories remain separate even when commit ids match.
 
 ## Model Experience

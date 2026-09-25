@@ -30,6 +30,16 @@ export interface WorkspaceProvenance {
 /** Host-generated identity for one conversation repository. */
 export type ConversationWorkspaceId = Branded<'ConversationWorkspaceId'>
 
+/** Identity of one turn's workspace admission request. */
+export type WorkspaceAdmissionId = Branded<'WorkspaceAdmissionId'>
+
+/** Durable execution waiting state, independent of conversation creation. */
+export interface WorkspaceAdmissionState {
+  id: WorkspaceAdmissionId
+  status: 'waiting' | 'admitted' | 'cancelled' | 'failed'
+  error?: string
+}
+
 /** Independently recorded synchronization outcome; model completion remains in turn/end. */
 export interface WorkspaceState {
   workspaceId: ConversationWorkspaceId
@@ -48,6 +58,8 @@ export interface WorkspaceState {
 
 declare module '@deepseek-ai/dsh-session/types' {
   interface SessionEventMap {
+    /** Execution capacity admission; never inserts model messages. */
+    'workspace/admission': WorkspaceAdmissionState
     /** Workspace identity and synchronization facts; never inserts agent messages. */
     'workspace/state': WorkspaceState
     /** Exact bounded auxiliary request recorded before dispatch. */

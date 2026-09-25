@@ -292,7 +292,7 @@ export class LocalContainerFileSystem extends FileSystem {
     let key = String(target.targetKey)
     const workspaces = this.ctx.get('conversationWorkspaces')
     if (workspaces !== undefined) {
-      const prefix = `${workspaces.capture().containerName}:`
+      const prefix = `${workspaces.targetNamespace}:`
       if (!key.startsWith(prefix)) throw new FsError('filesystem target belongs to another execution world', 'FS_PERMISSION_DENIED')
       key = key.slice(prefix.length)
     }
@@ -317,8 +317,8 @@ export class LocalContainerFileSystem extends FileSystem {
       || !isWorkspacePath(value.targetKey) || !isWorkspacePath(value.displayPath)) {
       throw this.protocolFailure()
     }
-    const world = this.ctx.get('conversationWorkspaces')?.capture()
-    const key = world === undefined ? value.targetKey : `${world.containerName}:${value.targetKey}`
+    const namespace = this.ctx.get('conversationWorkspaces')?.targetNamespace
+    const key = namespace === undefined ? value.targetKey : `${namespace}:${value.targetKey}`
     return { targetKey: FsTargetKey(key), displayPath: value.displayPath }
   }
 

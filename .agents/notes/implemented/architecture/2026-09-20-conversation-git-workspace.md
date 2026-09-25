@@ -26,6 +26,8 @@ DSH logs preparation and exposes saving, returned, checkpointed, and pending out
 
 ## Ownership and preparation
 
+[Execution admission](2026-09-25-workspace-execution-admission.md) assigns physical slots only while work runs; conversation ownership and acknowledged checkpoints survive release of that capacity.
+
 The durable owner is a top-level conversation, not a profile, standing preset mount, container process, or incidental current directory. A workspace record pins a branded workspace identity, source repository root, source base OID, input-baseline OID, source status and staged patch, checkpoint generation and digest, pending commit inputs, and returned refs. Child agents inherit that workspace; an independent conversation or explicitly isolated child receives a separate owner. Forking a conversation snapshots a defined generation into a new owner rather than aliasing mutable storage.
 
 Filesystem, subprocess, shell, search, terminal, job, LSP, instruction, and Client file-view consumers resolve an owner-bound handle. A handle binds both providers to one opaque execution-world identity; an unresolved initiator is an error. The process-global provider swap and standing preset scope cannot supply this identity. The policy bypass must verify the resolved handle for each operation, including resumed jobs, instead of accepting one process-global marker.

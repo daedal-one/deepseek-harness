@@ -180,9 +180,10 @@ async lookupChanges(query: string, signal: AbortSignal): Promise<{ records: Work
 /** Run a user-facing workspace operation with the selected live conversation.
  * @param sessionId - selected conversation identity from the host request.
  * @param operation - operation whose filesystem and process calls share that owner.
+ * @param signal - cancellation while waiting for workspace capacity.
  * @returns the operation result; cold conversations must be opened first.
  */
-runForSession<T>(sessionId: SessionId, operation: () => T): T
+async runForSession<T>(sessionId: SessionId, operation: () => Promise<T>, signal?: AbortSignal): Promise<T>
 
 /** Capture the exact initiating conversation's world for one operation.
  * @returns an operation-local runtime; missing ownership rejects rather than using another workspace.

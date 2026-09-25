@@ -166,3 +166,5 @@
 - insert:
     - id: workspace-outcomes
       name: '../../../packages/sandbox/local-container-runtime/tests/fixtures/workspace-outcomes.ts'
+      config:
+        admission: true
