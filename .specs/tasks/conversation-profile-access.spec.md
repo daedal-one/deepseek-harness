@@ -24,7 +24,7 @@ Access overrides are available until the first model turn; after that, the menu 
 
 ## Validation
 
-Cover profile defaults, explicit overrides, blank-profile changes, resumed and forked permissions, invalid policy references, host/container provider identity, and missing or mixed evidence. Verify labels and icons at desktop and mobile widths, real Loader behavior, session replay, and the affected documentation.
+Cover profile defaults, explicit overrides, blank-profile changes, resumed and forked permissions, invalid policy references, host/container provider identity, and missing or mixed evidence. Verify labels and icons at desktop and mobile widths, real Loader behavior, session replay, and the affected documentation. Verify that the Python runtime dependency manifest includes the required peers of the permission service.
 
 ## Evidence
 
