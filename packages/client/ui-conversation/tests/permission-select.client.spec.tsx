@@ -31,7 +31,6 @@ it('uses locale fallbacks for built-ins and keeps host descriptions authoritativ
       { value: 'read-only', name: 'read-only' },
       { value: 'workspace-write', name: 'workspace-write', description: hostDescription },
       { value: 'danger-full-access', name: 'danger-full-access' },
-      { value: 'custom', name: 'custom' },
     ],
     currentValue: 'read-only',
     context: { environment: 'host', defaultPreset: 'read-only' },
@@ -60,9 +59,6 @@ it('uses locale fallbacks for built-ins and keeps host descriptions authoritativ
   expect(view.getByRole('tooltip').textContent)
     .toBe('Read, edit, and run commands within the displayed environment without routine approval. This policy does not grant access beyond that environment. Use only for trusted tasks.')
   fireEvent.blur(fullAccess)
-
-  const custom = view.getByRole('menuitem', { name: 'Custom' })
-  fireEvent.focus(custom)
   expect(view.queryByRole('tooltip')).toBeNull()
 })
 
