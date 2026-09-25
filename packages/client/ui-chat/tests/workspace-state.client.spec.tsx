@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { en as commonCopy } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import type { ChatNodeViewProps } from '../src/client/contract/slots.ts'
-import { WorkspaceStateNodeView } from '../src/client/chat/WorkspaceStateNodeView.tsx'
+import { WorkspaceAdmissionNodeView, WorkspaceStateNodeView } from '../src/client/chat/WorkspaceStateNodeView.tsx'
 import { en } from '../src/client/locale.ts'
 
 afterEach(cleanup)
@@ -33,4 +33,16 @@ it.each(['saving', 'pending', 'checkpointed'] as const)('retains %s outcomes and
   expect(result.getByRole('status').getAttribute('data-workspace-phase')).toBe(phase)
   expect(result.getByText('Destination unavailable')).toBeTruthy()
   expect(result.container.querySelector('ul')).toBeNull()
+})
+
+it('shows waiting execution capacity and a failed admission with its explanation', () => {
+  const result = render(<WorkspaceAdmissionNodeView {...{
+    node: { data: { status: 'waiting' } }, t,
+  } as ChatNodeViewProps<'workspace-admission'>} />)
+  expect(result.getByRole('status').textContent).toBe('Waiting for workspace capacity…')
+  result.rerender(<WorkspaceAdmissionNodeView {...{
+    node: { data: { status: 'failed', error: 'Recovery checkpoint is unavailable' } }, t,
+  } as ChatNodeViewProps<'workspace-admission'>} />)
+  expect(result.getByText('Workspace could not start')).toBeTruthy()
+  expect(result.getByText('Recovery checkpoint is unavailable')).toBeTruthy()
 })

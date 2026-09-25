@@ -4,18 +4,26 @@ import z from '@deepseek-ai/schemastery'
 import type { Context } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { installWorkspaceGuidance } from '../../src/workspace-guidance.ts'
-import type { ConversationWorkspaceId, WorkspaceState, WorkspaceProvenanceId } from '../../src/workspace-types.ts'
+import type { ConversationWorkspaceId, WorkspaceState, WorkspaceProvenanceId, WorkspaceAdmissionId } from '../../src/workspace-types.ts'
 
 export const name = 'snapshot-workspace-outcomes'
 export const inject = ['agents', 'systemPrompt']
-export const Config = z.object({ provenance: z.boolean().default(false) })
+export const Config = z.object({ provenance: z.boolean().default(false), admission: z.boolean().default(false) })
 
 /** Register deterministic storage receipts around a real completed coding turn.
  * @param ctx - shipped SDK profile scope.
  * @param config - optional provenance fixture selection.
  */
-export function apply(ctx: Context, config: { provenance: boolean }): void {
+export function apply(ctx: Context, config: { provenance: boolean; admission: boolean }): void {
   ctx.on('agent/prepare', ({ agent }) => { installWorkspaceGuidance(agent) })
+  ctx.on('agent/turn-starting', async ({ agent }, next) => {
+    if (config.admission) {
+      const id = brandString<WorkspaceAdmissionId>('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee')
+      agent.session.append('workspace/admission', { id, status: 'waiting' })
+      agent.session.append('workspace/admission', { id, status: 'admitted' })
+    }
+    await next()
+  })
   ctx.on('agent/turn-settled', ({ agent, turn }) => {
     const state: WorkspaceState = { workspaceId: brandString<ConversationWorkspaceId>('a'.repeat(32)), turn,
       phase: 'saving', baseline: 'b'.repeat(40), checkpoint: 1, checkpointHash: 'c'.repeat(64), branches: {} }

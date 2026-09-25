@@ -1257,6 +1257,9 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:^
+        version: link:../../core/agent
       '@deepseek-ai/cordis':
         specifier: workspace:^
         version: link:../../../vendor/cordis

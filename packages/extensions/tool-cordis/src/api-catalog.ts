@@ -811,9 +811,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'bounded immutable receipts and an explicit truncation indicator.',
       },
       {
-        signature: 'runForSession<T>(sessionId: SessionId, operation: () => T): T',
+        signature: 'async runForSession<T>(sessionId: SessionId, operation: () => Promise<T>, signal?: AbortSignal): Promise<T>',
         description: 'Run a user-facing workspace operation with the selected live conversation.',
-        parameters: [{ name: 'sessionId', description: 'selected conversation identity from the host request.' }, { name: 'operation', description: 'operation whose filesystem and process calls share that owner.' }],
+        parameters: [{ name: 'sessionId', description: 'selected conversation identity from the host request.' }, { name: 'operation', description: 'operation whose filesystem and process calls share that owner.' }, { name: 'signal', description: 'cancellation while waiting for workspace capacity.' }],
         returns: 'the operation result; cold conversations must be opened first.',
       },
       {

@@ -15,6 +15,7 @@ import { tryLockExclusive } from '@deepseek-ai/node-addon-system/flock'
 import type { LocalContainerRuntime } from './index.ts'
 import type { PodmanControllerExecRequest, PodmanControllerExecResult } from './types.ts'
 import { WORKSPACE_CONTROLLER } from './workspace-controller.ts'
+import { WorkspaceAdmission } from './workspace-admission.ts'
 import { installWorkspaceGuidance } from './workspace-guidance.ts'
 import type {} from '@deepseek-ai/dsh-commands'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
@@ -55,7 +56,7 @@ export interface ConversationWorkspaceConfig extends WorkspaceLimits {
 
 declare module '@deepseek-ai/cordis' { interface Context { conversationWorkspaces: ConversationWorkspaces } }
 
-import type { ConversationWorkspaceId, WorkspaceState, WorkspaceProvenanceId, WorkspaceProvenance } from './workspace-types.ts'
+import type { ConversationWorkspaceId, WorkspaceState, WorkspaceProvenanceId, WorkspaceProvenance, WorkspaceAdmissionId } from './workspace-types.ts'
 export type { WorkspaceState } from './workspace-types.ts'
 
 type Control = (request: PodmanControllerExecRequest & { readonly deadlineMs: number }) => Promise<PodmanControllerExecResult>
@@ -91,6 +92,15 @@ interface RecordState {
   lastTurn: number
   branches: Record<string, string>
 }
+interface WorkspaceUse {
+  references: number
+  abort: AbortController
+  ready: Promise<Workspace>
+  releaseSlot?: () => void
+  closing?: Promise<void>
+  idlePending?: boolean
+}
+
 interface Workspace {
   owner: Agent
   users: Set<Agent>
@@ -134,13 +144,20 @@ export class ConversationWorkspaces extends Service {
     messageTimeoutMs: z.natural().required(),
   })
   private readonly bindings = new WeakMap<Agent, Workspace>()
+  private readonly owners = new WeakMap<Agent, Agent>()
+  private readonly identities = new WeakMap<Agent, ConversationWorkspaceId>()
+  private readonly uses = new Map<SessionId, WorkspaceUse>()
+  private readonly turnUses = new WeakMap<Agent, () => Promise<void>>()
+  private readonly admission: WorkspaceAdmission
   private readonly workspaces = new Set<Workspace>()
+  private readonly preparations = new Set<Promise<void>>()
   private readonly config: ConversationWorkspaceConfig & { provenanceRoot: string }
   private readonly requestCancellation = new AbortController()
 
   constructor(ctx: Context, config: ConversationWorkspaceConfig) {
     super(ctx, 'conversationWorkspaces')
     this.config = resolveConfig(config)
+    this.admission = new WorkspaceAdmission(this.config.poolPaths.length)
     ctx.inject(['commands'], (inner) => {
       inner.effect(() => inner.commands.register({
         name: 'changes', description: 'Find saved branches and their conversations.',
@@ -163,37 +180,54 @@ export class ConversationWorkspaces extends Service {
     })
     ctx.on('agent/prepare', async ({ agent, origin: { parentAgent }, signal }) => {
       signal.throwIfAborted()
-      if (parentAgent !== undefined) {
-        const workspace = this.forAgent(parentAgent)
-        workspace.users.add(agent); this.bindings.set(agent, workspace)
-      } else await this.prepare(agent)
+      this.requestCancellation.signal.throwIfAborted()
+      this.owners.set(agent, parentAgent === undefined ? agent : this.ownerFor(parentAgent))
       agent.ctx.effect(() => async () => {
+        await this.releaseTurn(agent)
         const workspace = this.bindings.get(agent)
-        if (workspace === undefined) return
-        workspace.users.delete(agent); this.bindings.delete(agent)
-        if (workspace.users.size === 0 && this.workspaces.has(workspace)) await this.release(workspace)
+        workspace?.users.delete(agent)
+        this.bindings.delete(agent)
+        this.owners.delete(agent)
       }, 'conversation workspace agent binding')
       agent.ctx.systemPrompt.variable('cwd', () => '/workspace')
       installWorkspaceGuidance(agent)
     })
-    ctx.on('agent/session-start', ({ agent }) => {
-      const workspace = this.forAgent(agent)
-      if (workspace.owner !== agent || workspace.resumeTurn === undefined) return
-      const { turn, reason } = workspace.resumeTurn
-      workspace.recovery = this.settle(workspace, turn, reason)
-      void workspace.recovery.catch((error: unknown) =>{  ctx.logger.error(error) })
-    })
     ctx.on('agent/turn-starting', async ({ agent, signal }, next) => {
-      const workspace = this.forAgent(agent)
-      await workspace.recovery
-      await workspace.settlement
-      signal.throwIfAborted()
-      if (workspace.pending) throw new Error('workspace recovery is pending; see the synchronization error')
-      await next()
+      const id = brandString<WorkspaceAdmissionId>(randomUUID())
+      agent.session.append('workspace/admission', { id, status: 'waiting' })
+      try {
+        const release = await this.acquireUse(agent, signal)
+        this.turnUses.set(agent, release)
+        if (this.forAgent(agent).pending) throw new Error('workspace recovery is pending; see the synchronization error')
+        signal.throwIfAborted()
+        agent.session.append('workspace/admission', { id, status: 'admitted' })
+        await next()
+      } catch (error) {
+        agent.session.append('workspace/admission', signal.aborted
+          ? { id, status: 'cancelled' }
+          : { id, status: 'failed', error: error instanceof Error ? error.message : String(error) })
+        await this.releaseTurn(agent)
+        throw error
+      }
+    })
+    ctx.on('agent/session-start', ({ agent, source }) => {
+      if (source !== 'resume') return
+      const waiting = new Set<WorkspaceAdmissionId>()
+      for (const event of agent.session.snapshotEvents()) {
+        if (event.type !== 'workspace/admission') continue
+        if (event.data.status === 'waiting') waiting.add(event.data.id)
+        else waiting.delete(event.data.id)
+      }
+      for (const id of waiting) agent.session.append('workspace/admission', { id, status: 'cancelled' })
     })
     ctx.on('agent/turn-settled', async ({ agent, turn, reason }) => {
-      const workspace = this.forAgent(agent)
-      if (workspace.owner === agent) await this.settle(workspace, turn, reason)
+      try {
+        const workspace = this.forAgent(agent)
+        if (workspace.owner === agent) await this.settle(workspace, turn, reason)
+      } finally { await this.releaseTurn(agent) }
+    })
+    ctx.on('agent/status', ({ agent, status }) => {
+      if (status === 'idle') void this.releaseTurn(agent).catch((error: unknown) => { ctx.logger.error(error) })
     })
     ctx.on('agent/pre-step', async ({ agent }, next) => {
       if (this.forAgent(agent).pending) throw new Error('workspace save is pending; resume after resolving the reported storage or writer error')
@@ -202,8 +236,9 @@ export class ConversationWorkspaces extends Service {
 
     ctx.effect(() => async () => {
       this.requestCancellation.abort()
+      const preparing = await Promise.allSettled(this.preparations)
       const results = await Promise.allSettled([...this.workspaces].map(workspace => this.release(workspace)))
-      const failures = results.flatMap(result => result.status === 'rejected' ? [result.reason as unknown] : [])
+      const failures = [...preparing, ...results].flatMap(result => result.status === 'rejected' ? [result.reason as unknown] : [])
       if (failures.length > 0) throw new AggregateError(failures, 'workspace shutdown failed; retained storage requires recovery')
     }, 'conversation workspace storage ownership')
   }
@@ -225,13 +260,15 @@ export class ConversationWorkspaces extends Service {
   /** Run a user-facing workspace operation with the selected live conversation.
    * @param sessionId - selected conversation identity from the host request.
    * @param operation - operation whose filesystem and process calls share that owner.
+   * @param signal - cancellation while waiting for workspace capacity.
    * @returns the operation result; cold conversations must be opened first.
    */
-  runForSession<T>(sessionId: SessionId, operation: () => T): T {
+  async runForSession<T>(sessionId: SessionId, operation: () => Promise<T>, signal?: AbortSignal): Promise<T> {
     const agent = this.ctx.agents.get(sessionId)
     if (agent === undefined) throw new Error('open the conversation before accessing its execution workspace')
-    this.forAgent(agent)
-    return this.ctx.agents.withInitiator(agent, operation)
+    const release = await this.acquireUse(agent, signal ?? this.requestCancellation.signal)
+    try { return await this.ctx.agents.withInitiator(agent, operation) }
+    finally { await release() }
   }
 
   /** Capture the exact initiating conversation's world for one operation.
@@ -258,18 +295,148 @@ export class ConversationWorkspaces extends Service {
     return path
   }
 
-  /** Exact world for policy comparisons; diagnostics outside an agent retain the boot world.
-   * @returns the initiating world's identity or the boot identity outside operations.
+  /** Exact world for policy comparisons; unadmitted agents use the verified boot provider identity.
+   * @returns the admitted world's identity, or the boot identity before execution allocation.
    */
   get executionWorld(): object {
     const agent = this.ctx.agents.currentInitiator()
-    return agent === undefined ? this.ctx.localContainerRuntime.executionWorld : this.forAgent(agent).runtime.executionWorld
+    const owner = agent === undefined ? undefined : this.owners.get(agent)
+    const workspace = owner === undefined ? undefined : this.bindings.get(owner)
+    return workspace?.runtime.executionWorld ?? this.ctx.localContainerRuntime.executionWorld
+  }
+
+  /** Stable filesystem target namespace across container replacement.
+   * @returns the admitted conversation's durable workspace identity.
+   */
+  get targetNamespace(): string {
+    const identity = this.identities.get(this.ownerFor(this.ctx.agents.requireInitiator()))
+    if (identity === undefined) throw new Error('conversation workspace identity is not initialized')
+    return identity
+  }
+
+  private ownerFor(agent: Agent): Agent {
+    const owner = this.owners.get(agent)
+    if (owner === undefined) throw new Error('conversation workspace was not prepared for this agent')
+    return owner
   }
 
   private forAgent(agent: Agent): Workspace {
-    const workspace = this.bindings.get(agent)
-    if (workspace === undefined) throw new Error('conversation workspace was not prepared for this agent')
+    const workspace = this.bindings.get(agent) ?? this.bindings.get(this.ownerFor(agent))
+    if (workspace === undefined) throw new Error('conversation workspace is not admitted for execution')
+    workspace.users.add(agent)
+    this.bindings.set(agent, workspace)
     return workspace
+  }
+
+  private async acquireUse(agent: Agent, signal: AbortSignal): Promise<() => Promise<void>> {
+    signal.throwIfAborted()
+    this.requestCancellation.signal.throwIfAborted()
+    const owner = this.ownerFor(agent)
+    let use = this.uses.get(owner.id)
+    if (use?.closing !== undefined) {
+      await waitForAdmission(use.closing, signal)
+      return this.acquireUse(agent, signal)
+    }
+    if (use === undefined) {
+      const abort = new AbortController()
+      const lifetime = AbortSignal.any([abort.signal, this.requestCancellation.signal])
+      const pending: WorkspaceUse = { references: 0, abort, ready: Promise.resolve().then(async () => {
+        pending.releaseSlot = await this.admission.acquire(lifetime)
+        try {
+          lifetime.throwIfAborted()
+          await this.prepare(owner)
+          const workspace = this.forAgent(owner)
+          if (workspace.resumeTurn !== undefined) {
+            const { turn, reason } = workspace.resumeTurn
+            await this.settle(workspace, turn, reason)
+          }
+          return workspace
+        } catch (error) {
+          pending.releaseSlot()
+          delete pending.releaseSlot
+          throw error
+        }
+      }) }
+      use = pending
+      this.uses.set(owner.id, use)
+      const preparation = use.ready.then(() => undefined, (error: unknown) => {
+        if (!lifetime.aborted) throw error
+      })
+      this.preparations.add(preparation)
+      void preparation.finally(() => { this.preparations.delete(preparation) }).catch(() => undefined)
+    }
+    const acquired = use
+    acquired.references++
+    let released = false
+    const release = async (): Promise<void> => {
+      if (released) return
+      released = true
+      acquired.references--
+      if (acquired.references === 0) await this.releaseIdle(owner, acquired)
+    }
+    try {
+      const workspace = await waitForAdmission(acquired.ready, signal)
+      this.identities.set(owner, workspace.record.workspaceId)
+      if (workspace.owner !== owner) {
+        await workspace.settlement
+        workspace.owner = owner
+        this.bindings.set(owner, workspace)
+        const ended = owner.session.snapshotEvents().findLast(event => event.type === 'turn/end')
+        if (workspace.pending && ended?.type === 'turn/end') await this.settle(workspace, ended.data.turn, ended.data.reason)
+      }
+      this.forAgent(agent)
+      return release
+    } catch (error) {
+      await release()
+      throw error
+    }
+  }
+
+  private async releaseTurn(agent: Agent): Promise<void> {
+    const release = this.turnUses.get(agent)
+    this.turnUses.delete(agent)
+    await release?.()
+  }
+
+  private releaseIdle(owner: Agent, use: WorkspaceUse): Promise<void> {
+    if (use.references !== 0) return Promise.resolve()
+    if (use.closing !== undefined) return use.closing
+    use.abort.abort()
+    use.closing = (async () => {
+      let workspace: Workspace
+      try { workspace = await use.ready }
+      catch {
+        // Allocation owns its rollback; no admitted workspace remains to checkpoint.
+        this.uses.delete(owner.id)
+        return
+      }
+      if (workspace.pending && use.idlePending !== true) {
+        delete use.closing
+        return
+      }
+      try {
+        await workspace.runtime.settle(this.config.settleTimeoutMs,
+          async (control) => { await this.checkpoint(workspace, control) },
+          async () => { await this.ctx.serial('workspace/quiesce', { executionWorld: workspace.runtime.executionWorld }) })
+      } catch (error) {
+        use.idlePending = true
+        workspace.pending = true
+        this.state(workspace, 'pending', workspace.record.lastTurn, error instanceof Error ? error.message : String(error))
+        await this.ctx.sessions.flush(workspace.owner.session)
+        delete use.closing
+        workspace.retryTimer = setTimeout(() => {
+          void this.releaseIdle(owner, use).catch((failure: unknown) => { this.ctx.logger.error(failure) })
+        }, this.config.retryDelayMs)
+        workspace.retryTimer.unref()
+        return
+      }
+      workspace.pending = false
+      await this.release(workspace, true)
+      for (const agent of workspace.users) this.bindings.delete(agent)
+      this.uses.delete(owner.id)
+      use.releaseSlot?.()
+    })()
+    return use.closing
   }
 
   private async verifyPool(): Promise<void> {
@@ -317,8 +484,12 @@ export class ConversationWorkspaces extends Service {
           let owner: unknown
           try { owner = await readWorkspaceJson(join(candidate, 'owner.json'), this.config.maxOutputBytes) }
           catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
-          if (owner !== undefined && (!isObject(owner) || typeof owner.workspaceId !== 'string' || typeof owner.clean !== 'boolean' || typeof owner.initialized !== 'boolean')) throw new Error('invalid RAM workspace ownership record')
-          if (isObject(owner) && owner.workspaceId !== workspaceId && owner.clean !== true) { await lease.close(); continue }
+          if (owner !== undefined && (!isObject(owner) || typeof owner.workspaceId !== 'string' || !/^[a-f0-9]{32}$/u.test(owner.workspaceId) || typeof owner.clean !== 'boolean' || typeof owner.initialized !== 'boolean')) throw new Error('invalid RAM workspace ownership record')
+          if (isObject(owner) && owner.workspaceId !== workspaceId && owner.clean !== true) {
+            await this.recoverVacantSlot(
+              candidate, brandString<ConversationWorkspaceId>(String(owner.workspaceId)), owner.initialized === true,
+            )
+          }
           if (owner === undefined && (await readdir(candidate)).length > 0) throw new Error('RAM workspace has unrecognized data; refusing to replace it')
           retained = isObject(owner) && owner.workspaceId === workspaceId && owner.initialized === true && record !== undefined
           leases.push(lease); slot = candidate; break
@@ -401,17 +572,19 @@ export class ConversationWorkspaces extends Service {
       sourceStatus: record.sourceStatus, stagedPatch: record.stagedPatch, entries }
   }
 
-  private release(workspace: Workspace): Promise<void> {
-    return workspace.releasing ??= this.finishRelease(workspace)
+  private release(workspace: Workspace, checkpointed = false): Promise<void> {
+    return workspace.releasing ??= this.finishRelease(workspace, checkpointed)
   }
 
-  private async finishRelease(workspace: Workspace): Promise<void> {
+  private async finishRelease(workspace: Workspace, checkpointed: boolean): Promise<void> {
     if (workspace.retryTimer !== undefined) clearTimeout(workspace.retryTimer)
     const failures: unknown[] = []
     try {
       await workspace.settlement
-      await workspace.runtime.cancelProcesses()
-      await workspace.runtime.settle(this.config.settleTimeoutMs, async (control) => { await this.checkpoint(workspace, control) })
+      if (!checkpointed) {
+        await workspace.runtime.cancelProcesses()
+        await workspace.runtime.settle(this.config.settleTimeoutMs, async (control) => { await this.checkpoint(workspace, control) })
+      }
     } catch (error) { failures.push(error) }
     // Keep the leases if teardown cannot prove that the old world stopped writing.
     await workspace.dispose()
@@ -446,17 +619,44 @@ export class ConversationWorkspaces extends Service {
   private async saveRecord(workspace: Workspace): Promise<void> { await this.publish(join(workspace.directory, 'state.json'), workspace.record) }
 
   private async checkpoint(workspace: Workspace, control: Control): Promise<void> {
+    await this.checkpointRecord(workspace.record, workspace.directory, control)
+  }
+
+  private async checkpointRecord(record: RecordState, directory: string, control: Control): Promise<void> {
     const captured = await this.control(control, 'capture')
     const entries = validateWorkspaceEntries(captured.entries, this.config)
-    const generation = workspace.record.checkpoint + 1
-    await this.publish(join(workspace.directory, `checkpoint-${generation}.json`), { entries })
-    workspace.record.checkpoint = generation
-    workspace.record.checkpointHash = checkpointHash(entries)
-    await this.saveRecord(workspace)
-    for (const name of await readdir(workspace.directory)) {
+    const generation = record.checkpoint + 1
+    await this.publish(join(directory, `checkpoint-${generation}.json`), { entries })
+    record.checkpoint = generation
+    record.checkpointHash = checkpointHash(entries)
+    await this.publish(join(directory, 'state.json'), record)
+    for (const name of await readdir(directory)) {
       const match = /^checkpoint-(\d+)\.json$/u.exec(name)
-      if (match !== null && Number(match[1]) < generation - 1) await rm(join(workspace.directory, name))
+      if (match !== null && Number(match[1]) < generation - 1) await rm(join(directory, name))
     }
+  }
+
+  private async recoverVacantSlot(slot: string, workspaceId: ConversationWorkspaceId, initialized: boolean): Promise<void> {
+    const directory = join(this.config.recoveryRoot, workspaceId)
+    const lease = await this.lease(join(directory, 'lease'))
+    try {
+      const value = await readWorkspaceJson(join(directory, 'state.json'), this.config.maxOutputBytes)
+      if (!isObject(value) || typeof value.sessionId !== 'string') throw new Error('invalid retained workspace session')
+      const record = parseRecord(value, workspaceId, brandString<SessionId>(value.sessionId))
+      const saved = await readWorkspaceJson(join(directory, `checkpoint-${record.checkpoint}.json`), this.config.maxOutputBytes)
+      const entries = validateWorkspaceEntries(isObject(saved) ? saved.entries : undefined, this.config)
+      if (checkpointHash(entries) !== record.checkpointHash) throw new Error('workspace recovery checkpoint failed its integrity check')
+      const backing = join(slot, 'workspace')
+      await this.ctx.localContainerRuntime.recoverWorkspace(backing)
+      if (initialized) {
+        const owned = await this.ctx.localContainerRuntime.createWorkspace(backing)
+        try {
+          await owned.runtime.settle(this.config.settleTimeoutMs,
+            async (control) => { await this.checkpointRecord(record, directory, control) })
+        } finally { await owned.dispose() }
+      }
+      await this.publish(join(slot, 'owner.json'), { workspaceId, clean: true, initialized })
+    } finally { await lease.close() }
   }
 
   private settle(workspace: Workspace, turn: number, reason: TurnEndReason): Promise<void> {
@@ -464,6 +664,10 @@ export class ConversationWorkspaces extends Service {
     if (workspace.retryTimer !== undefined) clearTimeout(workspace.retryTimer)
     const pending = this.attemptSettlement(workspace, turn, reason).finally(() => {
       delete workspace.settlement
+      const use = this.uses.get(workspace.owner.id)
+      if (!workspace.pending && use?.references === 0) {
+        void this.releaseIdle(workspace.owner, use).catch((error: unknown) => { this.ctx.logger.error(error) })
+      }
       if (workspace.pending && workspace.releasing === undefined) {
         workspace.retryTimer = setTimeout(() => {
           void this.settle(workspace, turn, reason).catch((error: unknown) =>{  this.ctx.logger.error(error) })
@@ -672,3 +876,15 @@ function resolveConfig(config: ConversationWorkspaceConfig): ConversationWorkspa
 }
 
 export default ConversationWorkspaces
+
+/** Wait for shared admission without cancelling another caller's use. */
+async function waitForAdmission<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
+  signal.throwIfAborted()
+  let abort!: () => void
+  const cancelled = new Promise<never>((_resolve, reject) => {
+    abort = () => { reject(signal.reason instanceof Error ? signal.reason : new Error('workspace admission cancelled', { cause: signal.reason })) }
+    signal.addEventListener('abort', abort, { once: true })
+  })
+  try { return await Promise.race([operation, cancelled]) }
+  finally { signal.removeEventListener('abort', abort) }
+}

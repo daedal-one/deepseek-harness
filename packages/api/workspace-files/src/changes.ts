@@ -34,10 +34,13 @@ export class WorkspaceChangeFeed {
    * Open one generation reporting observations inside `workspaceRoot`.
    * @param workspaceRoot - the session's workspace root path.
    * @param signal - generation cancellation.
+   * @param resolveRoot - optional workspace admission for the initial root lookup only.
    * @returns `ready` after observation is active and the root resolves, then
    *   observations made after the generation was first pulled, in emission order.
    */
-  async *follow(workspaceRoot: string, signal: AbortSignal): AsyncIterable<WorkspaceFileWatchFrame> {
+  async *follow(workspaceRoot: string, signal: AbortSignal,
+    resolveRoot: () => Promise<FsTarget> = () => this.ctx.fs.resolve(workspaceRoot, { signal }),
+  ): AsyncIterable<WorkspaceFileWatchFrame> {
     signal.throwIfAborted()
     // Registered before the root resolves, so nothing observed while it does is
     // missed; the root only filters at drain time.
@@ -47,7 +50,7 @@ export class WorkspaceChangeFeed {
       // Under the generation's signal, so a consumer leaving mid-resolve on a slow
       // backend releases the follower now rather than when the resolve settles;
       // a rejection the abort caused is the quiet end every other abort takes here.
-      const root = await this.ctx.fs.resolve(workspaceRoot, { signal }).catch((error: unknown) => {
+      const root = await resolveRoot().catch((error: unknown) => {
         if (signal.aborted) return undefined
         throw error
       })

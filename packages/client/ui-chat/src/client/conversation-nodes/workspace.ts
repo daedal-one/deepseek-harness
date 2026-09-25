@@ -1,12 +1,14 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { ConversationNodeDefinition } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { WorkspaceState } from '@deepseek-ai/dsh-local-container-runtime/workspace-types'
+import type { WorkspaceState, WorkspaceAdmissionState } from '@deepseek-ai/dsh-local-container-runtime/workspace-types'
 import { chatNode } from './common.ts'
 
 declare module '../contract/chat-nodes.ts' {
   interface ChatNodeDataMap {
     /** Workspace save outcome, separate from the model's turn result. */
     'workspace-state': WorkspaceState
+    /** Pending workspace execution capacity or its failure. */
+    'workspace-admission': WorkspaceAdmissionState
   }
 }
 
@@ -30,9 +32,29 @@ export const workspaceDefinition: ConversationNodeDefinition<WorkspaceState | nu
   },
 }
 
+/** Waiting work remains visible before its first turn and model request. */
+export const workspaceAdmissionDefinition: ConversationNodeDefinition<WorkspaceAdmissionState | null> = {
+  kind: 'workspace-admission',
+  target: 'chat',
+  match: event => event.type === 'workspace/admission'
+    ? { id: event.data.id, role: event.data.status === 'waiting' ? 'start' : 'update' }
+    : null,
+  start: () => null,
+  update: (context, match) => match.event.type === 'workspace/admission' ? match.event.data : context.state,
+  publication: () => 'immediate',
+  buildViewNode: (context) => {
+    const last = context.matches.at(-1)
+    if (last?.event.type !== 'workspace/admission') return null
+    return chatNode(context, 'workspace-admission', last.event.seq, last.event.data, {
+      visibility: last.event.data.status === 'waiting' || last.event.data.status === 'failed' ? 'visible' : 'hidden',
+    })
+  },
+}
+
 /** Register the workspace save receipt in the conversation timeline.
  * @param ctx - owning conversation UI context.
  */
 export function registerWorkspaceConversationNode(ctx: Context): void {
   ctx.uiConversation.events.register(workspaceDefinition)
+  ctx.uiConversation.events.register(workspaceAdmissionDefinition)
 }

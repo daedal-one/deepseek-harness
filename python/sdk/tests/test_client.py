@@ -1153,6 +1153,9 @@ for line in sys.stdin:
     ]
     assert actual == expected
     assert [event["phase"] for event in actual] == ["saving", "pending", "returned"]
+    if scenario == "workspace-outcomes":
+        admission = [event["data"]["status"] for event in result.events if event["type"] == "workspace/admission"]
+        assert admission == ["waiting", "admitted"]
     if scenario == "workspace-provenance":
         provenance = [event["data"] for event in result.events if event["type"] == "workspace/provenance"]
         expected_provenance = [
