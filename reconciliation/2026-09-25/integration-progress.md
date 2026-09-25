@@ -59,6 +59,11 @@ Fetched `origin` with pruning and tags before integration. Verified these candid
 - `doc-sync` completed 20 gates and failed 12 under the filtered install: missing unselected workspace dependencies, OOM-killed compiler gates, absent VitePress, and existing export-JSDoc findings. The one candidate-owned tsconfig alias failure was repaired and its focused gate now passes.
 - The repository has no installed `spec` command, so `spec lint` is unavailable in this checkout. Targeted typecheck found two spending-client type defects that were repaired; complete typecheck still requires generated Remote artifacts and a full dependency/build environment.
 
+## Publication
+
+- Initially published `daedal/reconcile-20260925-integration` at `903396517b619d3c3ca12c03019d91ab5aa6cfcc` after refreshing `origin/master` at `452c2e3e16ecde300bfad142dc4286f83c0a02e3`; no force update or hook bypass was used.
+- Pull-request creation is blocked in this environment: `gh` is not installed, browser automation is unavailable, and the repository-access grant authorizes Git push without exposing an API credential through `git credential fill`. GitHub reports no workflow run for the pushed branch because no PR exists.
+
 ## Remaining issues
 
 - Development VM source repair continues on `daedal/reconcile-20260925-development-vm`; real Incus/Docker/Compose qualification is unavailable because `incus` is absent.
