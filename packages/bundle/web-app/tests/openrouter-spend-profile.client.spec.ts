@@ -42,6 +42,16 @@ function keyResponse(): Response {
   return new Response(JSON.stringify(keyBody), { headers: { 'content-type': 'application/json' } })
 }
 
+interface HostSession {
+  readonly id: SessionId
+  snapshotEvents(): readonly unknown[]
+}
+
+function createHostSession(host: Context, id: SessionId): HostSession {
+  const sessions = host.get('sessions') as unknown as { create(sessionId: SessionId): HostSession }
+  return sessions.create(id)
+}
+
 async function loadProfile(credential: string | undefined): Promise<Context> {
   const root = await mkdtemp(join(tmpdir(), 'dsh-openrouter-spend-profile-'))
   roots.push(root)
@@ -96,10 +106,10 @@ function declareConversationView(slots: SlotRegistry): void {
 
 describe('OpenRouter spend Web profile slice', () => {
   it('loads the host service, client roster entry, Remote contribution, and spend tab with a fake credential', async () => {
-    const fetchSpy = vi.fn(() => keyResponse())
+    const fetchSpy = vi.fn((_input: string | URL, _init?: RequestInit) => keyResponse())
     vi.stubGlobal('fetch', fetchSpy)
     const host = await loadProfile('profile-fake-openrouter-key')
-    const session = host.sessions.create(SessionId('profile-spend'))
+    const session = createHostSession(host, SessionId('profile-spend'))
     const service = host.get('openrouterSpend') as OpenRouterSpendService
 
     await expect(service.read({ sessionId: session.id }, new AbortController().signal)).resolves.toEqual({
@@ -108,9 +118,9 @@ describe('OpenRouter spend Web profile slice', () => {
     })
     expect(fetchSpy).toHaveBeenCalledOnce()
     expect(JSON.stringify(session.snapshotEvents())).not.toContain('profile-fake-openrouter-key')
-    const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
-    expect(url).toBe('https://openrouter.test/api/v1/key')
-    expect((init.headers as Record<string, string>).authorization).toBe('Bearer profile-fake-openrouter-key')
+    const [url, init] = fetchSpy.mock.calls[0]!
+    expect(url.toString()).toBe('https://openrouter.test/api/v1/key')
+    expect((init?.headers as Record<string, string>).authorization).toBe('Bearer profile-fake-openrouter-key')
 
     const mounted: Array<{ readonly descriptors: readonly { readonly namespace: string }[] }> = []
     const disposeRemotes = await applyRemotes({
@@ -139,10 +149,10 @@ describe('OpenRouter spend Web profile slice', () => {
   })
 
   it('reports the profile credential-missing failure without an HTTP request', async () => {
-    const fetchSpy = vi.fn(() => keyResponse())
+    const fetchSpy = vi.fn((_input: string | URL, _init?: RequestInit) => keyResponse())
     vi.stubGlobal('fetch', fetchSpy)
     const host = await loadProfile(undefined)
-    const session = host.sessions.create(SessionId('profile-no-key'))
+    const session = createHostSession(host, SessionId('profile-no-key'))
     const service = host.get('openrouterSpend') as OpenRouterSpendService
 
     await expect(service.read({ sessionId: session.id }, new AbortController().signal)).resolves.toMatchObject({

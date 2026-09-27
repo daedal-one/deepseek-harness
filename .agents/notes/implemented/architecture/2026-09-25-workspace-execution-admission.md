@@ -8,9 +8,9 @@ Reserving a physical workspace when a conversation opens exhausts bounded storag
 
 ## Decision
 
-Physical workspace slots belong to admitted execution, not open conversations. Creating or selecting a conversation cannot consume bounded execution capacity. Turns and file operations acquire cancellation-aware FIFO admission while unrelated conversations retain separate files. Child agents use their parent's workspace.
+Execution permits belong to admitted work, not open conversations. Creating or selecting a conversation cannot consume bounded execution capacity. Turns and file operations acquire cancellation-aware FIFO admission while unrelated conversations retain separate durable directories. Child agents use their parent's workspace.
 
-The last workspace user waits for writers and a durable checkpoint before releasing capacity. Pending saves retain their slot and retry. Passive file observations retain conversation attribution without holding execution capacity. A later operation restores the conversation's private files; recovery checkpoints unclean slots under exclusive leases before reuse.
+The last workspace user waits for writers and a durable checkpoint before releasing capacity. Pending saves retain capacity and retry. Passive file observations retain conversation attribution without holding execution capacity. A later operation reopens the conversation's private disk directory; its exclusive lease prevents concurrent writers.
 
 Durable `workspace/admission` events expose waiting before model execution. Cancelling queued work preserves workspace selection. Admission and cancellation hide the waiting node without withdrawing an already-published conversation node.
 
@@ -20,6 +20,6 @@ Refusing conversation creation at capacity makes the workspace selector unusable
 
 ## Consequences
 
-Queued work can wait for a background writer or failed checkpoint to settle. Cancellation removes a waiting request without releasing another conversation's files. Reusing a slot requires restoring the owner's acknowledged checkpoint before filesystem or model work resumes.
+Queued work can wait for a background writer or failed checkpoint to settle. Cancellation removes a waiting request without releasing another conversation's files. Reopening a missing or unrecognized workspace directory requires restoring the owner's acknowledged checkpoint before filesystem or model work resumes.
 
 The [accepted task](../../../../.specs/tasks/workspace-execution-admission.spec.md) owns the lifecycle, queue, and browser evidence. Repository grants and deployment activation remain separate from execution capacity.

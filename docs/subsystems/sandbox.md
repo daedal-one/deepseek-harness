@@ -231,21 +231,30 @@ Source: [`packages/sandbox/local-container-runtime/src/workspaces.ts`](../../pac
 Adds durable VM execution to supervisor-owned conversation workspaces.
 
 ```ts cordis-catalog
-/** Quiesce a retained guest before the workspace owner touches its RAM slot.
- * @param id - workspace identity derived by the trusted supervisor.
+/** Require a durable record to name this exact effective-profile provider.
+ * @param reference - untrusted persisted VM identity.
  */
-async recover(id: ConversationWorkspaceId): Promise<void>
+assertReference(reference: unknown): void
+
+/** Quiesce a retained guest before the workspace owner touches its durable source directory.
+ * @param id - workspace identity derived by the trusted supervisor.
+ * @param reference - persisted provider identity, when recovery already acknowledged a VM.
+ */
+async recover(id: ConversationWorkspaceId, reference?: unknown): Promise<void>
 
 /** Bind a prepared repository to its conversation's retained development VM.
  * @param base - isolated maintenance controller for the private source directory.
- * @param id - supervisor-derived workspace identity.
- * @param directory - prepared, private memory-backed source directory.
- * @param generation - acknowledged source recovery generation.
- * @param retained - whether unacknowledged RAM source survived and is still owned.
- * @param required - whether durable recovery already acknowledges this VM.
+ * @param request - source generation, provider identity, and process authorization issuer.
  * @returns runtime and disposer; disposal retains durable guest storage.
  */
-async open( base: WorkspaceExecutionRuntime, id: ConversationWorkspaceId, directory: string, generation: number, retained: boolean, required: boolean, ): Promise<{ runtime: WorkspaceExecutionRuntime; dispose(): Promise<void> }>
+async open( base: WorkspaceExecutionRuntime, request: DevelopmentVmOpenRequest, ): Promise<{ runtime: WorkspaceExecutionRuntime; dispose(): Promise<void> }>
+
+/** Expose paired snapshot operations for a stopped displaced workspace.
+ * @param id - retained workspace identity.
+ * @param reference - persisted exact provider identity.
+ * @returns checkpoint operations that never start guest execution.
+ */
+retention(id: ConversationWorkspaceId, reference: unknown): WorkspaceCheckpointRuntime
 ```
 
 Source: [`packages/sandbox/local-container-runtime/src/vm.ts`](../../packages/sandbox/local-container-runtime/src/vm.ts)

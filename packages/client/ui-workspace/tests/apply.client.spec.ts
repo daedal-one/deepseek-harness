@@ -30,7 +30,8 @@ async function bench() {
   const renameSession = vi.fn(async (title: string) => ({ ok: true, value: { title, seq: 1 } }))
   const binding = vi.fn(() => ({ session: { rename: renameSession } }))
   const fork = vi.fn(async () => 'forked' as never)
-  const loadSummary = vi.fn(async (_sessionId: string, _signal: AbortSignal) => ({ ok: true as const, value: true }))
+  type LoadSummaryResult = { ok: true; value: boolean } | { ok: false; error: RemoteError }
+  const loadSummary = vi.fn(async (_sessionId: string, _signal: AbortSignal): Promise<LoadSummaryResult> => ({ ok: true, value: true }))
   const subscribe = () => () => {}
   let sessionList = {
     ids: [], byId: {}, current: undefined, phase: 'ready',
@@ -86,7 +87,8 @@ async function bench() {
   ctx.provide('locale', locale)
   return {
     ctx, slots: ctx.get('slots') as SlotRegistry, locale, create, rename,
-    insertSessionBefore, open, clear, selectPanel, search, loadSummary, admitSummary, sessionList: () => sessionList, renameSession, binding, fork, pickDirectory,
+    insertSessionBefore, open, clear, selectPanel, search, loadSummary, admitSummary,
+    sessionList: () => sessionList, renameSession, binding, fork, pickDirectory,
   }
 }
 

@@ -37,16 +37,18 @@ import { describe, expect, it } from 'vitest'
 
 const socketPath = process.env.DSH_PODMAN_SOCKET
 const image = process.env.DSH_PODMAN_IMAGE
-const rawPool = process.env.DSH_WORKSPACE_POOL
+const storageRoot = process.env.DSH_WORKSPACE_STORAGE_ROOT
+const rawCapacity = process.env.DSH_WORKSPACE_CAPACITY
 const rawVm = process.env.DSH_DEVELOPMENT_VM
 const vmConfig: unknown = rawVm === undefined ? undefined : JSON.parse(rawVm)
-const enabled = process.platform === 'linux' && socketPath !== undefined && image !== undefined && rawPool !== undefined
+const maxActiveWorkspaces = Number(rawCapacity)
+const enabled = process.platform === 'linux' && socketPath !== undefined && image !== undefined && storageRoot !== undefined
+  && Number.isSafeInteger(maxActiveWorkspaces) && maxActiveWorkspaces >= 2
 const limits = { gitCommand: '/usr/bin/git', authorName: 'DSH', authorEmail: 'dsh@localhost', resourceLimitCommand: '/usr/bin/prlimit', gitMemoryBytes: 512 * 1024 * 1024, maxBytes: 4 * 1024 * 1024, maxEntries: 1000, timeoutMs: 30_000 }
 
 describe.skipIf(!enabled)('conversation workspace real Podman Loader flow', () => {
   it.each(process.env.DSH_PODMAN_EGRESS === '1' ? [false, true] : [false])('isolates conversations, returns repositories, and resumes with environment=%s', async (environment) => {
-    if (socketPath === undefined || image === undefined || rawPool === undefined) throw new Error('workspace test environment disappeared')
-    const poolPaths = JSON.parse(rawPool) as string[]
+    if (socketPath === undefined || image === undefined || storageRoot === undefined) throw new Error('workspace test environment disappeared')
     const root = await mkdtemp(join(tmpdir(), 'dsh-workspaces-e2e-'))
     const source = join(root, 'source'); await mkdir(source)
     if (vmConfig !== undefined) await cp(new URL('./vm/app/', import.meta.url), join(source, 'app'), { recursive: true })
@@ -70,6 +72,7 @@ describe.skipIf(!enabled)('conversation workspace real Podman Loader flow', () =
     const hostFs = new URL('../../../fs/fs-local/src/index.ts', import.meta.url).href
     const hostSubprocess = new URL('../../../subprocess/subprocess-local/src/index.ts', import.meta.url).href
     const hostShell = new URL('../../../shell/bash-local/src/index.ts', import.meta.url).href
+    const developmentVms = new URL('../src/vm.ts', import.meta.url).href
     await writeFile(join(presetPath, 'preset.yml'), 'name: Maintenance\ndescription: Explicit host probe.\n')
     await writeFile(join(presetPath, 'agent.cordis.yml'), JSON.stringify([{ name: 'cordis:group', group: true,
       isolate: { fs: true, subprocess: true, shell: true }, config: [
@@ -85,24 +88,24 @@ describe.skipIf(!enabled)('conversation workspace real Podman Loader flow', () =
       const vmPresetPath = join(presetRoot, 'development-vm'); await mkdir(vmPresetPath)
       await writeFile(join(vmPresetPath, 'preset.yml'), 'name: Development VM\ndescription: Opt-in external integration fixture.\n')
       await writeFile(join(vmPresetPath, 'agent.cordis.yml'), JSON.stringify([
-        { name: 'cordis:group', group: true, isolate: { developmentVms: true }, config: [{ name: 'development-vms', config: vmConfig }] },
+        { name: 'cordis:group', group: true, isolate: { developmentVms: true }, config: [{ name: developmentVms, config: vmConfig }] },
       ]))
     }
     try {
       const modules = new Map<string, unknown>([
         [hostFs, HostFs], [hostSubprocess, HostSubprocess], [hostShell, HostShell], ['presets', AgentPresets],
         ['sessions', SessionStore], ['projections', SessionProjectionRegistry], ['persistence', Persistence], ['llm', LlmRuntime], ['agents', AgentRegistry],
-        ['user-questions', UserQuestions], ['repo-access', RepoAccess], ['system-prompt', SystemPrompt], ['tools', Tools], ['loop', AgentLoop], ['container', Runtime], ['container-fs', ContainerFs], ['container-subprocess', ContainerSubprocess], ['workspaces', Workspaces], ['development-vms', DevelopmentVms], ['instructions', Instructions], ['fs-tools', FsTools],
+        ['user-questions', UserQuestions], ['repo-access', RepoAccess], ['system-prompt', SystemPrompt], ['tools', Tools], ['loop', AgentLoop], ['container', Runtime], ['container-fs', ContainerFs], ['container-subprocess', ContainerSubprocess], ['workspaces', Workspaces], [developmentVms, DevelopmentVms], ['instructions', Instructions], ['fs-tools', FsTools],
       ])
       const entries = [
         { name: 'sessions' }, { name: 'projections' }, { name: 'persistence', config: { root: join(root, 'sessions'), compression: 'none' } },
         { name: 'user-questions' },
         { name: 'llm' }, { name: 'agents' }, { name: 'system-prompt' }, { name: 'tools' },
-        { name: 'container', config: { network: environment ? 'outbound' : 'none', socketPath, manageService: false, serviceStartupTimeoutMs: 10000, image, user: 'dsh', environment: { HOME: '/home/dsh', LANG: 'C.UTF-8', PATH: '/usr/local/bin:/usr/bin:/bin' }, memoryBytes: 268435456, nanoCpus: 500000000, pidsLimit: 128, tmpfsBytes: 67108864, engineRequestTimeoutMs: 10000, maxLiveProcesses: 8, lifetimeMs: vmConfig === undefined ? 300000 : 900000, stopTimeoutSeconds: 2 } },
+        { name: 'container', config: { network: environment ? 'outbound' : 'none', socketPath, manageService: false, serviceStartupTimeoutMs: 10000, image, user: 'dsh', environment: { HOME: '/home/dsh', LANG: 'C.UTF-8', PATH: '/usr/local/bin:/usr/bin:/bin' }, memoryBytes: 268435456, nanoCpus: 500000000, pidsLimit: 128, tmpfsBytes: 67108864, engineRequestTimeoutMs: 10000, maxLiveProcesses: 8, lifetimeMs: vmConfig === undefined ? 300000 : 1200000, stopTimeoutSeconds: 2 } },
         { name: 'container-fs', config: { cwdAliases: [], maxFileBytes: 65536, diffBasisMaxBytes: 32768, maxControllerOutputBytes: 200000, operationTimeoutMs: 10000 } },
         { name: 'container-subprocess', config: { cwdAliases: [], controlOutputBytes: 4096, controlTimeoutMs: 10000 } },
         { name: 'presets', config: { default: 'maintenance', roots: [{ path: presetRoot, trust: 'user' }], includeShippedRoot: false, includeUserRoot: false } },
-        { name: 'workspaces', config: { ...limits, hostSessions: [{ sessionId: maintenanceId, preset: 'maintenance', cwd: source }], ...(environment ? { environment: { id: 'e2e-environment', name: 'E2E environment', grantLifetimeMs: 3600000, repositories: [{ source, url: 'https://github.example/org/first.git', credentialTimeoutMs: 1000 }, { source: secondSource, url: 'https://github.example/org/second.git', credentialTimeoutMs: 1000 }], initialGrants: [{ repository: 'https://github.example/org/first.git', access: 'fetch' }] } } : {}), poolPaths, slotBytes: 67108864, slotInodes: 20000, recoveryRoot: join(root, 'recovery'), provenanceRoot: join(root, 'provenance'), maxOutputBytes: 8388608, settleTimeoutMs: 10000, retryDelayMs: 1000, messageProvider: 'mock-metadata', messageModel: 'cheap', messageInputBytes: 4096, messageOutputTokens: 64, messageTimeoutMs: 10000 } },
+        { name: 'workspaces', config: { ...limits, hostSessions: [{ sessionId: maintenanceId, preset: 'maintenance', cwd: source }], ...(environment ? { environment: { id: 'e2e-environment', name: 'E2E environment', grantLifetimeMs: 3600000, repositories: [{ source, url: 'https://github.example/org/first.git', credentialTimeoutMs: 1000 }, { source: secondSource, url: 'https://github.example/org/second.git', credentialTimeoutMs: 1000 }], initialGrants: [{ repository: 'https://github.example/org/first.git', access: 'fetch' }] } } : {}), storageRoot, maxActiveWorkspaces, recoveryRoot: join(root, 'recovery'), provenanceRoot: join(root, 'provenance'), maxOutputBytes: 8388608, settleTimeoutMs: 10000, retryDelayMs: 1000, messageProvider: 'mock-metadata', messageModel: 'cheap', messageInputBytes: 4096, messageOutputTokens: 64, messageTimeoutMs: 10000 } },
         { name: 'instructions', config: { dshHome: '/workspace/.dsh', maxBytes: 4096 } },
         ...(environment ? [{ name: 'repo-access' }] : []),
         { name: 'fs-tools' }, { name: 'loop', config: { agents: [] } },
@@ -166,7 +169,6 @@ describe.skipIf(!enabled)('conversation workspace real Podman Loader flow', () =
       console.info('Workspace acceptance: compiling and saving')
       expect(await command(first.agent, "printf 'int main(void) { return 0; }\\n' >probe.c && printf 'probe\\n' >>.gitignore && cc probe.c -o probe && ./probe && git add probe.c && git commit -m 'feat: add probe' && printf 'compiled-and-committed'"))
         .toContain('compiled-and-committed')
-      expect(await command(first.agent, 'if dd if=/dev/zero of=quota-probe bs=1048576 count=80 >/dev/null 2>&1; then exit 2; fi; rm quota-probe; printf quota-enforced')).toBe('quota-enforced')
       await writeFile(join(source, 'input.txt'), 'concurrent host edit\n')
       first.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Write result.txt.' }], source: { kind: 'user' } }))
       await first.agent.whenIdle()
@@ -194,15 +196,11 @@ describe.skipIf(!enabled)('conversation workspace real Podman Loader flow', () =
       console.info('Workspace acceptance: Git return and running service passed')
       await first.dispose(); first = undefined
       if (vmConfig !== undefined) {
-        for (const slot of poolPaths) {
-          const owner = JSON.parse(await readFile(join(slot, 'owner.json'), 'utf8')) as { workspaceId: string }
-          if (owner.workspaceId === receipt.data.workspaceId) {
-            await rm(join(slot, 'workspace'), { recursive: true })
-            await rm(join(slot, 'owner.json'))
-          }
-        }
+        const storage = join(storageRoot, receipt.data.workspaceId)
+        await rm(join(storage, 'workspace'), { recursive: true })
+        await rm(join(storage, 'owner.json'))
       }
-      console.info('Workspace acceptance: resuming after RAM loss')
+      console.info('Workspace acceptance: resuming after live workspace loss')
       first = await ctx.agents.resume({ resumeSessionId: id, agentOptions: { provider: 'mock', model: 'main' },
         ...vmSetup === undefined ? {} : { setup: vmSetup } })
       expect(await read(first.agent, 'result.txt')).toBe('agent result\n')
@@ -227,29 +225,21 @@ describe.skipIf(!enabled)('conversation workspace real Podman Loader flow', () =
       first.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Finish while the background writer remains active.' }], source: { kind: 'user' } }))
       await first.agent.whenIdle()
       expect(first.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')?.data)
-        .toMatchObject({ phase: vmConfig === undefined ? 'pending' : 'returned', turn: 3 })
+        .toMatchObject({ phase: 'pending', turn: 3 })
       const world = await ctx.conversationWorkspaces.runForSession(
         first.agent.id, async () => ctx.conversationWorkspaces.capture().containerName,
       )
-      // The test owns the tmpfs roots; this external release proves settlement did not kill the writer.
-      const slot = await Promise.all(poolPaths.map(async (slot) => {
-        let owner: { workspaceId: string } | undefined
-        try { owner = JSON.parse(await readFile(join(slot, 'owner.json'), 'utf8')) as { workspaceId: string } }
-        catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
-        return { slot, owner }
-      }))
-      const backing = slot.find(slot => slot.owner?.workspaceId === receipt.data.workspaceId)?.slot
-      if (backing === undefined) throw new Error('writer workspace slot missing')
-      const executionSource = ctx.agents.withInitiator(first.agent, () => ctx.conversationWorkspaces.executionPath(source))
-      await writeFile(join(backing, 'workspace', executionSource.slice('/workspace'.length), 'release-writer'), '')
+      // The test owns this conversation directory; the external release proves settlement did not kill the writer.
+      const backing = join(storageRoot, receipt.data.workspaceId)
+      await writeFile(join(backing, 'workspace', 'release-writer'), '')
       if (writer === undefined) throw new Error('background writer did not start')
       expect((await writer.done).exitCode).toBe(0)
       unwatch()
       const savedAgent = first.agent
       await expect.poll(() => savedAgent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')?.data,
-        { timeout: 15000 }).toMatchObject({ phase: 'returned', turn: 3 })
+        { timeout: vmConfig === undefined ? 15000 : 120000 }).toMatchObject({ phase: 'returned', turn: 3 })
       await ctx.conversationWorkspaces.runForSession(first.agent.id, async () => {
-        expect(ctx.conversationWorkspaces.capture().containerName).not.toBe(world)
+        expect(ctx.conversationWorkspaces.capture().containerName).toBe(world)
       })
       expect(await read(first.agent, 'background.txt')).toBe('retained')
       const started = Promise.withResolvers<undefined>()
@@ -267,9 +257,9 @@ describe.skipIf(!enabled)('conversation workspace real Podman Loader flow', () =
     } finally {
       await first?.dispose(); await maintenance?.dispose()
       await second?.dispose(); await ctx.fiber.dispose()
-      for (const slot of poolPaths) {
-        try { workspaceIds.add((JSON.parse(await readFile(join(slot, 'owner.json'), 'utf8')) as { workspaceId: string }).workspaceId) }
-        catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
+      for (const handle of [first, second]) {
+        const state = handle?.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')
+        if (state?.type === 'workspace/state') workspaceIds.add(state.data.workspaceId)
       }
       if (rawVm !== undefined) {
         const config = JSON.parse(rawVm) as { command: string; project: string }
@@ -278,15 +268,7 @@ describe.skipIf(!enabled)('conversation workspace real Podman Loader flow', () =
           await promisify(execFile)(config.command, ['--force-local', 'delete', `dsh-${id}`, '--project', config.project, '--force'])
         }
       }
-      for (const slot of poolPaths) {
-        let owner: { workspaceId: string }
-        try { owner = JSON.parse(await readFile(join(slot, 'owner.json'), 'utf8')) as { workspaceId: string } }
-        catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue; throw error }
-        if (workspaceIds.has(owner.workspaceId)) {
-          await rm(join(slot, 'workspace'), { recursive: true, force: true })
-          await rm(join(slot, 'owner.json'))
-        }
-      }
+      for (const id of workspaceIds) await rm(join(storageRoot, id), { recursive: true, force: true })
       await rm(root, { recursive: true, force: true })
     }
   })

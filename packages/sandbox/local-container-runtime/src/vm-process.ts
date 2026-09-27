@@ -3,14 +3,16 @@ import { spawn } from 'node:child_process'
 import { Duplex } from 'node:stream'
 import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
+import { setTimeout as delay } from 'node:timers/promises'
 import type { LocalContainerProcessHandle, LocalContainerProcessRequest } from './types.ts'
 import type { DevelopmentVmConfig, VmCommand } from './vm-engine.ts'
 
 const PROCESS_ENVIRONMENT = /^[A-Z_][A-Z0-9_]*=/u
 const GIT_ENVIRONMENT_NAME = /^GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+)$/u
+const PROCESS_LAUNCHER_READY = Buffer.from('\0dsh-process-ready\0')
 
 const VM_PROCESS_LAUNCHER = String.raw`
-import fcntl, json, os, struct, sys
+import fcntl, json, os, struct, sys, termios, tty
 
 def read_exact(size):
     chunks = []
@@ -21,25 +23,31 @@ def read_exact(size):
         size -= len(chunk)
     return b''.join(chunks)
 
-size = struct.unpack('>I', read_exact(4))[0]
-limit = int(sys.argv[1])
-if size < 2 or size > limit: raise RuntimeError('invalid process envelope size')
-request = json.loads(read_exact(size))
-if set(request) != {'argv', 'cwd', 'environment', 'tty', 'unit'}: raise RuntimeError('invalid process envelope')
-if not isinstance(request['argv'], list) or not request['argv'] or not all(isinstance(value, str) and value and '\0' not in value for value in request['argv']): raise RuntimeError('invalid process argv')
-if not isinstance(request['cwd'], str) or (request['cwd'] != '/workspace' and not request['cwd'].startswith('/workspace/')): raise RuntimeError('invalid process cwd')
-if not isinstance(request['environment'], list) or not all(isinstance(value, str) and '=' in value and '\0' not in value and '\n' not in value and '\r' not in value for value in request['environment']): raise RuntimeError('invalid process environment')
-if not isinstance(request['tty'], bool) or not isinstance(request['unit'], str): raise RuntimeError('invalid process metadata')
-fd = os.memfd_create('dsh-process-environment', os.MFD_ALLOW_SEALING)
-os.fchmod(fd, 0o400)
-for entry in request['environment']:
-    key, value = entry.split('=', 1)
-    encoded = value.replace('\\', '\\\\').replace('"', '\\"')
-    os.write(fd, (key + '="' + encoded + '"\n').encode())
-os.lseek(fd, 0, os.SEEK_SET)
-fcntl.fcntl(fd, fcntl.F_ADD_SEALS, fcntl.F_SEAL_SEAL | fcntl.F_SEAL_SHRINK | fcntl.F_SEAL_GROW | fcntl.F_SEAL_WRITE)
-os.set_inheritable(fd, True)
-path = '/proc/' + str(os.getpid()) + '/fd/' + str(fd)
+saved = termios.tcgetattr(0) if os.isatty(0) else None
+if saved is not None: tty.setraw(0, termios.TCSANOW)
+os.write(1, b'\0dsh-process-ready\0')
+try:
+    size = struct.unpack('>I', read_exact(4))[0]
+    limit = int(sys.argv[1])
+    if size < 2 or size > limit: raise RuntimeError('invalid process envelope size')
+    request = json.loads(read_exact(size))
+    if set(request) != {'argv', 'cwd', 'environment', 'tty', 'unit'}: raise RuntimeError('invalid process envelope')
+    if not isinstance(request['argv'], list) or not request['argv'] or not all(isinstance(value, str) and value and '\0' not in value for value in request['argv']): raise RuntimeError('invalid process argv')
+    if not isinstance(request['cwd'], str) or (request['cwd'] != '/workspace' and not request['cwd'].startswith('/workspace/')): raise RuntimeError('invalid process cwd')
+    if not isinstance(request['environment'], list) or not all(isinstance(value, str) and '=' in value and '\0' not in value and '\n' not in value and '\r' not in value for value in request['environment']): raise RuntimeError('invalid process environment')
+    if not isinstance(request['tty'], bool) or not isinstance(request['unit'], str): raise RuntimeError('invalid process metadata')
+    fd = os.memfd_create('dsh-process-environment', os.MFD_ALLOW_SEALING)
+    os.fchmod(fd, 0o400)
+    for entry in request['environment']:
+        key, value = entry.split('=', 1)
+        encoded = value.replace('\\', '\\\\').replace('"', '\\"')
+        os.write(fd, (key + '="' + encoded + '"\n').encode())
+    os.lseek(fd, 0, os.SEEK_SET)
+    fcntl.fcntl(fd, fcntl.F_ADD_SEALS, fcntl.F_SEAL_SEAL | fcntl.F_SEAL_SHRINK | fcntl.F_SEAL_GROW | fcntl.F_SEAL_WRITE)
+    os.set_inheritable(fd, True)
+    path = '/proc/' + str(os.getpid()) + '/fd/' + str(fd)
+finally:
+    if saved is not None: termios.tcsetattr(0, termios.TCSANOW, saved)
 command = ['/usr/bin/systemd-run', '--quiet', '--wait', '--collect', '--service-type=exec', '--unit=' + request['unit'], '--working-directory=' + request['cwd'], '--pty' if request['tty'] else '--pipe', '--property=EnvironmentFile=' + path, '--'] + request['argv']
 os.execve(command[0], command, {'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'LANG': 'C.UTF-8'})
 `
@@ -97,7 +105,13 @@ export async function createVmProcess(
   const environment = Object.entries(request.environment).filter((entry): entry is [string, string] => entry[1] !== undefined)
     .map(([key, value]) => `${key}=${value}`)
   const git = validateGuestGitAuthorization(authorization)
-  const envelope = Buffer.from(JSON.stringify({ argv: request.argv, cwd: request.cwd, environment: [...environment, ...git], tty: request.tty, unit }))
+  const envelope = Buffer.from(JSON.stringify({
+    argv: request.argv,
+    cwd: request.cwd,
+    environment: [...environment, ...git],
+    tty: request.tty,
+    unit,
+  }))
   if (envelope.length > config.maxOutputBytes) throw new Error('development-vm: guest process envelope exceeds its bound')
   const header = Buffer.alloc(4); header.writeUInt32BE(envelope.length)
   const child = spawn(config.command, ['--force-local', 'exec', name, '--project', config.project,
@@ -120,7 +134,6 @@ export async function createVmProcess(
     }
     if (!stream.push(data)) { child.stdout.pause(); child.stderr.pause() }
   }
-  child.stdout.on('data', output(1)); child.stderr.on('data', output(2))
   child.on('error', (error) => { failure = error })
   child.stdin.on('error', (error) => { if ((error as NodeJS.ErrnoException).code !== 'EPIPE') failure = error })
   let closed = false
@@ -131,13 +144,28 @@ export async function createVmProcess(
   let transferTimer: NodeJS.Timeout | undefined
   await Promise.race([
     new Promise<void>((resolve, reject) => {
-      const failed = (error: Error): void => { child.off('error', failed); reject(error) }
-      child.once('error', failed)
-      child.stdin.write(Buffer.concat([header, envelope]), (error) => {
-        child.off('error', failed)
-        if (error === null || error === undefined) resolve()
-        else reject(error)
-      })
+      let ready = Buffer.alloc(0)
+      const cleanup = (): void => {
+        child.stdout.off('data', received); child.off('error', failed); child.off('close', ended)
+      }
+      const failed = (error: Error): void => { cleanup(); reject(error) }
+      const ended = (): void => { failed(new Error('guest process launcher closed before its envelope')) }
+      const received = (chunk: Buffer): void => {
+        ready = Buffer.concat([ready, chunk])
+        if (ready.length > PROCESS_LAUNCHER_READY.length
+          || !PROCESS_LAUNCHER_READY.subarray(0, ready.length).equals(ready)) {
+          failed(new Error('guest process launcher returned an invalid readiness handshake'))
+          return
+        }
+        if (ready.length !== PROCESS_LAUNCHER_READY.length) return
+        cleanup()
+        child.stdout.on('data', output(1)); child.stderr.on('data', output(2))
+        child.stdin.write(Buffer.concat([header, envelope]), (error) => {
+          if (error === null || error === undefined) resolve()
+          else reject(error)
+        })
+      }
+      child.stdout.on('data', received); child.once('error', failed); child.once('close', ended)
     }),
     new Promise<never>((_resolve, reject) => {
       transferTimer = setTimeout(() => { reject(new Error('guest process envelope transfer timed out')) }, config.timeoutMs)
@@ -151,10 +179,22 @@ export async function createVmProcess(
   const exec = async (argv: readonly string[]): Promise<Uint8Array> => await control([
     'exec', name, '--project', config.project, '--mode', 'non-interactive', '--', ...argv,
   ])
-  const terminal = async (operation: string, args: string[]): Promise<string> => new TextDecoder().decode(await exec([
-    '/bin/sh', '-ceu', 'p=$(systemctl show --value --property MainPID "$1"); test "$p" -gt 0; shift; exec "$@" "$p"',
-    'dsh-terminal', unit, '/bin/sh', '-ceu', operation, 'dsh-terminal', ...args,
-  ]))
+  const terminal = async (operation: string, args: string[]): Promise<string> => {
+    const deadline = Date.now() + config.timeoutMs
+    let processId: string
+    for (;;) {
+      processId = new TextDecoder().decode(await exec([
+        'systemctl', 'show', '--value', '--property', 'MainPID', unit,
+      ])).trim()
+      const value = Number(processId)
+      if (Number.isSafeInteger(value) && value > 0) break
+      if (Date.now() >= deadline) throw new Error('development-vm: guest process did not publish its main PID')
+      await delay(Math.min(config.readinessPollMs, Math.max(1, deadline - Date.now())))
+    }
+    return new TextDecoder().decode(await exec([
+      '/bin/sh', '-ceu', operation, 'dsh-terminal', ...args, processId,
+    ]))
+  }
   let terminating: Promise<void> | undefined
   const handle: LocalContainerProcessHandle = {
     id: unit, stream, tty: request.tty, done: done.promise,
@@ -170,7 +210,12 @@ export async function createVmProcess(
     async terminate() {
       if (closed) return
       terminating ??= (async () => {
-        try { await exec(['systemctl', 'stop', unit]) }
+        try {
+          try { await exec(['systemctl', 'stop', unit]) }
+          catch (error) {
+            if (!(error instanceof Error) || !error.message.includes(`Unit ${unit} not loaded.`)) throw error
+          }
+        }
         finally { child.kill('SIGKILL'); await done.promise }
       })()
       await terminating
@@ -216,10 +261,12 @@ export async function connectVmPreview(config: DevelopmentVmConfig, name: string
   })
   let closed = false
   const stream = new Duplex({
-    allowHalfOpen: false,
+    // HTTP request completion half-closes guest input while the response remains readable.
+    allowHalfOpen: true,
     read() { child.stdout.resume() },
     write(chunk: Buffer, _encoding, callback) { child.stdin.write(chunk, callback) },
-    final(callback) { child.stdin.end(callback) },
+    // Keep the process attachment open until the HTTP response or upgraded socket closes.
+    final(callback) { callback() },
     destroy(error, callback) {
       child.kill('SIGKILL'); child.stdin.destroy(); child.stdout.destroy()
       if (closed) callback(error)

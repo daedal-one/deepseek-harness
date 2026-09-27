@@ -3,6 +3,7 @@ import { cp, mkdtemp, mkdir, open, readFile, realpath, rm, writeFile } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
+import { pathToFileURL } from 'node:url'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import Group from '@deepseek-ai/cordis-plugin-group'
@@ -35,7 +36,7 @@ import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 // These tests exercise persistence and transaction ordering with a local controller.
-// Only workspaces.e2e.ts establishes container isolation and physical tmpfs limits.
+// Only workspaces.e2e.ts establishes container isolation and durable host storage.
 class LocalStorageWorkspaces extends Workspaces {
   override [Service.init](): Promise<void> { return Promise.resolve() }
 }
@@ -58,13 +59,14 @@ async function fixture(options: {
   preview?: { socket: PassThrough; ports: number[] }
   developmentVmProfile?: 'vm-a' | 'vm-b'
   script?: ConstructorParameters<typeof MockAdapter>[0]
+  settlementBarrier?: { reached(): void; wait: Promise<void> }
 } = {}) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'dsh-workspaces-')))
-  const source = join(root, 'source'); const pool = join(root, 'slot'); const secondPool = join(root, 'second-slot'); const recovery = join(root, 'recovery')
-  await Promise.all([source, pool, secondPool, recovery].map(path => mkdir(path, { mode: 0o700 })))
+  const source = join(root, 'source'); const storage = join(root, 'storage'); const recovery = join(root, 'recovery')
+  await Promise.all([source, storage, recovery].map(path => mkdir(path, { mode: 0o700 })))
   const config: ConversationWorkspaceConfig = {
     ...options.maintenance === true ? { hostSessions: [{ sessionId: 'maintenance-root', preset: 'maintenance', cwd: source }] } : {},
-    poolPaths: [pool, secondPool], slotBytes: 67108864, slotInodes: 20000, recoveryRoot: recovery, provenanceRoot: join(recovery, 'provenance'),
+    storageRoot: storage, maxActiveWorkspaces: 2, recoveryRoot: recovery, provenanceRoot: join(recovery, 'provenance'),
     gitCommand: '/usr/bin/git', authorName: 'DSH', authorEmail: 'dsh@localhost', resourceLimitCommand: '/usr/bin/prlimit', gitMemoryBytes: 536870912,
     maxBytes: 4194304, maxEntries: 1000, timeoutMs: 30000, maxOutputBytes: 8388608,
     settleTimeoutMs: 1000, retryDelayMs: options.retryDelayMs ?? 10000,
@@ -90,14 +92,21 @@ async function fixture(options: {
   ])
   const [hostFs, hostSubprocess, hostShell] = [...hostModules.keys()]
   const vmSelections: string[] = []
+  const vmModules = new Map<string, string>()
   const vmProviders = new Map<string, {
     readonly identity: DevelopmentVmReference
     assertReference(reference: unknown): asserts reference is DevelopmentVmReference
     recover(): Promise<void>
     retention(): WorkspaceCheckpointRuntime
-    open(base: WorkspaceExecutionRuntime, request: DevelopmentVmOpenRequest): Promise<{ runtime: WorkspaceExecutionRuntime; dispose(): Promise<void> }>
+    open(
+      base: WorkspaceExecutionRuntime,
+      request: DevelopmentVmOpenRequest,
+    ): Promise<{ runtime: WorkspaceExecutionRuntime; dispose(): Promise<void> }>
   }>()
   for (const [index, profile] of ['vm-a', 'vm-b'].entries()) {
+    const moduleName = pathToFileURL(join(root, `${profile}.mjs`)).href
+    await writeFile(join(root, `${profile}.mjs`), '')
+    vmModules.set(profile, moduleName)
     const identity = developmentVmReference({
       command: '/usr/bin/incus', pythonCommand: '/usr/bin/python3', devicesRoot: '/var/lib/incus/devices',
       project: profile, storage: profile, network: profile, acl: profile, hostAddresses: ['203.0.113.1'],
@@ -121,7 +130,7 @@ async function fixture(options: {
       },
     }
     vmProviders.set(profile, provider)
-    hostModules.set(profile, { name: `fixture-${profile}`, apply(scope: Context) { scope.provide('developmentVms', provider as never) } })
+    hostModules.set(moduleName, { name: `fixture-${profile}`, apply(scope: Context) { scope.provide('developmentVms', provider as never) } })
   }
   if (options.maintenance === true) {
     for (const id of ['maintenance', 'incomplete', 'internal']) {
@@ -133,7 +142,7 @@ async function fixture(options: {
           ...(id === 'maintenance' ? [{ name: hostSubprocess }, { name: hostShell }] : []),
           ...(id === 'internal' ? [{ name: hostSubprocess }] : []),
         ] }, ...id === 'maintenance' && options.developmentVmProfile !== undefined ? [{ name: 'cordis:group', group: true,
-          isolate: { developmentVms: true }, config: [{ name: options.developmentVmProfile }] }] : []]))
+        isolate: { developmentVms: true }, config: [{ name: vmModules.get(options.developmentVmProfile)! }] }] : []]))
     }
   }
   if (options.developmentVmProfile !== undefined) {
@@ -141,7 +150,7 @@ async function fixture(options: {
       const directory = join(presetRoot, profile); await mkdir(directory, { recursive: true })
       await writeFile(join(directory, 'preset.yml'), `name: ${profile}\ndescription: Private VM fixture preset.\n`)
       await writeFile(join(directory, 'agent.cordis.yml'), JSON.stringify([{ name: 'cordis:group', group: true,
-        isolate: { developmentVms: true }, config: [{ name: profile }] }]))
+        isolate: { developmentVms: true }, config: [{ name: vmModules.get(profile)! }] }]))
     }
   }
   let ctx = new Context()
@@ -185,7 +194,10 @@ async function fixture(options: {
         async settle<T>(_timeout: number, operation: (
           control: (request: PodmanControllerExecRequest) => Promise<PodmanControllerExecResult>,
         ) => Promise<T>) {
-          return await operation(world.executeController)
+          const result = await operation(world.executeController)
+          options.settlementBarrier?.reached()
+          await options.settlementBarrier?.wait
+          return result
         },
       }
       worlds.set(world, directory)
@@ -216,10 +228,14 @@ async function fixture(options: {
   disposers.push(async () => { await unpinAll(); await ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) })
   const adapter = new MockAdapter(options.script ?? [textResponse('Done.'), textResponse('feat: retain changes'), textResponse(JSON.stringify({ HEAD: 'finish-task', 'refs/heads/codex/conversation': 'finish-task' })), textResponse('No further changes.')])
   ctx.llm.registerAdapter(['mock'], adapter)
+  const developmentVmProfile = options.developmentVmProfile
   const handle = await ctx.agents.create({ sessionId: SessionId(`test-${root.split('/').at(-1)}`),
-    meta: { cwd: source, ...options.developmentVmProfile === undefined ? {} : { agentPreset: options.developmentVmProfile } },
+    meta: { cwd: source, ...developmentVmProfile === undefined ? {} : { agentPreset: developmentVmProfile } },
     agentOptions: { provider: 'mock', model: 'main' },
-    ...options.developmentVmProfile === undefined ? {} : { setup: async (scope: Context) => { await ctx.agentPresets.mount(scope, options.developmentVmProfile!) } } })
+    ...developmentVmProfile === undefined
+      ? {}
+      : { setup: async (scope: Context) => { await ctx.agentPresets.mount(scope, developmentVmProfile) } },
+  })
   const pin = async (agent: Agent): Promise<string> => {
     const existing = pins.get(agent)
     if (existing !== undefined) return existing.execution
@@ -241,6 +257,11 @@ async function fixture(options: {
     return execution
   }
   const execution = options.pinWorkspace === false ? '' : await pin(handle.agent)
+  const storageFor = (agent: Agent): string => {
+    const state = agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')
+    if (state?.type !== 'workspace/state') throw new Error('workspace fixture has no storage identity')
+    return join(storage, state.data.workspaceId)
+  }
   const turn = async () => {
     handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Finish the task.' }], source: { kind: 'user' } }))
     await handle.agent.whenIdle()
@@ -255,7 +276,10 @@ async function fixture(options: {
     ctx.llm.registerAdapter(['mock'], adapter)
     return ctx
   }
-  return { ctx, root, source, secondSource, pool, recovery, execution, config, handle, turn, adapter, executionFor, restart, unpinAll, worlds, vmSelections, vmProviders }
+  return {
+    ctx, root, source, secondSource, storage, storageFor, recovery, execution, config, handle, turn,
+    adapter, executionFor, restart, unpinAll, worlds, vmSelections, vmProviders,
+  }
 }
 
 describe.skipIf(process.platform === 'win32')('conversation workspace transaction lifecycle', () => {
@@ -311,6 +335,19 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
       setup: async (scope) => { await f.ctx.agentPresets.mount(scope, 'vm-b') } })).rejects.toThrow('does not share')
   })
 
+  it('publishes a settled phase only after the execution barrier reopens', async () => {
+    const reached = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const f = await fixture({ settlementBarrier: { reached: () => { reached.resolve(undefined) }, wait: release.promise } })
+    await writeFile(join(f.execution, 'result.txt'), 'result\n')
+    const turn = f.turn()
+    await reached.promise
+    expect(f.handle.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')?.data)
+      .toMatchObject({ phase: 'saving', turn: 1 })
+    release.resolve(undefined)
+    expect((await turn)?.data).toMatchObject({ phase: 'returned', turn: 1 })
+  })
+
   it('bypasses an effective-profile VM provider for explicitly admitted host sessions', async () => {
     const f = await fixture({ maintenance: true, developmentVmProfile: 'vm-a' })
     const selected = f.vmSelections.length
@@ -333,7 +370,8 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
       expect(serviceForAgent(f.ctx, handle.agent, 'fs')).toBeDefined()
       expect(serviceForAgent(f.ctx, handle.agent, 'subprocess')).toBeDefined()
       expect(serviceForAgent(f.ctx, handle.agent, 'shell')).toBeUndefined()
-      expect(f.ctx.agents.withInitiator(handle.agent, () => f.ctx.conversationWorkspaces.capture())).toBeDefined()
+      expect(await f.ctx.conversationWorkspaces.runForSession(handle.agent.id,
+        async () => f.ctx.conversationWorkspaces.capture())).toBeDefined()
     } finally { await handle.dispose() }
   })
 
@@ -386,7 +424,7 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
   it('registers environment guidance before first lazy admission', async () => {
     const f = await fixture({ environment: true, pinWorkspace: false })
     await f.turn()
-    expect(JSON.stringify(f.adapter.requests[0]?.messages)).toContain('"environmentId":"test-environment"')
+    expect(JSON.stringify(f.adapter.requests[0]?.messages)).toContain('\\"environmentId\\":\\"test-environment\\"')
   })
 
   it('releases the environment lease after stopped-world checkpoint failure', async () => {
@@ -410,9 +448,9 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
     const connected = await f.ctx.conversationWorkspaces.connectPreviewForSession(f.handle.agent.id, 8080)
     expect(connected).toBe(socket)
     expect(ports).toEqual([8080])
-    expect(JSON.parse(await readFile(join(f.pool, 'owner.json'), 'utf8'))).toMatchObject({ clean: false })
+    expect(JSON.parse(await readFile(join(f.storageFor(f.handle.agent), 'owner.json'), 'utf8'))).toMatchObject({ clean: false })
     socket.destroy()
-    await expect.poll(async () => JSON.parse(await readFile(join(f.pool, 'owner.json'), 'utf8'))).toMatchObject({ clean: true })
+    await expect.poll(async () => JSON.parse(await readFile(join(f.storageFor(f.handle.agent), 'owner.json'), 'utf8'))).toMatchObject({ clean: true })
   })
 
   it('retains capacity after a failed idle checkpoint and admits the waiter only after recovery', async () => {
@@ -426,7 +464,7 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
     await writeFile(join(f.execution, 'private.txt'), 'must survive')
     await f.handle.dispose()
     expect(cancel).not.toHaveBeenCalled()
-    expect(JSON.parse(await readFile(join(f.pool, 'owner.json'), 'utf8'))).toMatchObject({ clean: false })
+    expect(JSON.parse(await readFile(join(f.storageFor(f.handle.agent), 'owner.json'), 'utf8'))).toMatchObject({ clean: false })
     let admitted = false
     const cancelled = new AbortController()
     const next = f.ctx.conversationWorkspaces.runForSession(waiting.agent.id, async () => { admitted = true }, cancelled.signal)
@@ -465,12 +503,13 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
     expect(flush).toHaveBeenCalled()
   })
 
-  it('checkpoints an unclean vacant slot before another conversation reuses it', async () => {
+  it('keeps an unclean durable workspace isolated while another conversation starts', async () => {
     const f = await fixture()
     await writeFile(join(f.execution, 'retained.txt'), 'unclean data')
     await f.unpinAll()
-    const receipt = JSON.parse(await readFile(join(f.pool, 'owner.json'), 'utf8')) as object
-    await writeFile(join(f.pool, 'owner.json'), JSON.stringify({ ...receipt, clean: false }))
+    const storage = f.storageFor(f.handle.agent)
+    const receipt = JSON.parse(await readFile(join(storage, 'owner.json'), 'utf8')) as object
+    await writeFile(join(storage, 'owner.json'), JSON.stringify({ ...receipt, clean: false }))
     await writeFile(join(f.execution, 'retained.txt'), 'latest unclean data')
     const other = await f.ctx.agents.create({ sessionId: SessionId('recover-vacant'), meta: { cwd: f.source }, agentOptions: { provider: 'mock', model: 'main' } })
     await f.ctx.conversationWorkspaces.runForSession(other.agent.id, async () => {
@@ -521,36 +560,7 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
     }
   })
 
-  it('releases admitted capacity when cancellation lands before turn start', async () => {
-    const f = await fixture({ pinWorkspace: false, script: ['hang', 'hang'] })
-    const handles = [f.handle]
-    for (let index = 1; index < 3; index++) handles.push(await f.ctx.agents.create({
-      sessionId: SessionId(`admission-cancellation-${index}`), meta: { cwd: f.source },
-      agentOptions: { provider: 'mock', model: 'main' },
-    }))
-    const stop = f.ctx.on('session/event', (session, event) => {
-      if (session === f.handle.agent.session && event.type === 'workspace/admission' && event.data.status === 'admitted') {
-        f.handle.agent.cancel({ kind: 'user' })
-      }
-    })
-    try {
-      f.handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Cancel after admission.' }], source: { kind: 'user' } }))
-      await f.handle.agent.whenIdle()
-      expect(f.handle.agent.session.snapshotEvents().filter(event => event.type === 'workspace/admission').map(event => event.data.status))
-        .toEqual(['waiting', 'admitted'])
-      expect(f.handle.agent.session.snapshotEvents().some(event => event.type === 'turn/start')).toBe(false)
-      for (const handle of handles.slice(1)) {
-        handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Use available capacity.' }], source: { kind: 'user' } }))
-      }
-      await expect.poll(() => f.adapter.requests.length).toBe(2)
-    } finally {
-      stop()
-      for (const handle of handles) handle.agent.cancel({ kind: 'user' })
-      await Promise.all(handles.map(async (handle) => { await handle.agent.whenIdle(); await handle.dispose() }))
-    }
-  })
-
-  it('creates more conversations than slots and queues isolated cancellable file work', async () => {
+  it('creates more conversations than active capacity and queues isolated cancellable file work', async () => {
     const f = await fixture({ pinWorkspace: false })
     const handles = [f.handle]
     for (let index = 1; index < 5; index++) handles.push(await f.ctx.agents.create({
@@ -723,13 +733,14 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
     const ctx = await f.restart()
     const resumed = await ctx.agents.resume({ resumeSessionId: f.handle.agent.id, agentOptions: { provider: 'mock', model: 'main' } })
     try {
+      await f.executionFor(resumed.agent)
       await expect.poll(() => resumed.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')?.data,
         { timeout: 5000 }).toMatchObject({ phase: 'returned', repositories: [{ lastTurn: 1 }, { lastTurn: 1 }] })
       expect(retries.mock.calls.map(args => args[0])).toEqual([f.secondSource])
     } finally { await resumed.dispose() }
   })
 
-  it('restores a multi-repository environment after RAM loss and preserves its grants', async () => {
+  it('restores a multi-repository environment after live workspace loss and preserves its grants', async () => {
     const f = await fixture({ environment: true, pinWorkspace: false })
     f.ctx.on('user-questions/request', async ({ questions }) => ({ answers: [{ id: questions[0]!.id, selected: ['Approve'] }] }))
     const result = await f.ctx.conversationWorkspaces.requestRepository(f.handle.agent, 'https://github.example/org/second.git', 'fetch', 'Work on the second repository.', new AbortController().signal)
@@ -738,7 +749,8 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
     await writeFile(join(initial, relative, 'retained.txt'), 'sandbox change\n')
     await f.turn()
     const ctx = await f.restart()
-    await rm(join(f.pool, 'workspace'), { recursive: true }); await rm(join(f.pool, 'owner.json'))
+    const storage = f.storageFor(f.handle.agent)
+    await rm(join(storage, 'workspace'), { recursive: true }); await rm(join(storage, 'owner.json'))
     await writeFile(join(f.secondSource, 'input.txt'), 'new host change\n')
     const resumed = await ctx.agents.resume({ resumeSessionId: f.handle.agent.id, agentOptions: { provider: 'mock', model: 'main' } })
     try {
@@ -851,7 +863,7 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
     await f.ctx.fiber.dispose()
     const lease = await open(join(f.recovery, 'environments/test-environment/lease'), 'a+')
     try { await tryLockExclusive(lease.fd) } finally { await lease.close() }
-    expect(JSON.parse(await readFile(join(f.pool, 'owner.json'), 'utf8'))).toMatchObject({ clean: false })
+    expect(JSON.parse(await readFile(join(f.storageFor(f.handle.agent), 'owner.json'), 'utf8'))).toMatchObject({ clean: false })
   })
 
   it('cancels and joins a pending human approval before releasing workspace storage', async () => {
@@ -871,7 +883,7 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
     await rejected
     const record = JSON.parse(await readFile(join(f.recovery, 'environments/test-environment/environment-access.json'), 'utf8')) as { revision: number }
     expect(record.revision).toBe(1)
-    expect(JSON.parse(await readFile(join(f.pool, 'owner.json'), 'utf8'))).toMatchObject({ clean: true })
+    expect(JSON.parse(await readFile(join(f.storageFor(f.handle.agent), 'owner.json'), 'utf8'))).toMatchObject({ clean: true })
   })
 
   it('uses the fixed residual commit when no message route exists and preserves source state', async () => {
@@ -915,9 +927,9 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
     const directory = join(f.recovery, ready.data.workspaceId)
     const runtime = f.ctx.agents.withInitiator(f.handle.agent, () => f.ctx.conversationWorkspaces.capture()) as WorkspaceExecutionRuntime
     const events: string[] = []
-    runtime.checkpoint = async generation => { events.push(`guest:${generation}`) }
-    runtime.discardCheckpoint = async generation => { events.push(`guest-discard:${generation}`) }
-    runtime.pruneCheckpoints = async generation => {
+    runtime.checkpoint = async (generation) => { events.push(`guest:${generation}`) }
+    runtime.discardCheckpoint = async (generation) => { events.push(`guest-discard:${generation}`) }
+    runtime.pruneCheckpoints = async (generation) => {
       if (generation >= 3) expect(await readFile(join(directory, 'checkpoint-1.json'))).toBeDefined()
       events.push(`guest-prune:${generation}`)
     }
@@ -1004,7 +1016,16 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
       const publish = broker.publishWorkspaceJson
       let interrupted = false
       const failure = vi.spyOn(broker, 'publishWorkspaceJson').mockImplementation(async (path, value, maxBytes) => {
-        const record = value as { lastTurn: number; transaction?: { message?: string; oid?: string; branchesReturned?: true; provenanceSaved?: true; eventRecorded?: true } }
+        const record = value as {
+          lastTurn: number
+          transaction?: {
+            message?: string
+            oid?: string
+            branchesReturned?: true
+            provenanceSaved?: true
+            eventRecorded?: true
+          }
+        }
         const transaction = record.transaction
         const matches = path.endsWith('/state.json') && !interrupted && (phase === 'candidate'
           ? transaction !== undefined && transaction.message === undefined
@@ -1043,7 +1064,7 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
           expect(await workspaceGit(f.execution, ['rev-parse', 'HEAD'], f.config)).toEqual(committed)
         }
         expect(f.adapter.requests.filter(request => request.purpose === 'workspace-commit'))
-          .toHaveLength(phase === 'candidate' && edge === 'after' ? 0 : 1)
+          .toHaveLength(1)
         const receipt = resumed.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')
         if (receipt?.type !== 'workspace/state') throw new Error('missing resumed receipt')
         for (const [ref, oid] of Object.entries(receipt.data.branches)) {
@@ -1054,7 +1075,7 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
     },
   )
 
-  it('retains the last checkpoint and dirty RAM when a recovery payload exceeds the configured bound', async () => {
+  it('retains the last checkpoint and dirty workspace when a recovery payload exceeds the configured bound', async () => {
     const f = await fixture({ retryDelayMs: 25 })
     const ready = f.handle.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')
     if (ready?.type !== 'workspace/state') throw new Error('missing prepared workspace')
@@ -1069,7 +1090,7 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
       { timeout: 5000 }).toMatchObject({ phase: 'returned' })
   })
 
-  it('retains dirty RAM and releases stopped-world leases when shutdown checkpointing fails', async () => {
+  it('retains dirty disk data and releases stopped-world leases when shutdown checkpointing fails', async () => {
     const f = await fixture()
     await writeFile(join(f.execution, 'unfinished.txt'), 'recover me')
     const publish = broker.publishWorkspaceJson
@@ -1095,8 +1116,10 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
     const statePath = join(f.recovery, stateEvent.data.workspaceId, 'state.json')
     const state = JSON.parse(await readFile(statePath, 'utf8')) as Record<string, unknown>
     await writeFile(statePath, JSON.stringify({ ...state, developmentVm: 'test/test' }))
-    await expect(f.ctx.agents.resume({ resumeSessionId: f.handle.agent.id,
-      agentOptions: { provider: 'mock', model: 'main' } })).rejects.toThrow('VM descriptor')
+    const resumed = await f.ctx.agents.resume({ resumeSessionId: f.handle.agent.id,
+      agentOptions: { provider: 'mock', model: 'main' } })
+    try { await expect(f.executionFor(resumed.agent)).rejects.toThrow('VM descriptor') }
+    finally { await resumed.dispose() }
   })
 
   it('refuses a corrupt acknowledged checkpoint instead of reimporting the source', async () => {
@@ -1144,11 +1167,12 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
     expect((await workspaceGit(f.source, ['for-each-ref', 'refs/heads/dsh/'], f.config)).length).toBe(0)
     expect(f.adapter.requests.filter(request => request.purpose === 'workspace-commit')).toHaveLength(0)
     await f.handle.dispose()
-    await rm(f.pool, { recursive: true }); await mkdir(f.pool, { mode: 0o700 })
+    const storage = f.storageFor(f.handle.agent)
+    await rm(storage, { recursive: true }); await mkdir(storage, { mode: 0o700 })
     const resumed = await f.ctx.agents.resume({ resumeSessionId: f.handle.agent.id,
       agentOptions: { provider: 'mock', model: 'main' } })
     await f.executionFor(resumed.agent)
-    expect(await readFile(join(f.pool, 'workspace', 'unfinished.txt'), 'utf8')).toBe('partial work\n')
+    expect(await readFile(join(storage, 'workspace', 'unfinished.txt'), 'utf8')).toBe('partial work\n')
     await resumed.dispose()
   })
 
@@ -1182,16 +1206,17 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
     await fork.dispose()
   })
 
-  it('restores the acknowledged repository after RAM loss without reading new host edits', async () => {
+  it('restores the acknowledged repository after live workspace loss without reading new host edits', async () => {
     const f = await fixture()
     await writeFile(join(f.execution, 'result.txt'), 'result\n'); await f.turn()
     await f.handle.dispose()
-    await rm(f.pool, { recursive: true }); await mkdir(f.pool, { mode: 0o700 })
+    const storage = f.storageFor(f.handle.agent)
+    await rm(storage, { recursive: true }); await mkdir(storage, { mode: 0o700 })
     await writeFile(join(f.source, 'input.txt'), 'changed on host after conversation\n')
     const resumed = await f.ctx.agents.resume({ resumeSessionId: f.handle.agent.id, agentOptions: { provider: 'mock', model: 'main' } })
     await f.executionFor(resumed.agent)
-    expect(await readFile(join(f.pool, 'workspace', 'result.txt'), 'utf8')).toBe('result\n')
-    expect(await readFile(join(f.pool, 'workspace', 'input.txt'), 'utf8')).toBe('initial\n')
+    expect(await readFile(join(storage, 'workspace', 'result.txt'), 'utf8')).toBe('result\n')
+    expect(await readFile(join(storage, 'workspace', 'input.txt'), 'utf8')).toBe('initial\n')
     await resumed.dispose()
   })
 })

@@ -4,7 +4,7 @@ type: task
 status: accepted
 summary: Implement and verify opt-in conversation development VMs using Incus, guest Docker, and authenticated previews.
 owners: [carlo]
-progress: in_progress
+progress: completed
 addresses:
   - REQ:sandbox/development-vm#c-world
   - REQ:sandbox/development-vm#c-docker
@@ -26,4 +26,4 @@ Implement the [development VM requirements](../sandbox/development-vm.spec.md) b
 
 Prove a real VM and Docker workload first, then connect ordinary tool providers, exclusive Git maintenance, durable recovery, and authenticated previews. Run focused failure tests, Loader composition, and the real-server acceptance flow before treating this task as complete. Keep production service and shipped profiles unchanged during isolated validation.
 
-The implementation includes focused tests for project-scoped network and ACL verification, canonical provider identity, live image and owner checks, process authorization, failed barriers, checkpoint transaction boundaries, and preview authentication. The external Incus, Docker, browser, recovery, and network scenario remains deployment-owned evidence and has not qualified a real host or image in this change. A keyless SDK Session snapshot records the failed-save diagnostic. Shipped profiles remain unchanged.
+The implementation includes focused tests for project quota and dedicated global bridge and ACL verification, canonical provider identity, live image and owner checks, process authorization, failed barriers, checkpoint transaction boundaries, and preview authentication. The deployment-owned scenario passed on the reserved remote host with the pinned local image: Compose and PostgreSQL startup, Chromium, authenticated HTTP and WebSocket previews, terminal resize and foreground inspection, Git return while services remained live, durable-source loss and recovery, and host-network denial all passed. A keyless SDK Session snapshot records the failed-save diagnostic. Shipped profiles remain unchanged.

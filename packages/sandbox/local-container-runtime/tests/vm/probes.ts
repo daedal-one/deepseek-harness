@@ -26,7 +26,9 @@ export async function previewProbe(runtime: WorkspaceExecutionRuntime): Promise<
     expect((await send('/private')).status).toBe(401)
     const login = await send('/.dsh/authorize', 'POST', { Origin: url.origin }, url.hash.slice(1))
     expect(login.status).toBe(204)
-    expect((await send('/', 'GET', { Cookie: login.cookie })).body).toContain('id="counter">1</p>')
+    const page = await send('/', 'GET', { Cookie: login.cookie })
+    expect(page.status).toBe(200)
+    expect(page.body).toContain('id="counter">1</p>')
     const echo = await new Promise<string>((resolve, reject) => {
       const req = request({ hostname: '127.0.0.1', port, path: '/', headers: {
         Host: url.host, Origin: url.origin, Cookie: login.cookie, Connection: 'Upgrade', Upgrade: 'websocket',
@@ -61,10 +63,18 @@ export async function terminalProbe(runtime: WorkspaceExecutionRuntime): Promise
   void process.done.then(() => { if (!output.includes('terminal-ready')) ready.reject(new Error(`terminal closed: ${output}`)) })
   try {
     await ready.promise
+    console.info('VM terminal probe: ready')
     await process.resize(31, 93)
+    console.info('VM terminal probe: resized')
     expect((await process.inspectTerminalForeground?.())?.processGroupId).toBeGreaterThan(0)
+    console.info('VM terminal probe: foreground inspected')
     process.stream.write('\n')
     expect((await process.done).exitCode).toBe(0)
+    console.info('VM terminal probe: process completed')
     expect(output).toContain('31 93')
-  } finally { await process.terminate() }
+  } finally {
+    console.info('VM terminal probe: terminating')
+    await process.terminate()
+    console.info('VM terminal probe: terminated')
+  }
 }

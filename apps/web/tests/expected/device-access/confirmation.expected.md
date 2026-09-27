@@ -1,6 +1,6 @@
 - region "Devices":
   - heading "Devices" [level=2]
-  - paragraph: Pair Daedal DSH on your iPhone with this Host, or revoke a device’s access.
+  - paragraph: Pair Daedal DSH on your iPhone or desktop with this Host, or revoke a device’s access.
   - paragraph: {{host-origin}}
   - paragraph: "Host identity: {{host-id}}"
   - note: A physical phone cannot reach this local address. Open this page using the Host’s private-network address before pairing your phone.

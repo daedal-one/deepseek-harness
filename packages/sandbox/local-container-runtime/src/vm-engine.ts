@@ -222,6 +222,7 @@ export class IncusDevelopmentVms {
   private readonly run: VmCommand
   private readonly fence: VmCommand
   private readonly frozen = new Map<ConversationWorkspaceId, unknown[]>()
+  /** Stable VM authority recorded with retained conversation workspace state. */
   readonly reference: DevelopmentVmReference
 
   constructor(readonly config: DevelopmentVmConfig, command?: VmCommand, fence?: VmCommand) {
@@ -249,13 +250,13 @@ export class IncusDevelopmentVms {
     this.fence = fence ?? hostCommand({ ...config, command: config.pythonCommand }, [])
   }
 
-  /** Validate the project-local host-enforced network and ACL before guest use. */
+  /** Validate the project-dedicated host-enforced network and ACL before guest use. */
   async verifyNetwork(): Promise<void> {
     const project = object(await this.json(['query', `/1.0/projects/${this.config.project}`]))
     const projectConfig = object(project.config)
     if (projectConfig['limits.instances'] !== String(this.config.maxInstances)
-      || projectConfig['features.networks'] !== 'true') {
-      throw new Error('development-vm: project network ownership or instance quota differs from configuration')
+      || projectConfig['features.networks'] === 'true') {
+      throw new Error('development-vm: project instance quota or managed-bridge scope differs from configuration')
     }
     const network = object(await this.json(['query', this.projectPath(`/1.0/networks/${this.config.network}`)]))
     const config = object(network.config)
@@ -303,7 +304,7 @@ export class IncusDevelopmentVms {
 
   /** Allocate a stopped VM; callers restore source before starting it.
    * @param id - supervisor-derived conversation workspace identifier.
-   * @param directory - private memory-backed source directory, validated by the workspace owner.
+   * @param directory - private durable source directory, validated by the workspace owner.
    * @returns retained instance name.
    */
   async create(id: ConversationWorkspaceId, directory: string): Promise<string> {
@@ -381,7 +382,7 @@ export class IncusDevelopmentVms {
     await this.verifyIdentity(id)
     if (await this.state(id) !== 'Stopped') throw new Error('development-vm: restore requires a stopped guest')
     await this.requireCheckpoint(id, generation, checkpointHash)
-    await this.call(['snapshot', 'restore', this.name(id), `source-${generation}`])
+    await this.call(['snapshot', 'restore', this.name(id), snapshotName(generation, checkpointHash)])
     await this.call(['config', 'device', 'set', this.name(id), 'workspace', `source=${directory}`])
     await this.verify(id, directory)
   }
@@ -396,7 +397,7 @@ export class IncusDevelopmentVms {
     for (;;) {
       try {
         await this.call(['exec', this.name(id), '--', '/bin/sh', '-c',
-          '/usr/bin/mountpoint -q /workspace && /usr/bin/docker info >/dev/null && /usr/bin/systemd-run --quiet --wait --collect --service-type=exec --working-directory=/workspace /bin/true || { printf "development-vm: guest toolchain not ready\\n" >&2; exit 75; }'])
+          '/usr/bin/mountpoint -q /workspace && /usr/bin/docker info >/dev/null && status=$(/usr/bin/docker ps --format "{{.State}} {{.Status}}") && ! printf "%s\\n" "$status" | /usr/bin/grep -Eq "(^restarting |\\(health: (starting|unhealthy)\\))" && /usr/bin/systemd-run --quiet --wait --collect --service-type=exec --working-directory=/workspace /bin/true || { printf "development-vm: guest toolchain not ready\\n" >&2; exit 75; }'])
         return
       } catch (error) {
         if (!(error instanceof Error) || (!error.message.includes('agent') && !error.message.includes('Instance is not running')
@@ -452,7 +453,7 @@ export class IncusDevelopmentVms {
       if (existing !== checkpointHash) throw new Error('development-vm: checkpoint generation identity conflict')
       return
     }
-    await this.call(['snapshot', 'create', this.name(id), `source-${generation}`, '-c', `user.dsh.checkpoint=${checkpointHash}`])
+    await this.call(['snapshot', 'create', this.name(id), snapshotName(generation, checkpointHash)])
     await this.requireCheckpoint(id, generation, checkpointHash)
   }
 
@@ -471,7 +472,7 @@ export class IncusDevelopmentVms {
     const existing = await this.checkpointHash(id, generation)
     if (existing === undefined) return
     if (existing !== checkpointHash) throw new Error('development-vm: abandoned checkpoint identity differs from its journal')
-    await this.call(['snapshot', 'delete', this.name(id), `source-${generation}`])
+    await this.call(['snapshot', 'delete', this.name(id), snapshotName(generation, checkpointHash)])
   }
 
   /** Remove superseded guest snapshots after source-manifest promotion.
@@ -482,9 +483,9 @@ export class IncusDevelopmentVms {
     await this.verifyIdentity(id)
     const snapshots = await this.snapshotNames(id)
     for (const value of snapshots) {
-      const match = /\/source-(\d+)$/u.exec(new URL(value, 'http://incus').pathname)
+      const match = /\/source-(\d+)-[a-f0-9]{64}$/u.exec(new URL(value, 'http://incus').pathname)
       if (match !== null && Number(match[1]) < generation - 1) {
-        await this.call(['snapshot', 'delete', this.name(id), `source-${match[1]}`])
+        await this.call(['snapshot', 'delete', this.name(id), match[0].slice(1)])
       }
     }
   }
@@ -541,7 +542,8 @@ export class IncusDevelopmentVms {
   }
 
   private verifyIdentityResponse(instance: Record<string, unknown>, id: ConversationWorkspaceId): {
-    config: Record<string, unknown>; devices: Record<string, unknown>
+    config: Record<string, unknown>
+    devices: Record<string, unknown>
   } {
     const localConfig = object(instance.config)
     const config = object(instance.expanded_config)
@@ -563,14 +565,10 @@ export class IncusDevelopmentVms {
   }
 
   private async checkpointHash(id: ConversationWorkspaceId, generation: number): Promise<string | undefined> {
-    const path = `/1.0/instances/${this.name(id)}/snapshots/source-${generation}`
-    const exists = (await this.snapshotNames(id)).some(value => new URL(value, 'http://incus').pathname === path)
-    if (!exists) return undefined
-    const snapshot = object(await this.json(['query', this.projectPath(path)]))
-    const config = object(snapshot.config)
-    const value = config['user.dsh.checkpoint']
-    if (typeof value !== 'string' || !SHA256.test(value)) throw new Error('development-vm: snapshot omits its source artifact identity')
-    return value
+    const pattern = new RegExp(`/source-${generation}-([a-f0-9]{64})$`, 'u')
+    const identities = (await this.snapshotNames(id)).flatMap(value => pattern.exec(new URL(value, 'http://incus').pathname)?.[1] ?? [])
+    if (identities.length > 1) throw new Error('development-vm: checkpoint generation has conflicting guest snapshots')
+    return identities[0]
   }
 
   private async requireCheckpoint(id: ConversationWorkspaceId, generation: number, checkpointHash: string): Promise<void> {
@@ -689,4 +687,9 @@ function validateCheckpoint(generation: number, checkpointHash: string): void {
   if (!Number.isSafeInteger(generation) || generation < 1 || !SHA256.test(checkpointHash)) {
     throw new Error('development-vm: invalid checkpoint identity')
   }
+}
+
+function snapshotName(generation: number, checkpointHash: string): string {
+  validateCheckpoint(generation, checkpointHash)
+  return `source-${generation}-${checkpointHash}`
 }

@@ -5,15 +5,82 @@ import { fileURLToPath } from 'node:url'
 import { chromium, type Browser, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
-  claimDeviceEnrollment, connectionDeviceEnrollmentSchema, createConnectionRpc, readHostIdentity, RpcId,
-} from '@deepseek-ai/dsh-client-connection/client/portable'
-import {
   captureStableAria, compareOrRefreshGolden, launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import { EN_BROWSER_LOCALE } from './support.ts'
 
 const EXPECTED = fileURLToPath(new URL('./expected/device-access', import.meta.url))
 const MODE = webSnapshotMode()
+
+interface Enrollment {
+  hostId: string
+  challenge: string
+}
+interface Grant {
+  hostId: string
+  credential: string
+  device: { deviceId: string }
+}
+type ClaimResult = { ok: true; value: Grant } | { ok: false; error: { code: string } }
+
+function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function enrollmentFrom(value: unknown): Enrollment {
+  if (!isRecord(value) || typeof value.hostId !== 'string' || typeof value.challenge !== 'string') {
+    throw new Error('Owner enrollment returned an invalid response')
+  }
+  return { hostId: value.hostId, challenge: value.challenge }
+}
+
+async function claimDeviceEnrollment(options: {
+  baseUrl: string
+  expectedHostId: string
+  challenge: string
+  label: string
+  signal: AbortSignal
+}): Promise<ClaimResult> {
+  const response = await fetch(new URL('/api/connection/devices/claim', options.baseUrl), {
+    method: 'POST', credentials: 'omit', redirect: 'error', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ hostId: options.expectedHostId, challenge: options.challenge, label: options.label }),
+    signal: options.signal,
+  })
+  const result: unknown = await response.json()
+  if (!isRecord(result) || typeof result.ok !== 'boolean') throw new Error('Device claim returned an invalid response')
+  if (!result.ok) {
+    if (!isRecord(result.error) || typeof result.error.code !== 'string') throw new Error('Device claim returned an invalid failure')
+    return { ok: false, error: { code: result.error.code } }
+  }
+  if (!isRecord(result.value) || typeof result.value.hostId !== 'string' || typeof result.value.credential !== 'string'
+    || !isRecord(result.value.device) || typeof result.value.device.deviceId !== 'string') {
+    throw new Error('Device claim returned an invalid grant')
+  }
+  return { ok: true, value: {
+    hostId: result.value.hostId,
+    credential: result.value.credential,
+    device: { deviceId: result.value.device.deviceId },
+  } }
+}
+
+async function readHostIdentity(
+  baseUrl: string,
+  credential: string,
+  signal: AbortSignal,
+): Promise<{ ok: true; value: { hostId: string } }> {
+  const rpcId = randomUUID()
+  const response = await fetch(new URL('/api/connection/identity', baseUrl), {
+    method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${credential}` },
+    body: JSON.stringify({ type: 'client-request', rpcId, method: 'connection/identity', payload: {} }), signal,
+  })
+  if (!response.ok) throw new Error(`transport failure for /api/connection/identity: HTTP ${response.status}`)
+  const envelope: unknown = await response.json()
+  if (!isRecord(envelope) || envelope.rpcId !== rpcId || !isRecord(envelope.result) || envelope.result.ok !== true
+    || !isRecord(envelope.result.value) || typeof envelope.result.value.hostId !== 'string') {
+    throw new Error('Host identity returned an invalid response')
+  }
+  return { ok: true, value: { hostId: envelope.result.value.hostId } }
+}
 
 describe('web e2e: browser-owned device access', () => {
   let scaffold: WebScaffold
@@ -55,26 +122,17 @@ describe('web e2e: browser-owned device access', () => {
     ])
     expect(response.ok()).toBe(true)
     const body = await response.json() as { value?: unknown }
-    const parsed = connectionDeviceEnrollmentSchema.safeParse(body.value)
-    if (!parsed.success) throw new Error('Owner enrollment failed shared response validation')
-    const enrollment = parsed.data
+    const enrollment = enrollmentFrom(body.value)
     const qr = section.locator('svg').filter({ has: page.locator('title', { hasText: 'Single-use device enrollment QR' }) })
     await qr.waitFor({ state: 'visible' })
     expect((await qr.boundingBox())?.width).toBeGreaterThan(200)
 
     const options = { baseUrl: scaffold.baseUrl, expectedHostId: enrollment.hostId, challenge: enrollment.challenge,
-      label: 'Browser test iPhone', fetch, signal: lifetime.signal }
+      label: 'Browser test iPhone', signal: lifetime.signal }
     const claimed = await claimDeviceEnrollment(options)
     if (!claimed.ok) throw new Error('The browser-created enrollment was refused')
     const grant = claimed.value
-    const rpc = createConnectionRpc({ baseUrl: scaffold.baseUrl, randomId: () => RpcId(randomUUID()),
-      fetch: (url, init) => {
-        const headers = new Headers(init.headers)
-        headers.set('authorization', `Bearer ${grant.credential}`)
-        return fetch(url, { ...init, headers })
-      },
-    })
-    const identity = await readHostIdentity(rpc, lifetime.signal)
+    const identity = await readHostIdentity(scaffold.baseUrl, grant.credential, lifetime.signal)
     if (!identity.ok) throw new Error('The paired device could not read its Host identity')
     expect(identity.value.hostId).toBe(enrollment.hostId)
     const reused = await claimDeviceEnrollment(options)
@@ -93,11 +151,11 @@ describe('web e2e: browser-owned device access', () => {
     await compareOrRefreshGolden(join(EXPECTED, 'confirmation.expected.md'),
       await captureStableAria(page, 'section[aria-label="Devices"]', scaffold.workspaceCwd, { replacements }), MODE)
     await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click()
-    expect((await readHostIdentity(rpc, lifetime.signal)).ok).toBe(true)
+    expect((await readHostIdentity(scaffold.baseUrl, grant.credential, lifetime.signal)).ok).toBe(true)
     await section.getByRole('button', { name: 'Revoke access…', exact: true }).click()
     await confirmation.getByRole('button', { name: 'Revoke device access', exact: true }).click()
     await section.getByText('No devices are enrolled.', { exact: true }).waitFor()
-    await expect(readHostIdentity(rpc, lifetime.signal)).rejects.toThrow('HTTP 401')
+    await expect(readHostIdentity(scaffold.baseUrl, grant.credential, lifetime.signal)).rejects.toThrow('HTTP 401')
     await compareOrRefreshGolden(join(EXPECTED, 'empty.expected.md'),
       await captureStableAria(page, 'section[aria-label="Devices"]', scaffold.workspaceCwd, { replacements }), MODE)
     expect(tripwire.pageErrors).toEqual([])

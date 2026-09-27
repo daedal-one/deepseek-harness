@@ -81,7 +81,12 @@ it.each([false, true])('keeps workspace return and pending recovery visible with
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
   let handle: Awaited<ReturnType<typeof scaffold.ctx.agents.create>> | undefined
   try {
-    await scaffold.ctx.plugin(WorkspaceOutcomes, { environment: false, provenance })
+    await scaffold.ctx.plugin(WorkspaceOutcomes, {
+      environment: false,
+      provenance,
+      admission: false,
+      pendingError: 'Result branch changed outside this conversation.',
+    })
     handle = await scaffold.ctx.agents.create({ sessionId: SessionId('workspace-outcomes-browser'),
       meta: { cwd: scaffold.workspaceCwd }, agentOptions: { provider: 'deepseek-official', model: 'deepseek-flash' } })
     handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Reply with exactly: SDK snapshot OK' }], source: { kind: 'user' } }))

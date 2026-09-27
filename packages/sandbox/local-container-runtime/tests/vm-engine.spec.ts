@@ -42,23 +42,19 @@ function fixture() {
     if (argv[0] === 'start') status = 'Running'
     if (argv[0] === 'stop') status = 'Stopped'
     if (argv[0] === 'snapshot' && argv[1] === 'create') {
-      const generation = Number(argv[3]?.slice('source-'.length))
-      const label = argv.find(value => value.startsWith('user.dsh.checkpoint='))?.slice('user.dsh.checkpoint='.length)
-      if (label !== undefined) snapshots.set(generation, label)
+      const match = /^source-(\d+)-([a-f0-9]{64})$/u.exec(argv[3] ?? '')
+      if (match !== null) snapshots.set(Number(match[1]), match[2]!)
     }
-    if (argv[0] === 'snapshot' && argv[1] === 'delete') snapshots.delete(Number(argv[3]?.slice('source-'.length)))
+    if (argv[0] === 'snapshot' && argv[1] === 'delete') snapshots.delete(Number(/^source-(\d+)-/u.exec(argv[3] ?? '')?.[1]))
     const rawPath = argv[1] ?? ''
     const path = rawPath.split('?')[0]!
     let response: unknown
-    if (path === '/1.0/projects/test') response = { config: { 'limits.instances': '4', 'features.networks': 'true' } }
+    if (path === '/1.0/projects/test') response = { config: { 'limits.instances': '4', 'features.networks': 'false' } }
     else if (path === '/1.0/networks/test') response = network
     else if (path === '/1.0/network-acls/test') response = acl
     else if (path === `/1.0/instances/dsh-${id}/state`) response = { status }
-    else if (path === `/1.0/instances/dsh-${id}/snapshots`) response = [...snapshots.keys()].map(generation => `/1.0/instances/dsh-${id}/snapshots/source-${generation}`)
-    else if (path.startsWith(`/1.0/instances/dsh-${id}/snapshots/source-`)) {
-      const generation = Number(path.slice(path.lastIndexOf('source-') + 'source-'.length))
-      response = { config: { 'user.dsh.checkpoint': snapshots.get(generation) } }
-    } else if (path === `/1.0/instances/dsh-${id}`) response = instance
+    else if (path === `/1.0/instances/dsh-${id}/snapshots`) response = [...snapshots].map(([generation, hash]) => `/1.0/instances/dsh-${id}/snapshots/source-${generation}-${hash}`)
+    else if (path === `/1.0/instances/dsh-${id}`) response = instance
     else if (path === '/1.0/instances') response = [`/1.0/instances/dsh-${id}`]
     else if (path === '/1.0/operations') response = {}
     else response = {}
@@ -95,10 +91,10 @@ describe('development VM host controls', () => {
     const inherited = fixture()
     const original = inherited.run
     const engine = new IncusDevelopmentVms(config, async (argv, input) => {
-      if (argv[1] === '/1.0/projects/test') return Buffer.from(JSON.stringify({ type: 'sync', status_code: 200, error_code: 0, metadata: { config: { 'limits.instances': '4', 'features.networks': 'false' } } }))
+      if (argv[1] === '/1.0/projects/test') return Buffer.from(JSON.stringify({ type: 'sync', status_code: 200, error_code: 0, metadata: { config: { 'limits.instances': '4', 'features.networks': 'true' } } }))
       return await original(argv, input)
     })
-    await expect(engine.verifyNetwork()).rejects.toThrow('project network ownership')
+    await expect(engine.verifyNetwork()).rejects.toThrow('managed-bridge scope')
     const ipv6 = fixture(); ipv6.network.config['ipv6.address'] = 'auto'
     await expect(ipv6.engine.verifyNetwork()).rejects.toThrow('isolation')
     const defaults = fixture(); defaults.network.config['security.acls.default.ingress.action'] = 'allow'
@@ -120,7 +116,7 @@ describe('development VM host controls', () => {
     await test.engine.unfreeze(id)
     expect(await test.engine.state(id)).toBe('Running')
     expect(test.calls.filter(call => call[0] === 'snapshot' && call[1] === 'create')).toEqual([
-      ['snapshot', 'create', `dsh-${id}`, 'source-2', '-c', `user.dsh.checkpoint=${hash}`, '--project', 'test'],
+      ['snapshot', 'create', `dsh-${id}`, `source-2-${hash}`, '--project', 'test'],
     ])
   })
 
@@ -157,7 +153,7 @@ describe('development VM host controls', () => {
     expect(failed.calls.some(call => call[0] === 'pause' || call[0] === 'snapshot')).toBe(false)
   })
 
-  it('waits through the image first-boot reboot until guest execution is available', async () => {
+  it('waits through first boot and retained-container recovery until guest execution is available', async () => {
     const test = fixture(); let attempts = 0
     const engine = new IncusDevelopmentVms(config, async (argv) => {
       if (argv[0] === 'exec') {
@@ -170,6 +166,9 @@ describe('development VM host controls', () => {
     })
     await engine.start(id)
     expect(attempts).toBe(4)
+    const readiness = test.calls.find(call => call[0] === 'exec' && call.includes('/bin/sh'))
+    expect(readiness?.at(-1)).toContain('docker ps --format')
+    expect(readiness?.at(-1)).toContain('health: (starting|unhealthy)')
   })
 
   it('does not release a stopped guest while a queued reboot can restart it', async () => {
@@ -189,7 +188,7 @@ describe('development VM host controls', () => {
   it('rejects live image and owner label drift before lifecycle operations', async () => {
     const image = fixture(); image.instance.config['volatile.base_image'] = 'd'.repeat(64)
     await expect(image.engine.stop(id)).rejects.toThrow('live image or owner')
-    const owner = fixture(); owner.instance.expanded_config['user.dsh.owner'] = 'c'.repeat(32)
+    const owner = fixture(); owner.instance.expanded_config['user.dsh.owner'] = brandString<ConversationWorkspaceId>('c'.repeat(32))
     await expect(owner.engine.stop(id)).rejects.toThrow('live image or owner')
   })
 

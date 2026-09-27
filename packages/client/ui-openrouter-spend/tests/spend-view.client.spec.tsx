@@ -131,7 +131,7 @@ describe('SpendView', () => {
 
   it('shows the unpriceable wording and never a fabricated zero for an unpriced model', () => {
     const store = createSpendStore().create()
-    store.actions.succeed({ ...SNAPSHOT, session: { ...SNAPSHOT.session, costUsd: null } })
+    store.actions.succeed({ ...SNAPSHOT, session: { ...SNAPSHOT.session!, costUsd: null } })
     const view = render(<SpendView {...viewProps(store, vi.fn())} />)
 
     expect(screen.getByText(en['session.unpriceable'])).toBeTruthy()
@@ -292,7 +292,7 @@ describe('spend plugin wiring', () => {
     const injected = (entry.inject as unknown as InjectFactory)(SID, store.actions)
 
     let settleFirst: ((value: unknown) => void) | undefined
-    b.read.mockReturnValueOnce(new Promise(resolve => { settleFirst = resolve }))
+    b.read.mockReturnValueOnce(new Promise((resolve) => { settleFirst = resolve }))
     injected.load()
     b.read.mockResolvedValueOnce({ ok: true, value: { ok: true, value: SNAPSHOT } })
     injected.load()

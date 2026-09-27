@@ -982,13 +982,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Adds durable VM execution to supervisor-owned conversation workspaces.',
     methods: [
       {
-        signature: 'assertReference(reference: unknown): asserts reference is DevelopmentVmReference',
+        signature: 'assertReference(reference: unknown): void',
         description: 'Require a durable record to name this exact effective-profile provider.',
         parameters: [{ name: 'reference', description: 'untrusted persisted VM identity.' }],
       },
       {
         signature: 'async recover(id: ConversationWorkspaceId, reference?: unknown): Promise<void>',
-        description: 'Quiesce a retained guest before the workspace owner touches its RAM slot.',
+        description: 'Quiesce a retained guest before the workspace owner touches its durable source directory.',
         parameters: [{ name: 'id', description: 'workspace identity derived by the trusted supervisor.' }, { name: 'reference', description: 'persisted provider identity, when recovery already acknowledged a VM.' }],
       },
       {
@@ -4587,7 +4587,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'DevelopmentVmNetworkPolicy',
-    declaration: 'export interface DevelopmentVmNetworkPolicy {\n    version: 1;\n    ipv4: \'private-rfc1918-nat\';\n    ipv6: \'disabled\';\n    defaultIngress: \'reject\';\n    defaultEgress: \'reject\';\n    hostAddresses: string[];\n    deniedNetworks: string[];\n    publicTcpPorts: [80, 443];\n    dnsResolvers: [\'1.1.1.1/32\', \'8.8.8.8/32\'];\n}',
+    declaration: 'export interface DevelopmentVmNetworkPolicy {\n    version: 1;\n    ipv4: \'private-rfc1918-nat\';\n    ipv6: \'disabled\';\n    defaultIngress: \'reject\';\n    defaultEgress: \'reject\';\n    hostAddresses: string[];\n    deniedNetworks: string[];\n    publicTcpPorts: [\n        80,\n        443\n    ];\n    dnsResolvers: [\n        \'1.1.1.1/32\',\n        \'8.8.8.8/32\'\n    ];\n}',
   },
   {
     name: 'DevelopmentVmOpenRequest',
@@ -7154,6 +7154,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface WorkspaceByteRange {\n    readonly offset?: number;\n    readonly length?: number;\n}',
   },
   {
+    name: 'WorkspaceCheckpointRuntime',
+    declaration: 'export interface WorkspaceCheckpointRuntime {\n    checkpoint(generation: number, checkpointHash: string): Promise<void>;\n    discardCheckpoint?(generation: number, checkpointHash: string): Promise<void>;\n    pruneCheckpoints(generation: number): Promise<void>;\n}',
+  },
+  {
     name: 'WorkspaceCreateRequest',
     declaration: 'export interface WorkspaceCreateRequest {\n    readonly path: string;\n}',
   },
@@ -7176,10 +7180,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'WorkspaceDirectoryListing',
     declaration: 'export interface WorkspaceDirectoryListing {\n    readonly path: string;\n    readonly entries: readonly WorkspaceDirectoryEntry[];\n    readonly truncated: boolean;\n}',
-  },
-  {
-    name: 'WorkspaceCheckpointRuntime',
-    declaration: 'export interface WorkspaceCheckpointRuntime {\n    checkpoint(generation: number, checkpointHash: string): Promise<void>;\n    discardCheckpoint?(generation: number, checkpointHash: string): Promise<void>;\n    pruneCheckpoints(generation: number): Promise<void>;\n}',
   },
   {
     name: 'WorkspaceExecutionRuntime',

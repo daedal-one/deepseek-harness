@@ -88,7 +88,7 @@ describe('conversation VM lifecycle', () => {
     expect(test.stop).toHaveBeenCalledTimes(1)
   })
 
-  it('restores a lost RAM generation before guest startup and preserves retained RAM otherwise', async () => {
+  it('restores a missing disk generation before guest startup and preserves retained disk data otherwise', async () => {
     const test = await fixture(); test.exists.mockResolvedValue(true)
     await test.service.open(test.base, test.request({ generation: 4, reference: test.service.identity }))
     expect(test.events).toEqual(['restore', 'start'])
@@ -121,6 +121,26 @@ describe('conversation VM lifecycle', () => {
     await expect(guest.runtime.settle(1000, maintenance)).rejects.toThrow('still running')
     expect(maintenance).not.toHaveBeenCalled()
     await expect(guest.runtime.createProcess({ argv: ['/bin/true'], cwd: '/workspace', environment: {}, tty: false, stdin: false })).rejects.toThrow('being saved')
+  })
+
+  it('does not checkpoint or stop a guest while an attached writer remains active', async () => {
+    const test = await fixture()
+    const removed = Promise.withResolvers<boolean>()
+    const done = Promise.withResolvers<{ exitCode: number }>()
+    const stream = new Duplex({ read() {}, write(_chunk, _encoding, callback) { callback() } })
+    vi.spyOn(processes, 'createVmProcess').mockResolvedValue({
+      id: 'writer', tty: false, stream, done: done.promise,
+      async resize() {}, async signal() {}, async waitForRemoval() { return await removed.promise },
+      async inspect() { return { exitCode: 0, output: '' } },
+      async terminate() { removed.resolve(true); done.resolve({ exitCode: 0 }) },
+    })
+    const guest = await test.service.open(test.base, test.request())
+    const writer = await guest.runtime.createProcess({ argv: ['/bin/sh'], cwd: '/workspace', environment: {}, tty: false, stdin: false })
+    test.events.length = 0
+    await expect(guest.runtime.settle(1, async () => undefined)).rejects.toThrow('active VM writers')
+    expect(test.events).toEqual([])
+    await writer.terminate()
+    await guest.dispose()
   })
 
   it('retains the freeze on failed maintenance and permits an explicit save retry', async () => {

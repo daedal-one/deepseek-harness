@@ -41,12 +41,10 @@ export interface ConversationWorkspaceConfig extends Omit<WorkspaceLimits, 'remo
   environment?: EnvironmentAccessConfig
   /** Exact operator-admitted host conversations; each preset must supply isolated host filesystem, subprocess and shell services. */
   hostSessions?: Array<{ sessionId: string; preset: string; cwd: string }>
-  /** Individually mounted tmpfs roots, exclusively provisioned for this supervisor. */
-  poolPaths: string[]
-  /** Maximum capacity of each tmpfs mount; their sum bounds aggregate admission. */
-  slotBytes: number
-  /** Maximum inode capacity of each tmpfs mount. */
-  slotInodes: number
+  /** Durable owner-only root for live conversation workspaces. */
+  storageRoot: string
+  /** Maximum conversations that may execute concurrently. */
+  maxActiveWorkspaces: number
   /** Durable owner-only root, outside every execution mount. */
   recoveryRoot: string
   /** Global receipt directory shared by profiles; resolves to $DSH_HOME/provenance when omitted. */
@@ -119,7 +117,6 @@ interface RecordState extends RepositoryRecord {
   stagedPatch: string
   checkpoint: number
   checkpointHash: string
-  slot?: string
   developmentVm?: DevelopmentVmReference
   transaction?: Transaction
   lastTurn: number
@@ -162,7 +159,7 @@ interface Workspace {
   users: Set<Agent>
   record: RecordState
   directory: string
-  slot: string
+  storage: string
   runtime: WorkspaceExecutionRuntime
   developmentVms?: DevelopmentVms
   dispose(): Promise<void>
@@ -189,8 +186,6 @@ const COMMIT_SYSTEM = 'Write one concise Git commit subject for the supplied cha
 const DEVELOPMENT_VM_PENDING = 'development-vm.pending.json'
 const CHECKPOINT_PENDING = 'checkpoint.pending.json'
 
-class UnavailableDevelopmentVmProvider extends Error {}
-
 /** Owns private workspace storage, live agent bindings, and automatic branch return. */
 export class ConversationWorkspaces extends Service {
   static inject = ['localContainerRuntime', 'agents', 'sessions', 'systemPrompt', 'sessionPersistence']
@@ -207,9 +202,8 @@ export class ConversationWorkspaces extends Service {
       }).default(undefined as never),
     }).default(undefined as never),
     hostSessions: z.array(z.object({ sessionId: z.string().required(), preset: z.string().required(), cwd: z.string().required() })),
-    poolPaths: z.array(z.string()).required(),
-    slotBytes: z.natural().required(),
-    slotInodes: z.natural().required(),
+    storageRoot: z.string().required(),
+    maxActiveWorkspaces: z.natural().required(),
     recoveryRoot: z.string().required(),
     provenanceRoot: z.string(),
     gitCommand: z.string().required(),
@@ -248,7 +242,7 @@ export class ConversationWorkspaces extends Service {
   constructor(ctx: Context, config: ConversationWorkspaceConfig) {
     super(ctx, 'conversationWorkspaces')
     this.config = resolveConfig(config)
-    this.admission = new WorkspaceAdmission(this.config.poolPaths.length)
+    this.admission = new WorkspaceAdmission(this.config.maxActiveWorkspaces)
     ctx.inject(['commands'], (inner) => {
       inner.effect(() => inner.commands.register({
         name: 'changes', description: 'Find saved branches and their conversations.',
@@ -316,6 +310,7 @@ export class ConversationWorkspaces extends Service {
         if (this.forAgent(agent).pending) throw new Error('workspace recovery is pending; see the synchronization error')
         signal.throwIfAborted()
         agent.session.append('workspace/admission', { id, status: 'admitted' })
+        signal.throwIfAborted()
         await next()
       } catch (error) {
         agent.session.append('workspace/admission', signal.aborted
@@ -349,7 +344,7 @@ export class ConversationWorkspaces extends Service {
     }, 'conversation workspace storage ownership')
   }
 
-  async [Service.init](): Promise<void> { await this.verifyPool() }
+  async [Service.init](): Promise<void> { await this.verifyStorage() }
 
   /** Search host-wide saved change metadata without invoking a model.
    * @param query - literal conversation, commit, branch, topic or receipt text; empty selects all.
@@ -580,8 +575,7 @@ export class ConversationWorkspaces extends Service {
     if (use.references !== 0) return Promise.resolve()
     if (use.closing !== undefined) return use.closing
     use.abort.abort()
-    let closing!: Promise<void>
-    closing = Promise.resolve().then(async () => {
+    const closing = Promise.resolve().then(async () => {
       let workspace: Workspace
       try { workspace = await use.ready }
       catch {
@@ -622,21 +616,13 @@ export class ConversationWorkspaces extends Service {
     return closing
   }
 
-  private async verifyPool(): Promise<void> {
-    if (process.platform !== 'linux') throw new Error('conversation container workspaces require Linux tmpfs mounts')
-    await mkdir(this.config.recoveryRoot, { recursive: true, mode: 0o700 })
-    await mkdir(this.config.provenanceRoot, { recursive: true, mode: 0o700 })
-    const devices = new Set<number>()
-    for (const path of [this.config.recoveryRoot, this.config.provenanceRoot, ...this.config.poolPaths]) {
+  private async verifyStorage(): Promise<void> {
+    if (process.platform !== 'linux') throw new Error('conversation container workspaces require Linux storage')
+    for (const path of [this.config.storageRoot, this.config.recoveryRoot, this.config.provenanceRoot]) {
+      await mkdir(path, { recursive: true, mode: 0o700 })
       const info = await lstat(path)
       if (!info.isDirectory() || info.isSymbolicLink() || info.uid !== process.getuid?.() || (info.mode & 0o077) !== 0 || await realpath(path) !== path) throw new Error('workspace storage roots must be canonical owner-only directories')
-      const fs = await statfs(path)
-      if (path === this.config.recoveryRoot || path === this.config.provenanceRoot) {
-        if (fs.type === 0x01021994) throw new Error('workspace recovery storage must survive tmpfs loss')
-        continue
-      }
-      if (fs.type !== 0x01021994 || fs.blocks * fs.bsize > this.config.slotBytes || fs.files > this.config.slotInodes || devices.has(info.dev)) throw new Error('each workspace slot must be a distinct tmpfs with configured byte and inode limits')
-      devices.add(info.dev)
+      if ((await statfs(path)).type === 0x01021994) throw new Error('workspace storage roots must use durable disk storage, not tmpfs')
     }
   }
 
@@ -827,36 +813,23 @@ export class ConversationWorkspaces extends Service {
       }
       const recorded = agent.session.snapshotEvents().some(event => event.type === 'workspace/state' && event.data.workspaceId === workspaceId)
       if (record === undefined && (recorded || vmPending !== undefined)) throw new Error('workspace recovery is missing; refusing to import a replacement')
-      let slot: string | undefined
-      let incompatibleVmSlot = false
-      const candidates = [...this.config.poolPaths].sort((a, b) => Number(b === record?.slot) - Number(a === record?.slot))
-      let retained = false
-      for (const candidate of candidates) {
-        let lease: FileHandle
-        try { lease = await this.lease(join(this.config.recoveryRoot, `slot-${createHash('sha256').update(candidate).digest('hex')}.lock`)) }
-        catch (error) { if (['EAGAIN', 'EWOULDBLOCK'].includes(String((error as NodeJS.ErrnoException).code))) continue; throw error }
-        try {
-          let owner: unknown
-          try { owner = await readWorkspaceJson(join(candidate, 'owner.json'), this.config.maxOutputBytes) }
-          catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
-          if (owner !== undefined && (!isObject(owner) || typeof owner.workspaceId !== 'string' || !/^[a-f0-9]{32}$/u.test(owner.workspaceId) || typeof owner.clean !== 'boolean' || typeof owner.initialized !== 'boolean')) throw new Error('invalid RAM workspace ownership record')
-          if (isObject(owner) && owner.workspaceId !== workspaceId) {
-            await this.recoverVacantSlot(candidate, brandString<ConversationWorkspaceId>(String(owner.workspaceId)),
-              owner.initialized === true, owner.clean === true, vms)
-          }
-          if (owner === undefined && (await readdir(candidate)).length > 0) throw new Error('RAM workspace has unrecognized data; refusing to replace it')
-          retained = isObject(owner) && owner.workspaceId === workspaceId && owner.initialized === true && record !== undefined
-          leases.push(lease); slot = candidate; break
-        } catch (error) {
-          await lease.close()
-          if (error instanceof UnavailableDevelopmentVmProvider) { incompatibleVmSlot = true; continue }
-          throw error
-        }
+      const storage = join(this.config.storageRoot, workspaceId)
+      await mkdir(storage, { mode: 0o700, recursive: true })
+      const storageInfo = await lstat(storage)
+      if (!storageInfo.isDirectory() || storageInfo.isSymbolicLink() || storageInfo.uid !== process.getuid?.()
+        || (storageInfo.mode & 0o077) !== 0 || await realpath(storage) !== storage) {
+        throw new Error('conversation workspace storage must be a canonical owner-only directory')
       }
-      if (slot === undefined) throw new Error(incompatibleVmSlot
-        ? 'all available RAM workspace slots retain development VMs from another effective profile'
-        : 'all configured RAM workspace slots are in use')
-      const backing = join(slot, 'workspace')
+      let owner: unknown
+      try { owner = await readWorkspaceJson(join(storage, 'owner.json'), this.config.maxOutputBytes) }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
+      if (owner !== undefined && (!isObject(owner) || owner.workspaceId !== workspaceId
+        || typeof owner.clean !== 'boolean' || typeof owner.initialized !== 'boolean')) {
+        throw new Error('invalid conversation workspace ownership record')
+      }
+      if (owner === undefined && (await readdir(storage)).length > 0) throw new Error('conversation workspace has unrecognized data; refusing to replace it')
+      const retained = isObject(owner) && owner.initialized === true && record !== undefined
+      const backing = join(storage, 'workspace')
       if (vms !== undefined) await vms.recover(workspaceId, record?.developmentVm ?? vmPending?.reference ?? vms.identity)
       await this.ctx.localContainerRuntime.recoverWorkspace(backing)
       let entries: WorkspaceEntry[]
@@ -896,14 +869,13 @@ export class ConversationWorkspaces extends Service {
         if (checkpointHash(entries) !== record.checkpointHash) throw new Error('workspace recovery checkpoint failed its integrity check')
       }
       if (!retained) { await rm(backing, { recursive: true, force: true }); await mkdir(backing, { mode: 0o700 }) }
-      record.slot = slot
       await this.publish(join(directory, 'state.json'), record)
-      await this.publish(join(slot, 'owner.json'), { workspaceId, clean: false, initialized: retained })
+      await this.publish(join(storage, 'owner.json'), { workspaceId, clean: false, initialized: retained })
       const authorize = environment === undefined ? undefined : () => environment.authorize()
       owned = await this.ctx.localContainerRuntime.createWorkspace(backing, authorize)
       if (!retained) {
         await this.control(owned.runtime.executeController.bind(owned.runtime), 'restore', { entries })
-        await this.publish(join(slot, 'owner.json'), { workspaceId, clean: false, initialized: true })
+        await this.publish(join(storage, 'owner.json'), { workspaceId, clean: false, initialized: true })
       }
       const retainedRecovery = record.developmentVm === undefined || vms === undefined
         ? undefined : vms.retention(workspaceId, record.developmentVm)
@@ -932,7 +904,7 @@ export class ConversationWorkspaces extends Service {
         users: new Set([agent]),
         record,
         directory,
-        slot,
+        storage,
         runtime: owned.runtime,
         ...vms === undefined ? {} : { developmentVms: vms },
         dispose: owned.dispose.bind(owned),
@@ -946,7 +918,10 @@ export class ConversationWorkspaces extends Service {
       this.state(workspace, record.lastTurn > 0 ? 'returned' : 'ready', record.lastTurn)
       this.workspaces.add(workspace); this.bindings.set(agent, workspace)
     } catch (error) {
-      const cleanup = await Promise.allSettled([owned?.dispose(), ...leases.map(handle => handle.close())].filter((value): value is Promise<void> => value !== undefined))
+      const cleanup = await Promise.allSettled(
+        [owned?.dispose(), ...leases.map(handle => handle.close())]
+          .filter((value): value is Promise<void> => value !== undefined),
+      )
       const failures = cleanup.flatMap(result => result.status === 'rejected' ? [result.reason as unknown] : [])
       if (failures.length > 0) throw new AggregateError([error, ...failures], 'workspace preparation and cleanup failed')
       throw error
@@ -1015,14 +990,14 @@ export class ConversationWorkspaces extends Service {
     if (quiescent) {
       try {
         if (failures.length === 0) {
-          await this.publish(join(workspace.slot, 'owner.json'), { workspaceId: workspace.record.workspaceId, clean: true, initialized: true })
+          await this.publish(join(workspace.storage, 'owner.json'), { workspaceId: workspace.record.workspaceId, clean: true, initialized: true })
         }
       } catch (error) { failures.push(error) }
       const released = await Promise.allSettled(workspace.leases.map(lease => lease.close()))
       for (const result of released) if (result.status === 'rejected') failures.push(result.reason)
       this.workspaces.delete(workspace)
     }
-    if (failures.length > 0) throw new AggregateError(failures, 'workspace checkpoint failed; private RAM storage retained for recovery')
+    if (failures.length > 0) throw new AggregateError(failures, 'workspace checkpoint failed; durable workspace storage retained for recovery')
   }
 
   private state(workspace: Workspace, phase: WorkspaceState['phase'], turn: number, error?: string): void {
@@ -1048,15 +1023,16 @@ export class ConversationWorkspaces extends Service {
 
   private async checkpoint(workspace: Workspace, control: Control): Promise<void> {
     const runtime = workspace.runtime
+    const { checkpoint, discardCheckpoint, pruneCheckpoints } = runtime
     const retention: Partial<WorkspaceCheckpointRuntime> = {
-      ...runtime.checkpoint === undefined ? {} : {
-        checkpoint: async (generation: number, checkpointHash: string) => await runtime.checkpoint!(generation, checkpointHash),
+      ...checkpoint === undefined ? {} : {
+        checkpoint: async (generation: number, checkpointHash: string) => await checkpoint(generation, checkpointHash),
       },
-      ...runtime.discardCheckpoint === undefined ? {} : {
-        discardCheckpoint: async (generation: number, checkpointHash: string) => await runtime.discardCheckpoint!(generation, checkpointHash),
+      ...discardCheckpoint === undefined ? {} : {
+        discardCheckpoint: async (generation: number, checkpointHash: string) => await discardCheckpoint(generation, checkpointHash),
       },
-      ...runtime.pruneCheckpoints === undefined ? {} : {
-        pruneCheckpoints: async (generation: number) => await runtime.pruneCheckpoints!(generation),
+      ...pruneCheckpoints === undefined ? {} : {
+        pruneCheckpoints: async (generation: number) => await pruneCheckpoints(generation),
       },
     }
     await this.checkpointRecord(workspace.record, workspace.directory, control, retention)
@@ -1142,50 +1118,12 @@ export class ConversationWorkspaces extends Service {
     directory: string,
     workspaceId: ConversationWorkspaceId,
   ): Promise<DevelopmentVmPending | undefined> {
-    try { return parseDevelopmentVmPending(await readWorkspaceJson(join(directory, DEVELOPMENT_VM_PENDING), this.config.maxOutputBytes), workspaceId) }
-    catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined; throw error }
-  }
-
-  private async recoverVacantSlot(
-    slot: string,
-    workspaceId: ConversationWorkspaceId,
-    initialized: boolean,
-    clean: boolean,
-    vms: DevelopmentVms | undefined,
-  ): Promise<void> {
-    const directory = join(this.config.recoveryRoot, workspaceId)
-    const lease = await this.lease(join(directory, 'lease'))
     try {
-      const value = await readWorkspaceJson(join(directory, 'state.json'), this.config.maxOutputBytes)
-      if (!isObject(value) || typeof value.sessionId !== 'string') throw new Error('invalid retained workspace session')
-      const record = parseRecord(value, workspaceId, brandString<SessionId>(value.sessionId))
-      const pending = await this.readDevelopmentVmPending(directory, workspaceId)
-      if (pending !== undefined && record.developmentVm === undefined) {
-        throw new UnavailableDevelopmentVmProvider('pending VM attachment must be recovered by its owner before slot reuse')
-      }
-      const reference = record.developmentVm ?? pending?.reference
-      let retention: WorkspaceCheckpointRuntime | undefined
-      if (reference !== undefined) {
-        if (vms === undefined || !sameDevelopmentVmReference(reference, vms.identity)) {
-          throw new UnavailableDevelopmentVmProvider('retained VM belongs to another effective profile')
-        }
-        await vms.recover(workspaceId, reference)
-        if (record.developmentVm !== undefined) retention = vms.retention(workspaceId, reference)
-      }
-      const saved = await readWorkspaceJson(join(directory, `checkpoint-${record.checkpoint}.json`), this.config.maxOutputBytes)
-      const entries = validateWorkspaceEntries(isObject(saved) ? saved.entries : undefined, this.config)
-      if (checkpointHash(entries) !== record.checkpointHash) throw new Error('workspace recovery checkpoint failed its integrity check')
-      const backing = join(slot, 'workspace')
-      await this.ctx.localContainerRuntime.recoverWorkspace(backing)
-      if (!clean && initialized) {
-        const owned = await this.ctx.localContainerRuntime.createWorkspace(backing)
-        try {
-          await owned.runtime.settle(this.config.settleTimeoutMs,
-            async (control) => { await this.checkpointRecord(record, directory, control, retention) })
-        } finally { await owned.dispose() }
-      } else await this.reconcileCheckpointJournal(record, directory, retention)
-      await this.publish(join(slot, 'owner.json'), { workspaceId, clean: true, initialized })
-    } finally { await lease.close() }
+      return parseDevelopmentVmPending(
+        await readWorkspaceJson(join(directory, DEVELOPMENT_VM_PENDING), this.config.maxOutputBytes), workspaceId,
+      )
+    }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined; throw error }
   }
 
   private settle(workspace: Workspace, turn: number, reason: TurnEndReason): Promise<void> {
@@ -1218,7 +1156,7 @@ export class ConversationWorkspaces extends Service {
         await this.completeAttachments(workspace, control)
         if (reason.kind !== 'completed') {
           await this.checkpoint(workspace, control)
-          this.state(workspace, 'checkpointed', turn); return
+          return
         }
         const failures: unknown[] = []
         for (const repository of [workspace.record, ...workspace.record.repositories ?? []]) {
@@ -1331,8 +1269,8 @@ export class ConversationWorkspaces extends Service {
           } catch (error) { failures.push(error) }
         }
         if (failures.length > 0) throw new AggregateError(failures, 'repository return remains pending; successful repository receipts are retained')
-        this.state(workspace, 'returned', turn)
       }, async () => { await this.ctx.serial('workspace/quiesce', { executionWorld: workspace.runtime.executionWorld }) })
+      this.state(workspace, reason.kind === 'completed' ? 'returned' : 'checkpointed', turn)
       workspace.pending = false
       await this.ctx.sessions.flush(workspace.owner.session)
     } catch (error) {
@@ -1513,14 +1451,17 @@ function resolveConfig(config: ConversationWorkspaceConfig): ConversationWorkspa
       || !/^[a-z0-9][a-z0-9-]*$/u.test(entry.preset) || !isAbsolute(entry.cwd))) {
     throw new Error('host Sessions require unique identities, preset ids and absolute directories')
   }
-  if (config.poolPaths.length === 0 || new Set(config.poolPaths).size !== config.poolPaths.length || !isAbsolute(config.gitCommand) || !isAbsolute(config.resourceLimitCommand)) throw new Error('workspace pool and Git executable must be explicit')
-  for (const path of [config.recoveryRoot, provenanceRoot, ...config.poolPaths]) if (!isAbsolute(path) || path.includes(':')) throw new Error('workspace storage paths must be absolute')
-  for (const path of config.poolPaths) if (config.recoveryRoot === path || config.recoveryRoot.startsWith(`${path}/`) || path.startsWith(`${config.recoveryRoot}/`)) throw new Error('recovery and execution storage must be separate')
+  if (!isAbsolute(config.gitCommand) || !isAbsolute(config.resourceLimitCommand)) throw new Error('workspace Git and resource-limit executables must be explicit')
+  for (const path of [config.storageRoot, config.recoveryRoot, provenanceRoot]) if (!isAbsolute(path) || path.includes(':')) throw new Error('workspace storage paths must be absolute')
+  if (config.storageRoot === config.recoveryRoot || config.storageRoot.startsWith(`${config.recoveryRoot}/`)
+    || config.recoveryRoot.startsWith(`${config.storageRoot}/`) || config.storageRoot === provenanceRoot
+    || config.storageRoot.startsWith(`${provenanceRoot}/`) || provenanceRoot.startsWith(`${config.storageRoot}/`)) {
+    throw new Error('live workspace and recovery storage must be separate')
+  }
   for (const [key, value] of Object.entries(config)) if (typeof value === 'number' && (!Number.isSafeInteger(value) || value <= 0 || value > 2_147_483_647)) throw new Error(`invalid workspace bound: ${key}`)
   if ((config.messageProvider === undefined) !== (config.messageModel === undefined)) throw new Error('workspace message provider and model must be paired')
   if (config.maxOutputBytes < config.maxBytes * 4 / 3 + config.maxEntries * 512) throw new Error('workspace response bound cannot hold the configured snapshot')
-  for (const path of config.poolPaths) if (provenanceRoot === path || provenanceRoot.startsWith(`${path}/`)) throw new Error('provenance and execution storage must be separate')
-  return { ...config, provenanceRoot, hostSessions: hostSessions.map(entry => ({ ...entry })), poolPaths: [...config.poolPaths] }
+  return { ...config, provenanceRoot, hostSessions: hostSessions.map(entry => ({ ...entry })) }
 }
 
 export default ConversationWorkspaces

@@ -34,13 +34,13 @@ export interface Config extends DevelopmentVmConfig {
 export interface DevelopmentVmOpenRequest {
   /** Supervisor-derived workspace identity. */
   id: ConversationWorkspaceId
-  /** Private memory-backed source directory. */
+  /** Private durable source directory. */
   directory: string
   /** Acknowledged source generation. */
   generation: number
   /** SHA-256 identity of the acknowledged source artifact. */
   checkpointHash: string
-  /** Whether the acknowledged source still occupies its owned RAM slot. */
+  /** Whether the acknowledged source remains in its durable workspace directory. */
   retained: boolean
   /** Persisted provider identity, absent only while first attachment is pending. */
   reference?: DevelopmentVmReference
@@ -98,7 +98,7 @@ export class DevelopmentVms extends Service {
     }
   }
 
-  /** Quiesce a retained guest before the workspace owner touches its RAM slot.
+  /** Quiesce a retained guest before the workspace owner touches its durable source directory.
    * @param id - workspace identity derived by the trusted supervisor.
    * @param reference - persisted provider identity, when recovery already acknowledged a VM.
    */
@@ -275,7 +275,9 @@ class VmWorkspace implements WorkspaceExecutionRuntime {
     try {
       const authorization = git && this.authorize !== undefined ? await this.authorize() : []
       request.signal?.throwIfAborted()
-      const handle = await createVmProcess(this.config, this.containerName, { ...request, environment: replacement }, this.command, authorization)
+      const handle = await createVmProcess(
+        this.config, this.containerName, { ...request, environment: replacement }, this.command, authorization,
+      )
       const terminate = handle.terminate.bind(handle)
       handle.terminate = async () => {
         try { await terminate() }
@@ -306,8 +308,12 @@ class VmWorkspace implements WorkspaceExecutionRuntime {
     await quiesce?.()
     let deadline: NodeJS.Timeout | undefined
     try {
-      await Promise.race([Promise.all([...this.allocations, ...this.controllers]), new Promise<never>((_resolve, reject) => {
-        deadline = setTimeout(() => { reject(new Error('development-vm: attached controller did not settle')) }, timeoutMs)
+      await Promise.race([Promise.all([
+        ...this.allocations,
+        ...this.controllers,
+        ...[...this.processes].map(process => process.waitForRemoval()),
+      ]), new Promise<never>((_resolve, reject) => {
+        deadline = setTimeout(() => { reject(new Error('workspace save pending: active VM writers did not stop before the deadline')) }, timeoutMs)
       })])
     } finally { if (deadline !== undefined) clearTimeout(deadline) }
     const state = await this.engine.state(this.id)

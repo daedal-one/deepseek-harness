@@ -99,12 +99,12 @@ describe('sessionCostUsd', () => {
   })
 
   it('is null when a bucket is not a finite non-negative number', () => {
-    const bad: [string, number][] = [
+    const bad = [
       ['uncachedInputTokens', -1],
       ['outputTokens', NaN],
       ['cacheReadTokens', Infinity],
       ['cacheWriteTokens', -0.5],
-    ]
+    ] as const
     for (const [field, value] of bad) {
       const buckets = { uncachedInputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 }
       buckets[field] = value

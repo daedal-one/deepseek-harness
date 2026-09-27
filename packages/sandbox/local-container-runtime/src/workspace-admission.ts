@@ -10,7 +10,7 @@ export class WorkspaceAdmission {
   private occupied = 0
   private readonly waiting: Waiter[] = []
 
-  /** @param capacity - number of independently provisioned workspace slots. */
+  /** @param capacity - maximum simultaneous workspace execution leases. */
   constructor(private readonly capacity: number) {}
 
   /**

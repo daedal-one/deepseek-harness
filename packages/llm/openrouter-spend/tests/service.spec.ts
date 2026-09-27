@@ -95,7 +95,12 @@ function event(seq: number, type: string, data: unknown): SessionEvent {
 
 function message(
   seq: number,
-  usage: { readonly inputTokens: number; readonly outputTokens: number; readonly cacheReadTokens?: number; readonly cacheWriteTokens?: number },
+  usage: {
+    readonly inputTokens: number
+    readonly outputTokens: number
+    readonly cacheReadTokens?: number
+    readonly cacheWriteTokens?: number
+  },
   provider = 'openrouter',
   model = 'a/b',
 ): SessionEvent {
@@ -115,7 +120,12 @@ function message(
 
 function failedAttempt(
   seq: number,
-  usage: { readonly inputTokens: number; readonly outputTokens: number; readonly cacheReadTokens?: number; readonly cacheWriteTokens?: number },
+  usage: {
+    readonly inputTokens: number
+    readonly outputTokens: number
+    readonly cacheReadTokens?: number
+    readonly cacheWriteTokens?: number
+  },
 ): SessionEvent {
   return event(seq, 'assistant/attempt', {
     turn: 1,
@@ -166,7 +176,12 @@ async function harness(overrides: HarnessOverrides = {}): Promise<{
     }),
   } as never)
   if (overrides.credentials !== undefined) ctx.provide('credentials', overrides.credentials as never)
-  const fiber = await ctx.plugin(OpenRouterSpendService, { baseURL: 'https://openrouter.test/api/v1' })
+  const fiber = await ctx.plugin(OpenRouterSpendService, {
+    credentialRef: 'OPENROUTER_API_KEY',
+    baseURL: 'https://openrouter.test/api/v1',
+    cacheTtlMs: 60000,
+    requestTimeoutMs: 10000,
+  })
   await fiber.await()
   return {
     ctx,
@@ -348,7 +363,7 @@ describe('OpenRouterSpendService', () => {
     let key = 'fake-key-a'
     const { service, keyCalls, fetchSpy } = await harness({
       credentials: { resolve: async () => ({ value: key }) },
-      keyReply: (call) => jsonResponse({
+      keyReply: call => jsonResponse({
         ...KEY_BODY,
         data: { ...KEY_BODY.data, label: `key-${String(call)}` },
       }),
@@ -386,7 +401,7 @@ describe('OpenRouterSpendService', () => {
   it('does not cache a failed key read and recovers immediately', async () => {
     const { service, keyCalls } = await harness({
       credentials: withKey(),
-      keyReply: (call) => call === 1
+      keyReply: call => call === 1
         ? new Response('unauthorized', { status: 401 })
         : jsonResponse(KEY_BODY),
     })

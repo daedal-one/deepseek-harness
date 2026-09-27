@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { findModelPricing, parseKeyReply, parseModelsReply } from '../src/api.ts'
 
-function keyReply(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+function keyReply(overrides: Record<string, unknown> = {}): { data: Record<string, unknown> } {
   return {
     data: {
       label: 'test key',
