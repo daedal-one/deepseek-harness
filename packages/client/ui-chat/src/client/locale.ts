@@ -71,6 +71,7 @@ export const en = {
   'message.compaction.unavailable': 'Compaction summary unavailable',
   'message.compaction.commandTitle': 'compact',
   'message.think': 'Think',
+  'message.activitySummary.label': 'Agent activity summary',
   'message.unknownSurface': 'Unknown surface event: {type}',
   'message.unknownBlock': 'Unknown content block',
   'message.turnProcess.toolCalls.one': '{count} tool call',

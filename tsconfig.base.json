@@ -387,6 +387,7 @@
       "@deepseek-ai/dsh-sdk-app": ["./packages/bundle/sdk-app/src"],
       "@deepseek-ai/dsh-sdk-minimal": ["./packages/bundle/sdk-minimal/src"],
       "@deepseek-ai/dsh-session": ["./packages/core/session/src"],
+      "@deepseek-ai/dsh-session-activity-summary-llm": ["./packages/session/session-activity-summary-llm/src"],
       "@deepseek-ai/dsh-session-checkpoint-policy": ["./packages/session/session-checkpoint-policy/src"],
       "@deepseek-ai/dsh-session-format": ["./packages/session/session-format/src"],
       "@deepseek-ai/dsh-session-format-catalog": ["./packages/session/session-format-catalog/src"],

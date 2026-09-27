@@ -15,6 +15,7 @@ export interface TurnProcessSpec {
   readonly toolCallCount: number
   /** Tool calls whose configured name identifies a subagent delegation. */
   readonly subagentCount: number
+  readonly summarizedThroughSeq: number | null
 }
 
 const TURN_PROCESS_INDEPENDENT_KIND_LIST = [
@@ -22,6 +23,7 @@ const TURN_PROCESS_INDEPENDENT_KIND_LIST = [
   'user',
   'steering',
   'turn-process',
+  'activity-summary',
   'turn-error',
   'turn-max-tokens',
   'turn-tail',
@@ -49,6 +51,7 @@ export function sameTurnProcessSpec(left: TurnProcessSpec, right: TurnProcessSpe
     && left.messageCount === right.messageCount
     && left.toolCallCount === right.toolCallCount
     && left.subagentCount === right.subagentCount
+    && left.summarizedThroughSeq === right.summarizedThroughSeq
 }
 
 /**

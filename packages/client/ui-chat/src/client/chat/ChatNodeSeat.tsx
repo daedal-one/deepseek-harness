@@ -3,6 +3,7 @@ import { JsonBlock } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ConversationLocationDataStore, ConversationTurnDataMap } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { ChatNodeOwnerProps, ChatViewSlotProps } from '../contract/slots.ts'
 import type { ChatNode } from '../contract/chat-nodes.ts'
+import { hasAssistantReplyContent } from '../contract/assistant-content.ts'
 import { TURN_PROCESS_INDEPENDENT_KINDS } from '../contract/turn-process.ts'
 import { storedTurnProcessEntry } from '../stores.ts'
 import { useSearchableHidden } from './searchable-hidden.ts'
@@ -32,6 +33,11 @@ function turnDataOf(node: ChatNode | undefined): ConversationLocationDataStore<C
 function turnOf(node: ChatNode | undefined): number | undefined {
   const location = node?.location
   return location?.kind === 'turn' || location?.kind === 'step' ? location.turn.turn : undefined
+}
+
+function isSummaryReplaceable(node: ChatNode): boolean {
+  if (node.kind === 'tool-call' || node.kind === 'model-retry') return true
+  return node.kind === 'assistant-step' && !hasAssistantReplyContent(node.data.blocks)
 }
 
 /** Subscribe, apply Turn-process visibility, and dispatch one stable Context key. */
@@ -76,6 +82,13 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
     && routedNode.kind === 'assistant-step'
     && routedNode.data.step === processSpec.answerStep
   const ownsDisclosure = routedNode?.kind === 'turn-process' || processAnswer
+  const summaryCovered = routedNode !== undefined
+    && compactTranscript
+    && processSpec !== undefined
+    && processSpec.summarizedThroughSeq !== null
+    && isSummaryReplaceable(routedNode)
+    && routedNode.anchorSeq >= processSpec.processStartSeq
+    && routedNode.anchorSeq <= processSpec.summarizedThroughSeq
   const foldable = processWindowReady
     && (processMember || (ownsDisclosure
       && (processPresentation.hasExternalProcess || processSpec.inlineReasoning)))
@@ -95,7 +108,7 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
     && foldable
     && processPresentation.compactAnswer
     && !processOpen
-  const processHidden = controllerInactive || (foldable && processMember && !processOpen)
+  const processHidden = controllerInactive || summaryCovered || (foldable && processMember && !processOpen)
   const revealProcess = useCallback(() => {
     if (processMember) setOpen(true)
   }, [processMember, setOpen])

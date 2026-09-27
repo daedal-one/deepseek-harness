@@ -2,6 +2,7 @@ export type {} from './conversation-nodes/workspace.ts'
 /** Browser Chat target plugin. */
 export { apply, inject } from './apply.ts'
 export type {} from './conversation-nodes/assistant.ts'
+export type {} from './conversation-nodes/activity-summary.ts'
 export type {} from './conversation-nodes/command.ts'
 export type {} from './conversation-nodes/compaction.ts'
 export type {} from './conversation-nodes/fallback.ts'
@@ -24,7 +25,7 @@ export type {
   TurnNavigationItem, UnknownSurfaceNode, UserMessageNode,
 } from './contract/snapshot.ts'
 export type {
-  AssistantChatData, ChatConversationViewNode, ChatNode, ChatNodeKind,
+  ActivitySummaryChatData, AssistantChatData, ChatConversationViewNode, ChatNode, ChatNodeKind,
   FinalAssistantChatData, ManualCompactionChatData, RetryChatData, ToolChatData,
   TurnProcessChatData, TurnTailChatData,
 } from './contract/chat-nodes.ts'

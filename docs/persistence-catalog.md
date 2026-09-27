@@ -87,6 +87,30 @@ Sources: [`packages/core/session/src/types.ts:406`](../packages/core/session/src
 
 ## Events
 
+### `activity-summary/*`
+
+<a id="activity-summaryrequest--log-only"></a>
+
+#### `activity-summary/request` — log-only
+
+```ts persistence-catalog
+/** Log-only pre-dispatch record of one activity-summary model request. */
+'activity-summary/request': ActivitySummaryRequestEventData
+```
+
+Source: [`packages/session/session-activity-summary-llm/src/index.ts:59`](../packages/session/session-activity-summary-llm/src/index.ts)
+
+<a id="activity-summaryupdate--log-only"></a>
+
+#### `activity-summary/update` — log-only
+
+```ts persistence-catalog
+/** Log-only accepted activity summary for Chat presentation. */
+'activity-summary/update': ActivitySummaryEventData
+```
+
+Source: [`packages/session/session-activity-summary-llm/src/index.ts:61`](../packages/session/session-activity-summary-llm/src/index.ts)
+
 ### `agent/*`
 
 <a id="agentinboxspliced--log-only"></a>

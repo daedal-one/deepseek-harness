@@ -20,7 +20,7 @@ The session group keeps conversations durable, restores released log formats, an
 <a id="packages"></a>
 ## Packages
 
-The group splits into four families: durable storage (persistence seam, backends, checkpoint policy), projections, titles, and telemetry. Each package README owns its contract and configuration.
+The group splits into five families: durable storage (persistence seam, backends, checkpoint policy), projections, titles, activity summaries, and telemetry. Each package README owns its contract and configuration.
 
 ### Persistence
 
@@ -52,6 +52,12 @@ The group splits into four families: durable storage (persistence seam, backends
 | [`session-title-llm/`](session-title-llm/README.md) | Shared model-backed title-generation policy for the provider packages | library — no ctx key |
 | [`session-title-first-prompt-llm/`](session-title-first-prompt-llm/README.md) | Titles a session from its first eligible human message | registers on `ctx.sessionTitle` |
 | [`session-title-all-prompts-llm/`](session-title-all-prompts-llm/README.md) | Titles a session from all eligible human messages | registers on `ctx.sessionTitle` |
+
+### Activity summaries
+
+| Package | Role | ctx key |
+|---|---|---|
+| [`session-activity-summary-llm/`](session-activity-summary-llm/README.md) | Generates bounded latest-wins live status from durable agent operations | listens to Session events |
 
 ### Telemetry
 

@@ -1773,6 +1773,46 @@ describe('ChatView', () => {
     expect(turnProcessControl(view.container)?.getAttribute('aria-expanded')).toBe('false')
   })
 
+  it('replaces summarized non-text actions while keeping visible agent commentary', () => {
+    const source = chatSnapshotFixture({
+      nodes: [
+        user(1, 'question'),
+        assistant(2, 'I am checking the repository.', 1, 1),
+        toolResult(3, 'read'),
+        reasoningAssistant(4, 'private reasoning', 1, 2),
+      ],
+    })
+    const process = source.nodes.values()
+      .find((candidate): candidate is ChatNode<'turn-process'> => candidate.kind === 'turn-process')
+    if (process === undefined
+      || (process.location.kind !== 'turn' && process.location.kind !== 'step')) {
+      throw new Error('fixture lacks a running Turn process')
+    }
+    const turnData = process.location.turn.data as typeof process.location.turn.data & {
+      set(key: 'turn-process', value: TurnProcessSpec): void
+      publish(): void
+    }
+    const summarized = { ...process.data, summarizedThroughSeq: 4 }
+    turnData.set('turn-process', summarized)
+    turnData.publish()
+    const builder = new ChatSnapshotBuilder()
+    const chat = builder.replace({
+      nodes: source.nodes.values().map(node => node.key === process.key
+        ? { ...process, data: summarized }
+        : node),
+      timeline: source.timeline,
+    })
+    const h = makeHarness({ chat }, { running: true })
+    const view = render(<h.ChatView {...h.props} />)
+    const commentary = view.getByText('I am checking the repository.').closest<HTMLElement>('[data-chat-flow-kind]')
+    const tool = view.container.querySelector<HTMLElement>('[data-chat-flow-kind="tool-call"]')
+    const reasoning = view.getByText('private reasoning').closest<HTMLElement>('[data-chat-flow-kind]')
+
+    expect(commentary?.getAttribute('hidden')).toBeNull()
+    expect(tool?.getAttribute('hidden')).toBe('until-found')
+    expect(reasoning?.getAttribute('hidden')).toBe('until-found')
+  })
+
   it('keeps a manual expansion when the reader returns from another view', () => {
     const host = document.createElement('div')
     host.setAttribute('data-conversation-scroll', '')

@@ -59,6 +59,12 @@ When you launch `dsh --profile web` over SSH, the URL line still prints but the 
 
 Each browser session composes its own agent from the shipped presets (the `standard` preset by default), instead of sharing one process-wide tool set. You can change the default preset or add your own presets under `$DSH_HOME/.agent-presets`.
 
+### Live activity summaries
+
+During a dense turn, compact Chat replaces each successfully covered group of non-text actions with at most three live status lines. The shipped monitor runs after five completed operations through OpenRouter `deepseek/deepseek-v4.1-flash`; ordinary agent commentary remains visible, and the complete durable trace stays available in Trajectory. Summary generation is independent of the main turn. If it fails or times out, Chat keeps the detailed rows instead.
+
+The cadence, route, byte limits, token cap, line cap, and timeout are explicit on the `session-activity-summary` row in [`cordis.patch.yml`](cordis.patch.yml). A deployment may change that row without changing the primary agent model.
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -93,6 +99,7 @@ The URL line and browser handoff are readiness signals: supervisors RPC as soon 
 | [`tests/startup.spec.ts`](tests/startup.spec.ts) | Command-line parsing over a real Loader tree |
 | [`tests/trusted-hosts.spec.ts`](tests/trusted-hosts.spec.ts) | LAN-trust sampling |
 | [`tests/browser-open.spec.ts`](tests/browser-open.spec.ts) | Default-browser handoff after the page is reachable |
+| [`tests/activity-summary-profile.spec.ts`](tests/activity-summary-profile.spec.ts) | Shipped activity-summary route and bounded presentation policy |
 
 ### Invariant ownership
 

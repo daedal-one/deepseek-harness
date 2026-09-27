@@ -86,6 +86,22 @@
     - id: session-turn-outline
       name: '@deepseek-ai/dsh-session-turn-outline'
 
+    # A cheap auxiliary route condenses every five completed agent operations
+    # into at most three live status lines. The durable detailed trace remains
+    # available to Trajectory.
+    - id: session-activity-summary
+      name: '@deepseek-ai/dsh-session-activity-summary-llm'
+      config:
+        operationsPerSummary: 5
+        maxOperationBytes: 2048
+        maxInputBytes: 16384
+        maxOutputTokens: 160
+        maxSummaryBytes: 720
+        maxLines: 3
+        timeoutMs: 20000
+        provider: openrouter
+        model: deepseek/deepseek-v4.1-flash
+
     # Resolve bind host, SSH launch, and display once at boot, then mount the
     # matching dual-face directory picker. Mount -native or -browse directly in
     # an overlay to pin the interaction.

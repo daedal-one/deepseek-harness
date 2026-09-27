@@ -17,6 +17,9 @@ import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import { hasAssistantReplyContent } from '../src/client/contract/assistant-content.ts'
 import { workspaceDefinition, workspaceAdmissionDefinition } from '../src/client/conversation-nodes/workspace.ts'
 import { assistantDefinition } from '../src/client/conversation-nodes/assistant.ts'
+import {
+  activitySummaryDefinition, activitySummaryRequestDefinition,
+} from '../src/client/conversation-nodes/activity-summary.ts'
 import { chatViewDefinition } from '../src/client/conversation-nodes/chat-snapshot-builder.ts'
 import { commandDefinition } from '../src/client/conversation-nodes/command.ts'
 import { compactionDefinition } from '../src/client/conversation-nodes/compaction.ts'
@@ -43,6 +46,8 @@ const DEFINITIONS: readonly ConversationNodeDefinition[] = [
   systemMessageDefinition(inspectSystemPrompt),
   requestPromptDefinition(inspectRequestPrompt),
   assistantDefinition,
+  activitySummaryRequestDefinition,
+  activitySummaryDefinition,
   turnProcessDefinition,
   toolDefinition,
   commandDefinition,
@@ -450,6 +455,62 @@ describe('built-in conversation node Definitions', () => {
       toolCallCount: 1,
       subagentCount: 1,
     })
+  })
+
+  it('projects only the latest activity status and marks its covered process range', () => {
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      at(3, 'tool/call', {
+        turn: 1, step: 1, callId: 'call-read', name: 'read', arguments: '{}',
+      }),
+      at(4, 'tool/result', {
+        turn: 1, step: 1, message: toolResult('call-read', 'read done'),
+      }, { surfaceOp: 'append' }),
+      at(5, 'activity-summary/request', {
+        turn: 1, revision: 1, operationSeqs: [4],
+        route: { provider: 'summary', model: 'cheap' },
+        system: 'summarize', messages: [], maxTokens: 100, reasoningEffort: 'off',
+      }),
+      at(6, 'activity-summary/update', {
+        turn: 1, revision: 1, operationSeqs: [4], throughSeq: 4,
+        lines: ['Inspected the repository'], route: { provider: 'summary', model: 'cheap' },
+      }),
+      at(7, 'activity-summary/update', {
+        turn: 1, revision: 2, operationSeqs: [4], throughSeq: 4,
+        lines: ['Focused checks are running'], route: { provider: 'summary', model: 'cheap' },
+      }),
+    ])
+    const current = snapshot(value)
+    const summary = node(current, 'activity-summary')
+
+    expect(current.order.map(key => current.nodes.get(key)?.kind)).toEqual([
+      'turn-process', 'tool-call', 'activity-summary',
+    ])
+    expect(summary).toMatchObject({
+      anchorSeq: 6,
+      data: { revision: 2, throughSeq: 4, lines: ['Focused checks are running'] },
+    })
+    expect(summary?.data).toMatchInlineSnapshot(`
+      {
+        "lines": [
+          "Focused checks are running",
+        ],
+        "operationSeqs": [
+          4,
+        ],
+        "revision": 2,
+        "route": {
+          "model": "cheap",
+          "provider": "summary",
+        },
+        "throughSeq": 4,
+        "turn": 1,
+      }
+    `)
+    expect(current.timeline.turns.get(1)?.data.get('turn-process'))
+      .toMatchObject({ summarizedThroughSeq: 4 })
+    expect(current.order.some(key => current.nodes.get(key)?.kind === 'activity-summary-request')).toBe(false)
   })
 
   it('orders the opening User before its process control and later steering', () => {

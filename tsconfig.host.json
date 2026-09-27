@@ -193,6 +193,7 @@
     { "path": "./packages/session/session-format-catalog" },
     { "path": "./packages/session/session-checkpoint-policy" },
     { "path": "./packages/session/session-log-deepseek" },
+    { "path": "./packages/session/session-activity-summary-llm" },
     { "path": "./packages/session/session-persistence-jsonl" },
     { "path": "./packages/session/session-projection" },
     { "path": "./packages/session/session-projection-cache" },

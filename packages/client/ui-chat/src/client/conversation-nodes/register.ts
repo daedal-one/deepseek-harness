@@ -2,6 +2,7 @@ import type {
   ConversationEventRegistry, ConversationViewRegistry, RequestPromptInspector, SystemPromptInspector,
 } from '@deepseek-ai/dsh-client-ui-conversation/client/portable'
 import { assistantDefinition } from './assistant.ts'
+import { activitySummaryDefinition, activitySummaryRequestDefinition } from './activity-summary.ts'
 import { chatViewDefinition } from './chat-snapshot-builder.ts'
 import { commandDefinition } from './command.ts'
 import { compactionDefinition } from './compaction.ts'
@@ -37,6 +38,8 @@ export function registerConversationNodes(conversation: ChatConversationRegistra
     systemMessageDefinition((previous, event) => conversation.inspectSystemPrompt(previous, event)),
     requestPromptDefinition((previous, event, system) => conversation.inspectRequestPrompt(previous, event, system)),
     assistantDefinition,
+    activitySummaryRequestDefinition,
+    activitySummaryDefinition,
     turnProcessDefinition,
     toolDefinition,
     commandDefinition,

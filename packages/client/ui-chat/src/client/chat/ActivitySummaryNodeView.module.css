@@ -1,0 +1,23 @@
+.root {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 2px 0 8px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.lines {
+  min-width: 0;
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

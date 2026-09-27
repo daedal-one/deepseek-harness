@@ -412,6 +412,7 @@ export function chatSnapshotFixture(input: {
       processStartSeq: processStart.anchorSeq,
       answerAnchorSeq: answer?.finalNode.seq ?? null,
       answerStep: answer?.step ?? null,
+      summarizedThroughSeq: null,
       inlineReasoning: answer !== undefined && inlineReasoning,
       messageCount: answer === undefined
         ? assistants.filter(candidate => hasAssistantReplyContent(candidate.blocks)).length

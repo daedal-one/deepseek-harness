@@ -3,6 +3,7 @@ import type {
   ConversationLocation, ConversationViewNode, ModelRetryNode, RunningToolCall,
   ToolCallBlock,
 } from '@deepseek-ai/dsh-client-ui-conversation/client/portable'
+import type { ActivitySummaryEventData } from '@deepseek-ai/dsh-session-activity-summary-llm'
 
 /** Final Chat render unit produced by a Chat business Definition. */
 export interface ChatConversationViewNode extends ConversationViewNode {
@@ -108,7 +109,12 @@ export interface TurnProcessChatData {
   readonly messageCount: number
   readonly toolCallCount: number
   readonly subagentCount: number
+  /** Latest operation seq covered by an accepted activity summary. */
+  readonly summarizedThroughSeq: number | null
 }
+
+/** Latest accepted activity-summary event rendered as one Chat row. */
+export type ActivitySummaryChatData = ActivitySummaryEventData
 
 /**
  * Test whether a Tool root has settled.

@@ -4,6 +4,7 @@ import type {
 import type {} from '@deepseek-ai/dsh-llm-retry/types'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-tools/types'
+import type {} from '@deepseek-ai/dsh-session-activity-summary-llm'
 import { hasAssistantReplyContent } from '../contract/assistant-content.ts'
 import type { AssistantChatData, ChatNode, FinalAssistantChatData } from '../contract/chat-nodes.ts'
 import {
@@ -35,6 +36,7 @@ interface TurnProcessState {
   readonly messageCount: number
   readonly toolCallCount: number
   readonly subagentCount: number
+  readonly summarizedThroughSeq?: number
 }
 
 type ConversationEvent = Parameters<ConversationNodeDefinition['match']>[0]
@@ -132,6 +134,7 @@ function processSpec(state: TurnProcessState, turn: TurnLocation): TurnProcessSp
         .reduce((total, [, count]) => total + count, 0),
     toolCallCount: state.toolCallCount,
     subagentCount: state.subagentCount,
+    summarizedThroughSeq: state.summarizedThroughSeq ?? null,
   }
   if (answer === null) {
     return {
@@ -183,6 +186,12 @@ function updateProcessState(state: TurnProcessState, event: ConversationEvent): 
       subagentCount: current.subagentCount + (subagent ? 1 : 0),
     }
   }
+  if (event.type === 'activity-summary/update') {
+    current = {
+      ...current,
+      summarizedThroughSeq: Math.max(current.summarizedThroughSeq ?? 0, event.data.throughSeq),
+    }
+  }
   const evidence = processEvidence(event)
   if (evidence === undefined) return current
   if (evidence.kind === 'other') {
@@ -216,6 +225,7 @@ export const turnProcessDefinition: ConversationNodeDefinition<TurnProcessState>
       || event.type === 'assistant/message'
       || event.type === 'tool/call'
       || event.type === 'tool/result'
+      || event.type === 'activity-summary/update'
       || event.type === 'llm/retry'
       || event.type === 'step/start'
       || event.type === 'step/end'
@@ -259,6 +269,7 @@ export const turnProcessDefinition: ConversationNodeDefinition<TurnProcessState>
       && current.data.messageCount === state.messageCount
       && current.data.toolCallCount === state.toolCallCount
       && current.data.subagentCount === state.subagentCount
+      && current.data.summarizedThroughSeq === (state.summarizedThroughSeq ?? null)
       && turn.status !== 'closed'
       && latestStep?.status !== 'closed') return previous
     const spec = processSpec(state, turn)
@@ -287,6 +298,7 @@ export const turnProcessDefinition: ConversationNodeDefinition<TurnProcessState>
       && current.data.messageCount === state.messageCount
       && current.data.toolCallCount === state.toolCallCount
       && current.data.subagentCount === state.subagentCount
+      && current.data.summarizedThroughSeq === (state.summarizedThroughSeq ?? null)
       && turn.status !== 'closed'
       && turn.steps.at(-1)?.status !== 'closed'
       && current.location === (context.start?.location ?? context.matches[0]?.location)) return current

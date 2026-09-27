@@ -2244,6 +2244,38 @@ Depends on: `Readable` (`node:stream`) · `Writable` (`node:stream`)
 
 Source: [`packages/sdk/server/src/index.ts:25`](../packages/sdk/server/src/index.ts)
 
+<a id="deepseek-aidsh-session-activity-summary-llm"></a>
+
+## `@deepseek-ai/dsh-session-activity-summary-llm`
+
+Requires: `llm` · `sessions`
+
+```ts config-catalog
+/** Required deployment policy for live activity summaries. */
+export interface Config {
+  /** Completed operations in one normal summary batch; constrained to four through six. */
+  readonly operationsPerSummary: number
+  /** Maximum UTF-8 bytes retained from one operation field. */
+  readonly maxOperationBytes: number
+  /** Maximum UTF-8 bytes in the complete JSON-framed request. */
+  readonly maxInputBytes: number
+  /** Auxiliary output-token cap. */
+  readonly maxOutputTokens: number
+  /** Maximum UTF-8 bytes accepted in one summary. */
+  readonly maxSummaryBytes: number
+  /** Maximum accepted non-empty output lines; constrained to one through three. */
+  readonly maxLines: number
+  /** End-to-end request deadline in milliseconds. */
+  readonly timeoutMs: number
+  /** Explicit auxiliary provider route. */
+  readonly provider: string
+  /** Explicit auxiliary model id. */
+  readonly model: string
+}
+```
+
+Source: [`packages/session/session-activity-summary-llm/src/index.ts:66`](../packages/session/session-activity-summary-llm/src/index.ts)
+
 <a id="deepseek-aidsh-session-log-deepseek"></a>
 
 ## `@deepseek-ai/dsh-session-log-deepseek`
