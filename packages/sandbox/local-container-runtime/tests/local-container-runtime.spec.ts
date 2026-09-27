@@ -264,12 +264,20 @@ describe('local-container execution-world validator', () => {
     await expect(ctx.localContainerRuntime.getContainer()).rejects.toThrow('permits host loopback access')
   })
 
-  it('rejects secret and host-home overrides before allocating process containers', async () => {
+  it('accepts trusted explicit credentials while rejecting restricted harness names and host-home paths', async () => {
     const engine = new FakeEngine()
     const ctx = new Context()
     const fiber = await ctx.plugin(runtimeClass(engine), config())
     try {
-      for (const environment of [{ API_TOKEN: 'test-secret' }, { DSH_HOME: '/home/host/.dsh' }]) {
+      const process = await ctx.localContainerRuntime.createProcess({
+        argv: ['/bin/true'], cwd: '/workspace', environment: { OPENROUTER_API_KEY: 'test-secret' }, tty: false, stdin: false,
+      })
+      process.stream.resume()
+      engine.processContainers[0]?.stream.end()
+      await process.done
+      expect(engine.createContainer.mock.calls.at(-1)?.[0].Cmd).toContain('OPENROUTER_API_KEY=test-secret')
+
+      for (const environment of [{ DSH_AUTH_COOKIE: 'test-secret' }, { DSH_HOME: '/home/host/.dsh' }]) {
         await expect(ctx.localContainerRuntime.createProcess({
           argv: ['/bin/true'], cwd: '/workspace', environment, tty: false, stdin: false,
         })).rejects.toThrow(/environment entry is invalid|DSH_HOME must refer/)

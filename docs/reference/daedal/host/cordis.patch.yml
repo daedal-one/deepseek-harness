@@ -6,6 +6,14 @@
   config:
     default: daedal
 
+# The Metis experiment and its in-process descendants receive only this stored
+# credential. Other sessions and ambient host credentials remain excluded.
+- id: shell-env
+  config:
+    credentialGrants:
+      - ref: OPENROUTER_API_KEY
+        sessionRoots: [session-af5bb76c-1a09-4545-a7b3-604cb120b1f8]
+
 # The existing Daedal preset keeps the fallback OpenRouter route. Daedal
 # OpenAI receives an independent main-Agent settings target whose provider is
 # fixed to the account-authenticated native Codex route.

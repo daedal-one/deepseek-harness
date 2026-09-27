@@ -1,9 +1,9 @@
 /**
- * Tool-independent shell environment plugin: owns the `ctx.shellEnv` registry of
- * trusted, per-execution `DSH_*` variables consumed by the model-facing shell
- * tools (`dsh-tool-bash`, `dsh-tool-pwsh`). Built-in shell facts are owned by
- * the registry itself while plugins can register additional, enumerable facts
- * with effect-scoped disposal.
+ * Tool-independent shell environment plugin: owns trusted per-execution
+ * `DSH_*` facts and deployment-allowlisted credential references consumed by
+ * the model-facing shell tools (`dsh-tool-bash`, `dsh-tool-pwsh`). Built-in
+ * shell facts are owned by the registry while plugins can register additional,
+ * enumerable facts with effect-scoped disposal.
  *
  * @module @deepseek-ai/dsh-shell-env
  */
@@ -14,6 +14,8 @@ import { DSH_ENV_PREFIX } from '@deepseek-ai/dsh-shell'
 import type { DshEnvironment, DshEnvironmentKey } from '@deepseek-ai/dsh-shell'
 import { DSH_HOME_ENV, resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
+import { credentialRef, type CredentialRef } from '@deepseek-ai/dsh-credentials'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -25,14 +27,28 @@ export const name = 'shell-env'
 export const inject: string[] = []
 
 /** Plugin config (all optional — the built-in facts resolve without defaults). */
+export interface CredentialGrantConfig {
+  /** Stored credential reference exposed to the selected session lineage. */
+  ref: string
+  /** Root session ids whose agents and in-process descendants receive the credential. */
+  sessionRoots: string[]
+}
+
+/** Shell facts and session-scoped credential grants configured by the deployment. */
 export interface Config {
   /** DeepSeek Harness home directory exposed as `DSH_HOME`; defaults to `$DSH_HOME` or `~/.dsh`. */
   dshHome?: string
+  /** Stored credential grants scoped to explicit root-session lineages. */
+  credentialGrants?: CredentialGrantConfig[]
 }
 
 /** Runtime configuration schema for the shell-env plugin. */
 export const Config: z<Config> = z.object({
   dshHome: z.string(),
+  credentialGrants: z.array(z.object({
+    ref: z.string().required(),
+    sessionRoots: z.array(z.string()).required(),
+  })).default([]),
 })
 
 /** Model-visible metadata for one managed `DSH_*` environment variable. */
@@ -76,27 +92,79 @@ const RESERVED_BASH_ENV_KEYS = new Set<DshEnvironmentKey>([
 ])
 const BASH_ENV_KEY_SUFFIX = /^[A-Z][A-Z0-9_]*$/
 
+interface CredentialGrant {
+  ref: CredentialRef
+  sessionRoots: ReadonlySet<string>
+}
+
 /**
- * Registry (`ctx.shellEnv`) for trusted, per-execution `DSH_*` variables.
- * The namespace is rebuilt for every model shell call: ambient `DSH_*` values
- * are discarded by the executor, then the registry's current snapshot is
- * injected. Built-in shell facts remain owned by the registry itself while
- * plugins can register additional, enumerable facts with effect-scoped
- * disposal.
+ * Registry (`ctx.shellEnv`) for trusted per-execution environment entries. The
+ * `DSH_*` namespace is rebuilt for every model shell call, and configured
+ * credential references resolve independently for the current command.
+ * Built-in shell facts remain owned by the registry while plugins can register
+ * additional enumerable facts with effect-scoped disposal.
  */
 export class ShellEnvRegistry extends Service {
   private readonly contributors = new Map<string, BashEnvContributor>()
   private readonly keyOwners = new Map<DshEnvironmentKey, string>()
   private readonly dshHome: string
+  private readonly credentialGrants: readonly CredentialGrant[]
 
   /**
    * Create and install the `ctx.shellEnv` service.
    * @param ctx - Cordis context that owns the service and registrations.
-   * @param config - home-directory configuration for the built-in variables.
+   * @param config - home-directory and credential-reference configuration.
    */
   constructor(ctx: Context, config: Config = {}) {
     super(ctx, 'shellEnv')
     this.dshHome = resolveDshHome(config.dshHome)
+    const grants = (config.credentialGrants ?? []).map(({ ref, sessionRoots }) => {
+      const reference = credentialRef(ref)
+      const roots = new Set(sessionRoots)
+      if (roots.size === 0) throw new Error(`shell-env: credential grant "${reference}" requires a session root`)
+      if (roots.size !== sessionRoots.length) throw new Error(`shell-env: credential grant "${reference}" repeats a session root`)
+      return Object.freeze({ ref: reference, sessionRoots: roots })
+    })
+    const duplicate = grants.find((grant, index) => grants.findIndex(candidate => candidate.ref === grant.ref) !== index)
+    if (duplicate !== undefined) throw new Error(`shell-env: duplicate credential grant "${duplicate.ref}"`)
+    this.credentialGrants = Object.freeze(grants)
+  }
+
+  /**
+   * Resolve session-scoped, deployment-allowlisted credentials for one shell
+   * process. Values are read for each call so rotation takes effect without a
+   * restart. Missing or detached ancestors fail closed.
+   * @param execution - current shell execution and its calling Agent.
+   * @returns explicit environment entries, or `undefined` when none are configured.
+   * @throws when the credential provider or a configured value is unavailable.
+   */
+  async resolveCredentials(execution: ToolExecution): Promise<Readonly<Record<string, string>> | undefined> {
+    const agent = execution.agent
+    if (agent === undefined || this.credentialGrants.length === 0) return undefined
+    const grants = this.credentialGrants.filter(grant => this.belongsToLineage(agent.session.header.id, grant.sessionRoots))
+    if (grants.length === 0) return undefined
+    const provider = this.ctx.get('credentials')
+    if (provider === undefined) throw new Error('shell-env: configured credential references require ctx.credentials')
+    const entries = await Promise.all(grants.map(async ({ ref }) => {
+      const resolved = await provider.resolve(ref)
+      if (resolved === undefined) throw new Error(`shell-env: configured credential "${ref}" is unavailable`)
+      return [ref, resolved.value] as const
+    }))
+    return Object.freeze(Object.fromEntries(entries))
+  }
+
+  private belongsToLineage(sessionId: string, roots: ReadonlySet<string>): boolean {
+    const sessions = this.ctx.get('sessions')
+    const visited = new Set<string>()
+    let current = sessionId
+    while (!visited.has(current)) {
+      if (roots.has(current)) return true
+      visited.add(current)
+      const parent = sessions?.get(current as SessionId)?.header.parentSession
+      if (parent === undefined) return false
+      current = parent
+    }
+    return false
   }
 
   /**

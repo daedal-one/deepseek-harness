@@ -10,6 +10,20 @@ Open **Settings → Models**. The DeepSeek card exposes one API-key field; enter
 
 Keys are write-only. The page receives a redacted descriptor after saving, never the literal secret. The key is stored in `$DSH_HOME/.credentials.yaml`, while settings retain only its credential reference.
 
+### Use a provider key in one agent-run experiment
+
+Provider adapters and agent-run shell commands have separate access. Saving an OpenRouter key authenticates Harness model calls; it does not expose the key to commands by default. A deployment can grant the same stored reference to one root session and its in-process descendants:
+
+```yaml
+- id: shell-env
+  config:
+    credentialGrants:
+      - ref: OPENROUTER_API_KEY
+        sessionRoots: [session-af5bb76c-1a09-4545-a7b3-604cb120b1f8]
+```
+
+Authorized foreground and background commands receive `OPENROUTER_API_KEY`; unrelated sessions and other ambient credentials remain excluded. Rotation through **Settings → Models** reaches the next authorized command without a restart. A command can read or print any credential it receives, so grant only keys intended for that experiment.
+
 ## Add a built-in provider
 
 Choose **Add provider** and pick a provider dsh ships with; the list shows provider ids such as `anthropic`, `openai`, `moonshotai` for Kimi, or `zai` for GLM. Enter its API key and save. The installed catalog supplies the endpoint, protocol, and model list.

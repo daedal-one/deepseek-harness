@@ -2518,14 +2518,24 @@ Source: [`packages/settings/settings-file/src/index.ts:22`](../packages/settings
 ## `@deepseek-ai/dsh-shell-env`
 
 ```ts config-catalog
-/** Plugin config (all optional — the built-in facts resolve without defaults). */
+/** Shell facts and session-scoped credential grants configured by the deployment. */
 export interface Config {
   /** DeepSeek Harness home directory exposed as `DSH_HOME`; defaults to `$DSH_HOME` or `~/.dsh`. */
   dshHome?: string
+  /** Stored credential grants scoped to explicit root-session lineages. */
+  credentialGrants?: CredentialGrantConfig[]
+}
+
+/** Plugin config (all optional — the built-in facts resolve without defaults). */
+export interface CredentialGrantConfig {
+  /** Stored credential reference exposed to the selected session lineage. */
+  ref: string
+  /** Root session ids whose agents and in-process descendants receive the credential. */
+  sessionRoots: string[]
 }
 ```
 
-Source: [`packages/shell/shell-env/src/index.ts:28`](../packages/shell/shell-env/src/index.ts)
+Source: [`packages/shell/shell-env/src/index.ts:38`](../packages/shell/shell-env/src/index.ts)
 
 <a id="deepseek-aidsh-skill"></a>
 

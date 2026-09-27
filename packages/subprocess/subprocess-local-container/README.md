@@ -43,6 +43,8 @@ Mount the runtime first and configure every exact host Session cwd alias that re
 
 The provider attaches before starting each process container, decodes Docker's byte-framed non-terminal streams with backpressure, and exposes raw terminal bytes for TTY processes. Collected streams keep the exact configured byte tail. When a configured spill remains within its cap, the provider publishes the complete bytes under `/workspace/.dsh-spill`; the matching `ctx.fs` provider can read that path after the process container is removed.
 
+Each process starts from the runtime's fixed replacement environment, then applies explicit entries from its trusted subprocess request. Ambient host and image credentials never enter the container. The shell environment owner may resolve a stored credential granted to the calling session lineage into those explicit entries. Values remain absent from composition, session events, workspace checkpoints, and provider diagnostics.
+
 Natural process exit and explicit termination both end at force-capable container removal. The runtime tracks every sibling and refuses to remove the shared backing directory until all siblings are gone. `maxLiveProcesses` on the runtime bounds concurrency; CPU, memory, and PID controls apply per sibling, so the aggregate maximum is the configured per-container bound multiplied by the owner plus that concurrency limit.
 
 Terminal foreground inspection runs a fixed bounded helper inside the process container. Signals target the reported foreground process group; group 1 uses the Engine's container signal operation because Linux does not expose PID 1 as a signalable negative process group inside the namespace.

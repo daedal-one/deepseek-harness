@@ -8,6 +8,8 @@ Source: [`packages/shell/shell/src/types.ts`](../../packages/shell/shell/src/typ
 
 `DSH_*` variables are Harness-owned child-process facts. The model-facing bash tool collects them through `ctx.shellEnv` and passes them through `ShellExecRequest.dshEnv`; the subprocess service removes inherited `DSH_*` names before merging the current snapshot. The `DshEnvironmentKey`/`DshEnvironment` vocabulary is owned by the [subprocess seam](subprocess.md) and re-exported by `dsh-shell`.
 
+The same environment owner can resolve stored credential grants for an explicit root-session lineage into trusted `ShellExecRequest.env` entries. It proves live parent-session ancestry for every command and fails closed for unrelated, agentless, or detached lineages. Credential references and session roots are deployment configuration; values stay in `ctx.credentials` and resolve immediately before the authorized process starts.
+
 ## Request vs. spec: the `resolve()` split
 
 The seam separates the **model-/plugin-facing request** (optional `workdir`/`timeoutMs`/`stdoutMaxBytes`, filled from config or request policy) from the **fully-resolved spec** the executor acts on (those fields required). The tool layer calls `ctx.shell.resolve(request)` between them (the repo's "explicit > implicit at package boundaries" rule); a `ShellExecSpec` carries resolved values.
@@ -273,9 +275,19 @@ Source: [`packages/shell/shell/src/index.ts`](../../packages/shell/shell/src/ind
 
 ### `ctx.shellEnv` — `ShellEnvRegistry`
 
-Registry (`ctx.shellEnv`) for trusted, per-execution `DSH_*` variables. The namespace is rebuilt for every model shell call: ambient `DSH_*` values are discarded by the executor, then the registry's current snapshot is injected. Built-in shell facts remain owned by the registry itself while plugins can register additional, enumerable facts with effect-scoped disposal.
+Registry (`ctx.shellEnv`) for trusted per-execution environment entries. The `DSH_*` namespace is rebuilt for every model shell call, and configured credential references resolve independently for the current command. Built-in shell facts remain owned by the registry while plugins can register additional enumerable facts with effect-scoped disposal.
 
 ```ts cordis-catalog
+/**
+ * Resolve session-scoped, deployment-allowlisted credentials for one shell
+ * process. Values are read for each call so rotation takes effect without a
+ * restart. Missing or detached ancestors fail closed.
+ * @param execution - current shell execution and its calling Agent.
+ * @returns explicit environment entries, or `undefined` when none are configured.
+ * @throws when the credential provider or a configured value is unavailable.
+ */
+async resolveCredentials(execution: ToolExecution): Promise<Readonly<Record<string, string>> | undefined>
+
 /**
  * Register one environment contributor. Names and keys are unique; built-in
  * keys are reserved. Registration is disposed with the calling plugin fiber.
