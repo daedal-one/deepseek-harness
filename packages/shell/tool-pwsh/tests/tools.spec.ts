@@ -417,6 +417,18 @@ describe('execution through the bash seam', () => {
     expect(bash.specs[0]?.workdir).toBe('/sessions/s1')
   })
 
+  it('forwards credentials resolved by the shell environment service', async () => {
+    const { ctx, bash } = await setup()
+    const agent = registerFakeAgent(ctx, 'credential-session')
+    vi.spyOn(ctx.shellEnv, 'resolveCredentials').mockResolvedValue({ OPENROUTER_API_KEY: 'stored-key' })
+
+    await call(ctx, 'pwsh', { command: 'Write-Output ok', description: 'ok' }, agent)
+
+    expect(ctx.shellEnv.resolveCredentials).toHaveBeenCalledOnce()
+    expect(vi.mocked(ctx.shellEnv.resolveCredentials).mock.calls[0]?.[0].agent).toBe(agent)
+    expect(bash.requests[0]?.env).toEqual({ OPENROUTER_API_KEY: 'stored-key' })
+  })
+
   it('resolves a relative workdir against the session cwd, absolute ones verbatim', async () => {
     const { ctx, bash } = await setup()
     bash.handler = () => runResult('ok\n')

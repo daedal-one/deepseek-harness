@@ -640,8 +640,9 @@ export class LocalContainerRuntime extends Service {
       return [entry.slice(0, separator), entry.slice(separator + 1)] as const
     }))
     for (const [name, value] of Object.entries(overrides)) {
-      if (!ALLOWED_ENVIRONMENT_NAMES.has(name) || SENSITIVE_ENVIRONMENT_NAME.test(name)
-        || !ENVIRONMENT_NAME.test(name) || name.includes('\0') || value?.includes('\0') === true) {
+      const restrictedHarnessName = name.startsWith('DSH_') && !ALLOWED_ENVIRONMENT_NAMES.has(name)
+      if (restrictedHarnessName || !ENVIRONMENT_NAME.test(name)
+        || name.includes('\0') || value?.includes('\0') === true) {
         throw new Error(`local-container-runtime: process environment entry is invalid: ${name}`)
       }
       if (name === 'DSH_HOME' && value !== undefined && value !== `${WORKSPACE_PATH}/.dsh`) {

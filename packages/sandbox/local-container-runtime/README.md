@@ -31,7 +31,7 @@ Choose this package for an explicitly assembled rootless Podman execution world 
 
 ### Minimal configuration
 
-Every value is required because these bounds and the Engine endpoint are deployment decisions. `environment` replaces the container environment rather than merging with the host; it accepts locale, path, terminal, pager, and non-secret Harness metadata through a fixed allowlist. Process overrides use the same allowlist; secret names reject and `DSH_HOME` must identify `/workspace/.dsh`.
+Every value is required because these bounds and the Engine endpoint are deployment decisions. `environment` replaces the container environment rather than merging with the host; it accepts locale, path, terminal, pager, and non-secret Harness metadata through a fixed allowlist. Trusted subprocess requests may add ordinary entries, including credentials resolved for an authorized session, for that process only. The `DSH_*` namespace remains restricted and `DSH_HOME` must identify `/workspace/.dsh`.
 
 ```yaml
 - name: '@deepseek-ai/dsh-local-container-runtime'

@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
+import SessionStore, { SessionId, SESSION_FORMAT_VERSION, type Session } from '@deepseek-ai/dsh-session'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
 import { ShellEnvRegistry } from '@deepseek-ai/dsh-shell-env'
 import * as BashEnvPlugin from '@deepseek-ai/dsh-shell-env'
@@ -39,6 +39,13 @@ function execution(sessionId?: string): ToolExecution {
   }
 }
 
+function sessionExecution(session: Session): ToolExecution {
+  return {
+    ...execution(),
+    agent: { session } as unknown as Agent,
+  }
+}
+
 describe('ShellEnvRegistry', () => {
   it('collects unconditional shell facts and the current agent session id', () => {
     const ctx = new Context()
@@ -63,6 +70,52 @@ describe('ShellEnvRegistry', () => {
     vi.stubEnv('DSH_HOME', undefined)
     const fromDefault = new ShellEnvRegistry(new Context())
     expect(fromDefault.collect(execution()).DSH_HOME).toBe(join(homedir(), '.dsh'))
+  })
+
+  it('resolves credentials only for an allowlisted root session lineage', async () => {
+    const ctx = new Context()
+    new SessionStore(ctx)
+    ctx.provide('credentials', {
+      resolve: vi.fn(async (ref: string) => ref === 'OPENROUTER_API_KEY'
+        ? { value: 'stored-key', source: 'test' }
+        : undefined),
+    } as never)
+    const root = ctx.sessions.create(SessionId('metis-root'))
+    const child = ctx.sessions.create(SessionId('metis-child'), { meta: { parentSession: root.id } })
+    const grandchild = ctx.sessions.create(SessionId('metis-grandchild'), { meta: { parentSession: child.id } })
+    const unrelated = ctx.sessions.create(SessionId('unrelated'))
+    const registry = new ShellEnvRegistry(ctx, {
+      credentialGrants: [{ ref: 'OPENROUTER_API_KEY', sessionRoots: [root.id] }],
+    })
+
+    await expect(registry.resolveCredentials(sessionExecution(root))).resolves.toEqual({ OPENROUTER_API_KEY: 'stored-key' })
+    await expect(registry.resolveCredentials(sessionExecution(grandchild))).resolves.toEqual({ OPENROUTER_API_KEY: 'stored-key' })
+    await expect(registry.resolveCredentials(sessionExecution(unrelated))).resolves.toBeUndefined()
+    await expect(registry.resolveCredentials(execution())).resolves.toBeUndefined()
+  })
+
+  it('rejects ambiguous grants and fails loud when an authorized credential is unavailable', async () => {
+    expect(() => new ShellEnvRegistry(new Context(), {
+      credentialGrants: [{ ref: 'OPENROUTER_API_KEY', sessionRoots: [] }],
+    })).toThrow(/requires a session root/)
+    expect(() => new ShellEnvRegistry(new Context(), {
+      credentialGrants: [{ ref: 'OPENROUTER_API_KEY', sessionRoots: ['root', 'root'] }],
+    })).toThrow(/repeats a session root/)
+    expect(() => new ShellEnvRegistry(new Context(), {
+      credentialGrants: [
+        { ref: 'OPENROUTER_API_KEY', sessionRoots: ['root'] },
+        { ref: 'OPENROUTER_API_KEY', sessionRoots: ['other'] },
+      ],
+    })).toThrow(/duplicate credential grant/)
+
+    const ctx = new Context()
+    new SessionStore(ctx)
+    ctx.provide('credentials', { resolve: vi.fn(async () => undefined) } as never)
+    const root = ctx.sessions.create(SessionId('root'))
+    const registry = new ShellEnvRegistry(ctx, {
+      credentialGrants: [{ ref: 'OPENROUTER_API_KEY', sessionRoots: [root.id] }],
+    })
+    await expect(registry.resolveCredentials(sessionExecution(root))).rejects.toThrow(/credential.*unavailable/)
   })
 
   it('collects declared contributor variables and omits unavailable values', () => {

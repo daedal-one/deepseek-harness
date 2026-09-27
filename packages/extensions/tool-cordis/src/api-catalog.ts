@@ -2483,9 +2483,16 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'shellEnv',
-    summary: 'Registry (`ctx.shellEnv`) for trusted, per-execution `DSH_*` variables.',
-    description: 'Registry (`ctx.shellEnv`) for trusted, per-execution `DSH_*` variables. The namespace is rebuilt for every model shell call: ambient `DSH_*` values are discarded by the executor, then the registry\'s current snapshot is injected. Built-in shell facts remain owned by the registry itself while plugins can register additional, enumerable facts with effect-scoped disposal.',
+    summary: 'Registry (`ctx.shellEnv`) for trusted per-execution environment entries.',
+    description: 'Registry (`ctx.shellEnv`) for trusted per-execution environment entries. The `DSH_*` namespace is rebuilt for every model shell call, and configured credential references resolve independently for the current command. Built-in shell facts remain owned by the registry while plugins can register additional enumerable facts with effect-scoped disposal.',
     methods: [
+      {
+        signature: 'async resolveCredentials(execution: ToolExecution): Promise<Readonly<Record<string, string>> | undefined>',
+        description: 'Resolve session-scoped, deployment-allowlisted credentials for one shell process. Values are read for each call so rotation takes effect without a restart. Missing or detached ancestors fail closed.',
+        parameters: [{ name: 'execution', description: 'current shell execution and its calling Agent.' }],
+        returns: 'explicit environment entries, or `undefined` when none are configured.',
+        throws: ['when the credential provider or a configured value is unavailable.'],
+      },
       {
         signature: 'register(contributor: BashEnvContributor): () => void',
         description: 'Register one environment contributor. Names and keys are unique; built-in keys are reserved. Registration is disposed with the calling plugin fiber.',

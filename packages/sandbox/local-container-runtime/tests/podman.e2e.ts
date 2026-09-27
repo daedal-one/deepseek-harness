@@ -21,6 +21,35 @@ async function readAll(stream: NodeJS.ReadableStream): Promise<string> {
 }
 
 describe.skipIf(!enabled)('rootless Podman Engine API runtime owner', () => {
+  it('admits an explicit credential for one process without retaining it', async () => {
+    if (socketPath === undefined || image === undefined) throw new Error('Podman integration environment disappeared')
+    const ctx = new Context()
+    const fiber = await ctx.plugin(LocalContainerRuntime, {
+      socketPath, image, manageService: false, serviceStartupTimeoutMs: 10000,
+      user: 'dsh', environment: { HOME: '/home/dsh', LANG: 'C.UTF-8', PATH: '/usr/local/bin:/usr/bin:/bin' },
+      memoryBytes: 268435456, nanoCpus: 500000000, pidsLimit: 128, tmpfsBytes: 67108864,
+      engineRequestTimeoutMs: 10000, maxLiveProcesses: 4, lifetimeMs: 300000, stopTimeoutSeconds: 2,
+    })
+    try {
+      const admitted = await ctx.localContainerRuntime.createProcess({
+        argv: ['/bin/sh', '-c', 'test "$OPENROUTER_API_KEY" = podman-explicit-credential && printf CREDENTIAL_OK'],
+        cwd: '/workspace', environment: { OPENROUTER_API_KEY: 'podman-explicit-credential' },
+        tty: true, rows: 24, cols: 80, stdin: false,
+      })
+      const admittedOutput = readAll(admitted.stream)
+      expect(await admitted.done).toEqual({ exitCode: 0 })
+      expect(await admittedOutput).toBe('CREDENTIAL_OK')
+
+      const isolated = await ctx.localContainerRuntime.createProcess({
+        argv: ['/bin/sh', '-c', 'test -z "$OPENROUTER_API_KEY" && printf CREDENTIAL_ABSENT'],
+        cwd: '/workspace', environment: {}, tty: true, rows: 24, cols: 80, stdin: false,
+      })
+      const isolatedOutput = readAll(isolated.stream)
+      expect(await isolated.done).toEqual({ exitCode: 0 })
+      expect(await isolatedOutput).toBe('CREDENTIAL_ABSENT')
+    } finally { await fiber.dispose() }
+  })
+
   it('preserves the workspace owner after concurrent short-lived executable probes', async () => {
     if (socketPath === undefined || image === undefined) throw new Error('Podman integration environment disappeared')
     const ctx = new Context()
