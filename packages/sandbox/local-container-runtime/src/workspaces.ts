@@ -53,8 +53,6 @@ export interface ConversationWorkspaceConfig extends Omit<WorkspaceLimits, 'remo
   maxOutputBytes: number
   /** Bounded wait for live processes and child agents at settlement. */
   settleTimeoutMs: number
-  /** Delay between automatic retries of a pending finalization. */
-  retryDelayMs: number
   /** Explicit auxiliary provider, paired with model. */
   messageProvider?: string
   /** Explicit inexpensive auxiliary model. */
@@ -123,6 +121,7 @@ interface RecordState extends RepositoryRecord {
   branches: Record<string, string>
   environmentId?: EnvironmentId
   repositories?: RepositoryRecord[]
+  failure?: { turn: number; finalize: boolean; error: string }
 }
 interface WorkspaceUse {
   references: number
@@ -130,7 +129,6 @@ interface WorkspaceUse {
   ready: Promise<Workspace>
   releaseSlot?: () => void
   closing?: Promise<void>
-  idlePending?: boolean
 }
 
 interface AgentExecutionProfile {
@@ -166,9 +164,7 @@ interface Workspace {
   leases: FileHandle[]
   pending: boolean
   releasing?: Promise<void>
-  recovery?: Promise<void>
   settlement?: Promise<void>
-  retryTimer?: NodeJS.Timeout
   resumeTurn?: { turn: number; reason: TurnEndReason }
 }
 
@@ -213,7 +209,7 @@ export class ConversationWorkspaces extends Service {
     maxBytes: z.natural().required(),
     maxEntries: z.natural().required(),
     timeoutMs: z.natural().required(),
-    maxOutputBytes: z.natural().required(), settleTimeoutMs: z.natural().required(), retryDelayMs: z.natural().required(),
+    maxOutputBytes: z.natural().required(), settleTimeoutMs: z.natural().required(),
     messageProvider: z.string(),
     messageModel: z.string(),
     messageInputBytes: z.natural().required(),
@@ -244,6 +240,17 @@ export class ConversationWorkspaces extends Service {
     this.config = resolveConfig(config)
     this.admission = new WorkspaceAdmission(this.config.maxActiveWorkspaces)
     ctx.inject(['commands'], (inner) => {
+      inner.effect(() => inner.commands.register({
+        name: 'workspace-save', description: 'Inspect a workspace save failure or explicitly retry it.',
+        input: { hint: '[status | retry]' },
+        handler: async ({ agent, rawInput, signal }) => {
+          const action = rawInput.trim() || 'status'
+          if (action !== 'status' && action !== 'retry') return { kind: 'error', text: 'Use /workspace-save status or /workspace-save retry.' }
+          if (action === 'retry') await this.retrySave(agent, signal)
+          const state = agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')
+          return { kind: 'success', text: state === undefined ? 'No workspace save has been recorded.' : JSON.stringify(state.data) }
+        },
+      }), 'workspace save recovery command')
       inner.effect(() => inner.commands.register({
         name: 'changes', description: 'Find saved branches and their conversations.',
         input: { hint: '[all | query | export query]' },
@@ -356,6 +363,28 @@ export class ConversationWorkspaces extends Service {
     return await lookupWorkspaceProvenance(this.config.provenanceRoot, query,
       { maxBytes: this.config.maxOutputBytes, maxEntries: this.config.maxEntries },
       AbortSignal.any([signal, this.requestCancellation.signal, AbortSignal.timeout(this.config.timeoutMs)]))
+  }
+
+  /** Retry one failed save without starting a model turn. Concurrent requests reject.
+   * @param agent - selected top-level conversation whose retained transaction is retried.
+   * @param signal - cancellation while acquiring workspace execution capacity.
+   * @returns after the attempt settles; the durable workspace state reports success or failure.
+   */
+  async retrySave(agent: Agent, signal: AbortSignal): Promise<void> {
+    if (this.ownerFor(agent) !== agent) throw new Error('Workspace recovery requires the owning conversation.')
+    const release = await this.acquireUse(agent, signal)
+    try {
+      signal.throwIfAborted()
+      const workspace = this.forAgent(agent)
+      if (workspace.settlement !== undefined) throw new Error('A workspace save is already running.')
+      if (!workspace.pending) throw new Error('This workspace has no failed save to retry.')
+      workspace.pending = false
+      const resume = workspace.resumeTurn
+      if (resume !== undefined) await this.settle(workspace, resume.turn, resume.reason)
+      else {
+        await this.settle(workspace, workspace.record.lastTurn, { kind: 'interrupted' })
+      }
+    } finally { await release() }
   }
 
 
@@ -518,11 +547,6 @@ export class ConversationWorkspaces extends Service {
           lifetime.throwIfAborted()
           await this.prepare(owner)
           const workspace = this.forAgent(owner)
-          if (workspace.resumeTurn !== undefined) {
-            const { turn, reason } = workspace.resumeTurn
-            workspace.recovery ??= this.settle(workspace, turn, reason)
-            await workspace.recovery
-          }
           return workspace
         } catch (error) {
           pending.releaseSlot?.()
@@ -554,8 +578,6 @@ export class ConversationWorkspaces extends Service {
         await workspace.settlement
         workspace.owner = owner
         this.bindings.set(owner, workspace)
-        const ended = owner.session.snapshotEvents().findLast(event => event.type === 'turn/end')
-        if (workspace.pending && ended?.type === 'turn/end') await this.settle(workspace, ended.data.turn, ended.data.reason)
       }
       this.forAgent(agent)
       return release
@@ -583,7 +605,7 @@ export class ConversationWorkspaces extends Service {
         this.uses.delete(owner.id)
         return
       }
-      if (workspace.pending && use.idlePending !== true) {
+      if (workspace.pending) {
         if (use.closing === closing) delete use.closing
         return
       }
@@ -592,17 +614,11 @@ export class ConversationWorkspaces extends Service {
           async (control) => { await this.checkpoint(workspace, control) },
           async () => { await this.ctx.serial('workspace/quiesce', { executionWorld: workspace.runtime.executionWorld }) })
       } catch (error) {
-        use.idlePending = true
         workspace.pending = true
         try {
-          this.state(workspace, 'pending', workspace.record.lastTurn, error instanceof Error ? error.message : String(error))
-          await this.ctx.sessions.flush(workspace.owner.session)
+          await this.failSave(workspace, workspace.record.lastTurn, false, error)
         } finally {
           if (use.closing === closing) delete use.closing
-          workspace.retryTimer = setTimeout(() => {
-            void this.releaseIdle(owner, use).catch((failure: unknown) => { this.ctx.logger.error(failure) })
-          }, this.config.retryDelayMs)
-          workspace.retryTimer.unref()
         }
         return
       }
@@ -910,12 +926,26 @@ export class ConversationWorkspaces extends Service {
         dispose: owned.dispose.bind(owned),
         leases,
         pending: false }
-      await this.completeAttachments(workspace, owned.runtime.executeController.bind(owned.runtime))
+      const previous = agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')
+      if (record.failure === undefined && previous?.data.phase !== 'failed' && previous?.data.phase !== 'pending' && previous?.data.phase !== 'saving') {
+        await this.completeAttachments(workspace, owned.runtime.executeController.bind(owned.runtime))
+      }
       const ended = agent.session.snapshotEvents().findLast(event => event.type === 'turn/end')
       const unfinished = [record, ...record.repositories ?? []].find(repository => repository.transaction !== undefined)
-      if (unfinished?.transaction !== undefined) workspace.resumeTurn = { turn: unfinished.transaction.turn, reason: { kind: 'completed' } }
-      else if (recorded && ended?.type === 'turn/end' && [record, ...record.repositories ?? []].some(repository => ended.data.turn > repository.lastTurn)) workspace.resumeTurn = ended.data
-      this.state(workspace, record.lastTurn > 0 ? 'returned' : 'ready', record.lastTurn)
+      if (record.failure !== undefined) workspace.resumeTurn = { turn: record.failure.turn,
+        reason: { kind: record.failure.finalize ? 'completed' : 'interrupted' } }
+      else if (unfinished?.transaction !== undefined) workspace.resumeTurn = { turn: unfinished.transaction.turn, reason: { kind: 'completed' } }
+      else if (recorded && ended?.type === 'turn/end'
+        && !((previous?.data.phase === 'returned' || previous?.data.phase === 'checkpointed') && previous.data.turn >= ended.data.turn)
+        && [record, ...record.repositories ?? []].some(repository => ended.data.turn > repository.lastTurn)) {
+        workspace.resumeTurn = ended.data
+      }
+      if (workspace.resumeTurn !== undefined || previous?.data.phase === 'pending'
+        || previous?.data.phase === 'failed' || previous?.data.phase === 'saving') {
+        workspace.pending = true
+        this.state(workspace, 'failed', workspace.resumeTurn?.turn ?? record.lastTurn,
+          record.failure?.error ?? previous?.data.error ?? 'Workspace save was interrupted. Inspect retained files, then use /workspace-save retry.')
+      } else this.state(workspace, record.lastTurn > 0 ? 'returned' : 'ready', record.lastTurn)
       this.workspaces.add(workspace); this.bindings.set(agent, workspace)
     } catch (error) {
       const cleanup = await Promise.allSettled(
@@ -975,7 +1005,6 @@ export class ConversationWorkspaces extends Service {
   }
 
   private async finishRelease(workspace: Workspace, checkpointed: boolean): Promise<void> {
-    if (workspace.retryTimer !== undefined) clearTimeout(workspace.retryTimer)
     const failures: unknown[] = []
     try {
       await workspace.settlement
@@ -1128,18 +1157,13 @@ export class ConversationWorkspaces extends Service {
 
   private settle(workspace: Workspace, turn: number, reason: TurnEndReason): Promise<void> {
     if (workspace.settlement !== undefined) return workspace.settlement
-    if (workspace.retryTimer !== undefined) clearTimeout(workspace.retryTimer)
+    if (workspace.pending) return Promise.resolve()
+    workspace.resumeTurn = { turn, reason }
     const pending = this.attemptSettlement(workspace, turn, reason).finally(() => {
       delete workspace.settlement
       const use = this.uses.get(workspace.owner.id)
       if (!workspace.pending && use?.references === 0) {
         void this.releaseIdle(workspace.owner, use).catch((error: unknown) => { this.ctx.logger.error(error) })
-      }
-      if (workspace.pending && workspace.releasing === undefined) {
-        workspace.retryTimer = setTimeout(() => {
-          void this.settle(workspace, turn, reason).catch((error: unknown) =>{  this.ctx.logger.error(error) })
-        }, this.config.retryDelayMs)
-        workspace.retryTimer.unref()
       }
     })
     workspace.settlement = pending
@@ -1167,7 +1191,11 @@ export class ConversationWorkspaces extends Service {
             if (transaction === undefined) {
               let prepared: Record<string, unknown>
               try { prepared = await this.control(control, 'prepare', { ...fields, baseline: repository.baseline }) }
-              catch (error) { await this.checkpoint(workspace, control); throw error }
+              catch (error) {
+                try { await this.checkpoint(workspace, control) }
+                catch (checkpointError) { throw new AggregateError([error, checkpointError], 'Git preparation and recovery checkpoint failed') }
+                throw error
+              }
               transaction = { turn, provenanceTrailers: true, authorName: this.config.authorName, authorEmail: this.config.authorEmail, timestamp: new Date(workspace.owner.session.snapshotEvents().findLast(event => event.type === 'turn/end' && event.data.turn === turn)?.time ?? workspace.owner.session.header.createdAt).toISOString(), tree: requireOid(prepared.tree), parent: requireOid(prepared.parent), clean: prepared.clean === true }
               transaction.summary = String(prepared.summary)
               repository.transaction = transaction
@@ -1266,18 +1294,33 @@ export class ConversationWorkspaces extends Service {
             }
             repository.lastTurn = turn; delete repository.transaction
             await this.saveRecord(workspace)
-          } catch (error) { failures.push(error) }
+          } catch (error) { failures.push(new Error(`Repository ${repository.executionPath ?? '/workspace'} save failed`, { cause: error })) }
         }
         if (failures.length > 0) throw new AggregateError(failures, 'repository return remains pending; successful repository receipts are retained')
       }, async () => { await this.ctx.serial('workspace/quiesce', { executionWorld: workspace.runtime.executionWorld }) })
+      delete workspace.record.failure
+      await this.saveRecord(workspace)
       this.state(workspace, reason.kind === 'completed' ? 'returned' : 'checkpointed', turn)
       workspace.pending = false
-      await this.ctx.sessions.flush(workspace.owner.session)
+      delete workspace.resumeTurn
+      if (!await this.ctx.sessions.flush(workspace.owner.session)) throw new Error('workspace outcome requires durable session persistence')
     } catch (error) {
-      workspace.pending = true
-      this.state(workspace, 'pending', turn, error instanceof Error ? error.message : 'workspace synchronization failed')
-      await this.ctx.sessions.flush(workspace.owner.session)
+      await this.failSave(workspace, turn, reason.kind === 'completed', error)
     }
+  }
+
+  private async failSave(workspace: Workspace, turn: number, finalize: boolean, error: unknown): Promise<void> {
+    workspace.pending = true
+    const failure = { turn, finalize, error: workspaceFailure(error) }
+    workspace.record.failure = failure
+    this.state(workspace, 'failed', turn, failure.error)
+    const results = await Promise.allSettled([
+      this.saveRecord(workspace),
+      Promise.resolve().then(() => this.ctx.sessions.flush(workspace.owner.session)),
+    ])
+    const failures = results.flatMap(result => result.status === 'rejected' ? [result.reason as unknown]
+      : result.value === false ? [new Error('workspace failure Session record was not persisted')] : [])
+    if (failures.length > 0) throw new AggregateError([error, ...failures], 'workspace save failed; failure persistence also failed; storage retained')
   }
 
   private async control(control: Control, operation: string, fields: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
@@ -1353,11 +1396,30 @@ async function waitForChildren(operation: Promise<unknown>, ms: number): Promise
   } finally { if (timer !== undefined) clearTimeout(timer) }
 }
 
+function workspaceFailure(error: unknown): string {
+  const messages: string[] = []
+  const seen = new Set<unknown>()
+  const visit = (cause: unknown): void => {
+    if (seen.has(cause) || seen.size >= 16) return
+    seen.add(cause)
+    if (!(cause instanceof Error)) { messages.push('Unknown workspace failure'); return }
+    messages.push(cause.message.slice(0, 1024))
+    if (cause instanceof AggregateError) for (const child of cause.errors) visit(child)
+    if (cause.cause !== undefined) visit(cause.cause)
+  }
+  visit(error)
+  return `${messages.join('\n').slice(0, 4096)}\nAutomatic saving stopped. Retained files require inspection; use /workspace-save retry after resolving the failure.`
+}
+
 function parseRecord(value: unknown, workspaceId: ConversationWorkspaceId, sessionId: string): RecordState {
   if (!isObject(value) || value.version !== 1 || value.workspaceId !== workspaceId || value.sessionId !== sessionId || typeof value.source !== 'string' || !isAbsolute(value.source)
     || typeof value.checkpoint !== 'number' || !Number.isSafeInteger(value.checkpoint) || value.checkpoint < 1 || typeof value.lastTurn !== 'number' || !Number.isSafeInteger(value.lastTurn) || value.lastTurn < 0
     || typeof value.sourceStatus !== 'string' || typeof value.stagedPatch !== 'string' || !isObject(value.branches)) throw new Error('corrupt workspace recovery manifest')
   if (value.developmentVm !== undefined) value.developmentVm = parseDevelopmentVmReference(value.developmentVm)
+  if (value.failure !== undefined && (!isObject(value.failure) || !Number.isSafeInteger(value.failure.turn)
+    || Number(value.failure.turn) < 0 || typeof value.failure.finalize !== 'boolean' || typeof value.failure.error !== 'string')) {
+    throw new Error('invalid workspace failure record')
+  }
   requireOid(value.sourceHead); requireOid(value.baseline)
   if (typeof value.checkpointHash !== 'string' || !/^[a-f0-9]{64}$/u.test(value.checkpointHash)) throw new Error('corrupt workspace checkpoint digest')
   parseRepository(value)

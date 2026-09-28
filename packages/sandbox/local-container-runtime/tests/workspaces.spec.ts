@@ -50,12 +50,12 @@ afterEach(async () => {
 })
 
 async function fixture(options: {
+  commands?: boolean
   environment?: boolean
   maintenance?: boolean
   pinWorkspace?: boolean
   message?: boolean
   failAfterCommit?: boolean
-  retryDelayMs?: number
   preview?: { socket: PassThrough; ports: number[] }
   developmentVmProfile?: 'vm-a' | 'vm-b'
   script?: ConstructorParameters<typeof MockAdapter>[0]
@@ -69,7 +69,7 @@ async function fixture(options: {
     storageRoot: storage, maxActiveWorkspaces: 2, recoveryRoot: recovery, provenanceRoot: join(recovery, 'provenance'),
     gitCommand: '/usr/bin/git', authorName: 'DSH', authorEmail: 'dsh@localhost', resourceLimitCommand: '/usr/bin/prlimit', gitMemoryBytes: 536870912,
     maxBytes: 4194304, maxEntries: 1000, timeoutMs: 30000, maxOutputBytes: 8388608,
-    settleTimeoutMs: 1000, retryDelayMs: options.retryDelayMs ?? 10000,
+    settleTimeoutMs: 1000,
     messageInputBytes: 4096, messageOutputTokens: 64, messageTimeoutMs: 1000,
     ...options.message === true ? { messageProvider: 'mock', messageModel: 'cheap' } : {},
   }
@@ -221,6 +221,7 @@ async function fixture(options: {
     await ctx.plugin(Persistence, { root: join(root, 'sessions'), compression: 'none' })
     await ctx.plugin(LlmRuntime); await ctx.plugin(AgentRegistry); await ctx.plugin(SystemPrompt); await ctx.plugin(Tools)
     await ctx.plugin(UserQuestions)
+    if (options.commands) await ctx.plugin(Commands)
     if (options.maintenance === true || options.developmentVmProfile !== undefined) await ctx.plugin(AgentPresets, { default: options.maintenance === true ? 'maintenance' : options.developmentVmProfile!, roots: [{ path: presetRoot, trust: 'user' }], includeShippedRoot: false, includeUserRoot: false })
     await ctx.plugin(LocalStorageWorkspaces, config); await ctx.plugin(AgentLoop, { agents: [] })
   }
@@ -454,7 +455,7 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
   })
 
   it('retains capacity after a failed idle checkpoint and admits the waiter only after recovery', async () => {
-    const f = await fixture({ retryDelayMs: 2_147_483_647 })
+    const f = await fixture({  })
     const other = await f.ctx.agents.create({ sessionId: SessionId('checkpoint-other'), meta: { cwd: f.source }, agentOptions: { provider: 'mock', model: 'main' } })
     await f.executionFor(other.agent)
     const waiting = await f.ctx.agents.create({ sessionId: SessionId('checkpoint-waiter'), meta: { cwd: f.source }, agentOptions: { provider: 'mock', model: 'main' } })
@@ -473,6 +474,7 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
       expect(admitted).toBe(false)
       save.mockRestore()
       const resumed = await f.ctx.agents.resume({ resumeSessionId: f.handle.agent.id, agentOptions: { provider: 'mock', model: 'main' } })
+      await f.ctx.conversationWorkspaces.retrySave(resumed.agent, new AbortController().signal)
       await f.ctx.conversationWorkspaces.runForSession(resumed.agent.id, async () => {
         const path = f.worlds.get(f.ctx.conversationWorkspaces.capture())!
         expect(await readFile(join(path, 'private.txt'), 'utf8')).toBe('must survive')
@@ -486,14 +488,16 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
     }
   })
 
-  it('retries idle release after recording its pending state fails', async () => {
-    const f = await fixture({ pinWorkspace: false, retryDelayMs: 25 })
+  it('requires explicit retry when idle checkpoint failure persistence also fails', async () => {
+    const f = await fixture({ pinWorkspace: false })
     const flush = vi.spyOn(f.ctx.sessions, 'flush').mockRejectedValueOnce(new Error('pending state unavailable'))
     const release = f.ctx.conversationWorkspaces.runForSession(f.handle.agent.id, async () => {
       const runtime = f.ctx.conversationWorkspaces.capture()
       vi.spyOn(runtime, 'settle').mockRejectedValueOnce(new Error('writer remains active'))
     })
-    await expect(release).rejects.toThrow('pending state unavailable')
+    await expect(release).rejects.toThrow('failure persistence also failed')
+    expect(f.handle.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')?.data).toMatchObject({ phase: 'failed' })
+    await f.ctx.conversationWorkspaces.retrySave(f.handle.agent, new AbortController().signal)
     await expect.poll(async () => {
       try {
         await f.ctx.conversationWorkspaces.runForSession(f.handle.agent.id, async () => undefined)
@@ -666,10 +670,10 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
   })
 
   it('reconciles published refs after a receipt-write failure without another naming call', async () => {
-    const f = await fixture({ message: true, retryDelayMs: 2_147_483_647 })
+    const f = await fixture({ message: true })
     await writeFile(join(f.execution, 'result.txt'), 'result\n')
     const save = vi.spyOn(provenance, 'saveWorkspaceProvenance').mockRejectedValueOnce(new Error('receipt disk unavailable'))
-    expect((await f.turn())?.data).toMatchObject({ phase: 'pending' })
+    expect((await f.turn())?.data).toMatchObject({ phase: 'failed' })
     const head = await workspaceGit(f.execution, ['rev-parse', 'HEAD'], f.config)
     const refs = await workspaceGit(f.source, ['for-each-ref', '--format=%(refname) %(objectname)', 'refs/heads/dsh/'], f.config)
     save.mockRestore()
@@ -677,6 +681,7 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
     const resumed = await ctx.agents.resume({ resumeSessionId: f.handle.agent.id, agentOptions: { provider: 'mock', model: 'main' } })
     await f.executionFor(resumed.agent)
     try {
+      await ctx.conversationWorkspaces.retrySave(resumed.agent, new AbortController().signal)
       await expect.poll(() => resumed.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')?.data, { timeout: 5000 }).toMatchObject({ phase: 'returned' })
       expect(await workspaceGit(f.execution, ['rev-parse', 'HEAD'], f.config)).toEqual(head)
       expect(await workspaceGit(f.source, ['for-each-ref', '--format=%(refname) %(objectname)', 'refs/heads/dsh/'], f.config)).toEqual(refs)
@@ -716,7 +721,7 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
   })
 
   it('retains successful repository returns while another repository fails, then retries only the pending return', async () => {
-    const f = await fixture({ environment: true, retryDelayMs: 2_147_483_647 })
+    const f = await fixture({ environment: true })
     f.ctx.on('user-questions/request', async ({ questions }) => ({ answers: [{ id: questions[0]!.id, selected: ['Approve'] }] }))
     await f.ctx.conversationWorkspaces.requestRepository(f.handle.agent, 'https://github.example/org/second.git', 'fetch', 'Change both repositories.', new AbortController().signal)
     const original = broker.returnWorkspaceBranches
@@ -726,7 +731,7 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
       if (args[0] === f.secondSource) throw new Error('second destination is unavailable')
       return await original(...args)
     })
-    expect((await f.turn())?.data).toMatchObject({ phase: 'pending', repositories: [{ lastTurn: 1 }, { lastTurn: 0 }] })
+    expect((await f.turn())?.data).toMatchObject({ phase: 'failed', repositories: [{ lastTurn: 1 }, { lastTurn: 0 }] })
     expect(returned).toEqual([f.source, f.secondSource])
     failure.mockRestore()
     const retries = vi.spyOn(broker, 'returnWorkspaceBranches')
@@ -734,6 +739,7 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
     const resumed = await ctx.agents.resume({ resumeSessionId: f.handle.agent.id, agentOptions: { provider: 'mock', model: 'main' } })
     try {
       await f.executionFor(resumed.agent)
+      await ctx.conversationWorkspaces.retrySave(resumed.agent, new AbortController().signal)
       await expect.poll(() => resumed.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')?.data,
         { timeout: 5000 }).toMatchObject({ phase: 'returned', repositories: [{ lastTurn: 1 }, { lastTurn: 1 }] })
       expect(retries.mock.calls.map(args => args[0])).toEqual([f.secondSource])
@@ -791,6 +797,7 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
     const ctx = await f.restart()
     const resumed = await ctx.agents.resume({ resumeSessionId: f.handle.agent.id, agentOptions: { provider: 'mock', model: 'main' } })
     try {
+      await ctx.conversationWorkspaces.retrySave(resumed.agent, new AbortController().signal)
       const attached = await ctx.conversationWorkspaces.requestRepository(resumed.agent, 'https://github.example/org/second.git', 'fetch', 'Resume attachment.', new AbortController().signal)
       expect(attached.status).toBe('ready')
       expect(await readFile(join(await f.executionFor(resumed.agent), attached.path!.slice('/workspace/'.length), 'input.txt'), 'utf8')).toBe('initial\n')
@@ -910,14 +917,98 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
   })
 
   it('retries a lost commit acknowledgement without repeating the subject model or creating another commit', async () => {
-    const f = await fixture({ message: true, failAfterCommit: true, retryDelayMs: 25 })
+    const f = await fixture({ message: true, failAfterCommit: true })
     await writeFile(join(f.execution, 'result.txt'), 'result\n')
-    expect((await f.turn())?.data).toMatchObject({ phase: 'pending' })
+    expect((await f.turn())?.data).toMatchObject({ phase: 'failed' })
     const committed = await workspaceGit(f.execution, ['rev-parse', 'HEAD'], f.config)
+    await f.ctx.conversationWorkspaces.retrySave(f.handle.agent, new AbortController().signal)
     await expect.poll(() => f.handle.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')?.data,
       { timeout: 5000 }).toMatchObject({ phase: 'returned' })
     expect(await workspaceGit(f.execution, ['rev-parse', 'HEAD'], f.config)).toEqual(committed)
     expect(f.adapter.requests.filter(request => request.purpose === 'workspace-commit')).toHaveLength(1)
+  })
+
+  it('keeps a failed save terminal across elapsed time and ordinary prompts', async () => {
+    const f = await fixture()
+    await writeFile(join(f.execution, 'oversized'), Buffer.alloc(f.config.maxBytes + 1))
+    const failed = await f.turn()
+    expect(failed?.data.phase).toBe('failed')
+    expect(failed?.data.error).toContain('workspace byte limit exceeded')
+    const saves = () => f.handle.agent.session.snapshotEvents().filter(event => event.type === 'workspace/state' && event.data.phase === 'saving').length
+    const count = saves()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try { await vi.advanceTimersByTimeAsync(60_000); expect(saves()).toBe(count) }
+    finally { vi.useRealTimers() }
+    await f.turn()
+    expect(saves()).toBe(count)
+    expect(await readFile(join(f.execution, 'oversized'))).toHaveLength(f.config.maxBytes + 1)
+    await rm(join(f.execution, 'oversized'))
+    await f.ctx.conversationWorkspaces.retrySave(f.handle.agent, new AbortController().signal)
+    expect(saves()).toBe(count + 1)
+  })
+
+  it('preserves nested repository causes in the failed save receipt', async () => {
+    const f = await fixture()
+    const failure = vi.spyOn(broker, 'returnWorkspaceBranches').mockRejectedValueOnce(new Error('destination is unavailable'))
+    const result = await f.turn()
+    expect(result?.data.phase).toBe('failed')
+    expect(result?.data.error).toContain('destination is unavailable')
+    const record = JSON.parse(await readFile(join(f.recovery, result!.data.workspaceId, 'state.json'), 'utf8')) as { failure: { error: string } }
+    expect(record.failure.error).toContain('destination is unavailable')
+    failure.mockRestore()
+  })
+
+  it('joins manifest persistence when failure Session flushing throws synchronously', async () => {
+    const f = await fixture()
+    vi.spyOn(broker, 'returnWorkspaceBranches').mockRejectedValueOnce(new Error('destination unavailable'))
+    const publish = broker.publishWorkspaceJson
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const flushed = Promise.withResolvers<undefined>()
+    let published = false
+    vi.spyOn(broker, 'publishWorkspaceJson').mockImplementation(async (path, value, bound) => {
+      if (path.endsWith('/state.json') && (value as { failure?: unknown }).failure !== undefined) {
+        entered.resolve(undefined)
+        await release.promise
+        await publish(path, value, bound)
+        published = true
+      } else await publish(path, value, bound)
+    })
+    const flush = f.ctx.sessions.flush.bind(f.ctx.sessions)
+    vi.spyOn(f.ctx.sessions, 'flush').mockImplementation((session) => {
+      if (f.handle.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')?.data.phase === 'failed') {
+        flushed.resolve(undefined)
+        throw new Error('Session persistence unavailable')
+      }
+      return flush(session)
+    })
+    let settled = false
+    const turn = f.turn().finally(() => { settled = true })
+    try {
+      await Promise.all([entered.promise, flushed.promise])
+      expect(settled).toBe(false)
+      expect(published).toBe(false)
+    } finally {
+      release.resolve(undefined)
+      await turn
+    }
+    expect(published).toBe(true)
+  })
+
+  it('inspects and retries a failed save through the human command without another model turn', async () => {
+    const f = await fixture({ commands: true })
+    const failure = vi.spyOn(broker, 'returnWorkspaceBranches').mockRejectedValueOnce(new Error('destination unavailable'))
+    await f.turn()
+    failure.mockRestore()
+    const signal = new AbortController().signal
+    const turns = f.handle.agent.session.snapshotEvents().filter(event => event.type === 'turn/start').length
+    const status = await f.ctx.commands.execute(f.handle.agent, '/workspace-save status', [], signal)
+    expect(status?.result.kind).toBe('success')
+    expect(status?.result.text).toContain('"phase":"failed"')
+    const retried = await f.ctx.commands.execute(f.handle.agent, '/workspace-save retry', [], signal)
+    expect(retried?.result.kind).toBe('success')
+    expect(retried?.result.text).toContain('"phase":"returned"')
+    expect(f.handle.agent.session.snapshotEvents().filter(event => event.type === 'turn/start')).toHaveLength(turns)
   })
 
   it('orders paired artifacts and guest retention before promotion, then prunes source last', async () => {
@@ -959,7 +1050,7 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
 
   it.each(['artifact', 'guest', 'promotion', 'prune'].flatMap(phase => ['before', 'after'].map(edge => ({ phase, edge }))))(
     'recovers a failure $edge paired checkpoint $phase without conflicting retained identities', async ({ phase, edge }) => {
-      const f = await fixture({ retryDelayMs: 25, developmentVmProfile: 'vm-a' })
+      const f = await fixture({ developmentVmProfile: 'vm-a' })
       const runtime = f.ctx.agents.withInitiator(f.handle.agent, () => f.ctx.conversationWorkspaces.capture()) as WorkspaceExecutionRuntime
       const retained = new Map<number, string>()
       const pruned = new Set<number>()
@@ -995,8 +1086,9 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
         if (matches) { interrupted = true; throw new Error(`injected ${phase} acknowledgement loss`) }
       })
       await writeFile(join(f.execution, 'result.txt'), 'result\n')
-      expect((await f.turn())?.data).toMatchObject({ phase: 'pending' })
+      expect((await f.turn())?.data).toMatchObject({ phase: 'failed' })
       expect(interrupted).toBe(true)
+      await f.ctx.conversationWorkspaces.retrySave(f.handle.agent, new AbortController().signal)
       await expect.poll(() => f.handle.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')?.data,
         { timeout: 5000 }).toMatchObject({ phase: 'returned' })
       const receipt = f.handle.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')
@@ -1012,7 +1104,7 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
 
   it.each(['candidate', 'message', 'committed', 'branch', 'provenance', 'event', 'lastTurn'].flatMap(phase => ['before', 'after'].map(edge => ({ phase, edge }))))(
     'recovers a restart $edge $phase publication without duplicate durable side effects', async ({ phase, edge }) => {
-      const f = await fixture({ message: true, retryDelayMs: 2_147_483_647, developmentVmProfile: 'vm-a' })
+      const f = await fixture({ message: true, developmentVmProfile: 'vm-a' })
       const publish = broker.publishWorkspaceJson
       let interrupted = false
       const failure = vi.spyOn(broker, 'publishWorkspaceJson').mockImplementation(async (path, value, maxBytes) => {
@@ -1041,7 +1133,7 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
       })
       await writeFile(join(f.execution, 'result.txt'), 'result\n')
       const pending = await f.turn()
-      expect(pending?.data).toMatchObject({ phase: 'pending' })
+      expect(pending?.data).toMatchObject({ phase: 'failed' })
       expect(interrupted).toBe(true)
       if (pending?.type !== 'workspace/state') throw new Error('missing workspace receipt')
       const directory = join(f.recovery, pending.data.workspaceId)
@@ -1057,6 +1149,7 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
         setup: async (scope: Context) => { await ctx.agentPresets.mount(scope, 'vm-a') } })
       await f.executionFor(resumed.agent)
       try {
+        await ctx.conversationWorkspaces.retrySave(resumed.agent, new AbortController().signal)
         await expect.poll(() => resumed.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')?.data,
           { timeout: 5000 }).toMatchObject({ phase: 'returned' })
         expect((await workspaceGit(f.execution, ['rev-list', '--count', 'HEAD'], f.config)).toString().trim()).toBe('2')
@@ -1076,16 +1169,17 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
   )
 
   it('retains the last checkpoint and dirty workspace when a recovery payload exceeds the configured bound', async () => {
-    const f = await fixture({ retryDelayMs: 25 })
+    const f = await fixture({  })
     const ready = f.handle.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')
     if (ready?.type !== 'workspace/state') throw new Error('missing prepared workspace')
     const statePath = join(f.recovery, ready.data.workspaceId, 'state.json')
     const before = JSON.parse(await readFile(statePath, 'utf8')) as { checkpoint: number }
     await writeFile(join(f.execution, 'oversized'), Buffer.alloc(f.config.maxBytes + 1))
-    expect((await f.turn())?.data).toMatchObject({ phase: 'pending' })
+    expect((await f.turn())?.data).toMatchObject({ phase: 'failed' })
     expect((JSON.parse(await readFile(statePath, 'utf8')) as { checkpoint: number }).checkpoint).toBe(before.checkpoint)
     expect((await readFile(join(f.execution, 'oversized'))).length).toBe(f.config.maxBytes + 1)
     await rm(join(f.execution, 'oversized'))
+    await f.ctx.conversationWorkspaces.retrySave(f.handle.agent, new AbortController().signal)
     await expect.poll(() => f.handle.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')?.data,
       { timeout: 5000 }).toMatchObject({ phase: 'returned' })
   })
@@ -1142,7 +1236,7 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
     await writeFile(join(f.execution, '.git/MERGE_HEAD'), head)
     await writeFile(join(f.execution, 'unfinished.txt'), 'merge work')
     const pending = await f.turn()
-    expect(pending?.data).toMatchObject({ phase: 'pending', turn: 1 })
+    expect(pending?.data).toMatchObject({ phase: 'failed', turn: 1 })
     if (pending?.type !== 'workspace/state') throw new Error('missing pending workspace receipt')
     const snapshot = JSON.parse(await readFile(join(f.recovery, pending.data.workspaceId,
       `checkpoint-${pending.data.checkpoint}.json`), 'utf8')) as { entries: Array<{ path: string; data: string }> }

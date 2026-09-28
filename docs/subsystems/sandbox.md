@@ -177,6 +177,13 @@ Owns private workspace storage, live agent bindings, and automatic branch return
  */
 async lookupChanges(query: string, signal: AbortSignal): Promise<{ records: WorkspaceProvenance[]; truncated: boolean }>
 
+/** Retry one failed save without starting a model turn. Concurrent requests reject.
+ * @param agent - selected top-level conversation whose retained transaction is retried.
+ * @param signal - cancellation while acquiring workspace execution capacity.
+ * @returns after the attempt settles; the durable workspace state reports success or failure.
+ */
+async retrySave(agent: Agent, signal: AbortSignal): Promise<void>
+
 /** Run a user-facing workspace operation with the selected live conversation.
  * @param sessionId - selected conversation identity from the host request.
  * @param operation - operation whose filesystem and process calls share that owner.

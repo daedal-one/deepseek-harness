@@ -2539,15 +2539,15 @@ describe('workspace return receipts', () => {
     expect(snapshot(value).order).not.toContain(node(snapshot(value), 'workspace-admission')?.key)
   })
 
-  it('keeps model completion separate from pending return and replaces progress on retry', () => {
+  it.each(['pending', 'failed'] as const)('keeps model completion separate from %s return and replaces progress on explicit retry', (phase) => {
     const base = { workspaceId: 'a'.repeat(32), turn: 1, baseline: 'b'.repeat(40), checkpoint: 1, branches: {} }
     const value = assembler([
       at(0, 'turn/start', { turn: 1 }),
       at(1, 'turn/end', { turn: 1, reason: { kind: 'completed' } }),
       at(2, 'workspace/state', { ...base, phase: 'saving' }),
-      at(3, 'workspace/state', { ...base, phase: 'pending', error: 'Destination unavailable' }),
+      at(3, 'workspace/state', { ...base, phase, error: 'Destination unavailable' }),
     ])
-    expect(node(snapshot(value), 'workspace-state')?.data).toMatchObject({ phase: 'pending', error: 'Destination unavailable' })
+    expect(node(snapshot(value), 'workspace-state')?.data).toMatchObject({ phase, error: 'Destination unavailable' })
     value.replaceWindow([
       at(0, 'turn/start', { turn: 1 }),
       at(1, 'turn/end', { turn: 1, reason: { kind: 'completed' } }),

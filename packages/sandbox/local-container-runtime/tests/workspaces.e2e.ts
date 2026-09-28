@@ -105,7 +105,7 @@ describe.skipIf(!enabled)('conversation workspace real Podman Loader flow', () =
         { name: 'container-fs', config: { cwdAliases: [], maxFileBytes: 65536, diffBasisMaxBytes: 32768, maxControllerOutputBytes: 200000, operationTimeoutMs: 10000 } },
         { name: 'container-subprocess', config: { cwdAliases: [], controlOutputBytes: 4096, controlTimeoutMs: 10000 } },
         { name: 'presets', config: { default: 'maintenance', roots: [{ path: presetRoot, trust: 'user' }], includeShippedRoot: false, includeUserRoot: false } },
-        { name: 'workspaces', config: { ...limits, hostSessions: [{ sessionId: maintenanceId, preset: 'maintenance', cwd: source }], ...(environment ? { environment: { id: 'e2e-environment', name: 'E2E environment', grantLifetimeMs: 3600000, repositories: [{ source, url: 'https://github.example/org/first.git', credentialTimeoutMs: 1000 }, { source: secondSource, url: 'https://github.example/org/second.git', credentialTimeoutMs: 1000 }], initialGrants: [{ repository: 'https://github.example/org/first.git', access: 'fetch' }] } } : {}), storageRoot, maxActiveWorkspaces, recoveryRoot: join(root, 'recovery'), provenanceRoot: join(root, 'provenance'), maxOutputBytes: 8388608, settleTimeoutMs: 10000, retryDelayMs: 1000, messageProvider: 'mock-metadata', messageModel: 'cheap', messageInputBytes: 4096, messageOutputTokens: 64, messageTimeoutMs: 10000 } },
+        { name: 'workspaces', config: { ...limits, hostSessions: [{ sessionId: maintenanceId, preset: 'maintenance', cwd: source }], ...(environment ? { environment: { id: 'e2e-environment', name: 'E2E environment', grantLifetimeMs: 3600000, repositories: [{ source, url: 'https://github.example/org/first.git', credentialTimeoutMs: 1000 }, { source: secondSource, url: 'https://github.example/org/second.git', credentialTimeoutMs: 1000 }], initialGrants: [{ repository: 'https://github.example/org/first.git', access: 'fetch' }] } } : {}), storageRoot, maxActiveWorkspaces, recoveryRoot: join(root, 'recovery'), provenanceRoot: join(root, 'provenance'), maxOutputBytes: 8388608, settleTimeoutMs: 10000, messageProvider: 'mock-metadata', messageModel: 'cheap', messageInputBytes: 4096, messageOutputTokens: 64, messageTimeoutMs: 10000 } },
         { name: 'instructions', config: { dshHome: '/workspace/.dsh', maxBytes: 4096 } },
         ...(environment ? [{ name: 'repo-access' }] : []),
         { name: 'fs-tools' }, { name: 'loop', config: { agents: [] } },
@@ -217,7 +217,7 @@ describe.skipIf(!enabled)('conversation workspace real Podman Loader flow', () =
       const writerAgent = first.agent
       const unwatch = ctx.on('agent/pre-step', ({ agent }, next) => {
         if (agent === writerAgent && writer === undefined) writer = ctx.subprocess.spawn({
-          argv: ['/bin/sh', '-c', 'while [ ! -f release-writer ]; do sleep 0.05; done; printf retained >background.txt; rm release-writer'],
+          argv: ['/bin/sh', '-c', 'while [ ! -f /workspace/release-writer ]; do sleep 0.05; done; printf retained >background.txt; rm /workspace/release-writer'],
           cwd: source, stdio: { stdin: 'ignore', stdout: { maxBytes: 4096 }, stderr: { maxBytes: 4096 } }, graceMs: 1000,
         })
         return next()
@@ -225,7 +225,7 @@ describe.skipIf(!enabled)('conversation workspace real Podman Loader flow', () =
       first.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Finish while the background writer remains active.' }], source: { kind: 'user' } }))
       await first.agent.whenIdle()
       expect(first.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')?.data)
-        .toMatchObject({ phase: 'pending', turn: 3 })
+        .toMatchObject({ phase: 'failed', turn: 3 })
       const world = await ctx.conversationWorkspaces.runForSession(
         first.agent.id, async () => ctx.conversationWorkspaces.capture().containerName,
       )
@@ -236,9 +236,10 @@ describe.skipIf(!enabled)('conversation workspace real Podman Loader flow', () =
       expect((await writer.done).exitCode).toBe(0)
       unwatch()
       const savedAgent = first.agent
-      await expect.poll(() => savedAgent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')?.data,
-        { timeout: vmConfig === undefined ? 15000 : 120000 }).toMatchObject({ phase: 'returned', turn: 3 })
       await ctx.conversationWorkspaces.runForSession(first.agent.id, async () => {
+        await ctx.conversationWorkspaces.retrySave(savedAgent, new AbortController().signal)
+        expect(savedAgent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')?.data)
+          .toMatchObject({ phase: 'returned', turn: 3 })
         expect(ctx.conversationWorkspaces.capture().containerName).toBe(world)
       })
       expect(await read(first.agent, 'background.txt')).toBe('retained')

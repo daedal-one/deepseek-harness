@@ -73,7 +73,7 @@ it('keeps the selected workspace and shows cancellable waiting before the first 
   if (failures.length > 0) throw new AggregateError(failures, 'workspace queue browser verification failed')
 })
 
-it.each([false, true])('keeps workspace return and pending recovery visible with provenance=%s', async (provenance) => {
+it.each([false, true])('keeps workspace return and failed recovery visible with provenance=%s', async (provenance) => {
   const scaffold = await launchWebScaffold({
     replayFixture: fileURLToPath(new URL(`../../../snapshots/sdk/${provenance ? 'workspace-provenance' : 'workspace-outcomes'}/session.v3.jsonl`, import.meta.url)),
     compareReplaySession: false,
@@ -86,6 +86,7 @@ it.each([false, true])('keeps workspace return and pending recovery visible with
       provenance,
       admission: false,
       pendingError: 'Result branch changed outside this conversation.',
+      terminalFailure: false,
     })
     handle = await scaffold.ctx.agents.create({ sessionId: SessionId('workspace-outcomes-browser'),
       meta: { cwd: scaffold.workspaceCwd }, agentOptions: { provider: 'deepseek-official', model: 'deepseek-flash' } })
@@ -115,6 +116,12 @@ it.each([false, true])('keeps workspace return and pending recovery visible with
     await pending.waitFor()
     await pending.locator('summary').click()
     expect(await pending.innerText()).toContain('Result branch changed outside this conversation.')
+    handle.agent.session.append('workspace/state', { ...event.data, phase: 'failed', error: 'Result branch changed outside this conversation.' })
+    const failed = page.locator('[data-workspace-phase="failed"]')
+    await failed.waitFor()
+    expect(await failed.innerText()).toContain('Workspace save failed — automatic saving stopped')
+    if (!await failed.locator('details').evaluate(element => element.hasAttribute('open'))) await failed.locator('summary').click()
+    expect(await failed.innerText()).toContain('Result branch changed outside this conversation.')
     expect(await page.getByText('SDK snapshot OK', { exact: true }).isVisible()).toBe(true)
     if (process.env.DSH_WORKSPACE_UI_SCREENSHOT !== undefined) {
       await page.screenshot({ path: process.env.DSH_WORKSPACE_UI_SCREENSHOT, fullPage: true })

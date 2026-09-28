@@ -14,12 +14,14 @@ export interface Config {
   provenance: boolean
   admission: boolean
   pendingError: string
+  terminalFailure: boolean
 }
 export const Config: z<Config> = z.object({
   environment: z.boolean().default(false),
   provenance: z.boolean().default(false),
   admission: z.boolean().default(false),
   pendingError: z.string().default('Result branch changed outside this conversation.'),
+  terminalFailure: z.boolean().default(false),
 })
 
 /** Register deterministic storage receipts around a real completed coding turn.
@@ -44,7 +46,8 @@ export function apply(ctx: Context, config: Config): void {
         { remote: 'https://github.example/org/second.git', path: '/workspace/repos/2222222222222222', baseline: 'e'.repeat(40), lastTurn: 0, branches: {} },
       ] } : {} }
     agent.session.append('workspace/state', state)
-    agent.session.append('workspace/state', { ...state, phase: 'pending', error: config.pendingError })
+    agent.session.append('workspace/state', { ...state, phase: config.terminalFailure ? 'failed' : 'pending', error: config.pendingError })
+    if (config.terminalFailure) return
     const branches = config.provenance ? {
       'refs/heads/dsh/fix-recovery-111111111111111111111111/turn-1': 'd'.repeat(40),
       'refs/heads/dsh/fix-recovery-222222222222222222222222/turn-1': 'd'.repeat(40),

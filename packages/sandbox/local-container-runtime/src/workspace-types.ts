@@ -44,7 +44,8 @@ export interface WorkspaceAdmissionState {
 export interface WorkspaceState {
   workspaceId: ConversationWorkspaceId
   turn: number
-  phase: 'ready' | 'saving' | 'returned' | 'checkpointed' | 'pending'
+  /** Pending is a legacy recovery-required outcome; neither pending nor failed authorizes automatic retry. */
+  phase: 'ready' | 'saving' | 'returned' | 'checkpointed' | 'pending' | 'failed'
   baseline: string
   checkpoint: number
   checkpointHash: string

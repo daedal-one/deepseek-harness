@@ -817,6 +817,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'bounded immutable receipts and an explicit truncation indicator.',
       },
       {
+        signature: 'async retrySave(agent: Agent, signal: AbortSignal): Promise<void>',
+        description: 'Retry one failed save without starting a model turn. Concurrent requests reject.',
+        parameters: [{ name: 'agent', description: 'selected top-level conversation whose retained transaction is retried.' }, { name: 'signal', description: 'cancellation while acquiring workspace execution capacity.' }],
+        returns: 'after the attempt settles; the durable workspace state reports success or failure.',
+      },
+      {
         signature: 'async runForSession<T>(sessionId: SessionId, operation: () => Promise<T>, signal?: AbortSignal): Promise<T>',
         description: 'Run a user-facing workspace operation with the selected live conversation.',
         parameters: [{ name: 'sessionId', description: 'selected conversation identity from the host request.' }, { name: 'operation', description: 'operation whose filesystem and process calls share that owner.' }, { name: 'signal', description: 'cancellation while waiting for workspace capacity.' }],

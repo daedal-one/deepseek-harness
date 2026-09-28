@@ -14,6 +14,7 @@ export const en = {
   'workspace.returned': 'Changes saved to host branches',
   'workspace.checkpointed': 'Workspace saved for recovery',
   'workspace.pending': 'Workspace save needs attention',
+  'workspace.failed': 'Workspace save failed — automatic saving stopped',
   'workspace.details': 'Details',
   'workspace.aliases': 'Other branches at this commit ({count})',
   'view.chat': 'Chat',
