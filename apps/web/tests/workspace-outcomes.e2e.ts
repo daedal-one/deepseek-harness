@@ -87,6 +87,7 @@ it.each([false, true])('keeps workspace return and failed recovery visible with 
       admission: false,
       pendingError: 'Result branch changed outside this conversation.',
       terminalFailure: false,
+      terminalCancellation: false,
     })
     handle = await scaffold.ctx.agents.create({ sessionId: SessionId('workspace-outcomes-browser'),
       meta: { cwd: scaffold.workspaceCwd }, agentOptions: { provider: 'deepseek-official', model: 'deepseek-flash' } })
@@ -122,6 +123,13 @@ it.each([false, true])('keeps workspace return and failed recovery visible with 
     expect(await failed.innerText()).toContain('Workspace save failed — automatic saving stopped')
     if (!await failed.locator('details').evaluate(element => element.hasAttribute('open'))) await failed.locator('summary').click()
     expect(await failed.innerText()).toContain('Result branch changed outside this conversation.')
+    handle.agent.session.append('workspace/state', { ...event.data, phase: 'cancelling' })
+    await page.getByText('Stopping workspace save…', { exact: true }).waitFor()
+    handle.agent.session.append('workspace/state', { ...event.data, phase: 'cancelled', error: 'Workspace save was cancelled by its owner.' })
+    const cancelled = page.locator('[data-workspace-phase="cancelled"]')
+    await cancelled.waitFor()
+    expect(await cancelled.innerText()).toContain('Workspace save cancelled — files retained')
+    expect(await page.getByText('Stopping workspace save…', { exact: true }).count()).toBe(0)
     expect(await page.getByText('SDK snapshot OK', { exact: true }).isVisible()).toBe(true)
     if (process.env.DSH_WORKSPACE_UI_SCREENSHOT !== undefined) {
       await page.screenshot({ path: process.env.DSH_WORKSPACE_UI_SCREENSHOT, fullPage: true })

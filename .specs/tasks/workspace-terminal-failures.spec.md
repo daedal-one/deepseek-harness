@@ -18,11 +18,13 @@ assignee: carlo
 
 ## Scope
 
-Implement the [terminal-failure proposal](../../.agents/notes/proposed/bug-fix/2026-09-28-terminal-workspace-failures.md) against the deployed workspace supervisor, including turn settlement, idle release, restart recovery, admission, commands, client presentation, and both SDK projections. The fail-stop and explicit-retry draft has local, remote Linux container, and recorded-session browser evidence; the proposal's implementation-status section lists the outstanding cancellation, admission, resource-release, diagnostic, and deployed-session qualification work. Deployment remains pending.
+Implement the [terminal-failure proposal](../../.agents/notes/proposed/bug-fix/2026-09-28-terminal-workspace-failures.md) against the deployed workspace supervisor, including turn settlement, idle release, restart recovery, admission, commands, client presentation, and both SDK projections. The implementation includes bounded cancellation and admission, safe capacity release, structured diagnostics, explicit recovery, and portable outcome projections. Deployment and individually authorized recovery of affected server conversations remain pending; qualification evidence lives in the proposal's implementation-status section.
 
 Before behavior changes, amend the owning requirement's finalization and outcome clauses to replace automatic pending-save retries with terminal failure and explicit recovery. Preserve transaction replay, source-checkout isolation, and retention guarantees. Update the existing decision's partially superseded retry paragraphs and link the new decision without removing its independent ownership and durability rationale.
 
 ## Delivery
+
+The save controller fences every subsequent side effect after cancellation or its total deadline. A separate durable attempt receipt prevents a late manifest write from erasing terminal failure. If termination or an in-flight operation cannot be joined within the cleanup bound, report failed with uncertain quiescence and retain the lease; never turn a timeout into successful cancellation. Idle failed workspaces release capacity only after confirmed runtime disposal, without checkpointing or marking retained storage clean. Recovery commands remain available outside model-turn admission, and concurrent retries reject before allocation.
 
 1. Add an attempt-scoped state controller with bounded stages, cancellation, durable terminal outcomes, and explicit transition validation. Remove both timer-based retry paths and their configuration consumers.
 2. Preserve bounded, redacted nested failures with operation and repository identity; retain the primary failure when checkpointing also fails.

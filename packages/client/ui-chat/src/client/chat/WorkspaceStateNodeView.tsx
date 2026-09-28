@@ -4,7 +4,7 @@ import type { ChatNodeViewProps } from '../contract/slots.ts'
 /** Save progress and returned branches, independent of the coding agent's answer. */
 export const WorkspaceStateNodeView = memo(function WorkspaceStateNodeView({ node, t }: ChatNodeViewProps<'workspace-state'>) {
   const { phase, branches, repositories, error } = node.data
-  const label = phase === 'returned' ? 'workspace.returned' : phase === 'checkpointed' ? 'workspace.checkpointed' : phase === 'failed' ? 'workspace.failed' : phase === 'pending' ? 'workspace.pending' : 'workspace.saving'
+  const label = phase === 'returned' ? 'workspace.returned' : phase === 'checkpointed' ? 'workspace.checkpointed' : phase === 'failed' ? 'workspace.failed' : phase === 'cancelled' ? 'workspace.cancelled' : phase === 'cancelling' ? 'workspace.cancelling' : phase === 'pending' ? 'workspace.pending' : 'workspace.saving'
   const groups = (repositories ?? [{ remote: '', branches }]).map((repository) => {
     const commits = new Map<string, string[]>()
     for (const [branch, commit] of Object.entries(repository.branches)) {

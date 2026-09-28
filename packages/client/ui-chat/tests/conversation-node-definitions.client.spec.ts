@@ -2539,7 +2539,7 @@ describe('workspace return receipts', () => {
     expect(snapshot(value).order).not.toContain(node(snapshot(value), 'workspace-admission')?.key)
   })
 
-  it.each(['pending', 'failed'] as const)('keeps model completion separate from %s return and replaces progress on explicit retry', (phase) => {
+  it.each(['pending', 'failed', 'cancelled'] as const)('keeps model completion separate from %s return and replaces progress on explicit retry', (phase) => {
     const base = { workspaceId: 'a'.repeat(32), turn: 1, baseline: 'b'.repeat(40), checkpoint: 1, branches: {} }
     const value = assembler([
       at(0, 'turn/start', { turn: 1 }),

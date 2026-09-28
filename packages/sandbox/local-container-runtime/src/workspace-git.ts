@@ -18,6 +18,8 @@ export interface WorkspaceEntry {
 
 /** Host command and transport limits, resolved from deployment configuration. */
 export interface WorkspaceLimits {
+  /** Cancellation owned by the complete save attempt; rejection waits for child exit. */
+  signal?: AbortSignal
   /** Deployment-owned HTTPS remotes, selected by canonical source checkout. */
   remotes?: WorkspaceGitRemote[]
   gitCommand: string
@@ -50,6 +52,7 @@ export interface WorkspaceSeed {
  * @returns bounded stdout.
  */
 export async function workspaceGit(cwd: string, args: string[], limits: WorkspaceLimits, input?: Uint8Array): Promise<Buffer> {
+  limits.signal?.throwIfAborted()
   return await new Promise((accept, reject) => {
     const arguments_ = ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'commit.gpgsign=false', '-c', 'protocol.allow=never', '-c', 'gc.auto=0', ...args]
     const linux = process.platform === 'linux'
@@ -67,6 +70,9 @@ export async function workspaceGit(cwd: string, args: string[], limits: Workspac
       }
     }
     const timer = setTimeout(() =>{  stop(new Error('workspace Git command deadline exceeded')) }, limits.timeoutMs)
+    const abort = (): void => { stop(new Error('Workspace save cancelled', { cause: limits.signal?.reason })) }
+    limits.signal?.addEventListener('abort', abort, { once: true })
+    if (limits.signal?.aborted) abort()
     const collect = (target: Buffer[]) => (chunk: Buffer): void => {
       bytes += chunk.length
       if (bytes > limits.maxBytes) stop(new Error('workspace Git output limit exceeded'))
@@ -77,6 +83,7 @@ export async function workspaceGit(cwd: string, args: string[], limits: Workspac
     child.stdin.on('error', (error) => { if ((error as NodeJS.ErrnoException).code !== 'EPIPE') stop(error) })
     child.on('close', (code) => {
       clearTimeout(timer)
+      limits.signal?.removeEventListener('abort', abort)
       if (failure !== undefined) reject(failure)
       else if (code !== 0) reject(new Error(`workspace Git ${args[0]} failed: ${Buffer.concat(stderr).toString('utf8').slice(0, 2048)}`))
       else accept(Buffer.concat(stdout))

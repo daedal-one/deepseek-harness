@@ -1115,7 +1115,7 @@ for line in sys.stdin:
     assert result.events[-1]["data"]["checkpoint"] == 2
 
 
-@pytest.mark.parametrize("scenario", ["workspace-outcomes", "environment-workspace-outcomes", "workspace-provenance", "workspace-terminal-failure"])
+@pytest.mark.parametrize("scenario", ["workspace-outcomes", "environment-workspace-outcomes", "workspace-provenance", "workspace-terminal-failure", "workspace-save-cancelled"])
 def test_recorded_workspace_outcomes_match_the_typescript_sdk(tmp_path: Path, scenario: str) -> None:
     fixture = Path(__file__).resolve().parents[3] / f"snapshots/sdk/{scenario}/notifications.expected.jsonl"
     script = tmp_path / "recorded_workspace_runtime.py"
@@ -1152,7 +1152,11 @@ for line in sys.stdin:
         if frame["method"] == "session.event" and frame["params"]["event"]["type"] == "workspace/state"
     ]
     assert actual == expected
-    assert [event["phase"] for event in actual] == (["saving", "failed"] if scenario == "workspace-terminal-failure" else ["saving", "pending", "returned"])
+    expected_phases = {
+        "workspace-terminal-failure": ["saving", "failed"],
+        "workspace-save-cancelled": ["saving", "cancelling", "cancelled"],
+    }.get(scenario, ["saving", "pending", "returned"])
+    assert [event["phase"] for event in actual] == expected_phases
     if scenario == "workspace-outcomes":
         admission = [event["data"]["status"] for event in result.events if event["type"] == "workspace/admission"]
         assert admission == ["waiting", "admitted"]

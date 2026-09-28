@@ -33,6 +33,18 @@ export type ConversationWorkspaceId = Branded<'ConversationWorkspaceId'>
 /** Identity of one turn's workspace admission request. */
 export type WorkspaceAdmissionId = Branded<'WorkspaceAdmissionId'>
 
+/** Durable identity of one explicitly triggered save attempt. */
+export type WorkspaceSaveAttemptId = Branded<'WorkspaceSaveAttemptId'>
+/** Save operations whose failure can require independent recovery. */
+export type WorkspaceSaveStage = 'persistence' | 'writers' | 'capture' | 'commit' | 'return' | 'metadata' | 'cleanup'
+/** Safe diagnostics never include raw subprocess output or credentials. */
+export interface WorkspaceSaveDiagnostic {
+  stage: WorkspaceSaveStage
+  quiescent: boolean
+  repository?: string
+  causes: Array<{ code: string; message: string; fingerprint?: string }>
+}
+
 /** Durable execution waiting state, independent of conversation creation. */
 export interface WorkspaceAdmissionState {
   id: WorkspaceAdmissionId
@@ -45,7 +57,9 @@ export interface WorkspaceState {
   workspaceId: ConversationWorkspaceId
   turn: number
   /** Pending is a legacy recovery-required outcome; neither pending nor failed authorizes automatic retry. */
-  phase: 'ready' | 'saving' | 'returned' | 'checkpointed' | 'pending' | 'failed'
+  phase: 'ready' | 'saving' | 'cancelling' | 'cancelled' | 'returned' | 'checkpointed' | 'pending' | 'failed'
+  attemptId?: WorkspaceSaveAttemptId
+  diagnostic?: WorkspaceSaveDiagnostic
   baseline: string
   checkpoint: number
   checkpointHash: string

@@ -30,13 +30,16 @@ export function workspaceNamingMessages(session: Session): Array<{ seq: number; 
  * @param refs - original sandbox refs requiring names.
  * @param summary - bounded frozen change summary.
  * @param config - deployment route, input, output and deadline limits.
+ * @param cancellation - owning save lifetime; cancellation rejects instead of selecting fallback names.
  * @returns all validated names, or undefined when disabled, oversized, unavailable or invalid.
  */
 export async function generateWorkspaceTopics(
   ctx: Context, session: Session, turn: number, refs: string[], summary: string,
   config: Pick<ConversationWorkspaceConfig,
     'messageProvider' | 'messageModel' | 'messageInputBytes' | 'messageOutputTokens' | 'messageTimeoutMs' | 'maxOutputBytes'>,
+  cancellation?: AbortSignal,
 ): Promise<Record<string, string> | undefined> {
+  cancellation?.throwIfAborted()
   const { messageProvider: provider, messageModel: model } = config
   const llm = ctx.get('llm')
   if (provider === undefined || model === undefined || llm === undefined) return undefined
@@ -46,7 +49,9 @@ export async function generateWorkspaceTopics(
   session.append('workspace/branch-name-request', { turn, system: SYSTEM, messages, provider, model, maxTokens: config.messageOutputTokens })
   if (!await ctx.sessions.flush(session)) return undefined
   try {
-    const signal = AbortSignal.timeout(config.messageTimeoutMs)
+    const deadline = AbortSignal.timeout(config.messageTimeoutMs)
+    const signal = cancellation === undefined ? deadline : AbortSignal.any([deadline, cancellation])
+    signal.throwIfAborted()
     const assembler = new BlockAssembler()
     let bytes = 0
     for await (const chunk of llm.stream({ provider, model, system: SYSTEM, messages, maxTokens: config.messageOutputTokens, sessionId: session.id, purpose: 'workspace-branch-name', signal })) {
@@ -63,5 +68,5 @@ export async function generateWorkspaceTopics(
     const names = value as Record<string, unknown>
     if (Object.keys(names).length !== refs.length || refs.some(ref => typeof names[ref] !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(names[ref]) || names[ref].length > 48)) return undefined
     return Object.fromEntries(refs.map(ref => [ref, names[ref] as string]))
-  } catch { return undefined }
+  } catch { cancellation?.throwIfAborted(); return undefined }
 }

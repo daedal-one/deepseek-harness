@@ -15,6 +15,7 @@ export interface Config {
   admission: boolean
   pendingError: string
   terminalFailure: boolean
+  terminalCancellation: boolean
 }
 export const Config: z<Config> = z.object({
   environment: z.boolean().default(false),
@@ -22,6 +23,7 @@ export const Config: z<Config> = z.object({
   admission: z.boolean().default(false),
   pendingError: z.string().default('Result branch changed outside this conversation.'),
   terminalFailure: z.boolean().default(false),
+  terminalCancellation: z.boolean().default(false),
 })
 
 /** Register deterministic storage receipts around a real completed coding turn.
@@ -46,6 +48,11 @@ export function apply(ctx: Context, config: Config): void {
         { remote: 'https://github.example/org/second.git', path: '/workspace/repos/2222222222222222', baseline: 'e'.repeat(40), lastTurn: 0, branches: {} },
       ] } : {} }
     agent.session.append('workspace/state', state)
+    if (config.terminalCancellation) {
+      agent.session.append('workspace/state', { ...state, phase: 'cancelling' })
+      agent.session.append('workspace/state', { ...state, phase: 'cancelled', error: 'Workspace save was cancelled by its owner.' })
+      return
+    }
     agent.session.append('workspace/state', { ...state, phase: config.terminalFailure ? 'failed' : 'pending', error: config.pendingError })
     if (config.terminalFailure) return
     const branches = config.provenance ? {

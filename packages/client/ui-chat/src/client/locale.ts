@@ -15,6 +15,8 @@ export const en = {
   'workspace.checkpointed': 'Workspace saved for recovery',
   'workspace.pending': 'Workspace save needs attention',
   'workspace.failed': 'Workspace save failed — automatic saving stopped',
+  'workspace.cancelled': 'Workspace save cancelled — files retained',
+  'workspace.cancelling': 'Stopping workspace save…',
   'workspace.details': 'Details',
   'workspace.aliases': 'Other branches at this commit ({count})',
   'view.chat': 'Chat',

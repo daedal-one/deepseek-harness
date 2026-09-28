@@ -2,6 +2,7 @@
 
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { createHash, randomUUID } from 'node:crypto'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { lstat, mkdir, open, realpath, readdir, rm, statfs } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
 import { isAbsolute, join, relative } from 'node:path'
@@ -23,6 +24,8 @@ import { parseDevelopmentVmReference, sameDevelopmentVmReference, type Developme
 import type { PodmanControllerExecRequest, PodmanControllerExecResult } from './types.ts'
 import { WORKSPACE_CONTROLLER } from './workspace-controller.ts'
 import { WorkspaceAdmission } from './workspace-admission.ts'
+import { WorkspaceSaveAttempt, joinWorkspaceOperation, workspaceSaveDiagnostic } from './workspace-save.ts'
+import type { WorkspaceSaveDiagnostic, WorkspaceSaveStage } from './workspace-types.ts'
 import { installWorkspaceGuidance } from './workspace-guidance.ts'
 import { EnvironmentAccess } from './environment-access.ts'
 import { cloneEnvironmentRepository } from './remote-import.ts'
@@ -36,7 +39,7 @@ import { importWorkspace, publishWorkspaceJson, returnWorkspaceBranches, workspa
 import type { WorkspaceEntry, WorkspaceLimits } from './workspace-git.ts'
 
 /** Deployment-owned workspace capacity, retention location, and optional cheap model route. */
-export interface ConversationWorkspaceConfig extends Omit<WorkspaceLimits, 'remotes'> {
+export interface ConversationWorkspaceConfig extends Omit<WorkspaceLimits, 'remotes' | 'signal'> {
   /** Independent environment authority and repository catalog; omitted retains the single-conversation lifecycle. */
   environment?: EnvironmentAccessConfig
   /** Exact operator-admitted host conversations; each preset must supply isolated host filesystem, subprocess and shell services. */
@@ -53,6 +56,12 @@ export interface ConversationWorkspaceConfig extends Omit<WorkspaceLimits, 'remo
   maxOutputBytes: number
   /** Bounded wait for live processes and child agents at settlement. */
   settleTimeoutMs: number
+  /** Maximum wait for execution capacity, including an existing release. */
+  admissionTimeoutMs: number
+  /** Total save attempt budget before cancellation is requested. */
+  saveTimeoutMs: number
+  /** Maximum wait to prove cancelled operations and writers have stopped. */
+  cleanupTimeoutMs: number
   /** Explicit auxiliary provider, paired with model. */
   messageProvider?: string
   /** Explicit inexpensive auxiliary model. */
@@ -165,7 +174,11 @@ interface Workspace {
   pending: boolean
   releasing?: Promise<void>
   settlement?: Promise<void>
+  saveWork?: Promise<void>
   resumeTurn?: { turn: number; reason: TurnEndReason }
+  attempt?: WorkspaceSaveAttempt
+  diagnostic?: WorkspaceSaveDiagnostic
+  quarantined?: boolean
 }
 
 /** Approval outcome; a checkout path is available only after durable attachment. */
@@ -210,6 +223,7 @@ export class ConversationWorkspaces extends Service {
     maxEntries: z.natural().required(),
     timeoutMs: z.natural().required(),
     maxOutputBytes: z.natural().required(), settleTimeoutMs: z.natural().required(),
+    admissionTimeoutMs: z.natural().required(), saveTimeoutMs: z.natural().required(), cleanupTimeoutMs: z.natural().required(),
     messageProvider: z.string(),
     messageModel: z.string(),
     messageInputBytes: z.natural().required(),
@@ -234,6 +248,8 @@ export class ConversationWorkspaces extends Service {
   private readonly requestCancellation = new AbortController()
   private environmentReady: Promise<void> | undefined
   private environmentLease: FileHandle | undefined
+  private readonly saveScope = new AsyncLocalStorage<WorkspaceSaveAttempt>()
+  private readonly recoveryRequests = new Set<SessionId>()
 
   constructor(ctx: Context, config: ConversationWorkspaceConfig) {
     super(ctx, 'conversationWorkspaces')
@@ -241,12 +257,15 @@ export class ConversationWorkspaces extends Service {
     this.admission = new WorkspaceAdmission(this.config.maxActiveWorkspaces)
     ctx.inject(['commands'], (inner) => {
       inner.effect(() => inner.commands.register({
-        name: 'workspace-save', description: 'Inspect a workspace save failure or explicitly retry it.',
-        input: { hint: '[status | retry]' },
+        name: 'workspace-save', description: 'Inspect, abort, or explicitly retry a workspace save.',
+        input: { hint: '[status | abort | retry]' },
         handler: async ({ agent, rawInput, signal }) => {
           const action = rawInput.trim() || 'status'
-          if (action !== 'status' && action !== 'retry') return { kind: 'error', text: 'Use /workspace-save status or /workspace-save retry.' }
+          if (action !== 'status' && action !== 'retry' && action !== 'abort') {
+            return { kind: 'error', text: 'Use /workspace-save status, /workspace-save abort, or /workspace-save retry.' }
+          }
           if (action === 'retry') await this.retrySave(agent, signal)
+          if (action === 'abort') await this.abortSave(agent)
           const state = agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')
           return { kind: 'success', text: state === undefined ? 'No workspace save has been recorded.' : JSON.stringify(state.data) }
         },
@@ -312,6 +331,10 @@ export class ConversationWorkspaces extends Service {
       const id = brandString<WorkspaceAdmissionId>(randomUUID())
       agent.session.append('workspace/admission', { id, status: 'waiting' })
       try {
+        const previous = agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')
+        if (previous !== undefined && ['failed', 'cancelled', 'pending', 'cancelling'].includes(previous.data.phase)) {
+          throw new Error('Workspace recovery is required. Use /workspace-save status, then /workspace-save retry after inspection.')
+        }
         const release = await this.acquireUse(agent, signal)
         this.turnUses.set(agent, release)
         if (this.forAgent(agent).pending) throw new Error('workspace recovery is pending; see the synchronization error')
@@ -367,24 +390,40 @@ export class ConversationWorkspaces extends Service {
 
   /** Retry one failed save without starting a model turn. Concurrent requests reject.
    * @param agent - selected top-level conversation whose retained transaction is retried.
-   * @param signal - cancellation while acquiring workspace execution capacity.
+   * @param signal - cancellation of acquisition and the owned save attempt.
    * @returns after the attempt settles; the durable workspace state reports success or failure.
    */
   async retrySave(agent: Agent, signal: AbortSignal): Promise<void> {
     if (this.ownerFor(agent) !== agent) throw new Error('Workspace recovery requires the owning conversation.')
-    const release = await this.acquireUse(agent, signal)
+    if (this.recoveryRequests.has(agent.id)) throw new Error('A workspace recovery request is already running.')
+    this.recoveryRequests.add(agent.id)
+    let release: (() => Promise<void>) | undefined
     try {
+      release = await this.acquireUse(agent, signal)
       signal.throwIfAborted()
       const workspace = this.forAgent(agent)
+      if (workspace.quarantined) throw new Error('Workspace cleanup is unconfirmed; its execution lease remains fenced.')
       if (workspace.settlement !== undefined) throw new Error('A workspace save is already running.')
       if (!workspace.pending) throw new Error('This workspace has no failed save to retry.')
       workspace.pending = false
       const resume = workspace.resumeTurn
-      if (resume !== undefined) await this.settle(workspace, resume.turn, resume.reason)
+      if (resume !== undefined) await this.settle(workspace, resume.turn, resume.reason, signal)
       else {
-        await this.settle(workspace, workspace.record.lastTurn, { kind: 'interrupted' })
+        await this.settle(workspace, workspace.record.lastTurn, { kind: 'interrupted' }, signal)
       }
-    } finally { await release() }
+    } finally { try { await release?.() } finally { this.recoveryRequests.delete(agent.id) } }
+  }
+
+  /** Abort the selected owner's current save without waiting for model or execution admission.
+   * @param agent - top-level conversation that owns the attempt.
+   * @returns after bounded cleanup; the durable outcome distinguishes cancellation from uncertain termination.
+   */
+  async abortSave(agent: Agent): Promise<void> {
+    if (this.ownerFor(agent) !== agent) throw new Error('Workspace recovery requires the owning conversation.')
+    const workspace = this.bindings.get(agent)
+    if (workspace?.attempt === undefined || workspace.settlement === undefined) throw new Error('No workspace save is running.')
+    workspace.attempt.cancel()
+    await workspace.settlement
   }
 
 
@@ -530,6 +569,7 @@ export class ConversationWorkspaces extends Service {
   }
 
   private async acquireUse(agent: Agent, signal: AbortSignal): Promise<() => Promise<void>> {
+    signal = AbortSignal.any([signal, AbortSignal.timeout(this.config.admissionTimeoutMs)])
     signal.throwIfAborted()
     this.requestCancellation.signal.throwIfAborted()
     const owner = this.ownerFor(agent)
@@ -540,7 +580,7 @@ export class ConversationWorkspaces extends Service {
     }
     if (use === undefined) {
       const abort = new AbortController()
-      const lifetime = AbortSignal.any([abort.signal, this.requestCancellation.signal])
+      const lifetime = AbortSignal.any([abort.signal, this.requestCancellation.signal, AbortSignal.timeout(this.config.admissionTimeoutMs)])
       const pending: WorkspaceUse = { references: 0, abort, ready: Promise.resolve().then(async () => {
         pending.releaseSlot = await this.admission.acquire(lifetime)
         try {
@@ -582,7 +622,8 @@ export class ConversationWorkspaces extends Service {
       this.forAgent(agent)
       return release
     } catch (error) {
-      await release()
+      const cleanup = release()
+      if (await joinWorkspaceOperation(cleanup, this.config.cleanupTimeoutMs)) await cleanup
       throw error
     }
   }
@@ -594,6 +635,7 @@ export class ConversationWorkspaces extends Service {
   }
 
   private releaseIdle(owner: Agent, use: WorkspaceUse): Promise<void> {
+    if (this.shutdown !== undefined) return Promise.resolve()
     if (use.references !== 0) return Promise.resolve()
     if (use.closing !== undefined) return use.closing
     use.abort.abort()
@@ -606,20 +648,18 @@ export class ConversationWorkspaces extends Service {
         return
       }
       if (workspace.pending) {
+        await this.retireFailed(workspace, use)
         if (use.closing === closing) delete use.closing
         return
       }
-      try {
+      await this.runSave(workspace, workspace.record.lastTurn, false, async () => {
         await workspace.runtime.settle(this.config.settleTimeoutMs,
           async (control) => { await this.checkpoint(workspace, control) },
           async () => { await this.ctx.serial('workspace/quiesce', { executionWorld: workspace.runtime.executionWorld }) })
-      } catch (error) {
-        workspace.pending = true
-        try {
-          await this.failSave(workspace, workspace.record.lastTurn, false, error)
-        } finally {
-          if (use.closing === closing) delete use.closing
-        }
+      })
+      if (workspace.record.failure !== undefined) {
+        await this.retireFailed(workspace, use)
+        if (use.closing === closing) delete use.closing
         return
       }
       workspace.pending = false
@@ -627,9 +667,32 @@ export class ConversationWorkspaces extends Service {
       for (const agent of workspace.users) this.bindings.delete(agent)
       this.uses.delete(owner.id)
       use.releaseSlot?.()
-    })
+    }).finally(() => { if (use.closing === closing) delete use.closing })
     use.closing = closing
     return closing
+  }
+
+  private async retireFailed(workspace: Workspace, use: WorkspaceUse): Promise<void> {
+    if (workspace.quarantined) return
+    const disposal = Promise.resolve().then(() => workspace.dispose())
+    if (!await joinWorkspaceOperation(disposal, this.config.cleanupTimeoutMs)) {
+      workspace.quarantined = true
+      await this.failSave(workspace, workspace.record.failure?.turn ?? workspace.record.lastTurn,
+        workspace.record.failure?.finalize ?? false, new Error('Workspace cleanup could not be confirmed'))
+      return
+    }
+    try { await disposal }
+    catch (error) {
+      workspace.quarantined = true
+      await this.failSave(workspace, workspace.record.failure?.turn ?? workspace.record.lastTurn,
+        workspace.record.failure?.finalize ?? false, error)
+      return
+    }
+    await Promise.all(workspace.leases.map(lease => lease.close()))
+    this.workspaces.delete(workspace)
+    for (const agent of workspace.users) this.bindings.delete(agent)
+    this.uses.delete(workspace.owner.id)
+    use.releaseSlot?.()
   }
 
   private async verifyStorage(): Promise<void> {
@@ -784,7 +847,7 @@ export class ConversationWorkspaces extends Service {
       workspace.record.repositories.push(repository)
     }
     await this.checkpoint(workspace, control)
-    await rm(path)
+    await this.saveStep('capture', () => rm(path))
   }
 
   private async completeAttachments(workspace: Workspace, control: Control): Promise<void> {
@@ -814,6 +877,11 @@ export class ConversationWorkspaces extends Service {
       let record: RecordState | undefined
       try { record = parseRecord(await readWorkspaceJson(join(directory, 'state.json'), this.config.maxOutputBytes), workspaceId, agent.id) }
       catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
+      const receipt = await this.readSaveReceipt(directory)
+      if (record !== undefined && receipt !== undefined && receipt.phase !== 'settled') {
+        record.failure = { turn: receipt.turn, finalize: receipt.finalize,
+          error: 'Workspace save did not complete. Inspect retained files, then use /workspace-save retry.' }
+      }
       if (record !== undefined && record.environmentId !== this.environment?.config.id) throw new Error('workspace recovery belongs to a different environment')
       if (record?.developmentVm !== undefined) {
         if (vms === undefined) throw new Error('workspace requires its recorded development VM provider')
@@ -927,7 +995,9 @@ export class ConversationWorkspaces extends Service {
         leases,
         pending: false }
       const previous = agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')
-      if (record.failure === undefined && previous?.data.phase !== 'failed' && previous?.data.phase !== 'pending' && previous?.data.phase !== 'saving') {
+      const interrupted = previous !== undefined && ['failed', 'cancelled', 'cancelling', 'pending', 'saving'].includes(previous.data.phase)
+        && receipt?.phase !== 'settled'
+      if (record.failure === undefined && !interrupted) {
         await this.completeAttachments(workspace, owned.runtime.executeController.bind(owned.runtime))
       }
       const ended = agent.session.snapshotEvents().findLast(event => event.type === 'turn/end')
@@ -940,8 +1010,7 @@ export class ConversationWorkspaces extends Service {
         && [record, ...record.repositories ?? []].some(repository => ended.data.turn > repository.lastTurn)) {
         workspace.resumeTurn = ended.data
       }
-      if (workspace.resumeTurn !== undefined || previous?.data.phase === 'pending'
-        || previous?.data.phase === 'failed' || previous?.data.phase === 'saving') {
+      if (workspace.resumeTurn !== undefined || interrupted) {
         workspace.pending = true
         this.state(workspace, 'failed', workspace.resumeTurn?.turn ?? record.lastTurn,
           record.failure?.error ?? previous?.data.error ?? 'Workspace save was interrupted. Inspect retained files, then use /workspace-save retry.')
@@ -1008,17 +1077,31 @@ export class ConversationWorkspaces extends Service {
     const failures: unknown[] = []
     try {
       await workspace.settlement
-      if (!checkpointed) {
-        await workspace.runtime.cancelProcesses()
-        await workspace.runtime.settle(this.config.settleTimeoutMs, async (control) => { await this.checkpoint(workspace, control) })
+      if (workspace.saveWork !== undefined && !await joinWorkspaceOperation(workspace.saveWork, this.config.cleanupTimeoutMs)) {
+        throw new Error('Workspace save remains active; execution lease retained')
+      }
+      if (!checkpointed && !workspace.pending) {
+        await this.runSave(workspace, workspace.record.lastTurn, false, async () => {
+          await this.saveStep('writers', () => workspace.runtime.cancelProcesses())
+          await workspace.runtime.settle(this.config.settleTimeoutMs, async (control) => { await this.checkpoint(workspace, control) })
+        })
+        if (workspace.record.failure !== undefined) throw new Error('Workspace shutdown checkpoint failed; retained storage requires recovery')
       }
     } catch (error) { failures.push(error) }
+    if (workspace.saveWork !== undefined && !await joinWorkspaceOperation(workspace.saveWork, this.config.cleanupTimeoutMs)) {
+      throw new AggregateError(failures, 'Workspace cleanup is unconfirmed; execution lease retained')
+    }
     let quiescent = false
-    try { await workspace.dispose(); quiescent = true }
+    try {
+      const disposal = Promise.resolve().then(() => workspace.dispose())
+      if (!await joinWorkspaceOperation(disposal, this.config.cleanupTimeoutMs)) throw new Error('Workspace disposal deadline exceeded; execution lease retained')
+      await disposal
+      quiescent = true
+    }
     catch (error) { failures.push(error) }
     if (quiescent) {
       try {
-        if (failures.length === 0) {
+        if (failures.length === 0 && !workspace.pending) {
           await this.publish(join(workspace.storage, 'owner.json'), { workspaceId: workspace.record.workspaceId, clean: true, initialized: true })
         }
       } catch (error) { failures.push(error) }
@@ -1030,6 +1113,8 @@ export class ConversationWorkspaces extends Service {
   }
 
   private state(workspace: Workspace, phase: WorkspaceState['phase'], turn: number, error?: string): void {
+    this.saveScope.getStore()?.signal.throwIfAborted()
+    if (phase !== 'ready' && phase !== 'pending') workspace.attempt?.transition(phase)
     const record = workspace.record
     workspace.owner.session.append('workspace/state',
       { workspaceId: record.workspaceId,
@@ -1039,13 +1124,15 @@ export class ConversationWorkspaces extends Service {
         checkpoint: record.checkpoint,
         checkpointHash: record.checkpointHash,
         branches: record.branches,
+        ...workspace.attempt === undefined ? {} : { attemptId: workspace.attempt.id },
+        ...workspace.diagnostic === undefined ? {} : { diagnostic: workspace.diagnostic },
         ...record.environmentId === undefined ? {} : { environmentId: record.environmentId,
           repositories: [record, ...record.repositories ?? []].map(repositoryState) },
         ...error === undefined ? {} : { error } })
   }
 
   private async publish(path: string, value: unknown): Promise<void> {
-    await publishWorkspaceJson(path, value, this.config.maxOutputBytes)
+    await this.saveStep('persistence', () => publishWorkspaceJson(path, value, this.config.maxOutputBytes))
   }
 
   private async saveRecord(workspace: Workspace): Promise<void> { await this.publish(join(workspace.directory, 'state.json'), workspace.record) }
@@ -1055,13 +1142,13 @@ export class ConversationWorkspaces extends Service {
     const { checkpoint, discardCheckpoint, pruneCheckpoints } = runtime
     const retention: Partial<WorkspaceCheckpointRuntime> = {
       ...checkpoint === undefined ? {} : {
-        checkpoint: async (generation: number, checkpointHash: string) => await checkpoint(generation, checkpointHash),
+        checkpoint: async (generation: number, checkpointHash: string) => { await this.saveStep('capture', () => checkpoint(generation, checkpointHash)) },
       },
       ...discardCheckpoint === undefined ? {} : {
-        discardCheckpoint: async (generation: number, checkpointHash: string) => await discardCheckpoint(generation, checkpointHash),
+        discardCheckpoint: async (generation: number, checkpointHash: string) => { await this.saveStep('capture', () => discardCheckpoint(generation, checkpointHash)) },
       },
       ...pruneCheckpoints === undefined ? {} : {
-        pruneCheckpoints: async (generation: number) => await pruneCheckpoints(generation),
+        pruneCheckpoints: async (generation: number) => { await this.saveStep('capture', () => pruneCheckpoints(generation)) },
       },
     }
     await this.checkpointRecord(workspace.record, workspace.directory, control, retention)
@@ -1095,7 +1182,7 @@ export class ConversationWorkspaces extends Service {
     }
     await retention?.pruneCheckpoints?.(generation)
     await this.pruneSourceCheckpoints(directory, generation)
-    await rm(join(directory, CHECKPOINT_PENDING))
+    await this.saveStep('capture', () => rm(join(directory, CHECKPOINT_PENDING)))
   }
 
   private async reconcileCheckpointJournal(
@@ -1130,16 +1217,16 @@ export class ConversationWorkspaces extends Service {
       if (checkpointHash(entries) !== journal.checkpointHash) throw new Error('workspace abandoned checkpoint differs from its journal')
       if (paired && retention?.discardCheckpoint === undefined) throw new Error('workspace VM discard provider is unavailable')
       await retention?.discardCheckpoint?.(journal.generation, journal.checkpointHash)
-      await rm(artifactPath)
+      await this.saveStep('capture', () => rm(artifactPath))
     } else throw new Error('workspace checkpoint journal differs from the durable manifest')
-    await rm(join(directory, CHECKPOINT_PENDING))
+    await this.saveStep('capture', () => rm(join(directory, CHECKPOINT_PENDING)))
     return promoted
   }
 
   private async pruneSourceCheckpoints(directory: string, generation: number): Promise<void> {
     for (const name of await readdir(directory)) {
       const match = /^checkpoint-(\d+)\.json$/u.exec(name)
-      if (match !== null && Number(match[1]) < generation - 1) await rm(join(directory, name))
+      if (match !== null && Number(match[1]) < generation - 1) await this.saveStep('capture', () => rm(join(directory, name)))
     }
   }
 
@@ -1155,175 +1242,279 @@ export class ConversationWorkspaces extends Service {
     catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined; throw error }
   }
 
-  private settle(workspace: Workspace, turn: number, reason: TurnEndReason): Promise<void> {
+  private async readSaveReceipt(directory: string): Promise<{ turn: number; finalize: boolean; phase: string } | undefined> {
+    const read = async (name: string): Promise<Record<string, unknown> | undefined> => {
+      let value: unknown
+      try { value = await readWorkspaceJson(join(directory, name), this.config.maxOutputBytes) }
+      catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined; throw error }
+      if (!isObject(value) || typeof value.id !== 'string' || !/^[a-f0-9-]{36}$/u.test(value.id)
+        || typeof value.turn !== 'number' || !Number.isSafeInteger(value.turn) || value.turn < 0
+        || typeof value.finalize !== 'boolean') throw new Error('Invalid workspace save receipt; retain storage for operator recovery')
+      return value
+    }
+    const attempt = await read('save-attempt.json')
+    const failure = await read('save-outcome.json')
+    const completed = await read('save-completed.json')
+    const outcome = failure !== undefined && (attempt === undefined || failure.id === attempt.id) ? failure
+      : completed !== undefined && completed.id === attempt?.id ? completed : undefined
+    const value = outcome ?? attempt
+    if (value === undefined) return undefined
+    if (value === outcome && !['settled', 'failed', 'cancelled'].includes(String(value.phase))) {
+      throw new Error('Invalid workspace save outcome; retain storage for operator recovery')
+    }
+    return { turn: value.turn as number, finalize: value.finalize as boolean,
+      phase: value === outcome ? String(value.phase) : 'interrupted' }
+  }
+
+  private settle(workspace: Workspace, turn: number, reason: TurnEndReason, signal?: AbortSignal): Promise<void> {
     if (workspace.settlement !== undefined) return workspace.settlement
     if (workspace.pending) return Promise.resolve()
     workspace.resumeTurn = { turn, reason }
-    const pending = this.attemptSettlement(workspace, turn, reason).finally(() => {
-      delete workspace.settlement
-      const use = this.uses.get(workspace.owner.id)
-      if (!workspace.pending && use?.references === 0) {
-        void this.releaseIdle(workspace.owner, use).catch((error: unknown) => { this.ctx.logger.error(error) })
-      }
-    })
-    workspace.settlement = pending
-    return pending
+    return this.runSave(workspace, turn, reason.kind === 'completed', () => this.attemptSettlement(workspace, turn, reason), signal)
   }
 
-  private async attemptSettlement(workspace: Workspace, turn: number, reason: TurnEndReason): Promise<void> {
-    try {
-      if (!await this.ctx.sessions.flush(workspace.owner.session)) throw new Error('workspace finalization requires durable session persistence')
+  private runSave(
+    workspace: Workspace, turn: number, finalize: boolean, operation: () => Promise<void>, signal?: AbortSignal,
+  ): Promise<void> {
+    if (workspace.settlement !== undefined) return workspace.settlement
+    const attempt = new WorkspaceSaveAttempt(this.config.saveTimeoutMs)
+    workspace.attempt = attempt
+    delete workspace.diagnostic
+    const abort = () => { attempt.cancel() }
+    signal?.addEventListener('abort', abort, { once: true })
+    if (signal?.aborted) abort()
+    const settled = this.finishSave(workspace, attempt, turn, finalize, operation).finally(() => {
+      signal?.removeEventListener('abort', abort)
+      attempt.dispose()
+      if (!workspace.quarantined) delete workspace.settlement
+    })
+    workspace.settlement = settled
+    return settled
+  }
+
+  private async finishSave(
+    workspace: Workspace, attempt: WorkspaceSaveAttempt, turn: number, finalize: boolean, operation: () => Promise<void>,
+  ): Promise<void> {
+    const previous = workspace.owner.session.snapshotEvents().findLast(event => event.type === 'workspace/state')
+    const successPhase = finalize || (previous?.data.phase === 'returned' && previous.data.turn === turn) ? 'returned' : 'checkpointed'
+    const task = this.saveScope.run(attempt, async () => {
+      await this.publish(join(workspace.directory, 'save-attempt.json'), { id: attempt.id, turn, finalize })
       this.state(workspace, 'saving', turn)
-      const children = [...workspace.users].filter(agent => agent !== workspace.owner)
-      await waitForChildren(Promise.all(children.map(agent => agent.whenIdle())), this.config.settleTimeoutMs)
-      await workspace.runtime.settle(this.config.settleTimeoutMs, async (control) => {
-        await this.completeAttachments(workspace, control)
-        if (reason.kind !== 'completed') {
-          await this.checkpoint(workspace, control)
-          return
-        }
-        const failures: unknown[] = []
-        for (const repository of [workspace.record, ...workspace.record.repositories ?? []]) {
-          const fields = repository.executionPath === undefined ? {} : { repository: repository.executionPath.slice('/workspace/'.length) }
-          try {
-            if (repository.lastTurn >= turn) continue
-            let transaction = repository.transaction
-            if (transaction === undefined) {
-              let prepared: Record<string, unknown>
-              try { prepared = await this.control(control, 'prepare', { ...fields, baseline: repository.baseline }) }
-              catch (error) {
-                try { await this.checkpoint(workspace, control) }
-                catch (checkpointError) { throw new AggregateError([error, checkpointError], 'Git preparation and recovery checkpoint failed') }
-                throw error
-              }
-              transaction = { turn, provenanceTrailers: true, authorName: this.config.authorName, authorEmail: this.config.authorEmail, timestamp: new Date(workspace.owner.session.snapshotEvents().findLast(event => event.type === 'turn/end' && event.data.turn === turn)?.time ?? workspace.owner.session.header.createdAt).toISOString(), tree: requireOid(prepared.tree), parent: requireOid(prepared.parent), clean: prepared.clean === true }
-              transaction.summary = String(prepared.summary)
-              repository.transaction = transaction
-              await this.checkpoint(workspace, control)
-              if (!transaction.clean) {
-                transaction.message = await this.message(workspace.owner.session, turn, String(prepared.diff))
-                await this.saveRecord(workspace)
-              }
-            }
-            if (transaction.provenanceId === undefined) {
-              transaction.provenanceId = brandString<WorkspaceProvenanceId>(randomUUID())
-              const events = workspace.owner.session.snapshotEvents()
-              const end = events.findLast(event => event.type === 'turn/end' && event.data.turn === turn)
-              if (end === undefined || events[0] === undefined) throw new Error('workspace provenance requires a completed turn')
-              transaction.eventRange = [events[0].seq, end.seq]
-              await this.saveRecord(workspace)
-            }
-            if (!transaction.clean && transaction.oid === undefined) {
-              if (transaction.message === undefined) {
-                const requested = workspace.owner.session.snapshotEvents().some(event => event.type === 'workspace/commit-message-request' && event.data.turn === turn)
-                transaction.message = requested ? fallback(turn) : await this.message(workspace.owner.session, turn, transaction.summary ?? '')
-                await this.saveRecord(workspace)
-              }
-              const result = await this.control(control, 'commit', { ...fields, authorName: transaction.authorName, authorEmail: transaction.authorEmail, tree: transaction.tree, parent: transaction.parent, timestamp: transaction.timestamp, message: `${transaction.message}\n\nDSH-Workspace: ${workspace.record.workspaceId}\nDSH-Turn: ${turn}\nDSH-Input-Baseline: ${repository.baseline}\n${transaction.provenanceTrailers === true ? `DSH-Session: ${workspace.owner.session.id}\nDSH-Provenance: ${transaction.provenanceId}\n` : ''}` })
-              transaction.oid = requireOid(result.oid)
-            }
-            await this.checkpoint(workspace, control)
-            let bundle: Buffer | undefined
-            let heads = transaction.heads
-            if (heads === undefined || transaction.branchesReturned !== true) {
-              const exported = await this.control(control, 'bundle', fields)
-              if (typeof exported.bundle !== 'string' || !isObject(exported.heads)) throw new Error('invalid workspace bundle response')
-              const observedHeads: Record<string, string> = {}
-              for (const [ref, value] of Object.entries(exported.heads)) observedHeads[ref] = requireOid(value)
-              bundle = Buffer.from(exported.bundle, 'base64')
-              if (bundle.toString('base64') !== exported.bundle) throw new Error('invalid workspace bundle encoding')
-              if (heads === undefined) {
-                transaction.heads = observedHeads
-                heads = observedHeads
-                await this.saveRecord(workspace)
-              } else if (!sameRecord(heads, observedHeads)) throw new Error('workspace bundle heads changed after checkpoint')
-            }
-            if (heads === undefined) throw new Error('workspace return heads are missing')
-            const unnamed = Object.keys(heads).filter(ref => repository.topics?.[ref] === undefined)
-            if (unnamed.length > 0) {
-              const fallbackTopic = workspaceTopic(workspaceNamingMessages(workspace.owner.session).at(-1)?.text ?? 'changes')
-              repository.topics = { ...repository.topics, ...Object.fromEntries(unnamed.map(ref => [ref, fallbackTopic])) }
-              await this.saveRecord(workspace)
-              const names = await generateWorkspaceTopics(this.ctx, workspace.owner.session, turn, unnamed, transaction.summary ?? transaction.message ?? '', this.config)
-              if (names !== undefined) { repository.topics = { ...repository.topics, ...names }; await this.saveRecord(workspace) }
-            }
-            const expectedBranches = Object.fromEntries(Object.entries(heads).map(([ref, oid]) => {
-              const topic = repository.topics?.[ref]
-              if (topic === undefined) throw new Error('workspace provenance branch topic is missing')
-              return [workspaceResultRef(workspace.record.workspaceId, turn, ref, topic), oid]
-            }))
-            if (transaction.branchesReturned !== true) {
-              if (bundle === undefined) throw new Error('workspace return bundle is missing')
-              const returned = await returnWorkspaceBranches(
-                repository.source, this.config.recoveryRoot, workspace.record.workspaceId, turn,
-                bundle, heads, this.config, repository.topics,
-              )
-              if (!sameRecord(returned, expectedBranches)) throw new Error('workspace return branches differ from their persisted plan')
-              repository.branches = returned
-              transaction.branchesReturned = true
-              await this.saveRecord(workspace)
-            } else if (!sameRecord(repository.branches, expectedBranches)) throw new Error('workspace returned branch receipt is inconsistent')
-            const historyBytes = await workspaceGit(repository.source, ['rev-list', ...Object.values(heads), '--not', repository.baseline], this.config)
-            const history = historyBytes.toString().trim()
-            const observedCommits = [...new Set([...Object.values(heads), ...history === '' ? [] : history.split('\n')])].sort()
-            if (observedCommits.length > this.config.maxEntries) throw new Error('workspace provenance commit count exceeds its bound')
-            const eventRange = transaction.eventRange
-            if (eventRange === undefined) throw new Error('workspace provenance event interval is missing')
-            const refs = Object.entries(heads).sort(([a], [b]) => a.localeCompare(b)).map(([ref, commit]) => {
-              const topic = repository.topics?.[ref]
-              if (topic === undefined) throw new Error('workspace provenance branch topic is missing')
-              return { source: ref, branch: workspaceResultRef(workspace.record.workspaceId, turn, ref, topic), commit, topic }
-            })
-            const receipt: WorkspaceProvenance = {
-              version: 1, id: transaction.provenanceId, workspaceId: workspace.record.workspaceId,
-              sessionId: workspace.owner.session.id, turn, eventRange,
-              repository: repository.source, baseline: repository.baseline, createdAt: transaction.timestamp,
-              refs,
-              observedCommits, createdCommits: transaction.oid === undefined ? [] : [transaction.oid],
-            }
-            if (transaction.provenanceSaved !== true) {
-              await saveWorkspaceProvenance(this.config.provenanceRoot, receipt, this.config.maxOutputBytes)
-              transaction.provenanceSaved = true
-              await this.saveRecord(workspace)
-            }
-            if (transaction.eventRecorded !== true) {
-              if (!workspace.owner.session.snapshotEvents().some(event => event.type === 'workspace/provenance' && event.data.id === receipt.id)) workspace.owner.session.append('workspace/provenance', receipt)
-              if (!await this.ctx.sessions.flush(workspace.owner.session)) throw new Error('workspace provenance requires durable session persistence')
-              transaction.eventRecorded = true
-              await this.saveRecord(workspace)
-            }
-            repository.lastTurn = turn; delete repository.transaction
-            await this.saveRecord(workspace)
-          } catch (error) { failures.push(new Error(`Repository ${repository.executionPath ?? '/workspace'} save failed`, { cause: error })) }
-        }
-        if (failures.length > 0) throw new AggregateError(failures, 'repository return remains pending; successful repository receipts are retained')
-      }, async () => { await this.ctx.serial('workspace/quiesce', { executionWorld: workspace.runtime.executionWorld }) })
-      delete workspace.record.failure
-      await this.saveRecord(workspace)
-      this.state(workspace, reason.kind === 'completed' ? 'returned' : 'checkpointed', turn)
+      await operation()
+      attempt.signal.throwIfAborted()
+      await this.publish(join(workspace.directory, 'save-completed.json'), { id: attempt.id, turn, finalize, phase: 'settled' })
       workspace.pending = false
       delete workspace.resumeTurn
-      if (!await this.ctx.sessions.flush(workspace.owner.session)) throw new Error('workspace outcome requires durable session persistence')
+      this.state(workspace, successPhase, turn)
+      if (!await this.saveStep('persistence', () => this.ctx.sessions.flush(workspace.owner.session))) {
+        throw new Error('Workspace terminal outcome requires durable Session persistence')
+      }
+    })
+    workspace.saveWork = task
+    try {
+      await waitForAdmission(task, attempt.signal)
     } catch (error) {
-      await this.failSave(workspace, turn, reason.kind === 'completed', error)
+      const stage = attempt.stage
+      const published = attempt.published
+      if (attempt.signal.aborted && !published) this.state(workspace, 'cancelling', turn)
+      else attempt.controller.abort(error)
+      const children = [...workspace.users].filter(agent => agent !== workspace.owner)
+      const cleanup = Promise.all([task.catch(() => undefined),
+        Promise.resolve().then(() => workspace.runtime.cancelProcesses()),
+        ...children.map(async (agent) => { agent.cancel({ kind: 'parent' }); await agent.whenIdle() })])
+      let quiescent = await joinWorkspaceOperation(cleanup, this.config.cleanupTimeoutMs)
+      if (quiescent) {
+        try { await cleanup } catch { quiescent = false }
+      }
+      workspace.quarantined = !quiescent
+      const diagnostic = workspaceSaveDiagnostic(error, stage, quiescent, attempt.repository)
+      const cancelled = !published && quiescent && error instanceof Error && error.message === 'Workspace save cancelled'
+      await this.failSave(workspace, turn, finalize, error, cancelled ? 'cancelled' : 'failed', diagnostic)
     }
   }
 
-  private async failSave(workspace: Workspace, turn: number, finalize: boolean, error: unknown): Promise<void> {
+  private async saveStep<T>(stage: WorkspaceSaveStage, operation: () => Promise<T>): Promise<T> {
+    const attempt = this.saveScope.getStore()
+    return attempt === undefined ? await operation() : await attempt.run(stage, operation)
+  }
+
+  private async attemptSettlement(workspace: Workspace, turn: number, reason: TurnEndReason): Promise<void> {
+    if (!await this.saveStep('persistence', () => this.ctx.sessions.flush(workspace.owner.session))) {
+      throw new Error('workspace finalization requires durable session persistence')
+    }
+    const children = [...workspace.users].filter(agent => agent !== workspace.owner)
+    await this.saveStep('writers', () => waitForChildren(Promise.all(children.map(agent => agent.whenIdle())), this.config.settleTimeoutMs))
+    await workspace.runtime.settle(this.config.settleTimeoutMs, async (control) => {
+      this.saveScope.getStore()?.signal.throwIfAborted()
+      await this.completeAttachments(workspace, control)
+      if (reason.kind !== 'completed') {
+        await this.checkpoint(workspace, control)
+        return
+      }
+      const failures: unknown[] = []
+      for (const repository of [workspace.record, ...workspace.record.repositories ?? []]) {
+        const attempt = this.saveScope.getStore()
+        attempt?.signal.throwIfAborted()
+        if (attempt !== undefined) attempt.repository = repository.executionPath ?? '/workspace'
+        const fields = repository.executionPath === undefined ? {} : { repository: repository.executionPath.slice('/workspace/'.length) }
+        try {
+          if (repository.lastTurn >= turn) continue
+          let transaction = repository.transaction
+          if (transaction === undefined) {
+            let prepared: Record<string, unknown>
+            try { prepared = await this.control(control, 'prepare', { ...fields, baseline: repository.baseline }) }
+            catch (error) {
+              try { await this.checkpoint(workspace, control) }
+              catch (checkpointError) { throw new AggregateError([error, checkpointError], 'Git preparation and recovery checkpoint failed') }
+              throw error
+            }
+            transaction = { turn, provenanceTrailers: true, authorName: this.config.authorName, authorEmail: this.config.authorEmail, timestamp: new Date(workspace.owner.session.snapshotEvents().findLast(event => event.type === 'turn/end' && event.data.turn === turn)?.time ?? workspace.owner.session.header.createdAt).toISOString(), tree: requireOid(prepared.tree), parent: requireOid(prepared.parent), clean: prepared.clean === true }
+            transaction.summary = String(prepared.summary)
+            repository.transaction = transaction
+            await this.checkpoint(workspace, control)
+            if (!transaction.clean) {
+              transaction.message = await this.message(workspace.owner.session, turn, String(prepared.diff))
+              await this.saveRecord(workspace)
+            }
+          }
+          if (transaction.provenanceId === undefined) {
+            transaction.provenanceId = brandString<WorkspaceProvenanceId>(randomUUID())
+            const events = workspace.owner.session.snapshotEvents()
+            const end = events.findLast(event => event.type === 'turn/end' && event.data.turn === turn)
+            if (end === undefined || events[0] === undefined) throw new Error('workspace provenance requires a completed turn')
+            transaction.eventRange = [events[0].seq, end.seq]
+            await this.saveRecord(workspace)
+          }
+          if (!transaction.clean && transaction.oid === undefined) {
+            if (transaction.message === undefined) {
+              const requested = workspace.owner.session.snapshotEvents().some(event => event.type === 'workspace/commit-message-request' && event.data.turn === turn)
+              transaction.message = requested ? fallback(turn) : await this.message(workspace.owner.session, turn, transaction.summary ?? '')
+              await this.saveRecord(workspace)
+            }
+            const result = await this.control(control, 'commit', { ...fields, authorName: transaction.authorName, authorEmail: transaction.authorEmail, tree: transaction.tree, parent: transaction.parent, timestamp: transaction.timestamp, message: `${transaction.message}\n\nDSH-Workspace: ${workspace.record.workspaceId}\nDSH-Turn: ${turn}\nDSH-Input-Baseline: ${repository.baseline}\n${transaction.provenanceTrailers === true ? `DSH-Session: ${workspace.owner.session.id}\nDSH-Provenance: ${transaction.provenanceId}\n` : ''}` })
+            transaction.oid = requireOid(result.oid)
+          }
+          await this.checkpoint(workspace, control)
+          let bundle: Buffer | undefined
+          let heads = transaction.heads
+          if (heads === undefined || transaction.branchesReturned !== true) {
+            const exported = await this.control(control, 'bundle', fields)
+            if (typeof exported.bundle !== 'string' || !isObject(exported.heads)) throw new Error('invalid workspace bundle response')
+            const observedHeads: Record<string, string> = {}
+            for (const [ref, value] of Object.entries(exported.heads)) observedHeads[ref] = requireOid(value)
+            bundle = Buffer.from(exported.bundle, 'base64')
+            if (bundle.toString('base64') !== exported.bundle) throw new Error('invalid workspace bundle encoding')
+            if (heads === undefined) {
+              transaction.heads = observedHeads
+              heads = observedHeads
+              await this.saveRecord(workspace)
+            } else if (!sameRecord(heads, observedHeads)) throw new Error('workspace bundle heads changed after checkpoint')
+          }
+          if (heads === undefined) throw new Error('workspace return heads are missing')
+          const unnamed = Object.keys(heads).filter(ref => repository.topics?.[ref] === undefined)
+          if (unnamed.length > 0) {
+            const fallbackTopic = workspaceTopic(workspaceNamingMessages(workspace.owner.session).at(-1)?.text ?? 'changes')
+            repository.topics = { ...repository.topics, ...Object.fromEntries(unnamed.map(ref => [ref, fallbackTopic])) }
+            await this.saveRecord(workspace)
+            const names = await this.saveStep('metadata', () => generateWorkspaceTopics(this.ctx, workspace.owner.session, turn,
+              unnamed, transaction.summary ?? transaction.message ?? '', this.config, attempt?.signal))
+            if (names !== undefined) { repository.topics = { ...repository.topics, ...names }; await this.saveRecord(workspace) }
+          }
+          const expectedBranches = Object.fromEntries(Object.entries(heads).map(([ref, oid]) => {
+            const topic = repository.topics?.[ref]
+            if (topic === undefined) throw new Error('workspace provenance branch topic is missing')
+            return [workspaceResultRef(workspace.record.workspaceId, turn, ref, topic), oid]
+          }))
+          if (transaction.branchesReturned !== true) {
+            if (bundle === undefined) throw new Error('workspace return bundle is missing')
+            const capturedBundle = bundle
+            const capturedHeads = heads
+            const returned = await this.saveStep('return', () => returnWorkspaceBranches(
+              repository.source, this.config.recoveryRoot, workspace.record.workspaceId, turn,
+              capturedBundle, capturedHeads, { ...this.config, ...attempt === undefined ? {} : { signal: attempt.signal } },
+              repository.topics,
+            ))
+            if (!sameRecord(returned, expectedBranches)) throw new Error('workspace return branches differ from their persisted plan')
+            repository.branches = returned
+            transaction.branchesReturned = true
+            await this.saveRecord(workspace)
+          } else if (!sameRecord(repository.branches, expectedBranches)) throw new Error('workspace returned branch receipt is inconsistent')
+          const historyBytes = await this.saveStep('return', () => workspaceGit(repository.source,
+            ['rev-list', ...Object.values(heads), '--not', repository.baseline], { ...this.config, ...attempt === undefined ? {} : { signal: attempt.signal } }))
+          const history = historyBytes.toString().trim()
+          const observedCommits = [...new Set([...Object.values(heads), ...history === '' ? [] : history.split('\n')])].sort()
+          if (observedCommits.length > this.config.maxEntries) throw new Error('workspace provenance commit count exceeds its bound')
+          const eventRange = transaction.eventRange
+          if (eventRange === undefined) throw new Error('workspace provenance event interval is missing')
+          const refs = Object.entries(heads).sort(([a], [b]) => a.localeCompare(b)).map(([ref, commit]) => {
+            const topic = repository.topics?.[ref]
+            if (topic === undefined) throw new Error('workspace provenance branch topic is missing')
+            return { source: ref, branch: workspaceResultRef(workspace.record.workspaceId, turn, ref, topic), commit, topic }
+          })
+          const receipt: WorkspaceProvenance = {
+            version: 1, id: transaction.provenanceId, workspaceId: workspace.record.workspaceId,
+            sessionId: workspace.owner.session.id, turn, eventRange,
+            repository: repository.source, baseline: repository.baseline, createdAt: transaction.timestamp,
+            refs,
+            observedCommits, createdCommits: transaction.oid === undefined ? [] : [transaction.oid],
+          }
+          if (transaction.provenanceSaved !== true) {
+            await this.saveStep('persistence', () => saveWorkspaceProvenance(this.config.provenanceRoot, receipt, this.config.maxOutputBytes))
+            transaction.provenanceSaved = true
+            await this.saveRecord(workspace)
+          }
+          if (transaction.eventRecorded !== true) {
+            if (!workspace.owner.session.snapshotEvents().some(event => event.type === 'workspace/provenance' && event.data.id === receipt.id)) workspace.owner.session.append('workspace/provenance', receipt)
+            if (!await this.saveStep('persistence', () => this.ctx.sessions.flush(workspace.owner.session))) {
+              throw new Error('workspace provenance requires durable session persistence')
+            }
+            transaction.eventRecorded = true
+            await this.saveRecord(workspace)
+          }
+          repository.lastTurn = turn; delete repository.transaction
+          await this.saveRecord(workspace)
+        } catch (error) { failures.push(new Error(`Repository ${repository.executionPath ?? '/workspace'} save failed`, { cause: error })) }
+      }
+      if (failures.length > 0) throw new AggregateError(failures, 'repository return remains pending; successful repository receipts are retained')
+    }, async () => { await this.saveStep('writers', () => this.ctx.serial('workspace/quiesce', { executionWorld: workspace.runtime.executionWorld })) })
+    delete workspace.record.failure
+    await this.saveRecord(workspace)
+    if (!await this.saveStep('persistence', () => this.ctx.sessions.flush(workspace.owner.session))) {
+      throw new Error('workspace outcome requires durable session persistence')
+    }
+  }
+
+  private async failSave(workspace: Workspace, turn: number, finalize: boolean, error: unknown,
+    phase: 'failed' | 'cancelled' = 'failed', diagnostic = workspaceSaveDiagnostic(error, 'cleanup', false)): Promise<void> {
     workspace.pending = true
-    const failure = { turn, finalize, error: workspaceFailure(error) }
+    workspace.diagnostic = diagnostic
+    workspace.resumeTurn = { turn, reason: { kind: finalize ? 'completed' : 'interrupted' } }
+    const failure = { turn, finalize, error: `Workspace save failed during ${diagnostic.stage}${diagnostic.repository === undefined ? '' : ` (${diagnostic.repository})`}.\n`
+      + diagnostic.causes.map(cause => cause.message).join('\n')
+      + (diagnostic.quiescent
+        ? '\nAutomatic saving stopped. Inspect retained files, then use /workspace-save retry.'
+        : '\nCleanup is unconfirmed. Storage and execution ownership are retained; operator recovery is required.') }
     workspace.record.failure = failure
-    this.state(workspace, 'failed', turn, failure.error)
-    const results = await Promise.allSettled([
+    this.state(workspace, phase, turn, failure.error)
+    const persistence = Promise.allSettled([
       this.saveRecord(workspace),
       Promise.resolve().then(() => this.ctx.sessions.flush(workspace.owner.session)),
+      ...workspace.attempt === undefined ? [] : [this.publish(join(workspace.directory, 'save-outcome.json'),
+        { id: workspace.attempt.id, turn, finalize, phase, error: failure.error, diagnostic })],
     ])
+    if (!await joinWorkspaceOperation(persistence, this.config.cleanupTimeoutMs)) {
+      workspace.quarantined = true
+      throw new Error('Workspace failure persistence exceeded its deadline; retained storage requires operator recovery')
+    }
+    const results = await persistence
     const failures = results.flatMap(result => result.status === 'rejected' ? [result.reason as unknown]
       : result.value === false ? [new Error('workspace failure Session record was not persisted')] : [])
     if (failures.length > 0) throw new AggregateError([error, ...failures], 'workspace save failed; failure persistence also failed; storage retained')
   }
 
   private async control(control: Control, operation: string, fields: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
+    const attempt = this.saveScope.getStore()
+    attempt?.signal.throwIfAborted()
     const input = { operation,
       authorName: this.config.authorName, authorEmail: this.config.authorEmail,
       ...fields,
@@ -1331,12 +1522,13 @@ export class ConversationWorkspaces extends Service {
       maxEntries: this.config.maxEntries,
       maxOutputBytes: this.config.maxOutputBytes,
       timeoutSeconds: Math.ceil(this.config.timeoutMs / 1000) }
-    const result = await control({ argv: ['/usr/bin/python3',
+    const result = await this.saveStep(operation === 'commit' ? 'commit' : 'capture', () => control({ argv: ['/usr/bin/python3',
       '-c',
       WORKSPACE_CONTROLLER],
     stdin: Buffer.from(JSON.stringify(input)),
     maxOutputBytes: this.config.maxOutputBytes,
-    deadlineMs: this.config.timeoutMs })
+    deadlineMs: this.config.timeoutMs,
+    ...attempt === undefined ? {} : { signal: attempt.signal } }))
     if (result.exitCode !== 0) throw new Error('workspace controller failed')
     const response: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(result.stdout))
     if (!isObject(response) || response.ok !== true || !isObject(response.value)) throw new Error(isObject(response) && typeof response.error === 'string' ? response.error : 'invalid workspace controller response')
@@ -1344,6 +1536,8 @@ export class ConversationWorkspaces extends Service {
   }
 
   private async message(session: Session, turn: number, summary: string): Promise<string> {
+    const attempt = this.saveScope.getStore()
+    attempt?.signal.throwIfAborted()
     const { messageProvider: provider, messageModel: model } = this.config
     const llm = this.ctx.get('llm')
     if (provider === undefined || model === undefined || llm === undefined
@@ -1359,9 +1553,13 @@ export class ConversationWorkspaces extends Service {
         provider,
         model,
         maxTokens: this.config.messageOutputTokens })
-    await this.ctx.sessions.flush(session)
+    await this.saveStep('persistence', () => this.ctx.sessions.flush(session))
     try {
-      const signal = AbortSignal.timeout(this.config.messageTimeoutMs); const assembler = new BlockAssembler()
+      const deadline = AbortSignal.timeout(this.config.messageTimeoutMs)
+      const signal = attempt === undefined ? deadline : AbortSignal.any([deadline, attempt.signal])
+      signal.throwIfAborted()
+      if (attempt !== undefined) attempt.stage = 'metadata'
+      const assembler = new BlockAssembler()
       for await (const chunk of llm.stream({ provider, model, system: COMMIT_SYSTEM, messages, maxTokens: this.config.messageOutputTokens, sessionId: session.id, purpose: 'workspace-commit', signal })) {
         signal.throwIfAborted(); assembler.push(chunk)
       }
@@ -1370,7 +1568,7 @@ export class ConversationWorkspaces extends Service {
       if (blocks.some(block => block.type !== 'text')) return fallback(turn)
       const subject = blocks.filter(block => block.type === 'text').map(block => block.text).join('').trim()
       return subject.length > 0 && subject.length <= 120 && !/[\x00-\x1f\x7f]/u.test(subject) ? subject : fallback(turn)
-    } catch { return fallback(turn) }
+    } catch { attempt?.signal.throwIfAborted(); return fallback(turn) }
   }
 }
 
@@ -1396,20 +1594,6 @@ async function waitForChildren(operation: Promise<unknown>, ms: number): Promise
   } finally { if (timer !== undefined) clearTimeout(timer) }
 }
 
-function workspaceFailure(error: unknown): string {
-  const messages: string[] = []
-  const seen = new Set<unknown>()
-  const visit = (cause: unknown): void => {
-    if (seen.has(cause) || seen.size >= 16) return
-    seen.add(cause)
-    if (!(cause instanceof Error)) { messages.push('Unknown workspace failure'); return }
-    messages.push(cause.message.slice(0, 1024))
-    if (cause instanceof AggregateError) for (const child of cause.errors) visit(child)
-    if (cause.cause !== undefined) visit(cause.cause)
-  }
-  visit(error)
-  return `${messages.join('\n').slice(0, 4096)}\nAutomatic saving stopped. Retained files require inspection; use /workspace-save retry after resolving the failure.`
-}
 
 function parseRecord(value: unknown, workspaceId: ConversationWorkspaceId, sessionId: string): RecordState {
   if (!isObject(value) || value.version !== 1 || value.workspaceId !== workspaceId || value.sessionId !== sessionId || typeof value.source !== 'string' || !isAbsolute(value.source)

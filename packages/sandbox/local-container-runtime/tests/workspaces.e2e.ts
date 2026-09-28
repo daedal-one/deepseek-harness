@@ -105,7 +105,7 @@ describe.skipIf(!enabled)('conversation workspace real Podman Loader flow', () =
         { name: 'container-fs', config: { cwdAliases: [], maxFileBytes: 65536, diffBasisMaxBytes: 32768, maxControllerOutputBytes: 200000, operationTimeoutMs: 10000 } },
         { name: 'container-subprocess', config: { cwdAliases: [], controlOutputBytes: 4096, controlTimeoutMs: 10000 } },
         { name: 'presets', config: { default: 'maintenance', roots: [{ path: presetRoot, trust: 'user' }], includeShippedRoot: false, includeUserRoot: false } },
-        { name: 'workspaces', config: { ...limits, hostSessions: [{ sessionId: maintenanceId, preset: 'maintenance', cwd: source }], ...(environment ? { environment: { id: 'e2e-environment', name: 'E2E environment', grantLifetimeMs: 3600000, repositories: [{ source, url: 'https://github.example/org/first.git', credentialTimeoutMs: 1000 }, { source: secondSource, url: 'https://github.example/org/second.git', credentialTimeoutMs: 1000 }], initialGrants: [{ repository: 'https://github.example/org/first.git', access: 'fetch' }] } } : {}), storageRoot, maxActiveWorkspaces, recoveryRoot: join(root, 'recovery'), provenanceRoot: join(root, 'provenance'), maxOutputBytes: 8388608, settleTimeoutMs: 10000, messageProvider: 'mock-metadata', messageModel: 'cheap', messageInputBytes: 4096, messageOutputTokens: 64, messageTimeoutMs: 10000 } },
+        { name: 'workspaces', config: { ...limits, hostSessions: [{ sessionId: maintenanceId, preset: 'maintenance', cwd: source }], ...(environment ? { environment: { id: 'e2e-environment', name: 'E2E environment', grantLifetimeMs: 3600000, repositories: [{ source, url: 'https://github.example/org/first.git', credentialTimeoutMs: 1000 }, { source: secondSource, url: 'https://github.example/org/second.git', credentialTimeoutMs: 1000 }], initialGrants: [{ repository: 'https://github.example/org/first.git', access: 'fetch' }] } } : {}), storageRoot, maxActiveWorkspaces, recoveryRoot: join(root, 'recovery'), provenanceRoot: join(root, 'provenance'), maxOutputBytes: 8388608, settleTimeoutMs: 10000, admissionTimeoutMs: 120000, saveTimeoutMs: 120000, cleanupTimeoutMs: 30000, messageProvider: 'mock-metadata', messageModel: 'cheap', messageInputBytes: 4096, messageOutputTokens: 64, messageTimeoutMs: 10000 } },
         { name: 'instructions', config: { dshHome: '/workspace/.dsh', maxBytes: 4096 } },
         ...(environment ? [{ name: 'repo-access' }] : []),
         { name: 'fs-tools' }, { name: 'loop', config: { agents: [] } },
@@ -217,7 +217,7 @@ describe.skipIf(!enabled)('conversation workspace real Podman Loader flow', () =
       const writerAgent = first.agent
       const unwatch = ctx.on('agent/pre-step', ({ agent }, next) => {
         if (agent === writerAgent && writer === undefined) writer = ctx.subprocess.spawn({
-          argv: ['/bin/sh', '-c', 'while [ ! -f /workspace/release-writer ]; do sleep 0.05; done; printf retained >background.txt; rm /workspace/release-writer'],
+          argv: ['/bin/sh', '-c', 'printf retained >background.txt; while [ ! -f /workspace/release-writer ]; do sleep 0.05; done'],
           cwd: source, stdio: { stdin: 'ignore', stdout: { maxBytes: 4096 }, stderr: { maxBytes: 4096 } }, graceMs: 1000,
         })
         return next()
@@ -226,21 +226,17 @@ describe.skipIf(!enabled)('conversation workspace real Podman Loader flow', () =
       await first.agent.whenIdle()
       expect(first.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')?.data)
         .toMatchObject({ phase: 'failed', turn: 3 })
-      const world = await ctx.conversationWorkspaces.runForSession(
-        first.agent.id, async () => ctx.conversationWorkspaces.capture().containerName,
-      )
-      // The test owns this conversation directory; the external release proves settlement did not kill the writer.
-      const backing = join(storageRoot, receipt.data.workspaceId)
-      await writeFile(join(backing, 'workspace', 'release-writer'), '')
       if (writer === undefined) throw new Error('background writer did not start')
-      expect((await writer.done).exitCode).toBe(0)
+      const [writerOutcome] = await Promise.allSettled([writer.done])
+      if (writerOutcome.status === 'fulfilled') expect(writerOutcome.value.exitCode).not.toBe(0)
+      else expect(writerOutcome.reason).toMatchObject({ name: 'AbortError' })
+      expect(first.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')?.data.diagnostic?.quiescent).toBe(true)
       unwatch()
       const savedAgent = first.agent
       await ctx.conversationWorkspaces.runForSession(first.agent.id, async () => {
         await ctx.conversationWorkspaces.retrySave(savedAgent, new AbortController().signal)
         expect(savedAgent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')?.data)
           .toMatchObject({ phase: 'returned', turn: 3 })
-        expect(ctx.conversationWorkspaces.capture().containerName).toBe(world)
       })
       expect(await read(first.agent, 'background.txt')).toBe('retained')
       const started = Promise.withResolvers<undefined>()

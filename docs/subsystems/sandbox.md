@@ -179,10 +179,16 @@ async lookupChanges(query: string, signal: AbortSignal): Promise<{ records: Work
 
 /** Retry one failed save without starting a model turn. Concurrent requests reject.
  * @param agent - selected top-level conversation whose retained transaction is retried.
- * @param signal - cancellation while acquiring workspace execution capacity.
+ * @param signal - cancellation of acquisition and the owned save attempt.
  * @returns after the attempt settles; the durable workspace state reports success or failure.
  */
 async retrySave(agent: Agent, signal: AbortSignal): Promise<void>
+
+/** Abort the selected owner's current save without waiting for model or execution admission.
+ * @param agent - top-level conversation that owns the attempt.
+ * @returns after bounded cleanup; the durable outcome distinguishes cancellation from uncertain termination.
+ */
+async abortSave(agent: Agent): Promise<void>
 
 /** Run a user-facing workspace operation with the selected live conversation.
  * @param sessionId - selected conversation identity from the host request.

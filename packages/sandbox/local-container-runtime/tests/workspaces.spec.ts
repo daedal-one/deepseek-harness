@@ -50,6 +50,7 @@ afterEach(async () => {
 })
 
 async function fixture(options: {
+  bounds?: Partial<Pick<ConversationWorkspaceConfig, 'admissionTimeoutMs' | 'saveTimeoutMs' | 'cleanupTimeoutMs'>>
   commands?: boolean
   environment?: boolean
   maintenance?: boolean
@@ -70,6 +71,8 @@ async function fixture(options: {
     gitCommand: '/usr/bin/git', authorName: 'DSH', authorEmail: 'dsh@localhost', resourceLimitCommand: '/usr/bin/prlimit', gitMemoryBytes: 536870912,
     maxBytes: 4194304, maxEntries: 1000, timeoutMs: 30000, maxOutputBytes: 8388608,
     settleTimeoutMs: 1000,
+    admissionTimeoutMs: 30000, saveTimeoutMs: 30000, cleanupTimeoutMs: 5000,
+    ...options.bounds,
     messageInputBytes: 4096, messageOutputTokens: 64, messageTimeoutMs: 1000,
     ...options.message === true ? { messageProvider: 'mock', messageModel: 'cheap' } : {},
   }
@@ -284,6 +287,145 @@ async function fixture(options: {
 }
 
 describe.skipIf(process.platform === 'win32')('conversation workspace transaction lifecycle', () => {
+  it('retries terminal persistence without losing the original completed-turn outcome', async () => {
+    const f = await fixture()
+    const flush = f.ctx.sessions.flush.bind(f.ctx.sessions)
+    let injected = false
+    const fault = vi.spyOn(f.ctx.sessions, 'flush').mockImplementation(async (session) => {
+      if (!injected && session.snapshotEvents().findLast(event => event.type === 'workspace/state')?.data.phase === 'returned') {
+        injected = true
+        throw new Error('terminal Session flush unavailable')
+      }
+      return await flush(session)
+    })
+    expect((await f.turn())?.data.phase).toBe('failed')
+    fault.mockRestore()
+    const before = await workspaceGit(f.execution, ['rev-parse', 'HEAD'], f.config)
+    await f.ctx.conversationWorkspaces.retrySave(f.handle.agent, new AbortController().signal)
+    expect(f.handle.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')?.data.phase).toBe('returned')
+    expect(await workspaceGit(f.execution, ['rev-parse', 'HEAD'], f.config)).toEqual(before)
+  })
+
+  it('returns cancelled admission before a stalled allocation finishes while retaining cleanup ownership', async () => {
+    const f = await fixture({ bounds: { cleanupTimeoutMs: 100 } })
+    const other = await f.ctx.agents.create({ sessionId: SessionId('stalled-allocation'), meta: { cwd: f.source }, agentOptions: { provider: 'mock', model: 'main' } })
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const runtime = f.ctx.localContainerRuntime
+    const create = runtime.createWorkspace.bind(runtime)
+    const paused = vi.spyOn(runtime, 'createWorkspace').mockImplementationOnce(async (...args) => {
+      entered.resolve(undefined)
+      await release.promise
+      return await create(...args)
+    })
+    const cancellation = new AbortController()
+    const invoked = vi.fn(async () => undefined)
+    const operation = f.ctx.conversationWorkspaces.runForSession(other.agent.id, invoked, cancellation.signal)
+    const rejected = expect(operation).rejects.toThrow('cancel allocation')
+    try {
+      await entered.promise
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      cancellation.abort(new Error('cancel allocation'))
+      await vi.advanceTimersByTimeAsync(100)
+      await rejected
+      expect(invoked).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+      release.resolve(undefined)
+      await f.ctx.conversationWorkspaces.runForSession(other.agent.id, async () => undefined)
+      paused.mockRestore()
+      await other.dispose()
+    }
+  })
+
+  it('ends capacity admission at its deadline without invoking the model', async () => {
+    const f = await fixture({ bounds: { admissionTimeoutMs: 5000 } })
+    const second = await f.ctx.agents.create({ sessionId: SessionId('deadline-held'), meta: { cwd: f.source }, agentOptions: { provider: 'mock', model: 'main' } })
+    await f.executionFor(second.agent)
+    const waiting = await f.ctx.agents.create({ sessionId: SessionId('deadline-waiter'), meta: { cwd: f.source }, agentOptions: { provider: 'mock', model: 'main' } })
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      waiting.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Start' }], source: { kind: 'user' } }))
+      await vi.advanceTimersByTimeAsync(5000)
+      await waiting.agent.whenIdle()
+      expect(waiting.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/admission')?.data.status).toBe('failed')
+      expect(f.adapter.requests).toHaveLength(0)
+    } finally { vi.useRealTimers(); await waiting.dispose(); await second.dispose() }
+  })
+
+  it('aborts a save during publication and fences every subsequent controller action', async () => {
+    const f = await fixture({ commands: true })
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const publish = broker.publishWorkspaceJson
+    const paused = vi.spyOn(broker, 'publishWorkspaceJson').mockImplementation(async (path, value, bound) => {
+      if (path.endsWith('/save-attempt.json')) { entered.resolve(undefined); await release.promise }
+      await publish(path, value, bound)
+    })
+    const runtime = f.ctx.agents.withInitiator(f.handle.agent, () => f.ctx.conversationWorkspaces.capture())
+    const controller = vi.spyOn(runtime, 'executeController')
+    const turn = f.turn()
+    try {
+      await entered.promise
+      const abort = f.ctx.conversationWorkspaces.abortSave(f.handle.agent)
+      await expect.poll(() => f.handle.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')?.data.phase).toBe('cancelling')
+      release.resolve(undefined)
+      await abort
+      expect((await turn)?.data).toMatchObject({ phase: 'cancelled', diagnostic: { quiescent: true } })
+      expect(controller).not.toHaveBeenCalled()
+      await expect(f.ctx.conversationWorkspaces.abortSave(f.handle.agent)).rejects.toThrow('No workspace save')
+    } finally { release.resolve(undefined); await turn; paused.mockRestore() }
+  })
+
+  it('bounds an unresponsive save and retains failure after its late publication', async () => {
+    const f = await fixture({ bounds: { saveTimeoutMs: 100, cleanupTimeoutMs: 50 } })
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const exited = Promise.withResolvers<undefined>()
+    const publish = broker.publishWorkspaceJson
+    const paused = vi.spyOn(broker, 'publishWorkspaceJson').mockImplementation(async (path, value, bound) => {
+      if (path.endsWith('/save-attempt.json')) { entered.resolve(undefined); await release.promise }
+      await publish(path, value, bound)
+      if (path.endsWith('/save-attempt.json')) exited.resolve(undefined)
+    })
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const turn = f.turn()
+    try {
+      await entered.promise
+      await vi.advanceTimersByTimeAsync(150)
+      const failed = await turn
+      expect(failed?.data).toMatchObject({ phase: 'failed', diagnostic: { quiescent: false } })
+      await expect(f.ctx.conversationWorkspaces.retrySave(f.handle.agent, new AbortController().signal)).rejects.toThrow('cleanup is unconfirmed')
+      release.resolve(undefined)
+      await exited.promise
+      const directory = join(f.recovery, failed!.data.workspaceId)
+      expect(JSON.parse(await readFile(join(directory, 'save-outcome.json'), 'utf8'))).toMatchObject({ phase: 'failed' })
+      expect(f.handle.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')?.data.phase).toBe('failed')
+    } finally { release.resolve(undefined); vi.useRealTimers(); await turn; paused.mockRestore() }
+  })
+
+  it('rejects simultaneous explicit retries before starting another save', async () => {
+    const f = await fixture()
+    const failed = vi.spyOn(broker, 'returnWorkspaceBranches').mockRejectedValueOnce(new Error('return unavailable'))
+    await f.turn()
+    failed.mockRestore()
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const publish = broker.publishWorkspaceJson
+    const paused = vi.spyOn(broker, 'publishWorkspaceJson').mockImplementation(async (path, value, bound) => {
+      if (path.endsWith('/save-attempt.json')) { entered.resolve(undefined); await release.promise }
+      await publish(path, value, bound)
+    })
+    const retry = f.ctx.conversationWorkspaces.retrySave(f.handle.agent, new AbortController().signal)
+    try {
+      await entered.promise
+      await expect(f.ctx.conversationWorkspaces.retrySave(f.handle.agent, new AbortController().signal)).rejects.toThrow('already running')
+      release.resolve(undefined)
+      await retry
+      expect(f.handle.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')?.data.phase).toBe('returned')
+    } finally { release.resolve(undefined); await retry; paused.mockRestore() }
+  })
+
   it('admits only the configured host identity and preserves ordinary container settlement', async () => {
     const f = await fixture({ maintenance: true })
     const host = await f.ctx.agents.create({ sessionId: SessionId('maintenance-root'),
@@ -454,7 +596,7 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
     await expect.poll(async () => JSON.parse(await readFile(join(f.storageFor(f.handle.agent), 'owner.json'), 'utf8'))).toMatchObject({ clean: true })
   })
 
-  it('retains capacity after a failed idle checkpoint and admits the waiter only after recovery', async () => {
+  it('releases capacity after failed idle cleanup while retaining uncheckpointed files', async () => {
     const f = await fixture({  })
     const other = await f.ctx.agents.create({ sessionId: SessionId('checkpoint-other'), meta: { cwd: f.source }, agentOptions: { provider: 'mock', model: 'main' } })
     await f.executionFor(other.agent)
@@ -464,14 +606,14 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
     const save = vi.spyOn(runtime, 'settle').mockRejectedValue(new Error('writer still active'))
     await writeFile(join(f.execution, 'private.txt'), 'must survive')
     await f.handle.dispose()
-    expect(cancel).not.toHaveBeenCalled()
+    expect(cancel).toHaveBeenCalledOnce()
     expect(JSON.parse(await readFile(join(f.storageFor(f.handle.agent), 'owner.json'), 'utf8'))).toMatchObject({ clean: false })
     let admitted = false
     const cancelled = new AbortController()
     const next = f.ctx.conversationWorkspaces.runForSession(waiting.agent.id, async () => { admitted = true }, cancelled.signal)
     try {
-      await Promise.resolve()
-      expect(admitted).toBe(false)
+      await next
+      expect(admitted).toBe(true)
       save.mockRestore()
       const resumed = await f.ctx.agents.resume({ resumeSessionId: f.handle.agent.id, agentOptions: { provider: 'mock', model: 'main' } })
       await f.ctx.conversationWorkspaces.retrySave(resumed.agent, new AbortController().signal)
@@ -890,7 +1032,8 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
     await rejected
     const record = JSON.parse(await readFile(join(f.recovery, 'environments/test-environment/environment-access.json'), 'utf8')) as { revision: number }
     expect(record.revision).toBe(1)
-    expect(JSON.parse(await readFile(join(f.storageFor(f.handle.agent), 'owner.json'), 'utf8'))).toMatchObject({ clean: true })
+    // Session persistence is already disposed; the checkpoint cannot acknowledge a complete save.
+    expect(JSON.parse(await readFile(join(f.storageFor(f.handle.agent), 'owner.json'), 'utf8'))).toMatchObject({ clean: false })
   })
 
   it('uses the fixed residual commit when no message route exists and preserves source state', async () => {
@@ -933,7 +1076,7 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
     await writeFile(join(f.execution, 'oversized'), Buffer.alloc(f.config.maxBytes + 1))
     const failed = await f.turn()
     expect(failed?.data.phase).toBe('failed')
-    expect(failed?.data.error).toContain('workspace byte limit exceeded')
+    expect(failed?.data.error).toContain('Workspace exceeds its configured byte limit')
     const saves = () => f.handle.agent.session.snapshotEvents().filter(event => event.type === 'workspace/state' && event.data.phase === 'saving').length
     const count = saves()
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
@@ -947,14 +1090,16 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
     expect(saves()).toBe(count + 1)
   })
 
-  it('preserves nested repository causes in the failed save receipt', async () => {
+  it('records safe repository diagnostics without persisting arbitrary provider output', async () => {
     const f = await fixture()
     const failure = vi.spyOn(broker, 'returnWorkspaceBranches').mockRejectedValueOnce(new Error('destination is unavailable'))
     const result = await f.turn()
     expect(result?.data.phase).toBe('failed')
-    expect(result?.data.error).toContain('destination is unavailable')
+    expect(result?.data.error).not.toContain('destination is unavailable')
+    expect(result?.data.diagnostic).toMatchObject({ stage: 'return', repository: '/workspace', quiescent: true })
     const record = JSON.parse(await readFile(join(f.recovery, result!.data.workspaceId, 'state.json'), 'utf8')) as { failure: { error: string } }
-    expect(record.failure.error).toContain('destination is unavailable')
+    expect(record.failure.error).not.toContain('destination is unavailable')
+    expect(record.failure.error).toContain('Workspace operation failed')
     failure.mockRestore()
   })
 

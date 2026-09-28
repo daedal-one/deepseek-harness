@@ -1309,7 +1309,7 @@ Source: [`packages/web/web-search-openrouter/src/provider.ts:74`](../packages/we
 'workspace/admission': WorkspaceAdmissionState
 ```
 
-Source: [`packages/sandbox/local-container-runtime/src/workspace-types.ts:63`](../packages/sandbox/local-container-runtime/src/workspace-types.ts)
+Source: [`packages/sandbox/local-container-runtime/src/workspace-types.ts:77`](../packages/sandbox/local-container-runtime/src/workspace-types.ts)
 
 <a id="workspacebranch-name-request--log-only"></a>
 
@@ -1320,7 +1320,7 @@ Source: [`packages/sandbox/local-container-runtime/src/workspace-types.ts:63`](.
 'workspace/branch-name-request': { turn: number; system: string; messages: Message[]; provider: string; model: string; maxTokens: number }
 ```
 
-Source: [`packages/sandbox/local-container-runtime/src/workspace-types.ts:69`](../packages/sandbox/local-container-runtime/src/workspace-types.ts)
+Source: [`packages/sandbox/local-container-runtime/src/workspace-types.ts:83`](../packages/sandbox/local-container-runtime/src/workspace-types.ts)
 
 <a id="workspacecommit-message-request--log-only"></a>
 
@@ -1331,7 +1331,7 @@ Source: [`packages/sandbox/local-container-runtime/src/workspace-types.ts:69`](.
 'workspace/commit-message-request': { turn: number; system: string; messages: Message[]; provider: string; model: string; maxTokens: number }
 ```
 
-Source: [`packages/sandbox/local-container-runtime/src/workspace-types.ts:67`](../packages/sandbox/local-container-runtime/src/workspace-types.ts)
+Source: [`packages/sandbox/local-container-runtime/src/workspace-types.ts:81`](../packages/sandbox/local-container-runtime/src/workspace-types.ts)
 
 <a id="workspaceprovenance--log-only"></a>
 
@@ -1342,7 +1342,7 @@ Source: [`packages/sandbox/local-container-runtime/src/workspace-types.ts:67`](.
 'workspace/provenance': WorkspaceProvenance
 ```
 
-Source: [`packages/sandbox/local-container-runtime/src/workspace-types.ts:71`](../packages/sandbox/local-container-runtime/src/workspace-types.ts)
+Source: [`packages/sandbox/local-container-runtime/src/workspace-types.ts:85`](../packages/sandbox/local-container-runtime/src/workspace-types.ts)
 
 <a id="workspacestate--log-only"></a>
 
@@ -1353,4 +1353,4 @@ Source: [`packages/sandbox/local-container-runtime/src/workspace-types.ts:71`](.
 'workspace/state': WorkspaceState
 ```
 
-Source: [`packages/sandbox/local-container-runtime/src/workspace-types.ts:65`](../packages/sandbox/local-container-runtime/src/workspace-types.ts)
+Source: [`packages/sandbox/local-container-runtime/src/workspace-types.ts:79`](../packages/sandbox/local-container-runtime/src/workspace-types.ts)

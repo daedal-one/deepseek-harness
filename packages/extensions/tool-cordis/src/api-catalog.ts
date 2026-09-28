@@ -819,8 +819,14 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       {
         signature: 'async retrySave(agent: Agent, signal: AbortSignal): Promise<void>',
         description: 'Retry one failed save without starting a model turn. Concurrent requests reject.',
-        parameters: [{ name: 'agent', description: 'selected top-level conversation whose retained transaction is retried.' }, { name: 'signal', description: 'cancellation while acquiring workspace execution capacity.' }],
+        parameters: [{ name: 'agent', description: 'selected top-level conversation whose retained transaction is retried.' }, { name: 'signal', description: 'cancellation of acquisition and the owned save attempt.' }],
         returns: 'after the attempt settles; the durable workspace state reports success or failure.',
+      },
+      {
+        signature: 'async abortSave(agent: Agent): Promise<void>',
+        description: 'Abort the selected owner\'s current save without waiting for model or execution admission.',
+        parameters: [{ name: 'agent', description: 'top-level conversation that owns the attempt.' }],
+        returns: 'after bounded cleanup; the durable outcome distinguishes cancellation from uncertain termination.',
       },
       {
         signature: 'async runForSession<T>(sessionId: SessionId, operation: () => Promise<T>, signal?: AbortSignal): Promise<T>',
