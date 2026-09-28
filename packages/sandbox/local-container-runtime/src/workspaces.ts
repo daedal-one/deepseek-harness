@@ -1204,13 +1204,20 @@ export class ConversationWorkspaces extends Service {
               for (const [ref, value] of Object.entries(exported.heads)) observedHeads[ref] = requireOid(value)
               bundle = Buffer.from(exported.bundle, 'base64')
               if (bundle.toString('base64') !== exported.bundle) throw new Error('invalid workspace bundle encoding')
+              if (transaction.oid !== undefined && observedHeads.HEAD !== transaction.oid) {
+                throw new Error('workspace bundle HEAD differs from the persisted automatic commit')
+              }
               if (heads === undefined) {
                 transaction.heads = observedHeads
                 heads = observedHeads
                 await this.saveRecord(workspace)
-              } else if (!sameRecord(heads, observedHeads)) throw new Error('workspace bundle heads changed after checkpoint')
+              } else if (!sameRecord(heads, observedHeads)) {
+                if (!isPersistedCommitHeadRecovery(transaction, observedHeads)) throw new Error('workspace bundle heads changed after checkpoint')
+                transaction.heads = observedHeads
+                heads = observedHeads
+                await this.saveRecord(workspace)
+              }
             }
-            if (heads === undefined) throw new Error('workspace return heads are missing')
             const unnamed = Object.keys(heads).filter(ref => repository.topics?.[ref] === undefined)
             if (unnamed.length > 0) {
               const fallbackTopic = workspaceTopic(workspaceNamingMessages(workspace.owner.session).at(-1)?.text ?? 'changes')
@@ -1433,6 +1440,21 @@ function sameRecord(left: Readonly<Record<string, string>>, right: Readonly<Reco
   const a = Object.entries(left).sort(([first], [second]) => first.localeCompare(second))
   const b = Object.entries(right).sort(([first], [second]) => first.localeCompare(second))
   return JSON.stringify(a) === JSON.stringify(b)
+}
+
+function isPersistedCommitHeadRecovery(transaction: Transaction, observed: Readonly<Record<string, string>>): boolean {
+  const planned = transaction.heads
+  const oid = transaction.oid
+  if (planned === undefined || oid === undefined || observed.HEAD !== oid) return false
+  const refs = Object.keys(planned)
+  if (refs.length !== Object.keys(observed).length || refs.some(ref => !(ref in observed))) return false
+  let changed = false
+  for (const ref of refs) {
+    if (planned[ref] === observed[ref]) continue
+    if (observed[ref] !== oid) return false
+    changed = true
+  }
+  return changed
 }
 
 async function disposePair(first: () => Promise<void>, second: () => Promise<void>): Promise<void> {

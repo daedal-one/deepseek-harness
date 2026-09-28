@@ -42,4 +42,4 @@ Validation includes a real rootless Podman Loader flow, deterministic restart fa
 
 ## Acceptance
 
-A coding agent can complete ordinary work in an imported repository using existing tools and granular Git commits. Every successful turn automatically preserves and returns its committed result without source-checkout mutation or remote publication. Private checkpoints recover dirty interrupted work. Every failure is attributable to import, execution, finalization, checkpoint, or return, and retries never duplicate commits or overwrite external work.
+A coding agent can complete ordinary work in an imported repository using existing tools and granular Git commits. Every successful turn automatically preserves and returns its committed result without source-checkout mutation or remote publication. Private checkpoints recover dirty interrupted work. Restart recovery reconciles a pre-publication head plan only when the workspace points to the exact persisted automatic commit. Every failure is attributable to import, execution, finalization, checkpoint, or return, and retries never duplicate commits, discard the persisted automatic commit, or overwrite external work.
