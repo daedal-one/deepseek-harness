@@ -1252,7 +1252,11 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
     },
   )
 
-  it.each(['candidate', 'message', 'committed', 'branch', 'provenance', 'event', 'lastTurn'].flatMap(phase => ['before', 'after'].map(edge => ({ phase, edge }))))(
+  it.each([
+    ...['candidate', 'message', 'committed', 'branch', 'provenance', 'event', 'lastTurn']
+      .flatMap(phase => ['before', 'after'].map(edge => ({ phase, edge }))),
+    { phase: 'stale-heads', edge: 'after' },
+  ])(
     'recovers a restart $edge $phase publication without duplicate durable side effects', async ({ phase, edge }) => {
       const f = await fixture({ message: true, developmentVmProfile: 'vm-a' })
       const publish = broker.publishWorkspaceJson
@@ -1272,7 +1276,8 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
         const matches = path.endsWith('/state.json') && !interrupted && (phase === 'candidate'
           ? transaction !== undefined && transaction.message === undefined
           : phase === 'message' ? transaction?.message !== undefined && transaction.oid === undefined
-            : phase === 'committed' ? transaction?.oid !== undefined && transaction.branchesReturned !== true
+            : (phase === 'committed' || phase === 'stale-heads')
+              ? transaction?.oid !== undefined && transaction.branchesReturned !== true
               : phase === 'branch' ? transaction?.branchesReturned === true && transaction.provenanceSaved !== true
                 : phase === 'provenance' ? transaction?.provenanceSaved === true && transaction.eventRecorded !== true
                   : phase === 'event' ? transaction?.eventRecorded === true
@@ -1289,6 +1294,18 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
       const directory = join(f.recovery, pending.data.workspaceId)
       const crashImage = join(f.root, 'crash-image')
       await cp(directory, crashImage, { recursive: true })
+      if (phase === 'stale-heads') {
+        const statePath = join(crashImage, 'state.json')
+        const state = JSON.parse(await readFile(statePath, 'utf8')) as {
+          transaction?: { oid?: string; parent: string; heads?: Record<string, string> }
+        }
+        if (state.transaction?.oid === undefined) throw new Error('missing committed transaction')
+        state.transaction.heads = {
+          HEAD: state.transaction.parent,
+          'refs/heads/codex/conversation': state.transaction.parent,
+        }
+        await writeFile(statePath, `${JSON.stringify(state)}\n`)
+      }
       const committed = await workspaceGit(f.execution, ['rev-parse', 'HEAD'], f.config)
       failure.mockRestore()
       const ctx = await f.restart()
@@ -1303,7 +1320,7 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
         await expect.poll(() => resumed.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')?.data,
           { timeout: 5000 }).toMatchObject({ phase: 'returned' })
         expect((await workspaceGit(f.execution, ['rev-list', '--count', 'HEAD'], f.config)).toString().trim()).toBe('2')
-        if (['committed', 'branch', 'provenance', 'event', 'lastTurn'].includes(phase)) {
+        if (['committed', 'stale-heads', 'branch', 'provenance', 'event', 'lastTurn'].includes(phase)) {
           expect(await workspaceGit(f.execution, ['rev-parse', 'HEAD'], f.config)).toEqual(committed)
         }
         expect(f.adapter.requests.filter(request => request.purpose === 'workspace-commit'))
