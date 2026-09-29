@@ -1418,7 +1418,6 @@ export class ConversationWorkspaces extends Service {
               await this.saveRecord(workspace)
             }
           }
-          if (heads === undefined) throw new Error('workspace return heads are missing')
           const unnamed = Object.keys(heads).filter(ref => repository.topics?.[ref] === undefined)
           if (unnamed.length > 0) {
             const fallbackTopic = workspaceTopic(workspaceNamingMessages(workspace.owner.session).at(-1)?.text ?? 'changes')
