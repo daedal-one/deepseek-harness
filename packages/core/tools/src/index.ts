@@ -1219,6 +1219,20 @@ export class ToolRuntime extends Service {
   }
 
   /**
+   * Resolve a definition against the same visibility, deferred-discovery, and
+   * presentation-collapse rules the execution pipeline will apply, without
+   * entering policy or dispatch. Composite consumers use this only for
+   * fail-closed admission and must recheck before their following dispatch.
+   * @param name - registered tool name to inspect.
+   * @param agent - calling agent whose scoped visibility and discovery admission apply.
+   * @param nested - whether the planned call is a composite sub-dispatch.
+   * @returns the currently executable definition, or undefined when unavailable.
+   */
+  admitted(name: string, agent: Agent | undefined, nested: boolean): ToolDefinition | undefined {
+    return this.resolveExecution(name, agent, nested)
+  }
+
+  /**
    * Resolve the definition that MAY EXECUTE for a call, applying the mode
    * collapse at the operation boundary that owns it. The registry view
    * (`get`) is presentation-agnostic; here a MODEL-DIRECT call under `ptc`

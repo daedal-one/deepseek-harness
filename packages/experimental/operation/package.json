@@ -1,0 +1,58 @@
+{
+  "name": "@deepseek-ai/dsh-experimental-operation",
+  "description": "Private bounded sequential operation runner, durable replay records, and closed-set judgment seam",
+  "version": "0.1.5-alpha.2",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "packages/experimental/operation"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./types": {
+      "types": "./lib/types/types.d.ts",
+      "default": "./lib/types/types.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/types/**/*.js",
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "private": true,
+  "dependencies": {
+    "@deepseek-ai/schemastery": "workspace:^"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-brand": "workspace:^",
+    "@deepseek-ai/dsh-llm": "workspace:^",
+    "@deepseek-ai/dsh-session": "workspace:^",
+    "@deepseek-ai/dsh-timeout": "workspace:^",
+    "@deepseek-ai/dsh-tools": "workspace:^",
+    "@deepseek-ai/dsh-util-crypto": "workspace:^",
+    "@deepseek-ai/dsh-util-values": "workspace:^"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-agent-loop": "workspace:^",
+    "@deepseek-ai/dsh-agent-loop-testkit": "workspace:^",
+    "@deepseek-ai/dsh-brand": "workspace:^",
+    "@deepseek-ai/dsh-llm": "workspace:^",
+    "@deepseek-ai/dsh-session": "workspace:^",
+    "@deepseek-ai/dsh-session-persistence-jsonl": "workspace:^",
+    "@deepseek-ai/dsh-timeout": "workspace:^",
+    "@deepseek-ai/dsh-tools": "workspace:^",
+    "@deepseek-ai/dsh-util-crypto": "workspace:^",
+    "@deepseek-ai/dsh-util-values": "workspace:^"
+  }
+}

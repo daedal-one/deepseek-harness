@@ -25,7 +25,7 @@ labels: [tools, operations, clm, experimental]
 
 ## Scope
 
-Implement milestones M1 and M2 of the [proposal](../../.agents/notes/proposed/feature/2026-09-27-clm-operations-mode.md): opt-in tool consumer, deterministic sequential runner, typed references, assertions, evidence and complete-action candidates, narrow judgment service, CLM HTTP provider, required recording barriers, and replay. Retain existing tool dispatch and policy ownership. Add deterministic fixtures and the hooks required for fair Dike comparisons; do not treat those fixtures as model-quality evidence.
+Implement milestones M1 and M2 of the [proposal](../../.agents/notes/proposed/feature/2026-09-27-clm-operations-mode.md): opt-in tool consumer, deterministic sequential runner, typed references, assertions, evidence and complete-action candidates, narrow judgment service, CLM HTTP provider, required recording barriers, and replay. The CLM adapter uses the pinned upstream System One wire and records configured deployment identity locally; autonomous acceptance requires explicit local deployment-manifest verification rather than a response identity claim. Retain existing tool dispatch and policy ownership. Add deterministic fixtures and the hooks required for fair Dike comparisons; do not treat those fixtures as model-quality evidence.
 
 This work item is accepted and in progress. Before runtime edits, render affected intent for agents, inspect policy/discovery/persistence impact, and run spec lint. The initial implementation is confined to observation and selection fixtures with independently established read-only behavior.
 
