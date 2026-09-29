@@ -61,15 +61,15 @@
   config:
     targets:
       - provider: openai-codex
-        model: gpt-5.6-luna
+        model: gpt-6-luna
       - provider: openai-codex
-        model: gpt-5.6-terra
+        model: gpt-6-sol
       - provider: openai-codex
-        model: gpt-5.6-sol
+        model: gpt-6-astra
     translator:
       provider: openai-codex
-      model: gpt-5.6-luna
-      reasoningEffort: minimal
+      model: gpt-6-luna
+      reasoningEffort: low
     hanMinChars: 2
     hanRatio: 0.2
     maxTranslationInputChars: 32000
@@ -85,8 +85,8 @@
   description: Finds reusable facts and preferences in sessions and proposes them for durable memory.
   config:
     provider: openai-codex
-    model: gpt-5.6-luna
-    reasoningEffort: minimal
+    model: gpt-6-luna
+    reasoningEffort: low
     maxInputBytes: 65536
     maxOutputTokens: 1024
     timeoutMs: 30000
@@ -362,7 +362,7 @@
         backgroundMode: one-shot
         agentOptions:
           provider: openai-codex
-          model: gpt-5.6-terra
+          model: gpt-6-sol
           reasoningEffort: xhigh
           maxTokens: 65536
         persona: !!js "process.getBuiltinModule('node:fs').readFileSync(new URL('roles/implementer-common.md', baseUrl), 'utf8').trim() + '\\n\\n' + ((text) => text.slice(text.indexOf('\\n---\\n', 4) + 5).trim())(process.getBuiltinModule('node:fs').readFileSync(new URL('roles/coder.md', baseUrl), 'utf8'))"
@@ -384,7 +384,7 @@
         backgroundMode: one-shot
         agentOptions:
           provider: openai-codex
-          model: gpt-5.6-sol
+          model: gpt-6-astra
           reasoningEffort: max
           maxTokens: 65536
         persona: !!js "process.getBuiltinModule('node:fs').readFileSync(new URL('roles/implementer-common.md', baseUrl), 'utf8').trim() + '\\n\\n' + ((text) => text.slice(text.indexOf('\\n---\\n', 4) + 5).trim())(process.getBuiltinModule('node:fs').readFileSync(new URL('roles/guru.md', baseUrl), 'utf8'))"
@@ -406,7 +406,7 @@
         backgroundMode: one-shot
         agentOptions:
           provider: openai-codex
-          model: gpt-5.6-sol
+          model: gpt-6-astra
           reasoningEffort: xhigh
           maxTokens: 65536
         persona: !!js "((text) => text.slice(text.indexOf('\\n---\\n', 4) + 5).trim())(process.getBuiltinModule('node:fs').readFileSync(new URL('roles/reviewer.md', baseUrl), 'utf8'))"
@@ -428,7 +428,7 @@
         backgroundMode: one-shot
         agentOptions:
           provider: openai-codex
-          model: gpt-5.6-terra
+          model: gpt-6-sol
           reasoningEffort: xhigh
           maxTokens: 65536
         persona: !!js "((text) => text.slice(text.indexOf('\\n---\\n', 4) + 5).trim())(process.getBuiltinModule('node:fs').readFileSync(new URL('roles/researcher.md', baseUrl), 'utf8'))"
@@ -448,8 +448,8 @@
         backgroundMode: one-shot
         agentOptions:
           provider: openai-codex
-          model: gpt-5.6-luna
-          reasoningEffort: minimal
+          model: gpt-6-luna
+          reasoningEffort: low
           maxTokens: 65536
         persona: !!js "((text) => text.slice(text.indexOf('\\n---\\n', 4) + 5).trim())(process.getBuiltinModule('node:fs').readFileSync(new URL('roles/browser-reader.md', baseUrl), 'utf8'))"
         toolFilter:
@@ -468,8 +468,8 @@
         backgroundMode: one-shot
         agentOptions:
           provider: openai-codex
-          model: gpt-5.6-luna
-          reasoningEffort: minimal
+          model: gpt-6-luna
+          reasoningEffort: low
           maxTokens: 65536
         persona: !!js "((text) => text.slice(text.indexOf('\\n---\\n', 4) + 5).trim())(process.getBuiltinModule('node:fs').readFileSync(new URL('roles/browser-operator.md', baseUrl), 'utf8'))"
         toolFilter:
@@ -488,7 +488,7 @@
         backgroundMode: one-shot
         agentOptions:
           provider: openai-codex
-          model: gpt-5.6-luna
+          model: gpt-6-luna
           reasoningEffort: xhigh
           maxTokens: 65536
         persona: !!js "((text) => text.slice(text.indexOf('\\n---\\n', 4) + 5).trim())(process.getBuiltinModule('node:fs').readFileSync(new URL('roles/toolsmith.md', baseUrl), 'utf8'))"
@@ -507,7 +507,7 @@
         backgroundMode: one-shot
         agentOptions:
           provider: openai-codex
-          model: gpt-5.6-sol
+          model: gpt-6-astra
           reasoningEffort: xhigh
           maxTokens: 65536
         persona: !!js "((text) => text.slice(text.indexOf('\\n---\\n', 4) + 5).trim())(process.getBuiltinModule('node:fs').readFileSync(new URL('roles/orchestrator.md', baseUrl), 'utf8'))"
@@ -527,8 +527,8 @@
         backgroundMode: one-shot
         agentOptions:
           provider: openai-codex
-          model: gpt-5.6-luna
-          reasoningEffort: minimal
+          model: gpt-6-luna
+          reasoningEffort: low
           maxTokens: 65536
         persona: !!js "((text) => text.slice(text.indexOf('\\n---\\n', 4) + 5).trim())(process.getBuiltinModule('node:fs').readFileSync(new URL('roles/crawler.md', baseUrl), 'utf8'))"
         toolFilter:
@@ -547,7 +547,7 @@
         backgroundMode: one-shot
         agentOptions:
           provider: openai-codex
-          model: gpt-5.6-terra
+          model: gpt-6-sol
           reasoningEffort: xhigh
           maxTokens: 65536
         persona: !!js "((text) => text.slice(text.indexOf('\\n---\\n', 4) + 5).trim())(process.getBuiltinModule('node:fs').readFileSync(new URL('roles/web-debugger.md', baseUrl), 'utf8'))"
@@ -567,7 +567,7 @@
         backgroundMode: one-shot
         agentOptions:
           provider: openai-codex
-          model: gpt-5.6-sol
+          model: gpt-6-astra
           reasoningEffort: xhigh
           maxTokens: 65536
         persona: !!js "((text) => text.slice(text.indexOf('\\n---\\n', 4) + 5).trim())(process.getBuiltinModule('node:fs').readFileSync(new URL('roles/memory-reviewer.md', baseUrl), 'utf8'))"

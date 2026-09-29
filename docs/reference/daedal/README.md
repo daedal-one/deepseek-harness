@@ -29,7 +29,7 @@ The preset references validators (`daedal-implementer-status`, `daedal-review-ve
 
 ## Model routes
 
-The existing `daedal` preset keeps its OpenRouter defaults, including `qwen/qwen3.8-27b` for `coder`. The `daedal-openai` main Agent and implementation/research roles use GPT-5.6 Terra, difficult reasoning and review roles use GPT-5.6 Sol, and bounded browser, crawler, translation, and extraction roles use GPT-5.6 Luna. The host fixes each target to its provider while Settings > Agents can still change that target's model and reasoning effort within the assigned catalog. See OpenAI's current [model catalog](https://developers.openai.com/api/docs/models) for the Sol, Terra, and Luna positioning.
+The existing `daedal` preset keeps its OpenRouter defaults, including `qwen/qwen3.8-27b` for `coder`. The `daedal-openai` main Agent and implementation/research roles use GPT-6 Sol, difficult reasoning and review roles use GPT-6 Astra, and bounded browser, crawler, translation, and extraction roles use GPT-6 Luna. The host fixes each target to its provider while Settings > Agents can still change that target's model and reasoning effort within the assigned catalog. See OpenAI's current [model catalog](https://developers.openai.com/api/docs/models) for the Astra, Sol, and Luna positioning.
 
 Tool-policy classifiers remain host-owned and keep their independent OpenRouter routes in this reference. They review supported shell and MCP calls for either preset and are not part of the selected Agent's model route.
 

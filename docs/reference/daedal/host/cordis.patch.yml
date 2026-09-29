@@ -25,7 +25,7 @@
     presets:
       daedal-openai:
         provider: openai-codex
-        model: gpt-5.6-terra
+        model: gpt-6-sol
         reasoningEffort: xhigh
         label: Daedal OpenAI main agent
 
@@ -51,6 +51,33 @@
               max: max
       openai-codex:
         displayName: OpenAI Codex
+        modelAliases:
+          gpt-6-sol:
+            catalogModel: gpt-6-astra
+            name: GPT-6 Sol
+            contextWindow: 1050000
+            maxTokens: 128000
+            input: [ text, image ]
+            reasoningEfforts:
+              off:
+              low: low
+              medium: medium
+              high: high
+              xhigh: xhigh
+              max: max
+          gpt-6-luna:
+            catalogModel: gpt-6-astra
+            name: GPT-6 Luna
+            contextWindow: 1050000
+            maxTokens: 128000
+            input: [ text, image ]
+            reasoningEfforts:
+              off:
+              low: low
+              medium: medium
+              high: high
+              xhigh: xhigh
+              max: max
 
 # Declaration order is the browser and command-picker order. The middle mode
 # pairs an unconfined file sandbox with an available human approval channel;
