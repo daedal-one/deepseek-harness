@@ -475,6 +475,13 @@ export interface OperationPreparedJudgment {
    */
   readonly wire: JsonValue
   /**
+   * Per-text encoder accounting and the reviewed server ceiling, when the provider uses independent text encoders.
+   */
+  readonly encoding?: {
+    readonly maxTokensPerText: number
+    readonly inputs: readonly { readonly text: string; readonly tokens: number }[]
+  }
+  /**
    * Exact local tokenizer count of all CLM encoder inputs.
    */
   readonly inputTokens: number
@@ -510,6 +517,8 @@ export interface OperationJudgmentResponse {
    * Provider-reported choice confidence, retained separately from local acceptance margins.
    */
   readonly providerConfidence?: number
+  /** Complete provider response after strict wire parsing, when available. */
+  readonly wire?: JsonValue
   /**
    * Provider-measured processing time when supplied.
    */
@@ -653,7 +662,7 @@ export interface OperationStepStartEventData {
 
 /**
 
- * Durable post-policy canonical tool outcome.
+ * Durable post-policy canonical tool outcome flushed before terminal handling.
 
  */
 export interface OperationStepResultEventData {
@@ -683,7 +692,7 @@ export interface OperationJudgmentRequestEventData {
 
 /**
 
- * Durable ranking output or provider failure after request dispatch.
+ * Durable ranking output or caller, deadline, or provider failure after request dispatch.
 
  */
 export interface OperationJudgmentResultEventData {
@@ -739,7 +748,7 @@ declare module '@deepseek-ai/dsh-session/types' {
      */
     'operation/step-start': OperationStepStartEventData
     /**
-     * Records the complete post-policy canonical step outcome.
+     * Records and flushes the complete post-policy canonical step outcome before terminal handling.
      * @param data Canonical value or failure, rendering, timing, and assertions.
      */
     'operation/step-result': OperationStepResultEventData
@@ -749,7 +758,7 @@ declare module '@deepseek-ai/dsh-session/types' {
      */
     'operation/judgment-request': OperationJudgmentRequestEventData
     /**
-     * Records one provider ranking response or request failure.
+     * Records and flushes one provider ranking response or caller, deadline, or provider failure.
      * @param data Response/failure and elapsed timing.
      */
     'operation/judgment-result': OperationJudgmentResultEventData

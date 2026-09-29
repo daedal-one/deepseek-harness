@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { OperationCandidateId, OperationJudgmentRequestId, OperationRunId } from '@deepseek-ai/dsh-experimental-operation'
 import type { OperationJudgmentDraft, OperationPreparedJudgment, OperationTokenizer } from '@deepseek-ai/dsh-experimental-operation'
 import { ClmHttpProvider } from '../src/provider.ts'
-import { clmStateText } from '../src/wire.ts'
+import { clmChoiceRequest, clmEncoderInputs, clmStateText } from '../src/wire.ts'
 
 const identity = {
   provider: 'clm-http', model: 'fixture-model', encoder: 'fixture-encoder', tokenizer: 'fixture-tokenizer',
@@ -14,7 +14,8 @@ const identity = {
 const config = {
   endpoint: 'http://127.0.0.1/v1/systemone', tokenizerId: identity.tokenizer, model: identity.model, encoder: identity.encoder,
   deployment: identity.deployment, deploymentManifest: identity.deploymentManifest, calibrationId: identity.calibrationId,
-  providerId: identity.provider, serialization: identity.serialization, temperature: 0.75, timeoutMs: 1_000, maxResponseBytes: 2_048,
+  providerId: identity.provider, serialization: identity.serialization, temperature: 0.75,
+  maxEncoderTokens: 2_048, timeoutMs: 1_000, maxResponseBytes: 2_048,
 } as const
 
 function draft(): OperationJudgmentDraft {
@@ -41,7 +42,7 @@ function response(overrides: Record<string, unknown> = {}) {
         probabilities: { 'continue-0': 0.9, 'needs-replan': 0.1 },
       },
     },
-    usage: { billing_units: 1, input_tokens: 3, output_tokens: 2 },
+    usage: { billing_units: 1, input_tokens: 3, output_tokens: 0 },
     ...overrides,
   }
 }
@@ -67,7 +68,22 @@ function pendingRequest() {
 describe('CLM System One operation provider', () => {
   it('renders upstream state text rather than JSON markup', () => {
     expect(clmStateText({ nested: { enabled: true }, records: [null, 'alpha'], empty: null }, 'choose')).toBe(
-      'nested:\n  enabled: true\n\nrecords:\n  - \n  - alpha\n\nempty:\n\nchoose',
+      'empty: \n\nnested:\n  enabled: true\n\nrecords:\n  - \n  - alpha\n\nchoose',
+    )
+  })
+
+  it('uses pinned Python whitespace stripping instead of JavaScript trim', () => {
+    expect(clmStateText('ok', '\ufeffComplete?\ufeff')).toBe('ok\n\n\ufeffComplete?\ufeff')
+    expect(clmStateText('\u0085\u001cstate\u001f', '\u0085choose\u001d')).toBe('state\n\nchoose')
+  })
+
+  it('counts canonical wire key order and JSON numeric spellings', () => {
+    const request = clmChoiceRequest({
+      ...draft(),
+      state: { z: 'last', a: { y: true, x: false }, numbers: [1e16, 1e20, 1e21, 1e-5] },
+    }, identity, config.temperature)
+    expect(clmEncoderInputs(request)[0]).toBe(
+      'a:\n  x: false\n  y: true\n\nnumbers:\n  - 10000000000000000\n  - 100000000000000000000\n  - 1e+21\n  - 1e-05\n\nz: last\n\nselect one',
     )
   })
 
@@ -83,6 +99,10 @@ describe('CLM System One operation provider', () => {
     const requestPrepared = await prepared(provider)
     expect(counted).toEqual(['observation: exact\n\nselect one', 'continue alpha', 'replan'])
     expect(requestPrepared.inputTokens).toBe(counted.reduce((total, text) => total + text.length, 0))
+    expect(requestPrepared.encoding).toEqual({
+      maxTokensPerText: config.maxEncoderTokens,
+      inputs: counted.map(text => ({ text, tokens: text.length })),
+    })
     const ranked = await provider.rank(requestPrepared, new AbortController().signal)
 
     expect(request?.input).toBe(config.endpoint)
@@ -104,12 +124,15 @@ describe('CLM System One operation provider', () => {
     expect(request?.body).not.toContain('encoder')
     expect(request?.body).not.toContain('truncation')
     expect(ranked).toMatchObject({ requestId: draft().id, identity, probabilities: { 'continue-0': 0.9, 'needs-replan': 0.1 } })
-    expect(ranked.usage).toEqual({ billingUnits: 1, inputTokens: 3, outputTokens: 2 })
+    expect(ranked.usage).toEqual({ billingUnits: 1, inputTokens: 3, outputTokens: 0 })
+    expect(ranked.wire).toEqual(response())
   })
 
   it('rejects model mismatch, unknown choices, malformed answers, and incomplete distributions', async () => {
     const cases = [
       response({ model: 'other-model' }),
+      response({ usage: { billing_units: 2, input_tokens: 1, output_tokens: 0 } }),
+      response({ usage: { billing_units: 1, input_tokens: 1, output_tokens: 1 } }),
       response({ answers: { transition: { type: 'choice', choice: 'unknown', confidence: 0.8, probabilities: { 'continue-0': 0.9, 'needs-replan': 0.1 } } } }),
       response({ answers: { transition: { type: 'choice', choice: 'continue-0', confidence: 0.8, probabilities: { 'continue-0': 1 } } } }),
       response({ answers: { transition: { type: 'choice', choice: 'continue-0', confidence: 0.8, probabilities: { 'continue-0': 0.4, 'needs-replan': 0.4 } } } }),
@@ -123,14 +146,26 @@ describe('CLM System One operation provider', () => {
     }
   })
 
+  it('rejects any encoder input above the reviewed server ceiling without inference', async () => {
+    let requests = 0
+    const provider = new ClmHttpProvider({ ...config, maxEncoderTokens: 10 }, tokenizer(), async () => {
+      requests += 1
+      throw new Error('inference must not start')
+    })
+    await expect(prepared(provider)).rejects.toMatchObject({ code: 'CLM_INPUT_LIMIT' })
+    expect(requests).toBe(0)
+    const invalid = new ClmHttpProvider(config, tokenizer(text => text === 'continue alpha' ? -1 : 10))
+    await expect(prepared(invalid)).rejects.toMatchObject({ code: 'CLM_TOKENIZER' })
+  })
+
   it('does not equate cache-dependent upstream input usage with local token accounting', async () => {
     const provider = new ClmHttpProvider(config, tokenizer(() => 10), async () => new Response(JSON.stringify(response({
-      usage: { billing_units: 1, input_tokens: 0, output_tokens: 2 },
+      usage: { billing_units: 1, input_tokens: 0, output_tokens: 0 },
     })), { headers: { 'content-type': 'application/json' } }))
     const requestPrepared = await prepared(provider)
     expect(requestPrepared.inputTokens).toBe(30)
     await expect(provider.rank(requestPrepared, new AbortController().signal)).resolves.toMatchObject({
-      usage: { billingUnits: 1, inputTokens: 0, outputTokens: 2 },
+      usage: { billingUnits: 1, inputTokens: 0, outputTokens: 0 },
     })
   })
 
@@ -178,6 +213,51 @@ describe('CLM System One operation provider', () => {
     await provider.dispose()
     await expect(ranking).rejects.toMatchObject({ code: 'CLM_DISPOSED' })
     await expect(provider.rank(requestPrepared, new AbortController().signal)).rejects.toMatchObject({ code: 'CLM_DISPOSED' })
+  })
+
+  it('aborts and drains tokenizer preparation on disposal', async () => {
+    let enter: (() => void) | undefined
+    const entered = new Promise<void>((resolve) => { enter = resolve })
+    const pendingTokenizer: OperationTokenizer = {
+      id: identity.tokenizer,
+      async count(_text, signal) {
+        enter?.()
+        return await new Promise<number>((_resolve, reject) => {
+          const abort = (): void => { reject(new Error('tokenizer aborted')) }
+          if (signal.aborted) abort()
+          else signal.addEventListener('abort', abort, { once: true })
+        })
+      },
+    }
+    const provider = new ClmHttpProvider(config, pendingTokenizer)
+    const preparation = provider.prepare(draft(), new AbortController().signal)
+    await entered
+    await provider.dispose()
+    await expect(preparation).rejects.toMatchObject({ code: 'CLM_DISPOSED' })
+    await expect(provider.prepare(draft(), new AbortController().signal)).rejects.toMatchObject({ code: 'CLM_DISPOSED' })
+  })
+
+  it('makes concurrent disposal callers wait for tokenizer quiescence', async () => {
+    let enter: (() => void) | undefined
+    let release: (() => void) | undefined
+    const entered = new Promise<void>((resolve) => { enter = resolve })
+    const provider = new ClmHttpProvider(config, {
+      id: identity.tokenizer,
+      async count() {
+        return await new Promise<number>((resolve) => { release = () => { resolve(1) }; enter?.() })
+      },
+    })
+    const preparation = provider.prepare(draft(), new AbortController().signal).catch((error: unknown) => error)
+    await entered
+    let settled = false
+    const first = provider.dispose()
+    const second = provider.dispose().then(() => { settled = true })
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    release?.()
+    await Promise.all([first, second])
+    expect(await preparation).toMatchObject({ code: 'CLM_DISPOSED' })
+    expect(settled).toBe(true)
   })
 
   it('resolves a credential for each request without placing it in the wire record', async () => {

@@ -8,6 +8,7 @@ import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
 import { OperationJudgmentRegistry } from './judgment.ts'
+import { OperationToolPolicyRegistry } from './policy.ts'
 import { OperationRunner, type OperationConfig } from './runner.ts'
 import type { OperationJudgmentProvider, OperationSummary, OperationTokenizer } from './types.ts'
 
@@ -15,6 +16,13 @@ export * from './types.ts'
 export { OperationJudgmentError, OperationJudgmentRegistry } from './judgment.ts'
 export { OperationJsonError, canonicalJson, digestJson, equalJson, jsonBytes, parseJsonPointer, resolveJsonPointer } from './json.ts'
 export { OperationPlanError, parseOperationPlan } from './plan.ts'
+export {
+  createForegroundProcessOperationPolicy,
+  inspectForegroundProcessResult,
+  OperationToolPolicyError,
+  OperationToolPolicyRegistry,
+} from './policy.ts'
+export type { ForegroundProcessPolicyOptions, OperationToolInspection, OperationToolPolicy } from './policy.ts'
 export { OperationEvidenceError, buildContinuationCandidates, completionControls, observeCanonicalResult, withIntermediateControls } from './observation.ts'
 export { OperationRecordingError, OperationRecorder } from './recorder.ts'
 export { OperationResolutionError, assertionsPassed, evaluateOperationAssertions, resolveOperationExpression } from './resolution.ts'
@@ -63,8 +71,10 @@ export class OperationService extends Service {
 
    */
   readonly judgments: OperationJudgmentRegistry
+  /** Trusted operation eligibility keyed by exact registered tool definition. */
+  readonly toolPolicies: OperationToolPolicyRegistry
   private readonly runner: OperationRunner
-  private readonly active = new Set<Promise<unknown>>()
+  private readonly active = new Map<AbortController, Promise<unknown>>()
   private closing = false
 
   /**
@@ -77,10 +87,11 @@ export class OperationService extends Service {
   constructor(ctx: Context, config: OperationConfig = {}) {
     super(ctx, 'operations')
     this.judgments = new OperationJudgmentRegistry(ctx)
-    this.runner = new OperationRunner(ctx, this.judgments, config)
+    this.toolPolicies = new OperationToolPolicyRegistry()
+    this.runner = new OperationRunner(ctx, this.judgments, this.toolPolicies, config)
     ctx.effect(() => ctx.tools.register(defineTool({
       name: 'run_operation',
-      description: 'Execute one short, finite operation plan through existing tools. Supply version-one JSON with fixed tool names, explicit JSON-pointer observations, required deterministic assertions, and completion checks. The runner executes steps sequentially, records every checkpoint, and may return needs_replan or stopped instead of inventing values. Do not use this tool for workflows, delegation, background jobs, retries, dynamic shell commands, or recursive operation plans.',
+      description: 'Execute one short, finite operation plan through existing tools. Only independently reviewed, explicitly eligible read-only tools are accepted. Make this the only tool call in the assistant response. Supply version-one JSON with fixed tool names, explicit JSON-pointer observations, required deterministic assertions, and completion checks. The runner executes steps sequentially, records every checkpoint, and may return needs-replan or stopped instead of inventing values. Do not use this tool for workflows, delegation, background jobs, retries, dynamic shell commands, or recursive operation plans.',
       parameters: {
         plan: { type: 'json', required: true, description: 'Version-one JSON operation plan with inputs, fixed steps, observations, assertions, and completion checks.' },
       },
@@ -115,7 +126,8 @@ export class OperationService extends Service {
     })), 'operation.runOperationTool()')
     ctx.effect(() => async () => {
       this.closing = true
-      await Promise.allSettled(this.active)
+      for (const controller of this.active.keys()) controller.abort(new Error('operation service is disposing'))
+      await Promise.allSettled(this.active.values())
     }, 'operation.drainRuns()')
   }
 
@@ -158,12 +170,18 @@ export class OperationService extends Service {
    */
   async run(exec: ToolRunContext, plan: unknown): Promise<OperationSummary> {
     if (this.closing) throw new Error('operation service is disposing')
-    const run = this.runner.run(exec, plan)
-    this.active.add(run)
+    const controller = new AbortController()
+    const run = Promise.resolve().then(async () => await this.runner.run({
+      ...exec,
+      signal: AbortSignal.any([exec.signal, controller.signal]),
+      concludeTurn: exec.concludeTurn.bind(exec),
+      deferContext: exec.deferContext.bind(exec),
+    }, plan))
+    this.active.set(controller, run)
     try {
       return await run
     } finally {
-      this.active.delete(run)
+      this.active.delete(controller)
     }
   }
 

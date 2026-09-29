@@ -635,6 +635,106 @@ Source: [`packages/memory/memory-extractor-llm/src/types.ts:17`](../packages/mem
 
 Source: [`packages/api/session-controller/src/types.ts:40`](../packages/api/session-controller/src/types.ts)
 
+### `operation/*`
+
+<a id="operationjudgment-request--log-only"></a>
+
+#### `operation/judgment-request` — log-only
+
+```ts persistence-catalog
+/**
+ * Records and flushes exact ranking input before provider inference.
+ * @param data Prepared wire input, candidate mapping, and remaining budgets.
+ */
+'operation/judgment-request': OperationJudgmentRequestEventData
+```
+
+Source: [`packages/experimental/operation/src/types.ts:759`](../packages/experimental/operation/src/types.ts)
+
+<a id="operationjudgment-result--log-only"></a>
+
+#### `operation/judgment-result` — log-only
+
+```ts persistence-catalog
+/**
+ * Records and flushes one provider ranking response or caller, deadline, or provider failure.
+ * @param data Response/failure and elapsed timing.
+ */
+'operation/judgment-result': OperationJudgmentResultEventData
+```
+
+Source: [`packages/experimental/operation/src/types.ts:764`](../packages/experimental/operation/src/types.ts)
+
+<a id="operationrun-end--log-only"></a>
+
+#### `operation/run-end` — log-only
+
+```ts persistence-catalog
+/**
+ * Settles the operation after owned tool and provider work quiesces.
+ * @param data Terminal status and declared verification evidence.
+ */
+'operation/run-end': OperationRunEndEventData
+```
+
+Source: [`packages/experimental/operation/src/types.ts:774`](../packages/experimental/operation/src/types.ts)
+
+<a id="operationrun-start--log-only"></a>
+
+#### `operation/run-start` — log-only
+
+```ts persistence-catalog
+/**
+ * Opens one immutable operation admission record.
+ * @param data Frozen plan, limits, identities, and caller correlation.
+ */
+'operation/run-start': OperationRunStartEventData
+```
+
+Source: [`packages/experimental/operation/src/types.ts:744`](../packages/experimental/operation/src/types.ts)
+
+<a id="operationstep-result--log-only"></a>
+
+#### `operation/step-result` — log-only
+
+```ts persistence-catalog
+/**
+ * Records and flushes the complete post-policy canonical step outcome before terminal handling.
+ * @param data Canonical value or failure, rendering, timing, and assertions.
+ */
+'operation/step-result': OperationStepResultEventData
+```
+
+Source: [`packages/experimental/operation/src/types.ts:754`](../packages/experimental/operation/src/types.ts)
+
+<a id="operationstep-start--log-only"></a>
+
+#### `operation/step-start` — log-only
+
+```ts persistence-catalog
+/**
+ * Records complete next-effect intent before nested tool dispatch.
+ * @param data Fixed tool, arguments, and expression provenance.
+ */
+'operation/step-start': OperationStepStartEventData
+```
+
+Source: [`packages/experimental/operation/src/types.ts:749`](../packages/experimental/operation/src/types.ts)
+
+<a id="operationtransition--log-only"></a>
+
+#### `operation/transition` — log-only
+
+```ts persistence-catalog
+/**
+ * Records the locally validated selected transition before its next effect.
+ * @param data Candidate identity, acceptance outcome, and bound arguments.
+ */
+'operation/transition': OperationTransitionEventData
+```
+
+Source: [`packages/experimental/operation/src/types.ts:769`](../packages/experimental/operation/src/types.ts)
+
 ### `permission/*`
 
 <a id="permissionpreset--log-only"></a>

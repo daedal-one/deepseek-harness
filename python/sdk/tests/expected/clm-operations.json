@@ -1,0 +1,39 @@
+{
+  "final_response": "Verified beta in east from one complete canonical record.",
+  "finish_reason": "completed",
+  "event_types": [
+    "operation/run-start",
+    "operation/step-start",
+    "operation/step-result",
+    "operation/judgment-request",
+    "operation/judgment-result",
+    "operation/transition",
+    "operation/step-start",
+    "operation/step-result",
+    "operation/judgment-request",
+    "operation/judgment-result",
+    "operation/transition",
+    "operation/run-end"
+  ],
+  "steps": [
+    {"step": "list", "tool": "fixture_list_records", "arguments": {}},
+    {"step": "verify", "tool": "fixture_read_record", "arguments": {"id": "beta", "region": "east", "title": "Selected record"}}
+  ],
+  "canonical_results": [
+    {"records": [{"id": "alpha", "region": "west", "title": "First record"}, {"id": "beta", "region": "east", "title": "Selected record"}]},
+    {"id": "beta", "region": "east", "title": "Selected record", "verified": true}
+  ],
+  "judgment_kinds": ["continuation", "completion"],
+  "distributions": [
+    {"continue-0": 0, "continue-1": 1, "needs-replan": 0, "stop": 0},
+    {"complete": 1, "needs-replan": 0, "stop": 0}
+  ],
+  "terminal": {
+    "version": 1,
+    "status": "completed",
+    "reason": "completion checkpoint accepted",
+    "attemptedSteps": ["list", "verify"],
+    "completedSteps": ["list", "verify"],
+    "verification": [{"index": 0, "passed": true, "reason": "passed"}]
+  }
+}

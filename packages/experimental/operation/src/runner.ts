@@ -14,6 +14,8 @@ import { digestJson, equalJson, jsonBytes, requireJson } from './json.ts'
 import { OperationJudgmentRegistry } from './judgment.ts'
 import { buildContinuationCandidates, completionControls, observeCanonicalResult, withIntermediateControls } from './observation.ts'
 import { parseOperationPlan, OperationPlanError } from './plan.ts'
+import type { OperationToolPolicy } from './policy.ts'
+import { OperationToolPolicyRegistry } from './policy.ts'
 import { OperationRecorder } from './recorder.ts'
 import { assertionsPassed, evaluateOperationAssertions, resolveOperationExpression } from './resolution.ts'
 import type { OperationResolutionContext } from './resolution.ts'
@@ -73,11 +75,6 @@ export const DEFAULT_OPERATION_LIMITS: OperationLimits = {
   requireCalibration: true,
 }
 
-const FIXED_FORBIDDEN_TOOLS = new Set([
-  'run_operation', 'run_code', 'workflow', 'ralph', 'spawn_teammate', 'send_message', 'wait_agent',
-  'interrupt_agent', 'create_goal', 'run_in_background', 'job_output', 'job_kill',
-])
-const SHELL_TOOLS = new Set(['bash', 'pwsh', 'terminal', 'terminal_execute', 'run_shell'])
 const DISTRIBUTION_TOLERANCE = 1e-6
 
 /**
@@ -108,6 +105,7 @@ export class OperationRunError extends Error {
 interface AdmittedStep {
   readonly definition: ToolDefinition
   readonly identity: OperationToolIdentity
+  readonly policy: OperationToolPolicy
 }
 
 interface PreparedStep {
@@ -152,11 +150,13 @@ export class OperationRunner {
   /**
    * @param ctx Calling composition context.
    * @param judgments Configured narrow judgment seam.
+   * @param toolPolicies Trusted exact-definition operation eligibility.
    * @param config Resolved deployment configuration.
    */
   constructor(
     private readonly ctx: Context,
     private readonly judgments: OperationJudgmentRegistry,
+    private readonly toolPolicies: OperationToolPolicyRegistry,
     private readonly config: OperationConfig,
   ) {}
 
@@ -223,21 +223,47 @@ export class OperationRunner {
         if (prepared.step !== step) throw new OperationRunError('operation runner lost sequential step ordering', 'RUNNER_INVARIANT')
         const outcome = await this.dispatchStep(state, exec, prepared)
         if (outcome.result.isError) {
-          this.recordStepResult(state, step, outcome.result, [], outcome.elapsedMs)
+          await this.recordStepResult(state, step, outcome.result, [], outcome.elapsedMs)
+          if (outcome.callerCancelled || signalAborted(exec.signal)) return await this.cancel(state, 'caller cancelled during tool dispatch')
+          if (outcome.timedOut) return await this.fail(state, `tool ${JSON.stringify(step.tool)} exceeded operation deadline`, 'TOOL_TIMEOUT')
           return await this.fail(state, `tool ${JSON.stringify(step.tool)} failed: ${outcome.result.error.message}`, 'TOOL_FAILED')
         }
-        if (signalAborted(exec.signal)) {
-          this.recordStepResult(state, step, outcome.result, [], outcome.elapsedMs)
+        if (outcome.callerCancelled || signalAborted(exec.signal)) {
+          await this.recordStepResult(state, step, outcome.result, [], outcome.elapsedMs)
           return await this.cancel(state, 'caller cancelled during tool dispatch')
         }
+        if (outcome.timedOut) {
+          await this.recordStepResult(state, step, outcome.result, [], outcome.elapsedMs)
+          return await this.fail(state, `tool ${JSON.stringify(step.tool)} exceeded operation deadline`, 'TOOL_TIMEOUT')
+        }
         for (const context of outcome.result.additionalContexts ?? []) exec.deferContext(context)
-        if (jsonBytes(outcome.result.value) > limits.maxResultBytes) {
-          this.recordStepResult(state, step, outcome.result, [], outcome.elapsedMs, false)
+        const resultBytes = jsonBytes(outcome.result.value)
+        if (resultBytes > limits.maxResultBytes) {
+          await this.recordStepResult(state, step, outcome.result, [], outcome.elapsedMs, {
+            omitPayload: true,
+            reason: `canonical result omitted because ${resultBytes} bytes exceeds the ${limits.maxResultBytes}-byte limit`,
+          })
           return await this.fail(state, `step ${JSON.stringify(step.id)} canonical result exceeds ${limits.maxResultBytes} bytes`, 'RESULT_LIMIT')
+        }
+        let inspection
+        try {
+          inspection = prepared.admitted.policy.inspectResult(outcome.result.value)
+        } catch (error: unknown) {
+          await this.recordStepResult(state, step, outcome.result, [], outcome.elapsedMs)
+          return await this.fail(state, `trusted result inspection failed for step ${JSON.stringify(step.id)}: ${message(error)}`, 'PROCESS_FAILED')
+        }
+        if (inspection.kind === 'failed') {
+          await this.recordStepResult(state, step, outcome.result, [], outcome.elapsedMs)
+          return await this.fail(state, inspection.reason, 'PROCESS_FAILED')
+        }
+        if (inspection.kind === 'incomplete') {
+          await this.recordStepResult(state, step, outcome.result, [], outcome.elapsedMs)
+          return await this.finish(state, 'needs-replan', inspection.reason, [])
         }
         state.results.set(step.id, outcome.result.value)
         const assertions = evaluateOperationAssertions(step.assertions, resolutionContext(state))
-        this.recordStepResult(state, step, outcome.result, assertions, outcome.elapsedMs)
+        await this.recordStepResult(state, step, outcome.result, assertions, outcome.elapsedMs)
+        if (signalAborted(exec.signal)) return await this.cancel(state, 'caller cancelled after tool dispatch')
         if (!assertionsPassed(assertions)) return await this.finish(state, 'stopped', `required assertions failed for step ${JSON.stringify(step.id)}`, assertions)
         state.completed.push(step.id)
         if (outcome.result.concludesTurn) {
@@ -268,7 +294,7 @@ export class OperationRunner {
             next,
             outcome.result.value,
             resolutionContext(state),
-            limits.maxCandidates,
+            limits.maxCandidates - 2,
             limits.maxCandidateBytes,
           ))
         } catch (error: unknown) {
@@ -305,16 +331,32 @@ export class OperationRunner {
 
   private admit(plan: OperationPlan, exec: ToolRunContext, limits: OperationLimits): ReadonlyMap<string, AdmittedStep> {
     if (plan.steps.length > limits.maxSteps || plan.steps.length > limits.maxToolCalls) throw new OperationRunError('operation plan exceeds configured step or tool-call limit', 'STEP_LIMIT')
-    const forbidden = new Set([...FIXED_FORBIDDEN_TOOLS, ...this.config.forbiddenTools ?? []])
+    if (plan.steps.length > limits.maxJudgments) throw new OperationRunError('operation plan cannot fit its mandatory checkpoints', 'JUDGMENT_BUDGET')
+    if (limits.maxCandidates < 3) throw new OperationRunError('operation candidate limit cannot fit the mandatory control choices', 'CANDIDATE_LIMIT')
+    const forbidden = new Set(this.config.forbiddenTools ?? [])
     const admitted = new Map<string, AdmittedStep>()
     for (const step of plan.steps) {
-      if (forbidden.has(step.tool)) throw new OperationRunError(`operation plan cannot dispatch excluded tool ${JSON.stringify(step.tool)}`, 'TOOL_EXCLUDED')
-      if (SHELL_TOOLS.has(step.tool) && !isLiteral(step.arguments)) {
-        throw new OperationRunError(`operation shell tool ${JSON.stringify(step.tool)} requires fully literal arguments`, 'DYNAMIC_SHELL')
+      if (step.tool === 'run_operation' || forbidden.has(step.tool)) {
+        throw new OperationRunError(`operation plan cannot dispatch excluded tool ${JSON.stringify(step.tool)}`, 'TOOL_EXCLUDED')
       }
       const definition = this.ctx.tools.admitted(step.tool, exec.agent, true)
       if (definition === undefined) throw new OperationRunError(`operation tool ${JSON.stringify(step.tool)} is unavailable or undiscovered`, 'TOOL_UNAVAILABLE')
-      admitted.set(step.id, { definition, identity: toolIdentity(definition) })
+      let policy: OperationToolPolicy
+      try {
+        policy = this.toolPolicies.require(definition)
+      } catch (error: unknown) {
+        throw new OperationRunError(`operation tool ${JSON.stringify(step.tool)} is not eligible: ${message(error)}`, 'TOOL_POLICY')
+      }
+      const staticallyResolvable = isStaticallyResolvable(step.arguments)
+      if (!staticallyResolvable && !policy.allowOutputReferences) {
+        throw new OperationRunError(`operation tool ${JSON.stringify(step.tool)} does not allow output-derived arguments`, 'TOOL_POLICY')
+      }
+      const entry = { definition, identity: toolIdentity(definition), policy }
+      admitted.set(step.id, entry)
+      if (staticallyResolvable) {
+        const resolved = resolveOperationExpression(step.arguments, { inputs: plan.inputs, results: new Map() })
+        validateArguments(step, definition, policy, resolved.value)
+      }
     }
     return admitted
   }
@@ -351,9 +393,16 @@ export class OperationRunner {
     if (admitted === undefined) throw new OperationRunError(`step ${JSON.stringify(step.id)} was not admitted`, 'ADMISSION_MISMATCH')
     const current = this.ctx.tools.admitted(step.tool, exec.agent, true)
     if (current === undefined) throw new OperationRunError(`tool ${JSON.stringify(step.tool)} is no longer available`, 'TOOL_CHANGED')
+    if (current !== admitted.definition) throw new OperationRunError(`tool ${JSON.stringify(step.tool)} definition changed after admission`, 'TOOL_CHANGED')
+    let currentPolicy: OperationToolPolicy
+    try {
+      currentPolicy = this.toolPolicies.require(current)
+    } catch (error: unknown) {
+      throw new OperationRunError(`tool ${JSON.stringify(step.tool)} operation policy is no longer available: ${message(error)}`, 'TOOL_CHANGED')
+    }
+    if (currentPolicy !== admitted.policy) throw new OperationRunError(`tool ${JSON.stringify(step.tool)} operation policy changed after admission`, 'TOOL_CHANGED')
     if (toolIdentity(current).schemaDigest !== admitted.identity.schemaDigest) throw new OperationRunError(`tool ${JSON.stringify(step.tool)} schema changed after admission`, 'TOOL_CHANGED')
-    const violations = validateJsonSchemaValue(current.parameters, argumentsValue, 'arguments')
-    if (violations.length > 0) throw new OperationRunError(`resolved arguments for ${JSON.stringify(step.tool)} are invalid: ${violations.join('; ')}`, 'INVALID_ARGS')
+    validateArguments(step, current, currentPolicy, argumentsValue)
     return { step, arguments: argumentsValue, bindings, admitted }
   }
 
@@ -376,15 +425,16 @@ export class OperationRunner {
     state: RunnerState,
     exec: ToolRunContext,
     prepared: PreparedStep,
-  ): Promise<{ result: ToolExecutionResult; elapsedMs: number }> {
+  ): Promise<{ result: ToolExecutionResult; elapsedMs: number; callerCancelled: boolean; timedOut: boolean }> {
     this.requireRemaining(state, exec.signal)
     const current = this.validatedPreparedStep(state, exec, prepared.step, prepared.arguments, prepared.bindings)
     const timeout = Math.min(state.limits.maxToolDeadlineMs, this.remainingMs(state))
+    if (timeout <= 0) throw new OperationRunError('operation wall-time budget is exhausted before tool dispatch', 'WALL_TIME')
     const startedAt = Date.now()
     using d = deadline(exec.signal, timeout, 'OPERATION_TOOL_TIMEOUT')
     state.attempted.push(current.step.id)
     state.toolCalls += 1
-    const result = await this.ctx.tools.execute({
+    const execution = {
       callId: nestedCallId(exec, state.runId, current.step.id),
       rootCallId: exec.rootCallId,
       parent: exec.token,
@@ -392,30 +442,64 @@ export class OperationRunner {
       arguments: current.arguments,
       ...(exec.agent === undefined ? {} : { agent: exec.agent }),
       signal: d.signal,
-    })
-    if (timeoutOf(d.signal, 'OPERATION_TOOL_TIMEOUT') !== undefined) {
-      throw new OperationRunError(`tool ${JSON.stringify(current.step.tool)} exceeded operation deadline`, 'TOOL_TIMEOUT')
+      dispatchConstraint: {
+        expectedDefinition: current.admitted.definition,
+        validate: (definition: ToolDefinition, argumentsValue: JsonValue) => {
+          if (definition !== current.admitted.definition) {
+            throw new OperationRunError(`tool ${JSON.stringify(current.step.tool)} definition changed at dispatch`, 'TOOL_CHANGED')
+          }
+          let policy: OperationToolPolicy
+          try {
+            policy = this.toolPolicies.require(definition)
+          } catch (error: unknown) {
+            throw new OperationRunError(`tool ${JSON.stringify(current.step.tool)} operation policy is unavailable at dispatch: ${message(error)}`, 'TOOL_CHANGED')
+          }
+          if (policy !== current.admitted.policy) {
+            throw new OperationRunError(`tool ${JSON.stringify(current.step.tool)} operation policy changed at dispatch`, 'TOOL_CHANGED')
+          }
+          if (toolIdentity(definition).schemaDigest !== current.admitted.identity.schemaDigest) {
+            throw new OperationRunError(`tool ${JSON.stringify(current.step.tool)} schema changed at dispatch`, 'TOOL_CHANGED')
+          }
+          if (!equalJson(argumentsValue, current.arguments)) {
+            throw new OperationRunError(`tool ${JSON.stringify(current.step.tool)} arguments changed at dispatch`, 'TOOL_CHANGED')
+          }
+          validateArguments(current.step, definition, policy, argumentsValue)
+        },
+      },
     }
-    return { result, elapsedMs: Date.now() - startedAt }
+    const result = await this.ctx.tools.execute(execution)
+    return {
+      result,
+      elapsedMs: Date.now() - startedAt,
+      callerCancelled: signalAborted(exec.signal),
+      timedOut: timeoutOf(d.signal, 'OPERATION_TOOL_TIMEOUT') !== undefined,
+    }
   }
 
-  private recordStepResult(
+  private async recordStepResult(
     state: RunnerState,
     step: OperationStep,
     result: ToolExecutionResult,
     assertions: readonly OperationAssertionResult[],
     elapsedMs: number,
-    includeValue = true,
-  ): void {
-    state.recorder.append('operation/step-result', {
+    omission?: { readonly omitPayload: true; readonly reason: string },
+  ): Promise<void> {
+    const rendered = result.content as unknown as JsonValue
+    const renderedTooLarge = jsonBytes(rendered) > state.limits.maxResultBytes
+    const omittedReason = omission?.reason ?? (renderedTooLarge
+      ? `rendered result omitted because it exceeds the ${state.limits.maxResultBytes}-byte limit`
+      : undefined)
+    await state.recorder.appendAndFlush('operation/step-result', {
       version: 1,
       runId: state.runId,
       stepId: step.id,
       isError: result.isError,
       ...(result.isError
         ? { error: { message: result.error.message, ...(result.error.info === undefined ? {} : { code: result.error.info.code }) } }
-        : !includeValue ? {} : { value: result.value }),
-      rendered: result.content as unknown as JsonValue,
+        : omission === undefined ? { value: result.value } : {}),
+      rendered: omittedReason === undefined
+        ? rendered
+        : [{ type: 'text', text: omittedReason }],
       elapsedMs,
       assertions,
     })
@@ -437,6 +521,9 @@ export class OperationRunner {
   ): Promise<OperationSelection> {
     this.requireRemaining(state, exec.signal)
     if (state.judgments >= state.limits.maxJudgments) throw new OperationRunError('operation judgment budget is exhausted', 'JUDGMENT_BUDGET')
+    if (candidates.length > state.limits.maxCandidates || candidates.some(candidate => Buffer.byteLength(candidate.description, 'utf8') > state.limits.maxCandidateBytes)) {
+      throw new OperationRunError('complete judgment choices exceed the configured candidate bounds', 'CANDIDATE_LIMIT')
+    }
     const observationState: JsonValue[] = []
     for (const observation of observations) {
       observationState.push({ step: observation.step, pointer: observation.pointer, value: observation.value })
@@ -455,15 +542,25 @@ export class OperationRunner {
       question,
       candidates,
     }
-    const prepareTimeout = Math.min(state.limits.maxJudgmentDeadlineMs, this.remainingMs(state))
-    let prepared
-    using preparationDeadline = deadline(exec.signal, prepareTimeout, 'OPERATION_JUDGMENT_TIMEOUT')
-    try {
-      prepared = await state.provider.prepare(draft, preparationDeadline.signal)
-    } catch (error: unknown) {
-      throw new OperationRunError(`operation judgment preparation failed: ${message(error)}`, 'JUDGMENT_PREPARE')
+    let prepared: OperationPreparedJudgment
+    {
+      const prepareTimeout = Math.min(state.limits.maxJudgmentDeadlineMs, this.remainingMs(state))
+      if (prepareTimeout <= 0) throw new OperationRunError('operation wall-time budget is exhausted before judgment preparation', 'WALL_TIME')
+      using preparationDeadline = deadline(exec.signal, prepareTimeout, 'OPERATION_JUDGMENT_TIMEOUT')
+      try {
+        prepared = await state.provider.prepare(draft, preparationDeadline.signal)
+      } catch (error: unknown) {
+        if (signalAborted(exec.signal)) throw new OperationRunError('caller cancelled during judgment preparation', 'CANCELLED')
+        if (timeoutOf(preparationDeadline.signal, 'OPERATION_JUDGMENT_TIMEOUT') !== undefined) {
+          throw new OperationRunError('operation judgment preparation exceeded deadline', 'JUDGMENT_TIMEOUT')
+        }
+        throw new OperationRunError(`operation judgment preparation failed: ${message(error)}`, 'JUDGMENT_PREPARE')
+      }
+      if (signalAborted(exec.signal)) throw new OperationRunError('caller cancelled during judgment preparation', 'CANCELLED')
+      if (timeoutOf(preparationDeadline.signal, 'OPERATION_JUDGMENT_TIMEOUT') !== undefined) {
+        throw new OperationRunError('operation judgment preparation exceeded deadline', 'JUDGMENT_TIMEOUT')
+      }
     }
-    if (timeoutOf(preparationDeadline.signal, 'OPERATION_JUDGMENT_TIMEOUT') !== undefined) throw new OperationRunError('operation judgment preparation exceeded deadline', 'JUDGMENT_TIMEOUT')
     validatePrepared(draft, prepared, state.providerIdentity)
     if (state.inputTokens + prepared.inputTokens > state.limits.maxJudgmentInputTokens) throw new OperationRunError('operation judgment input-token budget is exhausted', 'JUDGMENT_TOKEN_BUDGET')
     await state.recorder.appendAndFlush('operation/judgment-request', {
@@ -475,50 +572,76 @@ export class OperationRunner {
     })
     state.inputTokens += prepared.inputTokens
     state.judgments += 1
-    if (signalAborted(exec.signal)) throw new OperationRunError('caller cancelled before judgment inference', 'CANCELLED')
     const startedAt = Date.now()
-    const rankTimeout = Math.min(state.limits.maxJudgmentDeadlineMs, this.remainingMs(state))
-    let response: OperationJudgmentResponse
-    using rankingDeadline = deadline(exec.signal, rankTimeout, 'OPERATION_JUDGMENT_TIMEOUT')
-    try {
-      response = await state.provider.rank(prepared, rankingDeadline.signal)
-    } catch (error: unknown) {
-      state.recorder.append('operation/judgment-result', {
-        version: 1,
-        runId: state.runId,
-        requestId: draft.id,
-        error: { message: message(error), code: 'JUDGMENT_PROVIDER' },
-        elapsedMs: Date.now() - startedAt,
-      })
-      throw new OperationRunError(`operation judgment request failed: ${message(error)}`, 'JUDGMENT_PROVIDER')
+    if (signalAborted(exec.signal)) {
+      return await this.judgmentFailure(state, draft.id, startedAt, 'caller cancelled before judgment inference', 'CANCELLED')
     }
-    if (timeoutOf(rankingDeadline.signal, 'OPERATION_JUDGMENT_TIMEOUT') !== undefined) throw new OperationRunError('operation judgment request exceeded deadline', 'JUDGMENT_TIMEOUT')
-    if (signalAborted(exec.signal)) throw new OperationRunError('caller cancelled during judgment inference', 'CANCELLED')
+    if (this.remainingMs(state) < 1) {
+      return await this.judgmentFailure(state, draft.id, startedAt, 'operation wall-time budget is exhausted before judgment inference', 'WALL_TIME')
+    }
+    let response: OperationJudgmentResponse
+    {
+      const rankTimeout = Math.min(state.limits.maxJudgmentDeadlineMs, this.remainingMs(state))
+      if (rankTimeout <= 0) {
+        return await this.judgmentFailure(state, draft.id, startedAt, 'operation wall-time budget is exhausted before judgment inference', 'WALL_TIME')
+      }
+      using rankingDeadline = deadline(exec.signal, rankTimeout, 'OPERATION_JUDGMENT_TIMEOUT')
+      try {
+        response = await state.provider.rank(prepared, rankingDeadline.signal)
+      } catch (error: unknown) {
+        if (signalAborted(exec.signal)) {
+          return await this.judgmentFailure(state, draft.id, startedAt, 'caller cancelled during judgment inference', 'CANCELLED')
+        }
+        if (timeoutOf(rankingDeadline.signal, 'OPERATION_JUDGMENT_TIMEOUT') !== undefined) {
+          return await this.judgmentFailure(state, draft.id, startedAt, 'operation judgment request exceeded deadline', 'JUDGMENT_TIMEOUT')
+        }
+        return await this.judgmentFailure(state, draft.id, startedAt, `operation judgment request failed: ${message(error)}`, 'JUDGMENT_PROVIDER')
+      }
+      if (signalAborted(exec.signal)) {
+        return await this.judgmentFailure(state, draft.id, startedAt, 'caller cancelled during judgment inference', 'CANCELLED')
+      }
+      if (timeoutOf(rankingDeadline.signal, 'OPERATION_JUDGMENT_TIMEOUT') !== undefined) {
+        return await this.judgmentFailure(state, draft.id, startedAt, 'operation judgment request exceeded deadline', 'JUDGMENT_TIMEOUT')
+      }
+    }
     try {
       validateResponse(draft, response, state.providerIdentity)
     } catch (error: unknown) {
-      state.recorder.append('operation/judgment-result', {
-        version: 1,
-        runId: state.runId,
-        requestId: draft.id,
-        error: { message: message(error), code: 'JUDGMENT_RESPONSE' },
-        elapsedMs: Date.now() - startedAt,
-      })
-      throw new OperationRunError(`operation judgment response is invalid: ${message(error)}`, 'JUDGMENT_RESPONSE')
+      return await this.judgmentFailure(state, draft.id, startedAt, `operation judgment response is invalid: ${message(error)}`, 'JUDGMENT_RESPONSE')
     }
-    const usage = response.usage
-    const outputTokens = usage?.outputTokens ?? 0
-    if (state.outputTokens + outputTokens > state.limits.maxJudgmentOutputTokens) throw new OperationRunError('operation judgment output-token budget is exhausted', 'JUDGMENT_TOKEN_BUDGET')
-    state.outputTokens += outputTokens
-    state.recorder.append('operation/judgment-result', {
+    await state.recorder.appendAndFlush('operation/judgment-result', {
       version: 1,
       runId: state.runId,
       requestId: draft.id,
       response,
       elapsedMs: Date.now() - startedAt,
     })
+    if (signalAborted(exec.signal)) throw new OperationRunError('caller cancelled after judgment inference', 'CANCELLED')
+    if (this.remainingMs(state) < 1) throw new OperationRunError('operation wall-time budget is exhausted after judgment inference', 'WALL_TIME')
+    const outputTokens = response.usage?.outputTokens ?? 0
+    if (state.outputTokens + outputTokens > state.limits.maxJudgmentOutputTokens) {
+      throw new OperationRunError('operation judgment output-token budget is exhausted', 'JUDGMENT_TOKEN_BUDGET')
+    }
+    state.outputTokens += outputTokens
     const selection = selectCandidate(draft.candidates, response, state.limits)
     return { requestId: draft.id, ...selection }
+  }
+
+  private async judgmentFailure(
+    state: RunnerState,
+    requestId: OperationJudgmentRequestId,
+    startedAt: number,
+    reason: string,
+    code: string,
+  ): Promise<never> {
+    await state.recorder.appendAndFlush('operation/judgment-result', {
+      version: 1,
+      runId: state.runId,
+      requestId,
+      error: { message: reason, code },
+      elapsedMs: Date.now() - startedAt,
+    })
+    throw new OperationRunError(reason, code)
   }
 
   private recordTransition(state: RunnerState, selection: OperationSelection): void {
@@ -667,20 +790,37 @@ function nestedCallId(exec: ToolRunContext, runId: OperationRunId, stepId: strin
   return ToolCallId(`${exec.rootCallId}:operation:${runId}:${stepId}`)
 }
 
-function isLiteral(expression: OperationStep['arguments']): boolean {
+function isStaticallyResolvable(expression: OperationStep['arguments']): boolean {
   switch (expression.kind) {
     case 'literal':
+    case 'input':
       return true
     case 'object':
-      return Object.values(expression.properties).every(isLiteral)
+      return Object.values(expression.properties).every(isStaticallyResolvable)
     case 'array':
-      return expression.items.every(isLiteral)
-    case 'input':
+      return expression.items.every(isStaticallyResolvable)
     case 'result':
     case 'selected':
       return false
     default:
       return unreachable(expression)
+  }
+}
+
+function validateArguments(
+  step: OperationStep,
+  definition: ToolDefinition,
+  policy: OperationToolPolicy,
+  argumentsValue: JsonValue,
+): void {
+  const violations = validateJsonSchemaValue(definition.parameters, argumentsValue, 'arguments')
+  if (violations.length > 0) {
+    throw new OperationRunError(`resolved arguments for ${JSON.stringify(step.tool)} are invalid: ${violations.join('; ')}`, 'INVALID_ARGS')
+  }
+  try {
+    policy.validateArguments(argumentsValue)
+  } catch (error: unknown) {
+    throw new OperationRunError(`resolved arguments for ${JSON.stringify(step.tool)} violate its operation policy: ${message(error)}`, 'TOOL_POLICY')
   }
 }
 

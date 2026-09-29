@@ -3,7 +3,7 @@
  * @module @deepseek-ai/dsh-experimental-operation/plan
  */
 
-import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+import { deepFreeze, type JsonValue } from '@deepseek-ai/dsh-util-values'
 import { OperationJsonError, parseJsonPointer, requireJson } from './json.ts'
 import type {
   OperationAssertion,
@@ -50,7 +50,7 @@ export function parseOperationPlan(raw: unknown): OperationPlan {
     ...(record.requestedLimits === undefined ? {} : { requestedLimits: parseRequestedLimits(record.requestedLimits) }),
   }
   validateReferences(plan)
-  return plan
+  return deepFreeze(plan)
 }
 
 /**

@@ -7,15 +7,22 @@ kind: "package-reference"
 
 ## Summary
 
-`dsh-experimental-operation` adds the opt-in `run_operation` tool to a composition that explicitly mounts it.
+`dsh-experimental-operation` lets a model submit one short, finite plan through `run_operation` when a composition explicitly mounts it. The runner executes eligible tools sequentially, preserves canonical result values, and checks deterministic assertions before asking a configured provider to rank complete next actions. A run can complete, stop, or return control for replanning, and its recorded decisions can be replayed without executing tools. The package is private and experimental; no production tool is eligible by default.
 
-It parses a version-one JSON plan, admits fixed visible tools, resolves only typed JSON-pointer references, dispatches one nested tool at a time, records canonical evidence, and asks one configured closed-set judgment provider whether to continue, stop, replan, or complete.
+## Table of Contents
 
-The package is private and experimental.
+- [Use this package](#use-this-package)
+- [Durable records and replay](#durable-records-and-replay)
+- [Further Exploration](#further-exploration)
+- [Model Experience](#model-experience)
+- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+- [Dev Note](#dev-note)
+
+-----
 
 ## Use this package
 
-Mount this service beside `dsh-tools`, durable Session persistence, and a provider package such as `@deepseek-ai/dsh-experimental-operation-clm`.
+Mount this service beside `dsh-tools`, durable Session persistence, and a provider such as [operation-clm](../operation-clm/README.md). The following composition illustrates the required identity fields; deployment owners supply reviewed values and the matching tokenizer rather than using these placeholders.
 
 ```yaml
 - name: '@deepseek-ai/dsh-experimental-operation'
@@ -31,44 +38,68 @@ Mount this service beside `dsh-tools`, durable Session persistence, and a provid
       digest: sha256:replace-me
     calibrationId: dike-heldout-v1
     temperature: 1
+    maxEncoderTokens: 2048
 ```
 
-The composing deployment registers the exact tokenizer hook named by `tokenizerId` before mounting the CLM provider.
+The composing deployment registers the exact tokenizer hook named by `tokenizerId` before mounting the CLM provider. Its `maxEncoderTokens` must match the reviewed serving deployment's encoder ceiling; the example is not a default. The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-experimental-operation) owns the complete runner limits.
 
-`run_operation` accepts a finite version-one plan with named JSON inputs, nonempty fixed steps, deterministic assertions, explicit observations, and final completion evidence.
+The deployment also registers an independently reviewed read-only policy through `ctx.operations.toolPolicies` for each exact `ToolDefinition` instance eligible for operation execution. Each policy explicitly declares `allowOutputReferences`; process policies set it to false so only literal/input-derived arguments are admitted, while a reviewed structured-selection fixture may enable it. A matching name, schema, model description, or prior definition registration grants no operation authority. The foreground-process helper checks lifecycle facts, not command safety; its composition must separately restrict the definition or argument validator to reviewed read-only invocations.
 
-Every planned tool is admitted against the calling agent's current scoped visibility and deferred discovery state before the first dispatch, then rechecked before every effect.
-
-## Model Experience
-
-### Model input
-
-The model sees `run_operation` only when this package is mounted.
-
-Its input is a JSON plan, never executable code or shell interpolation.
-
-### Token and KV-cache effects
-
-The operation runner does not append checkpoint data to the planning model context.
-
-The judgment provider receives only the bounded canonical observation and complete candidate actions recorded for that checkpoint.
-
-Each provider input is separately tokenized through the configured exact tokenizer hook; the runner rejects inputs beyond the frozen budget instead of truncating them.
+`run_operation` accepts a finite version-one plan with named JSON inputs, nonempty fixed steps, deterministic assertions, explicit observations, and final completion evidence. Every planned tool is admitted against the calling agent's current scoped visibility and deferred discovery state before the first dispatch. Admission requires the trusted exact-definition policy, prevalidates every statically resolvable argument, and rechecks the same definition and policy registration before each effect. Concrete calls still pass through the ordinary registry policy, approval, credentials, sandbox, and cancellation pipeline.
 
 ## Durable records and replay
 
-The package writes log-only `operation/*` events for admission, step intent and canonical results, judgment requests and responses, transitions, and terminal outcomes.
+The package writes required, log-only `operation/*` records for admission, step intent and canonical results, judgment requests and responses or failures, transitions, and terminal outcomes. The [persistence catalog](../../../docs/persistence-catalog.md) owns their declarations.
 
-It flushes the judgment request before provider inference and flushes a selected transition with the next step intent before that next tool dispatch.
+The runner flushes each settled tool or judgment outcome before terminal handling, flushes the judgment request before provider inference, and flushes a selected transition with the next step intent before that next tool dispatch. Provider-prepared encoding evidence and parsed response facts remain in those records when the provider supplies them.
 
-`replayOperation()` reconstructs the selected run from those records without calling tools, models, or the filesystem.
+`replayOperation()` reconstructs the selected run without calling tools, models, or the filesystem. Every step after the first requires a recorded accepted continuation whose selected canonical source and resolved arguments match its intent. Completed replay requires an accepted final `complete` choice, matching recorded and reevaluated completion checks, and exact attempted/completed step lists. It rejects transitions that do not match their recorded request and response candidate mapping. Valid record prefixes remain replayable; a started step without a recorded result remains `unknown`, and no operation is automatically resumed.
 
-A started step without a recorded result remains `unknown` on replay; no operation is automatically resumed.
+The [keyless SDK scenario](../../../snapshots/sdk/clm-operations/snapshot.yml) patches the shipped SDK profile with this service, verified read-only fixture tools, and a deterministic judgment provider. Its recorded Session drives the TypeScript and [Python SDK projection](../../../python/sdk/tests/test_client.py) evidence; it does not exercise a live CLM deployment or establish ranking quality.
+
+## Further Exploration
+
+- [Tool execution](../../../docs/subsystems/tools.md) — scoped tool visibility and ordinary dispatch policy.
+- [Operation types](src/types.ts) — plans, `OperationJudgmentProvider`, `OperationTokenizer`, and terminal `OperationSummary` declarations.
+- [CLM adapter](../operation-clm/README.md) — deployment identity, encoding, and HTTP validation.
+
+## Model Experience
+
+### Operation plans and summaries
+
+#### What the model sees
+
+An opted-in composition exposes `run_operation` with one JSON `plan` argument, never executable code or shell interpolation. The tool returns a bounded terminal summary with the run identity, status, attempted and completed steps, and declared verification outcomes; detailed checkpoints remain log-only. The [tool definition](src/index.ts) owns the argument and result declarations.
+
+##### Operation tool description
+
+```markdown
+Execute one short, finite operation plan through existing tools. Supply version-one JSON with fixed tool names, explicit JSON-pointer observations, required deterministic assertions, and completion checks. The runner executes steps sequentially, records every checkpoint, and may return needs_replan or stopped instead of inventing values. Do not use this tool for workflows, delegation, background jobs, retries, dynamic shell commands, or recursive operation plans.
+```
+
+#### Token effect
+
+The planning request gains the `run_operation` declaration and the returned summary, not each checkpoint's canonical data. The judgment provider receives only the bounded canonical observation and complete candidate actions recorded for that checkpoint; its separately counted input is rejected beyond the frozen budget rather than truncated.
+
+#### KV Cache effect
+
+The opted-in tool declaration changes the planning request's tool catalog. Operation checkpoints do not append planning-model messages or mutate its cached history; the outer tool result extends that history through the ordinary loop.
 
 ## Known Limitations and Deferred Work
 
+The initial operation language and deployment policy intentionally restrict execution.
+
 - Plans are strictly finite and sequential: no retries, branches, DAGs, background work, nested operation runs, compensation, or restart continuation.
-- The initial evidence surface is complete JSON Pointer values and arrays of complete JSON candidate records; it does not parse arbitrary stdout, CSV, or command text.
-- Shell tools are accepted only with fully literal arguments; interactive terminals and composition/delegation tools are excluded.
+- Evidence consists of complete JSON Pointer values and arrays of complete JSON candidate records; the runner does not parse arbitrary stdout, CSV, or command text.
+- The verified-read-only scope has no bundled eligible tools. A deployment must register each exact reviewed definition and structured result inspector; background handles, incomplete process output, and mandatory process failures cannot be normalized into completion.
 - A passing declared completion check is evidence for the plan only, not independent proof of an arbitrary natural-language goal.
-- The package is not mounted by shipped profiles, has no Operations mode or UI, and does not establish CLM quality or live-provider performance evidence.
+- Shipped profiles do not mount the package by default. It has no Operations mode or UI, and deterministic profile evidence does not establish CLM quality or live-provider performance.
+
+### Dev Note
+
+<details>
+<summary>Working context for maintainers — click to expand</summary>
+
+No runtime invariant companion is published because the runner validates admission, source bindings, and recording barriers before dispatch, and replay validates the recorded transaction without maintaining a second live projection. There is no independently maintained observation to compare through a `./invariant` entry.
+
+</details>

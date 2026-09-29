@@ -79,6 +79,10 @@ export interface Config {
    */
   temperature: number
   /**
+   * Reviewed server encoder ceiling, counted with the exact deployed tokenizer including special tokens.
+   */
+  maxEncoderTokens: number
+  /**
    * Optional per-request deadline.
    */
   timeoutMs?: number
@@ -108,6 +112,7 @@ export const Config: z<Config> = z.object({
   providerId: z.string().default('clm-http'),
   serialization: z.string().default('clm-systemone-bb42c6c5'),
   temperature: z.number().min(0).max(100).required(),
+  maxEncoderTokens: z.natural().min(1).required(),
   timeoutMs: z.natural().min(1).default(15_000),
   maxResponseBytes: z.natural().min(1).default(65_536),
 })
@@ -138,6 +143,7 @@ export function resolveConfig(config: Config): ClmHttpConfig {
     providerId: config.providerId ?? 'clm-http',
     serialization: config.serialization ?? 'clm-systemone-bb42c6c5',
     temperature: config.temperature,
+    maxEncoderTokens: config.maxEncoderTokens,
     timeoutMs: config.timeoutMs ?? 15_000,
     maxResponseBytes: config.maxResponseBytes ?? 65_536,
   }

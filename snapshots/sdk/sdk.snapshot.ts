@@ -357,8 +357,9 @@ function normalizeNotifications(notifications: readonly HarnessNotification[], c
     .filter(n => n.method === 'session.event')
     .map(n => n.params.event as Record<string, unknown>)
   const typedFeedback = events.some(event => event.type === 'feedback/message-put')
+  const typedIdentities = typedFeedback || events.some(event => typeof event.type === 'string' && event.type.startsWith('operation/'))
   const eventLog = events.map(event => JSON.stringify(event)).join('\n') + '\n'
-  const typedLog = typedFeedback
+  const typedLog = typedIdentities
     ? redactSessionSnapshotIds([JSON.stringify({ type: 'session', id: ctx.sessionIds[0] }) + '\n' + eventLog])[0]!.split('\n').slice(1).join('\n')
     : eventLog
   const normalizedEvents = events.length === 0
@@ -366,7 +367,7 @@ function normalizeNotifications(notifications: readonly HarnessNotification[], c
     : scrubModelRequestBulk(normalizeSessionLog(
       normalizeSessionFormatProvenance(typedLog),
       ctx,
-      typedFeedback ? { identityMode: 'preserve' } : {},
+      typedIdentities ? { identityMode: 'preserve' } : {},
     )).trimEnd().split('\n').map(line => JSON.parse(line) as Record<string, unknown>)
   let eventIndex = 0
   const records = notifications.map((notification) => {
@@ -375,10 +376,10 @@ function normalizeNotifications(notifications: readonly HarnessNotification[], c
     return { method: notification.method, params: { ...notification.params, event } }
   })
   let output = records.map(record => JSON.stringify(record)).join('\n') + '\n'
-  if (typedFeedback) {
+  if (typedIdentities) {
     for (const [index, id] of ctx.sessionIds.entries()) output = output.replaceAll(id, '{{session:' + (index + 1) + '}}')
   }
-  return normalizeStdout(output, ctx, typedFeedback ? { identityMode: 'preserve' } : {})
+  return normalizeStdout(output, ctx, typedIdentities ? { identityMode: 'preserve' } : {})
 }
 
 /** Normalize the owned-run projection. */

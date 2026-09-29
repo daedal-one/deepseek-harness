@@ -7,6 +7,10 @@ A service can be a core spine service, a swappable capability seam, or a bundle/
 
 ```mermaid
 flowchart LR
+  pkg_experimental_operation["experimental-operation"]
+  svc_operations["ctx.operations<br/>Bounded sequential operation execution"]
+  pkg_experimental_operation_clm["experimental-operation-clm"]
+  svc_operationJudgments["ctx.operationJudgments<br/>Closed-set operation judgments and tokenizers"]
   pkg_local_container_runtime["local-container-runtime"]
   svc_conversationWorkspaces["ctx.conversationWorkspaces<br/>Conversation Git workspace lifecycle"]
   pkg_fs_local_container["fs-local-container"]
@@ -282,6 +286,9 @@ flowchart LR
   pkg_e2b --> svc_e2b
   pkg_experimental_agent_team --> svc_agentTeams
   pkg_experimental_code_runtime_python --> svc_codeRuntime
+  pkg_experimental_operation --> svc_operationJudgments
+  pkg_experimental_operation --> svc_operations
+  pkg_experimental_operation_clm --> svc_operationJudgments
   pkg_file_reference --> svc_fileReferences
   pkg_file_reference_local --> svc_fileReferences
   pkg_forge_project_workspaces --> svc_forgeProjectWorkspaces
@@ -427,6 +434,8 @@ flowchart LR
   svc_memory --> pkg_memory_extractor_llm
   svc_memory --> pkg_tool_memory
   svc_memory --> pkg_tool_memory_reviewer
+  svc_operationJudgments --> pkg_experimental_operation
+  svc_operations --> pkg_experimental_operation_clm
   svc_sandbox --> pkg_bash_sandbox
   svc_sandbox --> pkg_terminal_bash
   svc_sandboxPolicy --> pkg_bash_sandbox
@@ -516,6 +525,8 @@ flowchart LR
 
 | ctx key | Role | Owner | Implementations | Direct consumers | Companion plugins | Note |
 | --- | --- | --- | --- | --- | --- | --- |
+| `ctx.operations` | `core` | [`experimental-operation`](../packages/experimental/operation) | - | [`experimental-operation-clm`](../packages/experimental/operation-clm) | - | Opt-in runner owns fixed-tool admission, source-bound sequential dispatch, required records, and replay; shipped profiles do not mount it by default. |
+| `ctx.operationJudgments` | `seam` | [`experimental-operation`](../packages/experimental/operation) | [`experimental-operation-clm`](../packages/experimental/operation-clm) | [`experimental-operation`](../packages/experimental/operation) | - | The operation service owns the sole ranking provider and exact-tokenizer registrations; the CLM adapter supplies bounded System One requests. |
 | `ctx.conversationWorkspaces` | `core` | [`local-container-runtime`](../packages/sandbox/local-container-runtime) | - | [`fs-local-container`](../packages/fs/fs-local-container), [`subprocess-local-container`](../packages/subprocess/subprocess-local-container), `workspace-files`, [`file-reference-local`](../packages/context/file-reference-local) | - | Opt-in ownership, recovery, and automatic branch return for conversation repositories. |
 | `ctx.localContainerRuntime` | `core` | [`local-container-runtime`](../packages/sandbox/local-container-runtime) | - | [`fs-local-container`](../packages/fs/fs-local-container), [`subprocess-local-container`](../packages/subprocess/subprocess-local-container) | - | Owns one verified rootless container world and removable process ranges shared by the filesystem and subprocess providers. |
 | `ctx.attachments` | `seam` | [`attachment`](../packages/attachment/attachment) | [`attachment-local`](../packages/attachment/attachment-local) | [`api-session-controller`](../packages/api/session-controller), [`tool-fs`](../packages/fs/tool-fs), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-deepseek`](../packages/llm/llm-deepseek) | - | The host commits accepted images before session events; provider adapters resolve authorized durable references into provider-native content. |

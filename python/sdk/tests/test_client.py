@@ -1152,3 +1152,77 @@ for line in sys.stdin:
     ]
     assert actual == expected
     assert [event["phase"] for event in actual] == ["saving", "pending", "returned"]
+
+
+def test_recorded_operation_records_match_the_typescript_sdk(tmp_path: Path) -> None:
+    fixture = Path(__file__).resolve().parents[3] / "snapshots/sdk/clm-operations/notifications.expected.jsonl"
+    expected_path = Path(__file__).parent / "expected/clm-operations.json"
+    script = tmp_path / "recorded_operation_runtime.py"
+    script.write_text(
+        """
+import json
+import sys
+from pathlib import Path
+
+frames = [json.loads(line) for line in Path(sys.argv[1]).read_text().splitlines()]
+for frame in frames:
+    frame["params"]["sessionId"] = "main"
+accepted = next(
+    frame["params"]["event"]["data"]["inserted"][0]["id"]
+    for frame in frames
+    if frame["method"] == "session.event"
+    and frame["params"]["event"]["type"] == "agent/inbox/spliced"
+    and frame["params"]["event"]["data"].get("inserted")
+)
+for line in sys.stdin:
+    msg = json.loads(line)
+    if msg["method"] == "initialize":
+        result = {"serverInfo": {"name": "recorded-operation-fixture"}}
+    elif msg["method"] == "session/prompt":
+        for frame in frames:
+            print(json.dumps({"jsonrpc": "2.0", **frame}), flush=True)
+        result = {"messageId": accepted}
+    else:
+        result = {}
+    print(json.dumps({"jsonrpc": "2.0", "id": msg["id"], "result": result}), flush=True)
+    if msg["method"] == "shutdown":
+        break
+""".strip()
+    )
+    seen: list[Notification] = []
+    with DeepSeekHarness(_launch_args=(sys.executable, str(script), str(fixture)), cwd=str(tmp_path)) as harness:
+        result = harness.run("verify the complete beta record", session_id="main", on_notification=seen.append)
+
+    raw_operations = [
+        frame["params"]["event"]
+        for frame in (json.loads(line) for line in fixture.read_text().splitlines())
+        if frame["method"] == "session.event" and frame["params"]["event"]["type"].startswith("operation/")
+    ]
+    actual = [event for event in result.events if event["type"].startswith("operation/")]
+    assert actual == raw_operations
+    assert [
+        notification.payload["event"]
+        for notification in seen
+        if notification.method == "session.event" and notification.payload["event"]["type"].startswith("operation/")
+    ] == raw_operations
+    assert all("ignorable" not in event for event in actual)
+    run_id = actual[0]["data"]["runId"]
+    assert all(event["data"]["runId"] == run_id for event in actual)
+    requests = [event["data"]["request"] for event in actual if event["type"] == "operation/judgment-request"]
+    responses = [event["data"] for event in actual if event["type"] == "operation/judgment-result"]
+    assert [request["draft"]["id"] for request in requests] == [response["requestId"] for response in responses]
+    assert all(response["response"]["requestId"] == response["requestId"] for response in responses)
+    projection = {
+        "final_response": result.final_response,
+        "finish_reason": result.finish_reason,
+        "event_types": [event["type"] for event in actual],
+        "steps": [
+            {"step": event["data"]["stepId"], "tool": event["data"]["tool"], "arguments": event["data"]["arguments"]}
+            for event in actual if event["type"] == "operation/step-start"
+        ],
+        "canonical_results": [event["data"]["value"] for event in actual if event["type"] == "operation/step-result"],
+        "judgment_kinds": [request["draft"]["kind"] for request in requests],
+        "distributions": [response["response"]["probabilities"] for response in responses],
+        "terminal": {key: value for key, value in actual[-1]["data"].items() if key != "runId"},
+    }
+    assert projection == json.loads(expected_path.read_text())

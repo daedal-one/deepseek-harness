@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { parseOperationPlan } from '../src/plan.ts'
+import type { OperationPlan, OperationStep } from '../src/types.ts'
 import { evaluateOperationAssertions, resolveOperationExpression } from '../src/resolution.ts'
 
-function plan() {
+type MutableStep = { -readonly [Key in keyof OperationStep]: OperationStep[Key] }
+
+function plan(): Omit<OperationPlan, 'steps'> & { steps: MutableStep[] } {
   return {
     version: 1,
     name: 'read-then-act',

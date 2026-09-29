@@ -65,7 +65,7 @@ export function clmChoiceRequest(
 ): ClmChoiceRequest {
   const criteria: Record<string, string> = Object.create(null) as Record<string, string>
   for (const candidate of draft.candidates) criteria[candidate.id] = candidate.description
-  return {
+  const request: ClmChoiceRequest = {
     state: draft.state,
     model: identity.model,
     temperature,
@@ -77,6 +77,7 @@ export function clmChoiceRequest(
       },
     },
   }
+  return JSON.parse(canonicalJson(request as unknown as JsonValue)) as ClmChoiceRequest
 }
 
 /**
@@ -121,8 +122,8 @@ export function clmEncoderInputs(request: ClmChoiceRequest): readonly string[] {
 
  */
 export function clmStateText(state: JsonValue, instructions: string): string {
-  const renderedState = clmText(state).trim()
-  const renderedInstructions = clmText(instructions).trim()
+  const renderedState = pythonStrip(clmText(state))
+  const renderedInstructions = pythonStrip(clmText(instructions))
   return renderedState && renderedInstructions
     ? `${renderedState}\n\n${renderedInstructions}`
     : renderedState || renderedInstructions
@@ -169,6 +170,7 @@ export function parseClmChoiceResponse(
     probabilities,
     usage,
     providerConfidence: confidence,
+    wire: record as JsonValue,
   }
 }
 
@@ -193,11 +195,12 @@ function probabilityMap(raw: unknown, prepared: OperationPreparedJudgment): Read
 function parseUsage(raw: unknown): { readonly billingUnits: number; readonly inputTokens: number; readonly outputTokens: number } {
   const record = object(raw, 'CLM response.usage')
   exact(record, ['billing_units', 'input_tokens', 'output_tokens'], 'CLM response.usage')
-  return {
-    billingUnits: safeNonNegative(record.billing_units, 'CLM response.usage.billing_units'),
-    inputTokens: safeNonNegative(record.input_tokens, 'CLM response.usage.input_tokens'),
-    outputTokens: safeNonNegative(record.output_tokens, 'CLM response.usage.output_tokens'),
-  }
+  const billingUnits = safeNonNegative(record.billing_units, 'CLM response.usage.billing_units')
+  const inputTokens = safeNonNegative(record.input_tokens, 'CLM response.usage.input_tokens')
+  const outputTokens = safeNonNegative(record.output_tokens, 'CLM response.usage.output_tokens')
+  if (billingUnits !== 1) throw new ClmWireError('CLM response.usage.billing_units must equal the single supplied question')
+  if (outputTokens !== 0) throw new ClmWireError('CLM response.usage.output_tokens must equal zero for System One')
+  return { billingUnits, inputTokens, outputTokens }
 }
 
 function clmText(value: JsonValue, indent = 0): string {
@@ -212,13 +215,30 @@ function clmText(value: JsonValue, indent = 0): string {
       return `${pad}- ${clmText(entry)}`
     }).join('\n')
   }
-  return Object.entries(value).map(([key, entry]) => {
+  return Object.entries(value).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0).map(([key, entry]) => {
     if ((Array.isArray(entry) || isRecord(entry)) && nonEmpty(entry)) return `${pad}${key}:\n${clmText(entry, indent + 2)}`
     return `${pad}${key}: ${clmText(entry)}`
   }).join(indent === 0 ? '\n\n' : '\n')
 }
 
+// Python str.strip follows Unicode White_Space plus U+001C–U+001F, not ECMAScript trim (which removes U+FEFF).
+function pythonStrip(value: string): string {
+  let start = 0
+  let end = value.length
+  while (start < end && pythonWhitespace(value.charCodeAt(start))) start += 1
+  while (end > start && pythonWhitespace(value.charCodeAt(end - 1))) end -= 1
+  return value.slice(start, end)
+}
+
+function pythonWhitespace(code: number): boolean {
+  return (code >= 0x09 && code <= 0x0d) || (code >= 0x1c && code <= 0x20)
+    || code === 0x85 || code === 0xa0 || code === 0x1680 || (code >= 0x2000 && code <= 0x200a)
+    || code === 0x2028 || code === 0x2029 || code === 0x202f || code === 0x205f || code === 0x3000
+}
+
 function pythonNumberText(value: number): string {
+  const json = JSON.stringify(value)
+  if (!json.includes('.') && !json.includes('e')) return json
   const absolute = Math.abs(value)
   if (absolute === 0 || (absolute >= 1e-4 && absolute < 1e16)) return String(value)
   const exponential = value.toExponential()

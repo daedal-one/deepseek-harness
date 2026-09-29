@@ -67,6 +67,10 @@ export interface ClmHttpConfig {
    */
   readonly temperature: number
   /**
+   * Reviewed server encoder ceiling; each encoded text must fit without truncation.
+   */
+  readonly maxEncoderTokens: number
+  /**
    * Per-request cooperative HTTP deadline.
    */
   readonly timeoutMs: number
@@ -126,7 +130,7 @@ export class ClmHttpProvider implements OperationJudgmentProvider {
    */
   readonly identity: OperationJudgmentIdentity
   private readonly active = new Map<AbortController, Promise<void>>()
-  private disposed = false
+  private disposal: Promise<void> | undefined
 
   /**
 
@@ -170,21 +174,31 @@ export class ClmHttpProvider implements OperationJudgmentProvider {
 
    */
   async prepare(draft: OperationJudgmentDraft, signal: AbortSignal): Promise<OperationPreparedJudgment> {
-    this.assertLive()
-    if (signal.aborted) throw new ClmHttpError('CLM request preparation was cancelled', 'CLM_CANCELLED')
-    const wire = clmChoiceRequest(draft, this.identity, this.config.temperature)
-    let inputTokens = 0
-    for (const text of clmEncoderInputs(wire)) {
-      try {
-        inputTokens += await this.tokenizer.count(text, signal)
-      } catch (error: unknown) {
-        throwIfAborted(signal, 'CLM request preparation was cancelled')
-        throw new ClmHttpError(`CLM tokenizer failed: ${message(error)}`, 'CLM_TOKENIZER')
+    return await this.owned(signal, async (ownedSignal) => {
+      const wire = clmChoiceRequest(draft, this.identity, this.config.temperature)
+      let inputTokens = 0
+      const inputs: Array<{ text: string; tokens: number }> = []
+      for (const text of clmEncoderInputs(wire)) {
+        this.throwPreparationAbort(ownedSignal)
+        let count: number
+        try {
+          count = await this.tokenizer.count(text, ownedSignal)
+        } catch (error: unknown) {
+          this.throwPreparationAbort(ownedSignal)
+          throw new ClmHttpError(`CLM tokenizer failed: ${message(error)}`, 'CLM_TOKENIZER')
+        }
+        this.throwPreparationAbort(ownedSignal)
+        if (!Number.isSafeInteger(count) || count < 0) throw new ClmHttpError('CLM tokenizer returned an invalid token count', 'CLM_TOKENIZER')
+        if (count > this.config.maxEncoderTokens) throw new ClmHttpError('CLM encoder input would exceed the reviewed server token ceiling', 'CLM_INPUT_LIMIT')
+        inputTokens += count
+        inputs.push({ text, tokens: count })
       }
-      throwIfAborted(signal, 'CLM request preparation was cancelled')
-    }
-    if (!Number.isSafeInteger(inputTokens) || inputTokens < 0) throw new ClmHttpError('CLM tokenizer returned an invalid token count', 'CLM_TOKENIZER')
-    return { draft, wire: wire as unknown as import('@deepseek-ai/dsh-util-values').JsonValue, inputTokens, identity: this.identity }
+      if (!Number.isSafeInteger(inputTokens) || inputTokens < 0) throw new ClmHttpError('CLM tokenizer returned an invalid token count', 'CLM_TOKENIZER')
+      return {
+        draft, wire: wire as unknown as import('@deepseek-ai/dsh-util-values').JsonValue, inputTokens, identity: this.identity,
+        encoding: { maxTokensPerText: this.config.maxEncoderTokens, inputs },
+      }
+    })
   }
 
   /**
@@ -199,10 +213,31 @@ export class ClmHttpProvider implements OperationJudgmentProvider {
 
    */
   async rank(prepared: OperationPreparedJudgment, signal: AbortSignal): Promise<OperationJudgmentResponse> {
+    return await this.owned(signal, async ownedSignal => await this.rankRequest(prepared, ownedSignal))
+  }
+
+  /**
+
+   * Abort all owned requests and await their settlement before provider unload completes.
+
+   */
+  async dispose(): Promise<void> {
+    this.disposal ??= Promise.resolve().then(async () => {
+      for (const controller of this.active.keys()) controller.abort(new ClmHttpError('CLM provider is disposing', 'CLM_DISPOSED'))
+      await Promise.allSettled(this.active.values())
+      this.active.clear()
+    })
+    await this.disposal
+  }
+
+  private async owned<Result>(signal: AbortSignal, run: (signal: AbortSignal) => Promise<Result>): Promise<Result> {
     this.assertLive()
     const controller = new AbortController()
-    const requestSignal = AbortSignal.any([signal, controller.signal])
-    const task = this.rankRequest(prepared, requestSignal)
+    const ownedSignal = AbortSignal.any([signal, controller.signal])
+    const task = Promise.resolve().then(async () => {
+      this.assertLive()
+      return await run(ownedSignal)
+    })
     const settling = task.then(() => undefined, () => undefined)
     this.active.set(controller, settling)
     try {
@@ -212,17 +247,10 @@ export class ClmHttpProvider implements OperationJudgmentProvider {
     }
   }
 
-  /**
-
-   * Abort all owned requests and await their settlement before provider unload completes.
-
-   */
-  async dispose(): Promise<void> {
-    if (this.disposed) return
-    this.disposed = true
-    for (const controller of this.active.keys()) controller.abort(new ClmHttpError('CLM provider is disposing', 'CLM_DISPOSED'))
-    await Promise.allSettled(this.active.values())
-    this.active.clear()
+  private throwPreparationAbort(signal: AbortSignal): void {
+    if (!signal.aborted) return
+    if (this.disposal !== undefined) throw new ClmHttpError('CLM provider is disposing', 'CLM_DISPOSED')
+    throw new ClmHttpError('CLM request preparation was cancelled', 'CLM_CANCELLED')
   }
 
   private async rankRequest(prepared: OperationPreparedJudgment, signal: AbortSignal): Promise<OperationJudgmentResponse> {
@@ -237,9 +265,12 @@ export class ClmHttpProvider implements OperationJudgmentProvider {
     using d = deadline(signal, this.config.timeoutMs, 'CLM_HTTP_TIMEOUT')
     let response: Response
     try {
+      const headers = await this.headers()
+      if (d.signal.aborted) throw this.transportError(d.signal.reason, d.signal)
       response = await this.request(this.config.endpoint, {
         method: 'POST',
-        headers: await this.headers(),
+        redirect: 'error',
+        headers,
         body,
         signal: d.signal,
       })
@@ -285,11 +316,11 @@ export class ClmHttpProvider implements OperationJudgmentProvider {
   }
 
   private assertLive(): void {
-    if (this.disposed) throw new ClmHttpError('CLM provider is disposed', 'CLM_DISPOSED')
+    if (this.disposal !== undefined) throw new ClmHttpError('CLM provider is disposed', 'CLM_DISPOSED')
   }
 
   private transportError(error: unknown, signal: AbortSignal): ClmHttpError {
-    if (this.disposed) return new ClmHttpError('CLM provider is disposing', 'CLM_DISPOSED')
+    if (this.disposal !== undefined) return new ClmHttpError('CLM provider is disposing', 'CLM_DISPOSED')
     if (timeoutOf(signal, 'CLM_HTTP_TIMEOUT') !== undefined) return new ClmHttpError('CLM HTTP request timed out', 'CLM_TIMEOUT')
     if (signal.aborted) return new ClmHttpError('CLM HTTP request was cancelled', 'CLM_CANCELLED')
     return new ClmHttpError(`CLM HTTP request failed: ${message(error)}`, 'CLM_TRANSPORT')
@@ -318,7 +349,7 @@ export function validateConfig(config: ClmHttpConfig, tokenizer: OperationTokeni
     throw new ClmHttpError('CLM endpoint must be the exact /v1/systemone URL', 'CLM_CONFIG')
   }
   for (const [name, value] of Object.entries(config)) {
-    if ((name === 'timeoutMs' || name === 'maxResponseBytes') && (!Number.isSafeInteger(value) || value < 1)) {
+    if ((name === 'timeoutMs' || name === 'maxResponseBytes' || name === 'maxEncoderTokens') && (!Number.isSafeInteger(value) || value < 1)) {
       throw new ClmHttpError(`CLM ${name} must be a positive safe integer`, 'CLM_CONFIG')
     }
     if (typeof value === 'string' && value.length === 0) throw new ClmHttpError(`CLM ${name} must be non-empty`, 'CLM_CONFIG')

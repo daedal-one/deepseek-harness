@@ -99,6 +99,35 @@ describe('session snapshot identity redaction', () => {
     expect(redacted?.endsWith('\n')).toBe(false)
   })
 
+  it('maps operation run, judgment, and nested-call identities without claiming semantic UUID values', () => {
+    const operationRunId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    const judgmentId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+    const nestedCallId = `operation:${operationRunId}:0`
+    const semanticId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+    const resultJson = JSON.stringify({ runId: operationRunId, status: 'completed', sourceId: semanticId })
+    const source = [
+      { type: 'session', id: parentId },
+      { type: 'operation/run-start', data: { runId: operationRunId, rootCallId: 'stable-outer', plan: { inputs: { sourceId: semanticId } } } },
+      { type: 'operation/step-start', data: { runId: operationRunId, callId: nestedCallId, arguments: { sourceId: semanticId } } },
+      { type: 'operation/step-result', data: { runId: operationRunId, value: { id: semanticId, elapsedMs: 9 }, rendered: [{ type: 'text', text: semanticId }] } },
+      { type: 'operation/judgment-request', data: { runId: operationRunId, request: { draft: { id: judgmentId, state: { sourceId: semanticId } } } } },
+      { type: 'operation/judgment-result', data: { runId: operationRunId, requestId: judgmentId } },
+      { type: 'operation/transition', data: { runId: operationRunId, requestId: judgmentId } },
+      { type: 'tool/result', data: { content: [{ type: 'text', text: resultJson }] } },
+      { type: 'example', data: { text: `unrelated ${semanticId}` } },
+      '',
+    ].map(record => typeof record === 'string' ? record : JSON.stringify(record)).join('\n')
+
+    const [redacted] = redactSessionSnapshotIds([source])
+    expect(redacted?.match(/\{\{operation:1\}\}/g)?.length).toBeGreaterThanOrEqual(7)
+    expect(redacted).toContain('"callId":"{{call:1}}"')
+    expect(redacted?.match(/\{\{judgment:1\}\}/g)).toHaveLength(3)
+    expect(redacted).toContain(`"text":"${semanticId}"`)
+    expect(redacted).toContain(`unrelated ${semanticId}`)
+    expect(redacted).toContain('\\"runId\\":\\"{{operation:1}}\\"')
+    expect(redactSessionSnapshotIds([redacted!])).toEqual([redacted])
+  })
+
   it('keeps a canonical token first seen through a generic id key', () => {
     const canonical = '{{message:7}}'
     const nextMessage = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
