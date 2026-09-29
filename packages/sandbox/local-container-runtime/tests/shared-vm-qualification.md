@@ -18,7 +18,7 @@ This record separates Incus infrastructure checks from harness and UI acceptance
 
 ## Infrastructure evidence
 
-On 2026-09-29, the existing server's Incus 6.0.0 installation provided project `dsh-vm-verify`, storage pool `dsh-vm-test`, bridge `dshvmtest`, and ACL `dsh-vm-test`. The project contained no instances before provisioning. The shared VM is `dsh-c533cb44dc73b913f0a49eb85cb609f0`, derived from environment `daedal-development`. Its pinned image is `04d6cc76ecf40e08ea76be7aa8798695f30cd3fd4ebb21dd896bc56744548588`; resources are 4 CPUs, 8 GiB RAM, and a 64 GiB root disk. Automatic host-boot startup is disabled pending deployment qualification.
+On 2026-09-29, the existing server's Incus 6.0.0 installation provided project `dsh-vm-verify`, storage pool `dsh-vm-test`, bridge `dshvmtest`, and ACL `dsh-vm-test`. The project contained no instances before provisioning. The shared VM is `dsh-c533cb44dc73b913f0a49eb85cb609f0`, derived from environment `daedal-development`. Its pinned image is `04d6cc76ecf40e08ea76be7aa8798695f30cd3fd4ebb21dd896bc56744548588`; resources are 4 CPUs, 8 GiB RAM, and a 64 GiB root disk. Incus automatic host-boot startup is disabled; the runtime starts an existing stopped VM after verification.
 
 | Host source | Guest target |
 |---|---|
@@ -41,7 +41,9 @@ python3 packages/sandbox/local-container-runtime/tests/vm/shared-volume-probe.py
 
 The recorded execution sent this exact checked-in script over SSH to `python3 -` with the same arguments. It passed bidirectional file visibility and ownership checks, wrote 1,074,790,400 non-sparse random bytes, matched host and guest SHA-256, stopped one unique transient systemd unit while another remained active, and read the same file from fresh Incus attachments. The recorded SHA-256 was `ae542bbdf14d5e5babfa46b4fc749e3c19e5eac776a19512e0b5a04f99067a04`. Cleanup stopped only its unique test units and removed only its temporary directory; it did not change repository files or stop the VM.
 
-This probe does not test the harness transport, harness restart, VM reboot, 64 GiB files, browser sessions, or credential handling.
+The same probe passed with `--size-mib 65536 --source /dev/zero --timeout 900`: 68,719,476,736 fully allocated bytes, SHA-256 `57b295ba06757c81edca2d1e299133b2f059bea28e6cf9f438d7741611c36541`, matching host and guest reads, cancellation isolation, and `virtiofs`. It asserts allocated disk blocks as well as logical size. The durable output is `/home/carlo/.local/share/dsh-server/qualification/shared-vm-64g.log`. An earlier SSH attachment lost its completion output; only the run with the retained log is counted as passed. Both probes cleaned up their own data.
+
+This probe does not test the harness transport, harness restart, VM reboot, browser sessions, or credential handling. The harness tests and restart observations below provide separate evidence.
 
 ## Harness acceptance
 
@@ -60,7 +62,7 @@ The real-provider test in [shared-vm.e2e.ts](shared-vm.e2e.ts) passed on the exi
 
 The latest transferred source also passed `pnpm exec tsc -b packages/sandbox/local-container-runtime packages/fs/fs-local-container packages/subprocess/subprocess-local-container` on Linux, together with a repeated real-provider test after the filesystem path adjustment.
 
-The following cases remain required before activation. Record each command, source revision, outcome, and retained evidence when executed.
+The following matrix separates observed behavior from remaining acceptance. Record each command, source revision, outcome, and retained evidence when executed.
 
 | Case | Required observable result |
 |---|---|
@@ -69,7 +71,7 @@ The following cases remain required before activation. Record each command, sour
 | Concurrent conversations | Two sessions observe edits to the same file and Git index; cancelling one leaves the other's command alive. |
 | Harness restart | A large file's hash, installed guest tool, and separately started guest service survive disposal and reattachment. |
 | Transport loss | Killing one local Incus attachment does not leave its owned command running or affect another command. |
-| Large disk workload | At least 64 GiB of real written data remains readable without workspace serialization or proportional harness-memory growth; record disk usage, memory, and hashes. |
+| Large disk workload | The 64 GiB probe above passed without a workspace archive. This is a storage test, not a measured peak-memory benchmark. |
 | Missing and changed configuration | Startup reports an actionable failure without creating an empty replacement VM or retrying forever. |
 | Retained conversation recovery | Recovered CLM changes are on `codex/recovered-clm-20260929`; Phoebe's retained commits are on `codex/recovered-conversation-20260929`. Both original conversation directories remain intact. |
 | Harness code ownership | The effective service executable is in the managed release directory outside both guest-writable repositories. Discovery and handoff patches select packaged plugins, not repository source. The working directory alone does not identify the running release. |
@@ -77,6 +79,14 @@ The following cases remain required before activation. Record each command, sour
 
 ## Dev Note
 
-The environment is provisioned but not attached to the live UI. No activation, source commit, or full reliability qualification is recorded here.
+Release `fb64d9b304584c1f94b9990f6aa73a6dd19cf288` is committed and pushed on `codex/shared-environment-workspace`. The existing `dsh-sync.service` built it and completed its managed authenticated activation checks. Its source branch was updated explicitly; `dsh-sync.timer` remains disabled. The main service then restarted with the shared-runtime patches. The composed profile disables the disposable runtime, includes `/shared-vm`, and omits the conversation-workspace supervisor and repository-access tool. Configuration backups are in `/home/carlo/.local/share/dsh-server/recovery/shared-vm-config-ohemmy10`; the original updater script is in `shared-vm-sync-sglzc29j` under the same recovery root.
+
+After configuration activation, the main and companion services were active, the main loopback endpoint returned its expected unauthenticated HTTP 401, and the retained VM remained running. The main process used about 978 MiB at the observation, not a measured peak. The fresh browser also required authentication; a real Daedal-OpenAI UI turn remains unverified. No CI run was reported for the published branch at this observation.
+
+A separate restart probe created 1,074,790,400 disk-backed bytes at `/workspace/harness-restart-XPqZTMqS/restart.bin` with `dd if=/dev/zero bs=1048576 count=1025 conv=fsync`, and started the unique guest unit `dsh-harness-restart-XPqZTMqS` with `systemd-run --collect --service-type=exec /bin/sleep 1800`. After the main-service configuration restart, SHA-256 remained `0e5784b2441347f7c1cbfe2ee03dd421ff87c3086fdf0ce280cf26cbcf114462`; both the probe unit and Docker were active. This proves that restart did not stop the independent guest service or lose the mounted file, not crash recovery or a physical-host reboot.
+
+A second `sudo -n /usr/bin/systemctl restart --no-block dsh-web.service` exercised shutdown and startup of the shared composition itself. The main PID changed from 2906849 to 2907299; the file hash, probe service, and Docker checks passed again. Cleanup stopped only `dsh-harness-restart-XPqZTMqS`, removed its exact `restart.bin`, and removed the empty probe directory. No repository files or VM disks were removed.
 
 Retained conversation directories `/home/carlo/.local/share/dsh-server/workspaces/cc76b316faf34bd79c27e9076af69673/workspace` (about 5.1 GiB) and `/home/carlo/.local/share/dsh-server/workspaces/ab90725a86f349d8a420a08277f511c2/workspace` (about 355 MiB) remain untouched after user-authorized reconciliation. CLM's uncommitted source files were copied to its recovered branch without dependency caches. Phoebe's committed history was fetched into its recovered branch. The host's original untracked `oom` file is preserved in `/home/carlo/.local/share/dsh-server/recovery/reconcile-clm-gveCh0qK`.
+
+The recorded guest paths `/workspace/repos/ad80457c2edf8397` and `/workspace/repos/b8fc9576301029f7` are ordinary directory symlinks to the corresponding shared mounts. Guest `readlink -f` confirmed their destinations. They preserve historical command paths without recreating per-conversation Git handling. Historical Session events are retained; the migration does not rewrite old waiting or failure cards as successful saves.
