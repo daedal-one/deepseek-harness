@@ -1,0 +1,28 @@
+{
+  "command": "/usr/bin/incus",
+  "pythonCommand": "/usr/bin/python3",
+  "devicesRoot": "/var/lib/incus/devices",
+  "project": "dsh-vm-verify",
+  "storage": "dsh-vm-test",
+  "network": "dshvmtest",
+  "acl": "dsh-vm-test",
+  "hostAddresses": ["77.42.117.142"],
+  "image": "04d6cc76ecf40e08ea76be7aa8798695f30cd3fd4ebb21dd896bc56744548588",
+  "workspaceUid": 1000,
+  "workspaceGid": 1000,
+  "maxInstances": 4,
+  "cpus": 4,
+  "memoryBytes": 8589934592,
+  "diskBytes": 68719476736,
+  "timeoutMs": 30000,
+  "readinessPollMs": 250,
+  "maxOutputBytes": 1048576,
+  "environmentId": "daedal-development",
+  "workspaceDirectory": "/home/carlo/.local/share/dsh-server/environments/daedal-development/workspace",
+  "repositories": [
+    { "source": "/home/carlo/devel/deepseek-harness", "path": "/workspace/deepseek-harness" },
+    { "source": "/home/carlo/devel/phoebe-lab", "path": "/workspace/phoebe-lab" }
+  ],
+  "environment": { "HOME": "/root", "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", "LANG": "C.UTF-8" },
+  "maxLiveProcesses": 32
+}

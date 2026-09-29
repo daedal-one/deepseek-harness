@@ -15,9 +15,11 @@ class FakeRuntime extends Service {
   readonly workspacePath = '/workspace' as const
   readonly getContainer = vi.fn(async () => ({ id: 'fake', workspacePath: this.workspacePath }))
   readonly executeController = vi.fn()
+  async ensureReady(): Promise<void> { await this.getContainer() }
+  executionPath(path: string): string { return path }
 
   constructor(ctx: Context) {
-    super(ctx, 'localContainerRuntime')
+    super(ctx, 'executionRuntime')
   }
 }
 
@@ -79,6 +81,6 @@ describe('local-container execution world Loader composition', () => {
     expect(ctx.fs.executionWorld === marker).toBe(true)
     expect(ctx.subprocess.executionWorld === marker).toBe(true)
     expect(ctx.subprocess.resolveWorkingDirectory('/host/workspace')).toBe('/workspace')
-    expect((ctx.get('localContainerRuntime') as unknown as FakeRuntime).getContainer).toHaveBeenCalledOnce()
+    expect((ctx.get('executionRuntime') as unknown as FakeRuntime).getContainer).toHaveBeenCalledOnce()
   })
 })

@@ -7,7 +7,7 @@ kind: "package-reference"
 
 ## Summary
 
-`dsh-local-container-runtime` gives coding tools an isolated `/workspace` with explicit resource limits. The plain provider uses a disposable rootless Podman container and rejects engines, images, and inspections that cannot prove configured isolation. The optional `/workspaces` plugin imports private conversation repositories, saves private recovery checkpoints, returns committed branches automatically, and can give sessions independent workspace identities with shared durable repository grants. The optional `/vm` provider adds a private Linux guest with Docker, Compose, and browser testing while preserving that Git flow. All modes require explicitly configured trusted images and storage; no shipped profile enables them.
+`dsh-local-container-runtime` gives coding tools an isolated `/workspace` with explicit resource limits. Choose a disposable rootless Podman container, a private conversation workspace, or `/shared-vm` for one persistent Incus VM shared by an environment's sessions. Shared repositories are ordinary disk-backed directories: commands and file operations do not import, checkpoint, or commit them. Private conversation modes retain their separate Git recovery workflow. All modes require explicitly configured trusted images and storage; no shipped profile enables them.
 
 ## Table of Contents
 
@@ -76,6 +76,14 @@ Every value is required because these bounds and the Engine endpoint are deploym
 | `stopTimeoutSeconds` | required | Engine graceful-stop bound before force removal. |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-local-container-runtime) is the exhaustive source for every accepted field and its JSDoc.
+
+### Shared environment VM
+
+Mount `@deepseek-ai/dsh-local-container-runtime/shared-vm` instead of the plain runtime, with the filesystem and subprocess adapters and `/startup`. Do not mount `/workspaces`, `/vm`, or the repository-access tool in this composition. The runtime attaches to an operator-provisioned VM identified by `environmentId`; it refuses a missing instance or different image, resources, network, or directory devices. `workspaceDirectory` supplies `/workspace`, and `repositories` maps each canonical host source to an explicit directory below it. Sources must be existing disk-backed directories, not overlapping parents or tmpfs. Guest RAM and controller output limits do not impose a workspace-size quota.
+
+Every session in the environment shares files, Git branches, the index, installed tools, and services. Use this mode only for one trust domain and coordinate conflicting edits or Git operations. Closing the harness releases attached commands but retains the VM and mounted files. The runtime neither creates commits nor synchronizes repositories at turn completion. Operator backups must cover both host directories and guest disks; a guest-disk snapshot alone does not capture host mounts. Worktrees whose Git metadata lies outside the admitted mounts need explicit operator preparation.
+
+The [qualification record](tests/shared-vm-qualification.md) distinguishes tested server behavior from remaining activation checks. The [shared-runtime source](src/shared-vm.ts) owns its required configuration. Controller bounds limit individual tool requests, not files written by ordinary guest commands.
 
 ### Conversation repositories
 

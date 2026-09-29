@@ -99,6 +99,14 @@ const GROUP_ORDER = [
 
 const SERVICE_ROLES: ServiceRole[] = [
   {
+    key: 'executionRuntime',
+    pkg: 'local-container-runtime',
+    title: 'Verified isolated execution world',
+    mode: 'core',
+    consumers: ['fs-local-container', 'subprocess-local-container'],
+    note: 'Owns bounded commands in either a disposable container or a retained shared environment VM.',
+  },
+  {
     key: 'daedalHandoff',
     pkg: 'daedal-handoff',
     title: 'Confirmed Daedal host handoff',

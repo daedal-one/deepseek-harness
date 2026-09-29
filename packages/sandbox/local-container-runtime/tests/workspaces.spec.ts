@@ -343,14 +343,19 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
     const second = await f.ctx.agents.create({ sessionId: SessionId('deadline-held'), meta: { cwd: f.source }, agentOptions: { provider: 'mock', model: 'main' } })
     await f.executionFor(second.agent)
     const waiting = await f.ctx.agents.create({ sessionId: SessionId('deadline-waiter'), meta: { cwd: f.source }, agentOptions: { provider: 'mock', model: 'main' } })
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const deadline = new AbortController()
+    const timeout = vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms) => {
+      expect(ms).toBe(5000)
+      return deadline.signal
+    })
     try {
       waiting.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Start' }], source: { kind: 'user' } }))
-      await vi.advanceTimersByTimeAsync(5000)
+      await expect.poll(() => timeout.mock.calls.length).toBeGreaterThan(0)
+      deadline.abort(new DOMException('Admission deadline exceeded', 'TimeoutError'))
       await waiting.agent.whenIdle()
       expect(waiting.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/admission')?.data.status).toBe('failed')
       expect(f.adapter.requests).toHaveLength(0)
-    } finally { vi.useRealTimers(); await waiting.dispose(); await second.dispose() }
+    } finally { timeout.mockRestore(); await waiting.dispose(); await second.dispose() }
   })
 
   it('aborts a save during publication and fences every subsequent controller action', async () => {

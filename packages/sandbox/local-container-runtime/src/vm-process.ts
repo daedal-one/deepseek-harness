@@ -137,9 +137,19 @@ export async function createVmProcess(
   child.on('error', (error) => { failure = error })
   child.stdin.on('error', (error) => { if ((error as NodeJS.ErrnoException).code !== 'EPIPE') failure = error })
   let closed = false
+  let stopping: Promise<void> | undefined
+  const stopUnit = (): Promise<void> => stopping ??= control([
+    'exec', name, '--project', config.project, '--mode', 'non-interactive', '--', 'systemctl', 'stop', unit,
+  ]).then(() => undefined).catch((error: unknown) => {
+    if (!(error instanceof Error) || !error.message.includes(`Unit ${unit} not loaded.`)) throw error
+  })
   child.on('close', (exitCode) => {
     closed = true; stream.push(null)
-    done.resolve({ exitCode, ...failure === undefined ? {} : { error: failure.message } })
+    // An Incus attachment can close while its guest service is still running.
+    void stopUnit().then(
+      () => { done.resolve({ exitCode, ...failure === undefined ? {} : { error: failure.message } }) },
+      (error: unknown) => { done.resolve({ exitCode: null, error: `development-vm: guest command cleanup unconfirmed: ${String(error)}` }) },
+    )
   })
   let transferTimer: NodeJS.Timeout | undefined
   await Promise.race([
@@ -208,26 +218,19 @@ export async function createVmProcess(
     },
     async signal(signal) { await exec(['systemctl', 'kill', '--kill-whom=main', `--signal=${signal}`, unit]) },
     async terminate() {
-      if (closed) return
       terminating ??= (async () => {
-        try {
-          try { await exec(['systemctl', 'stop', unit]) }
-          catch (error) {
-            if (!(error instanceof Error) || !error.message.includes(`Unit ${unit} not loaded.`)) throw error
-          }
-        }
-        finally { child.kill('SIGKILL'); await done.promise }
+        try { await stopUnit() }
+        finally { if (!closed) child.kill('SIGKILL'); await done.promise }
       })()
       await terminating
     },
     async waitForRemoval(signal) {
-      if (closed) return true
       if (signal?.aborted) return false
-      if (signal === undefined) { await done.promise; return true }
+      if (signal === undefined) { return (await done.promise).error === undefined }
       return await new Promise<boolean>((resolve) => {
         const aborted = (): void => { resolve(false) }
         signal.addEventListener('abort', aborted, { once: true })
-        void done.promise.then(() => { signal.removeEventListener('abort', aborted); resolve(true) })
+        void done.promise.then((result) => { signal.removeEventListener('abort', aborted); resolve(result.error === undefined) })
       })
     },
     async inspectTerminalForeground() {

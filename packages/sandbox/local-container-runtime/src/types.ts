@@ -393,3 +393,14 @@ export interface WorkspaceExecutionRuntime {
   /** Prune superseded development data only after durable source acknowledgement. */
   pruneCheckpoints?: WorkspaceCheckpointRuntime['pruneCheckpoints']
 }
+
+/** Shared execution operations independent of conversation Git settlement. */
+export interface ExecutionRuntime extends Pick<WorkspaceExecutionRuntime, 'executionWorld' | 'containerName' | 'executeController' | 'createProcess'> {
+  /** Verify the configured execution environment before admitting tools. */
+  ensureReady(): Promise<void>
+  /** Map an explicitly admitted host path to its guest path; relative paths remain relative.
+   * @param path - admitted host path, guest path, or relative path.
+   * @returns path in the execution environment; rejects unmounted host paths.
+   */
+  executionPath(path: string): string
+}

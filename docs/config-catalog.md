@@ -970,7 +970,7 @@ Source: [`packages/fs/fs-local/src/index.ts:42`](../packages/fs/fs-local/src/ind
 
 ## `@deepseek-ai/dsh-fs-local-container`
 
-Requires: `localContainerRuntime`
+Requires: `executionRuntime`
 
 ```ts config-catalog
 /** Deployment-specific bounds and host Session cwd aliases for this provider. */
@@ -3001,7 +3001,7 @@ Source: [`packages/e2b/subprocess-e2b/src/index.ts:26`](../packages/e2b/subproce
 
 ## `@deepseek-ai/dsh-subprocess-local-container`
 
-Requires: `localContainerRuntime`
+Requires: `executionRuntime`
 
 ```ts config-catalog
 /** Provider-specific controller and cwd mapping bounds. */

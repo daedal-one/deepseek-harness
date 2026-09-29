@@ -70,7 +70,7 @@ interface ControllerRequest {
 
 /** Container-backed filesystem provider sharing the local runtime owner's execution world. */
 export class LocalContainerFileSystem extends FileSystem {
-  static inject = ['localContainerRuntime']
+  static inject = ['executionRuntime']
   static Config: z<Config> = z.object({
     cwdAliases: z.array(z.string()).required(),
     maxFileBytes: z.natural().required(),
@@ -99,7 +99,7 @@ export class LocalContainerFileSystem extends FileSystem {
 
   /** This provider shares the runtime owner's container path and process world. */
   override get executionWorld(): object {
-    return this.ctx.get('conversationWorkspaces')?.executionWorld ?? this.ctx.localContainerRuntime.executionWorld
+    return this.ctx.get('conversationWorkspaces')?.executionWorld ?? this.ctx.executionRuntime.executionWorld
   }
 
   override async resolve(path: string, opts?: { cwd?: string; signal?: AbortSignal }): Promise<FsTarget> {
@@ -244,7 +244,7 @@ export class LocalContainerFileSystem extends FileSystem {
       throw new FsError(`${operation} aborted`, 'FS_ABORTED')
     }
     const combined = signal === undefined ? this.lifetime.signal : AbortSignal.any([signal, this.lifetime.signal])
-    const controllerRequest = (this.ctx.get('conversationWorkspaces')?.capture() ?? this.ctx.localContainerRuntime).executeController({
+    const controllerRequest = (this.ctx.get('conversationWorkspaces')?.capture() ?? this.ctx.executionRuntime).executeController({
       argv: ['/usr/bin/python3', '-c', FILESYSTEM_CONTROLLER],
       stdin: Buffer.from(JSON.stringify(request), 'utf8'),
       maxOutputBytes: this.config.maxControllerOutputBytes,
@@ -301,7 +301,13 @@ export class LocalContainerFileSystem extends FileSystem {
 
   private executionPath(path: string, cwd?: string): string {
     const workspaces = this.ctx.get('conversationWorkspaces')
-    if (workspaces === undefined) { this.cwd(cwd); return path }
+    if (workspaces === undefined) {
+      const base = this.ctx.executionRuntime.executionPath(cwd ?? WORKSPACE_PATH)
+      if (base !== WORKSPACE_PATH && (!base.startsWith(`${WORKSPACE_PATH}/`) || posix.normalize(base) !== base)) this.cwd(cwd)
+      const mapped = this.ctx.executionRuntime.executionPath(path)
+      if (base === WORKSPACE_PATH || this.config.cwdAliases.includes(base)) return mapped
+      return posix.isAbsolute(mapped) ? mapped : posix.join(base, mapped)
+    }
     const base = cwd === undefined ? WORKSPACE_PATH : workspaces.executionPath(cwd)
     const mapped = workspaces.executionPath(path)
     return posix.isAbsolute(mapped) ? mapped : posix.join(base, mapped)

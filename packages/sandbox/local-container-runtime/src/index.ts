@@ -29,9 +29,11 @@ import type {
   PodmanControllerExecResult,
   PodmanEngine,
   PodmanInfo,
+  ExecutionRuntime,
 } from './types.ts'
 
 export type {
+  ExecutionRuntime,
   WorkspaceCheckpointRuntime,
   WorkspaceExecutionRuntime,
   LocalContainerDiagnostics,
@@ -106,14 +108,14 @@ interface CleanupState {
   backingDirectoryRemoved: boolean
 }
 
-/** A caller cancellation stopped the whole container to settle its controller process. */
+/** A caller cancellation stopped the owned controller process. */
 export class LocalContainerControllerAborted extends Error {
   constructor() {
     super('local-container-runtime: controller operation aborted')
   }
 }
 
-/** The per-operation controller deadline stopped the whole container to settle its process. */
+/** The per-operation deadline stopped the owned controller process. */
 export class LocalContainerControllerDeadlineExceeded extends Error {
   constructor() {
     super('local-container-runtime: controller operation exceeded its deadline')
@@ -130,6 +132,7 @@ declare module '@deepseek-ai/cordis' {
   }
   interface Context {
     localContainerRuntime: LocalContainerRuntime
+    executionRuntime: ExecutionRuntime
   }
 }
 
@@ -191,6 +194,7 @@ export class LocalContainerRuntime extends Service {
     super(ctx, 'localContainerRuntime')
     this.rawConfig = config
     this.config = this.resolveConfig(config)
+    ctx.effect(() => ctx.provide('executionRuntime', this), 'container execution provider')
     this.ready = Promise.resolve().then(() => this.open())
     this.armLifetime()
     ctx.effect(() => async () => {
@@ -209,6 +213,15 @@ export class LocalContainerRuntime extends Service {
     this.throwIfDisposing()
     return handle
   }
+
+  /** Verify this execution world before provider use. */
+  async ensureReady(): Promise<void> { await this.getContainer() }
+
+  /** Preserve paths for the provider's configured container aliases.
+   * @param path - requested process path.
+   * @returns the unchanged path.
+   */
+  executionPath(path: string): string { return path }
 
   /**
    * Execute one owner-controlled provider controller in the verified container.

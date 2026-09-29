@@ -37,6 +37,44 @@ const config: DevelopmentVmConfig = {
 }
 
 describe('development VM process controls', () => {
+  it('waits for guest cleanup after losing the local attachment', async () => {
+    const child = attachedProcess()
+    childProcess.spawn.mockReturnValueOnce(child)
+    const stopped = Promise.withResolvers<Uint8Array>()
+    const control = vi.fn<VmCommand>(async () => stopped.promise)
+    const process = await createVmProcess(config, 'dsh-test', {
+      argv: ['/bin/sh'], cwd: '/workspace', environment: {}, tty: false, stdin: true,
+    }, control)
+    let completed = false
+    void process.done.then(() => { completed = true })
+    try {
+      child.emit('close', null)
+      await new Promise(resolve => setImmediate(resolve))
+      expect(control).toHaveBeenCalledWith(expect.arrayContaining(['systemctl', 'stop', process.id]))
+      expect(completed).toBe(false)
+    } finally {
+      stopped.resolve(Buffer.alloc(0))
+      await process.terminate()
+    }
+    expect(await process.waitForRemoval()).toBe(true)
+    expect(control).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports unconfirmed guest cleanup when the transport is unavailable', async () => {
+    const child = attachedProcess()
+    childProcess.spawn.mockReturnValueOnce(child)
+    const control = vi.fn<VmCommand>(async () => { throw new Error('transport unavailable') })
+    const process = await createVmProcess(config, 'dsh-test', {
+      argv: ['/bin/sh'], cwd: '/workspace', environment: {}, tty: false, stdin: true,
+    }, control)
+    child.emit('close', null)
+    const result = await process.done
+    expect(result.exitCode).toBeNull()
+    expect(result.error).toContain('cleanup unconfirmed')
+    expect(await process.waitForRemoval()).toBe(false)
+    await expect(process.terminate()).rejects.toThrow('transport unavailable')
+  })
+
   it('does not send the process envelope before the guest disables terminal echo', async () => {
     const child = attachedProcess(false)
     childProcess.spawn.mockReturnValueOnce(child)

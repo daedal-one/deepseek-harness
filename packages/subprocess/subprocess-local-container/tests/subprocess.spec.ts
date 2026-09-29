@@ -33,6 +33,7 @@ class FakeProcess implements LocalContainerProcessHandle {
 }
 
 class FakeRuntime {
+  executionPath(path: string): string { return path }
   readonly executionWorld = Object.freeze({})
   readonly processes: FakeProcess[] = []
   readonly createProcess = vi.fn(async (request: LocalContainerProcessRequest) => {
@@ -59,7 +60,7 @@ afterEach(async () => {
 async function setup(): Promise<{ ctx: Context; runtime: FakeRuntime; fiber: { dispose(): Promise<void> } }> {
   const ctx = new Context()
   const runtime = new FakeRuntime()
-  ctx.provide('localContainerRuntime', runtime as never)
+  ctx.provide('executionRuntime', runtime as never)
   const fiber = await ctx.plugin(LocalContainerSubprocessRuntime, {
     cwdAliases: ['/host/workspace'],
     controlOutputBytes: 4096,

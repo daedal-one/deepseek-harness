@@ -1080,6 +1080,24 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'executionRuntime',
+    summary: 'Shared execution operations independent of conversation Git settlement.',
+    description: 'Shared execution operations independent of conversation Git settlement.',
+    methods: [
+      {
+        signature: 'ensureReady(): Promise<void>',
+        description: 'Verify the configured execution environment before admitting tools.',
+        parameters: [],
+      },
+      {
+        signature: 'executionPath(path: string): string',
+        description: 'Map an explicitly admitted host path to its guest path; relative paths remain relative.',
+        parameters: [{ name: 'path', description: 'admitted host path, guest path, or relative path.' }],
+        returns: 'path in the execution environment; rejects unmounted host paths.',
+      },
+    ],
+  },
+  {
     key: 'fileReferences',
     summary: 'Host capability for cancellable file-reference discovery.',
     description: 'Host capability for cancellable file-reference discovery.',
@@ -1534,6 +1552,17 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [],
         returns: 'the owner-retained Engine id and fixed workspace path.',
         throws: ['when engine verification, setup, or teardown prevents readiness.'],
+      },
+      {
+        signature: 'async ensureReady(): Promise<void>',
+        description: 'Verify this execution world before provider use.',
+        parameters: [],
+      },
+      {
+        signature: 'executionPath(path: string): string',
+        description: 'Preserve paths for the provider\'s configured container aliases.',
+        parameters: [{ name: 'path', description: 'requested process path.' }],
+        returns: 'the unchanged path.',
       },
       {
         signature: 'async executeController(request: PodmanControllerExecRequest & { readonly deadlineMs: number }): Promise<PodmanControllerExecResult>',
@@ -5134,7 +5163,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LocalContainerRuntime',
-    declaration: 'export class LocalContainerRuntime extends Service {\n    static Config: z<LocalContainerRuntimeConfig>;\n    readonly executionWorld: object;\n    readonly workspacePath: \'/workspace\';\n    readonly containerName: string;\n    constructor(ctx: Context, config: LocalContainerRuntimeConfig, private readonly retainedDirectory?: string);\n    async getContainer(): Promise<LocalContainerHandle>;\n    async executeController(request: PodmanControllerExecRequest & {\n        readonly deadlineMs: number;\n    }): Promise<PodmanControllerExecResult>;\n    async createProcess(request: LocalContainerProcessRequest): Promise<LocalContainerProcessHandle>;\n    registerWorkspaceOwner(shutdown: () => Promise<void>): () => void;\n    async createWorkspace(directory: string, authorize?: () => Promise<string[]>): Promise<{\n        runtime: LocalContainerRuntime;\n        dispose(): Promise<void>;\n    }>;\n    async settle<T>(timeoutMs: number, operation: (control: (request: PodmanControllerExecRequest & {\n        readonly deadlineMs: number;\n    }) => Promise<PodmanControllerExecResult>) => Promise<T>, quiesce?: () => Promise<void>): Promise<T>;\n    async cancelProcesses(): Promise<void>;\n    async recoverWorkspace(directory: string): Promise<void>;\n    get diagnostics(): LocalContainerDiagnostics;\n}',
+    declaration: 'export class LocalContainerRuntime extends Service {\n    static Config: z<LocalContainerRuntimeConfig>;\n    readonly executionWorld: object;\n    readonly workspacePath: \'/workspace\';\n    readonly containerName: string;\n    constructor(ctx: Context, config: LocalContainerRuntimeConfig, private readonly retainedDirectory?: string);\n    async getContainer(): Promise<LocalContainerHandle>;\n    async ensureReady(): Promise<void>;\n    executionPath(path: string): string;\n    async executeController(request: PodmanControllerExecRequest & {\n        readonly deadlineMs: number;\n    }): Promise<PodmanControllerExecResult>;\n    async createProcess(request: LocalContainerProcessRequest): Promise<LocalContainerProcessHandle>;\n    registerWorkspaceOwner(shutdown: () => Promise<void>): () => void;\n    async createWorkspace(directory: string, authorize?: () => Promise<string[]>): Promise<{\n        runtime: LocalContainerRuntime;\n        dispose(): Promise<void>;\n    }>;\n    async settle<T>(timeoutMs: number, operation: (control: (request: PodmanControllerExecRequest & {\n        readonly deadlineMs: number;\n    }) => Promise<PodmanControllerExecResult>) => Promise<T>, quiesce?: () => Promise<void>): Promise<T>;\n    async cancelProcesses(): Promise<void>;\n    async recoverWorkspace(directory: string): Promise<void>;\n    get diagnostics(): LocalContainerDiagnostics;\n}',
   },
   {
     name: 'LocalContainerRuntimeConfig',

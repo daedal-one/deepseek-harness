@@ -290,24 +290,24 @@ describe('local-container execution-world validator', () => {
   it('awaits one matching runtime identity', async () => {
     const ctx = new Context()
     const world = {}
-    const runtime = { executionWorld: world, getContainer: vi.fn(async () => ({ id: 'container-1', workspacePath: '/workspace' })) }
-    ctx.provide('localContainerRuntime', runtime as never)
+    const runtime = { executionWorld: world, ensureReady: vi.fn(async () => {}) }
+    ctx.provide('executionRuntime', runtime as never)
     ctx.provide('fs', { executionWorld: world } as never)
     ctx.provide('subprocess', { executionWorld: world } as never)
     await expect(validateExecutionWorld(ctx)).resolves.toBeUndefined()
     expect(ctx.get('localContainerExecutionWorld')).toBe(world)
-    expect(runtime.getContainer).toHaveBeenCalledOnce()
+    expect(runtime.ensureReady).toHaveBeenCalledOnce()
   })
 
   it('rejects a split provider pair before runtime work', async () => {
     const ctx = new Context()
     const world = {}
-    const runtime = { executionWorld: world, getContainer: vi.fn() }
-    ctx.provide('localContainerRuntime', runtime as never)
+    const runtime = { executionWorld: world, ensureReady: vi.fn() }
+    ctx.provide('executionRuntime', runtime as never)
     ctx.provide('fs', { executionWorld: world } as never)
     ctx.provide('subprocess', { executionWorld: {} } as never)
     await expect(validateExecutionWorld(ctx)).rejects.toThrow(/must share the configured local container execution world/)
-    expect(runtime.getContainer).not.toHaveBeenCalled()
+    expect(runtime.ensureReady).not.toHaveBeenCalled()
   })
 })
 

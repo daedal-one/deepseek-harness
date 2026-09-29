@@ -67,6 +67,17 @@ function fixture() {
 }
 
 describe('development VM host controls', () => {
+  it('requires the exact configured repository mounts on a shared VM', async () => {
+    const test = fixture()
+    const mounts = [{ source: '/repositories/first', path: '/workspace/first' }]
+    Object.assign(test.instance.expanded_devices, { 'repository-0': { type: 'disk', ...mounts[0] } })
+    await test.engine.verify(id, '/private/source', mounts)
+    await expect(test.engine.verify(id, '/private/source')).rejects.toThrow('controls differ')
+    await expect(test.engine.verify(id, '/private/source', [{ source: '/other', path: '/workspace/first' }])).rejects.toThrow('repository mount differs')
+    Object.assign(test.instance.expanded_devices, { 'repository-0': { type: 'disk', ...mounts[0], readonly: 'true' } })
+    await expect(test.engine.verify(id, '/private/source', mounts)).rejects.toThrow('repository mount differs')
+  })
+
   it('queries both the managed network and ACL in the configured project', async () => {
     const test = fixture()
     await test.engine.verifyNetwork()

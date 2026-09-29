@@ -7,7 +7,7 @@ kind: "package-reference"
 
 ## Summary
 
-`dsh-fs-local-container` implements `ctx.fs` in the verified Podman container owned by `dsh-local-container-runtime`. It resolves configured host Session cwd aliases to `/workspace`, performs reads, listings, versioned atomic writes, and literal edits through bounded controller executions, and returns only POSIX container paths. Node never opens the backing directory. Mount it only in an explicit opt-in composition with the runtime owner; no shipped profile loads it. Mount `dsh-subprocess-local-container` alongside it so commands, terminals, search, and LSP share this world.
+`dsh-fs-local-container` reads and edits files in a verified container or shared Incus VM. It resolves admitted host paths to guest workspace paths, performs reads, listings, versioned atomic writes, and literal edits through bounded controller executions, and returns POSIX guest paths. Node never opens the backing directory. Mount it only with an explicit runtime owner; no shipped profile loads it. Mount `dsh-subprocess-local-container` alongside it so commands, terminals, search, and LSP share this world.
 
 ## Table of Contents
 
@@ -24,6 +24,8 @@ kind: "package-reference"
 ## Use this package
 
 Mount the runtime owner first, then this provider. Each configured host Session cwd alias becomes the container's canonical `/workspace`; an unknown cwd fails instead of selecting a host or image path. Relative paths, absolute `/workspace` paths, parent traversal, and symlink resolution are checked by the controller in the container namespace. A symlink that resolves outside `/workspace` is rejected.
+
+With the [shared VM runtime](../../sandbox/local-container-runtime/README.md#shared-environment-vm), leave `cwdAliases` empty: the runtime maps each configured repository to its own mounted directory. File-operation bounds still apply to tool requests; they do not limit files stored or generated in the workspace.
 
 ### Minimal configuration
 

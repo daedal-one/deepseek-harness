@@ -7,7 +7,7 @@ kind: "package-reference"
 
 ## Summary
 
-`dsh-subprocess-local-container` implements `ctx.subprocess` in the execution world owned by `dsh-local-container-runtime`. Each ordinary process or terminal receives one sibling rootless Podman container with the same image, private workspace bind, configured private network mode, read-only root, private `/tmp`, dropped capabilities, non-root user, and resource controls. Removing that container is the provider's descendant-quiescence primitive. Mount it only with the matching runtime and filesystem provider in an explicit opt-in composition.
+`dsh-subprocess-local-container` runs commands and terminals in the execution world owned by `dsh-local-container-runtime`. The Podman runtime allocates sibling process containers; the shared Incus runtime allocates guest systemd units in one persistent VM. Commands share their runtime's admitted workspace paths and resource controls. Mount this provider only with the matching runtime and filesystem provider in an explicit opt-in composition.
 
 ## Table of Contents
 
@@ -22,6 +22,8 @@ kind: "package-reference"
 ## Use this package
 
 Mount the runtime first and configure every exact host Session cwd alias that represents `/workspace`.
+
+With the [shared VM runtime](../../sandbox/local-container-runtime/README.md#shared-environment-vm), leave `cwdAliases` empty: each configured repository maps to its mounted guest directory. Cancelling a command addresses its own unit, not the shared VM.
 
 ```yaml
 - name: '@deepseek-ai/dsh-subprocess-local-container'

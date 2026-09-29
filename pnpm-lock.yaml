@@ -8309,6 +8309,9 @@ importers:
       '@deepseek-ai/dsh-fs':
         specifier: workspace:^
         version: link:../../fs/fs
+      '@deepseek-ai/dsh-fs-local-container':
+        specifier: workspace:^
+        version: link:../../fs/fs-local-container
       '@deepseek-ai/dsh-host-webserver':
         specifier: workspace:^
         version: link:../../host/webserver
@@ -8321,6 +8324,9 @@ importers:
       '@deepseek-ai/dsh-subprocess':
         specifier: workspace:^
         version: link:../../subprocess/subprocess
+      '@deepseek-ai/dsh-subprocess-local-container':
+        specifier: workspace:^
+        version: link:../../subprocess/subprocess-local-container
 
   packages/sandbox/sandbox:
     dependencies:

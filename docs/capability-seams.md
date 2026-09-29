@@ -7,13 +7,14 @@ A service can be a core spine service, a swappable capability seam, or a bundle/
 
 ```mermaid
 flowchart LR
-  pkg_daedal_handoff["daedal-handoff"]
-  svc_daedalHandoff["ctx.daedalHandoff<br/>Confirmed Daedal host handoff"]
   pkg_local_container_runtime["local-container-runtime"]
-  svc_developmentVms["ctx.developmentVms<br/>Conversation development VM lifecycle"]
-  svc_conversationWorkspaces["ctx.conversationWorkspaces<br/>Conversation Git workspace lifecycle"]
+  svc_executionRuntime["ctx.executionRuntime<br/>Verified isolated execution world"]
   pkg_fs_local_container["fs-local-container"]
   pkg_subprocess_local_container["subprocess-local-container"]
+  pkg_daedal_handoff["daedal-handoff"]
+  svc_daedalHandoff["ctx.daedalHandoff<br/>Confirmed Daedal host handoff"]
+  svc_developmentVms["ctx.developmentVms<br/>Conversation development VM lifecycle"]
+  svc_conversationWorkspaces["ctx.conversationWorkspaces<br/>Conversation Git workspace lifecycle"]
   pkg_workspace_files["workspace-files"]
   pkg_file_reference_local["file-reference-local"]
   svc_localContainerRuntime["ctx.localContainerRuntime<br/>Disposable local container execution world"]
@@ -309,6 +310,7 @@ flowchart LR
   pkg_llm_replay --> svc_llm
   pkg_local_container_runtime --> svc_conversationWorkspaces
   pkg_local_container_runtime --> svc_developmentVms
+  pkg_local_container_runtime --> svc_executionRuntime
   pkg_local_container_runtime --> svc_localContainerRuntime
   pkg_lsp --> svc_lsp
   pkg_lsp_stdio --> svc_lsp
@@ -415,6 +417,8 @@ flowchart LR
   svc_dynamicCordisRunner --> pkg_tool_cordis
   svc_e2b --> pkg_fs_e2b
   svc_e2b --> pkg_subprocess_e2b
+  svc_executionRuntime --> pkg_fs_local_container
+  svc_executionRuntime --> pkg_subprocess_local_container
   svc_fileReferences --> pkg_api_session_controller
   svc_fileUploads --> pkg_api_session_controller
   svc_fs --> pkg_tool_fs
@@ -523,6 +527,7 @@ flowchart LR
 
 | ctx key | Role | Owner | Implementations | Direct consumers | Companion plugins | Note |
 | --- | --- | --- | --- | --- | --- | --- |
+| `ctx.executionRuntime` | `core` | [`local-container-runtime`](../packages/sandbox/local-container-runtime) | - | [`fs-local-container`](../packages/fs/fs-local-container), [`subprocess-local-container`](../packages/subprocess/subprocess-local-container) | - | Owns bounded commands in either a disposable container or a retained shared environment VM. |
 | `ctx.daedalHandoff` | `core` | [`daedal-handoff`](../packages/integration/daedal-handoff) | - | [`daedal-handoff`](../packages/integration/daedal-handoff) | - | A Daedal-only tool reviews the task and fixed destination with the human before dispatch to a separate host profile. |
 | `ctx.developmentVms` | `core` | [`local-container-runtime`](../packages/sandbox/local-container-runtime) | - | [`local-container-runtime`](../packages/sandbox/local-container-runtime) | - | Opt-in guest execution, source writer barriers, and durable Docker storage for conversation workspaces. |
 | `ctx.conversationWorkspaces` | `core` | [`local-container-runtime`](../packages/sandbox/local-container-runtime) | - | [`fs-local-container`](../packages/fs/fs-local-container), [`subprocess-local-container`](../packages/subprocess/subprocess-local-container), `workspace-files`, [`file-reference-local`](../packages/context/file-reference-local) | - | Opt-in ownership, recovery, and automatic branch return for conversation repositories. |

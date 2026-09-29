@@ -43,6 +43,7 @@ export { REGION_BEGIN, REGION_END }
  */
 export const SERVICE_PAGE: Record<string, string> = {
   localContainerRuntime: 'sandbox.md',
+  executionRuntime: 'sandbox.md',
   conversationWorkspaces: 'sandbox.md',
   developmentVms: 'sandbox.md',
   agentLoop: 'core.md',

@@ -272,6 +272,25 @@ retention(id: ConversationWorkspaceId, reference: unknown): WorkspaceCheckpointR
 
 Source: [`packages/sandbox/local-container-runtime/src/vm.ts`](../../packages/sandbox/local-container-runtime/src/vm.ts)
 
+<a id="ctxexecutionruntime--executionruntime"></a>
+
+### `ctx.executionRuntime` — `ExecutionRuntime`
+
+Shared execution operations independent of conversation Git settlement.
+
+```ts cordis-catalog
+/** Verify the configured execution environment before admitting tools. */
+ensureReady(): Promise<void>
+
+/** Map an explicitly admitted host path to its guest path; relative paths remain relative.
+ * @param path - admitted host path, guest path, or relative path.
+ * @returns path in the execution environment; rejects unmounted host paths.
+ */
+executionPath(path: string): string
+```
+
+Source: [`packages/sandbox/local-container-runtime/src/types.ts`](../../packages/sandbox/local-container-runtime/src/types.ts)
+
 <a id="ctxlocalcontainerruntime--localcontainerruntime"></a>
 
 ### `ctx.localContainerRuntime` — `LocalContainerRuntime`
@@ -285,6 +304,15 @@ Owns one disposable rootless Podman container. Provider adapters await getContai
  * @throws when engine verification, setup, or teardown prevents readiness.
  */
 async getContainer(): Promise<LocalContainerHandle>
+
+/** Verify this execution world before provider use. */
+async ensureReady(): Promise<void>
+
+/** Preserve paths for the provider's configured container aliases.
+ * @param path - requested process path.
+ * @returns the unchanged path.
+ */
+executionPath(path: string): string
 
 /**
  * Execute one owner-controlled provider controller in the verified container.

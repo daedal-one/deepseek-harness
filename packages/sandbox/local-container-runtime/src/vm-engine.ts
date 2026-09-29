@@ -111,6 +111,14 @@ export interface DevelopmentVmReference {
 /** Fixed command executor; tests replace the process boundary only. */
 export type VmCommand = (argv: readonly string[], input?: Uint8Array) => Promise<Uint8Array>
 
+/** Operator-authorized host directory mounted below the guest workspace. */
+export interface VmDirectoryMount {
+  /** Absolute canonical host source directory. */
+  source: string
+  /** Absolute normalized guest directory below /workspace. */
+  path: string
+}
+
 /** Non-public destinations forbidden even when public HTTP egress is allowed. */
 export const VM_DENIED_NETWORKS = [
   '0.0.0.0/8', '10.0.0.0/8', '100.64.0.0/10', '127.0.0.0/8',
@@ -338,15 +346,16 @@ export class IncusDevelopmentVms {
   /** Verify an existing instance before giving it workspace authority.
    * @param id - supervisor-derived identifier.
    * @param directory - expected sole shared source directory.
+   * @param mounts - explicitly configured additional shared directories, in device order.
    */
-  async verify(id: ConversationWorkspaceId, directory: string): Promise<void> {
+  async verify(id: ConversationWorkspaceId, directory: string, mounts: readonly VmDirectoryMount[] = []): Promise<void> {
     const instance = await this.instance(id)
     const { config, devices } = this.verifyIdentityResponse(instance, id)
     if (config['limits.cpu'] !== String(this.config.cpus)
       || config['limits.memory'] !== String(this.config.memoryBytes) || config['boot.autostart'] !== 'false'
       || config['raw.idmap'] !== `both ${this.config.workspaceUid} 0`
       || Object.keys(config).some(key => (key.startsWith('raw.') && key !== 'raw.idmap') || key.startsWith('security.'))
-      || Object.keys(devices).sort().join(',') !== 'eth0,root,workspace') {
+      || Object.keys(devices).sort().join(',') !== ['eth0', 'root', 'workspace', ...mounts.map((_mount, index) => `repository-${index}`)].sort().join(',')) {
       throw new Error('development-vm: instance controls differ from configuration')
     }
     const root = object(devices.root); const workspace = object(devices.workspace); const nic = object(devices.eth0)
@@ -359,6 +368,13 @@ export class IncusDevelopmentVms {
       || nic['security.mac_filtering'] !== 'true' || nic['security.ipv4_filtering'] !== 'true'
       || nic['security.ipv6_filtering'] !== 'true') {
       throw new Error('development-vm: instance devices differ from configuration')
+    }
+    for (const [index, mount] of mounts.entries()) {
+      const device = object(devices[`repository-${index}`])
+      if (!exactObject(device, ['type', 'path', 'source']) || device.type !== 'disk'
+        || device.path !== mount.path || device.source !== mount.source) {
+        throw new Error('development-vm: repository mount differs from configuration')
+      }
     }
   }
 

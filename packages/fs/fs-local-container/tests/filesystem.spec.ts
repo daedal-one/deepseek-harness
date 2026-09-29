@@ -16,6 +16,7 @@ interface ControllerInput {
 }
 
 class FakeRuntime {
+  executionPath(path: string): string { return path }
   readonly executionWorld = Object.freeze({})
   readonly workspacePath = WORKSPACE_PATH
   readonly calls: Array<{ input: ControllerInput; request: PodmanControllerExecRequest }> = []
@@ -58,7 +59,7 @@ async function setup(runtime = new FakeRuntime(), options: Partial<LocalContaine
   fiber: { dispose(): Promise<void> }
 }> {
   const ctx = new Context()
-  ctx.provide('localContainerRuntime', runtime as never)
+  ctx.provide('executionRuntime', runtime as never)
   const fiber = await ctx.plugin(LocalContainerFileSystem, config(options))
   fibers.add(fiber)
   return { ctx, fs: ctx.fs as LocalContainerFileSystem, runtime, fiber }

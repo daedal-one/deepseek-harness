@@ -269,6 +269,7 @@
       // so these aliases stay hand-written like dsh-util-crypto above.
       "@deepseek-ai/dsh-util-time": ["./packages/util/time/src"],
       "@deepseek-ai/dsh-local-container-runtime/vm": ["./packages/sandbox/local-container-runtime/src/vm.ts"],
+      "@deepseek-ai/dsh-local-container-runtime/shared-vm": ["./packages/sandbox/local-container-runtime/src/shared-vm.ts"],
       "@deepseek-ai/dsh-local-container-runtime/vm-previews": ["./packages/sandbox/local-container-runtime/src/vm-previews.ts"],
       "@deepseek-ai/dsh-local-container-runtime/workspaces": ["./packages/sandbox/local-container-runtime/src/workspaces.ts"],
       "@deepseek-ai/dsh-local-container-runtime/workspace-types": ["./packages/sandbox/local-container-runtime/src/workspace-types.ts"],
