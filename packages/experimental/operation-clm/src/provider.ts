@@ -4,8 +4,10 @@
  */
 
 import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
+import { deepFreeze } from '@deepseek-ai/dsh-util-values'
 import {
   canonicalJson,
+  digestJson,
   type OperationDeploymentManifestVerification,
   type OperationJudgmentDraft,
   type OperationJudgmentIdentity,
@@ -14,7 +16,7 @@ import {
   type OperationPreparedJudgment,
   type OperationTokenizer,
 } from '@deepseek-ai/dsh-experimental-operation'
-import { clmChoiceRequest, clmEncoderInputs, ClmWireError, parseClmChoiceResponse, serializeClmChoice } from './wire.ts'
+import { CLM_SERIALIZATION, clmChoiceRequest, clmEncoderInputs, ClmWireError, parseClmChoiceResponse, serializeClmChoice } from './wire.ts'
 
 /**
 
@@ -150,7 +152,9 @@ export class ClmHttpProvider implements OperationJudgmentProvider {
     private readonly resolveCredential?: ClmCredentialResolver,
   ) {
     validateConfig(config, tokenizer)
-    this.identity = {
+    this.config = deepFreeze(structuredClone(config))
+    config = this.config
+    this.identity = deepFreeze({
       provider: config.providerId,
       model: config.model,
       encoder: config.encoder,
@@ -159,7 +163,18 @@ export class ClmHttpProvider implements OperationJudgmentProvider {
       deployment: config.deployment,
       ...(config.deploymentManifest === undefined ? {} : { deploymentManifest: config.deploymentManifest }),
       ...(config.calibrationId === undefined ? {} : { calibrationId: config.calibrationId }),
-    }
+      configurationDigest: digestJson({
+        protocol: 'CLM/SystemOne@bb42c6c5bf914fd449bed2f6ca65be80602cb1f7',
+        endpoint: new URL(config.endpoint).href,
+        credentialRef: config.credentialRef ?? null,
+        provider: config.providerId, model: config.model, encoder: config.encoder, tokenizer: config.tokenizerId,
+        serialization: config.serialization, deployment: config.deployment,
+        deploymentManifest: config.deploymentManifest === undefined ? null : { ...config.deploymentManifest },
+        calibrationId: config.calibrationId ?? null,
+        temperature: config.temperature, maxEncoderTokens: config.maxEncoderTokens,
+        timeoutMs: config.timeoutMs, maxResponseBytes: config.maxResponseBytes,
+      }),
+    })
   }
 
   /**
@@ -312,7 +327,14 @@ export class ClmHttpProvider implements OperationJudgmentProvider {
       throw new ClmHttpError('CLM credential resolution failed', 'CLM_CREDENTIAL')
     }
     if (secret === undefined || secret.length === 0) throw new ClmHttpError('CLM credential is unavailable', 'CLM_CREDENTIAL')
-    return { ...headers, authorization: `Bearer ${secret}` }
+    const authorization = `Bearer ${secret}`
+    try {
+      void new Headers({ authorization })
+    } catch {
+      // Fetch header errors can contain the rejected credential value.
+      throw new ClmHttpError('CLM credential cannot be encoded as an HTTP header', 'CLM_CREDENTIAL')
+    }
+    return { ...headers, authorization }
   }
 
   private assertLive(): void {
@@ -337,13 +359,17 @@ export class ClmHttpProvider implements OperationJudgmentProvider {
 
  */
 export function validateConfig(config: ClmHttpConfig, tokenizer: OperationTokenizer): void {
+  if (config.serialization !== CLM_SERIALIZATION) throw new ClmHttpError(`CLM serialization must be ${CLM_SERIALIZATION}`, 'CLM_CONFIG')
   let endpoint: URL
   try {
     endpoint = new URL(config.endpoint)
   } catch {
     throw new ClmHttpError('CLM endpoint must be an absolute URL', 'CLM_CONFIG')
   }
-  const localHttp = endpoint.protocol === 'http:' && (endpoint.hostname === '127.0.0.1' || endpoint.hostname === '::1' || endpoint.hostname === 'localhost')
+  if (endpoint.username !== '' || endpoint.password !== '') {
+    throw new ClmHttpError('CLM endpoint credentials must use the configured credential resolver', 'CLM_CONFIG')
+  }
+  const localHttp = endpoint.protocol === 'http:' && (endpoint.hostname === '127.0.0.1' || endpoint.hostname === '[::1]' || endpoint.hostname === 'localhost')
   if (endpoint.protocol !== 'https:' && !localHttp) throw new ClmHttpError('CLM endpoint must use HTTPS outside local protocol tests', 'CLM_CONFIG')
   if (endpoint.pathname !== '/v1/systemone' || endpoint.search !== '' || endpoint.hash !== '') {
     throw new ClmHttpError('CLM endpoint must be the exact /v1/systemone URL', 'CLM_CONFIG')

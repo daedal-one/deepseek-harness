@@ -8,11 +8,15 @@ import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-test
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import { defineTool, ToolOutputError } from '@deepseek-ai/dsh-tools'
+import * as timeoutPolicy from '@deepseek-ai/dsh-tool-call-timeout-policy'
 import OperationService from '../src/index.ts'
 import type { OperationJudgmentProvider } from '../src/types.ts'
+import type { OperationConfig } from '../src/runner.ts'
+import { replayOperation } from '../src/replay.ts'
 
 const roots: string[] = []
+const contexts: Context[] = []
 const identity = {
   provider: 'deterministic', model: 'fixture', encoder: 'fixture-encoding', tokenizer: 'fixture-tokenizer',
   serialization: 'fixture-v1', deployment: 'fixture-deployment', deploymentManifest: { reference: 'fixture-manifest', digest: 'sha256:fixture' }, calibrationId: 'fixture-calibration',
@@ -36,16 +40,21 @@ const provider: OperationJudgmentProvider = {
   },
 }
 
-afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
+afterEach(async () => {
+  vi.useRealTimers()
+  for (const ctx of contexts.splice(0)) await ctx.fiber.dispose()
+  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
+})
 
-async function mounted(id: string, judgmentProvider: OperationJudgmentProvider = provider) {
+async function mounted(id: string, judgmentProvider: OperationJudgmentProvider = provider, config: OperationConfig = {}) {
   const ctx = new Context()
+  contexts.push(ctx)
   await mountAgentLoopTestDependencies(ctx)
   const root = mkdtempSync(join(tmpdir(), 'dsh-operation-'))
   roots.push(root)
   await ctx.plugin(JsonlSessionPersistence, { root })
   await ctx.plugin(AgentLoop, { agents: [] })
-  await ctx.plugin(OperationService, { maxWallMs: 10_000 })
+  await ctx.plugin(OperationService, { maxWallMs: 10_000, ...config })
   ctx.effect(() => ctx.operations.registerJudgmentProvider(judgmentProvider), `operation-test.${id}.provider`)
   const agent = await ctx.agentLoop.create(SessionId(id), { provider: 'mock', model: 'mock' })
   return { ctx, agent }
@@ -66,9 +75,9 @@ function oneStepPlan(tool: string, argumentsExpression: unknown = { kind: 'liter
   }
 }
 
-async function runOperation(ctx: Context, agent: Awaited<ReturnType<typeof mounted>>['agent'], plan: unknown) {
+async function runOperation(ctx: Context, agent: Awaited<ReturnType<typeof mounted>>['agent'], plan: unknown, signal = new AbortController().signal) {
   return await ctx.agents.withInitiator(agent, () => ctx.tools.execute({
-    callId: ToolCallId(`operation-${agent.session.id}`), name: 'run_operation', signal: new AbortController().signal, agent,
+    callId: ToolCallId(`operation-${agent.session.id}`), name: 'run_operation', signal, agent,
     arguments: { plan },
   }))
 }
@@ -78,6 +87,7 @@ const completePolicy = { allowOutputReferences: true, validateArguments() {}, in
 describe('operation opt-in composition', () => {
   it('dispatches planned nested tools through the real tool registry and persists replayable records', async () => {
     const ctx = new Context()
+    contexts.push(ctx)
     await mountAgentLoopTestDependencies(ctx)
     const root = mkdtempSync(join(tmpdir(), 'dsh-operation-'))
     roots.push(root)
@@ -384,6 +394,298 @@ describe('operation opt-in composition', () => {
     expect(effects).toBe(1)
     expect(lifecycleProvider.rank).not.toHaveBeenCalled()
     expect(agent.session.snapshotEvents().findLast(event => event.type === 'operation/run-end')?.data).toMatchObject({ status: 'cancelled' })
+  })
+
+  it('drains late inference on service disposal without recording an accepted transition', async () => {
+    const entered = Promise.withResolvers<undefined>()
+    const aborted = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const lifecycleProvider: OperationJudgmentProvider = {
+      ...provider,
+      async rank(prepared, signal) {
+        signal.addEventListener('abort', () => { aborted.resolve(undefined) }, { once: true })
+        entered.resolve(undefined)
+        await release.promise
+        return await provider.rank(prepared, signal)
+      },
+    }
+    const { ctx, agent } = await mounted('operation-inference-disposal', lifecycleProvider)
+    const tool = defineTool({
+      name: 'before_inference_fixture', description: 'fixture', parameters: {},
+      output: { schema: { type: 'object', additionalProperties: false, properties: { ok: { type: 'boolean', required: true } } }, render: () => [] },
+      async execute() { return { ok: true } },
+    })
+    ctx.effect(() => ctx.tools.register(tool), 'operation-test.beforeInferenceTool')
+    ctx.effect(() => ctx.operations.toolPolicies.register(tool, completePolicy), 'operation-test.beforeInferencePolicy')
+    const running = runOperation(ctx, agent, oneStepPlan(tool.name))
+    let disposing: Promise<unknown> | undefined
+    let disposed = false
+    try {
+      await entered.promise
+      disposing = ctx.fiber.dispose().then(() => { disposed = true })
+      await aborted.promise
+      expect(disposed).toBe(false)
+      release.resolve(undefined)
+      await disposing
+      expect(await running).toMatchObject({ isError: true })
+      const replay = replayOperation(agent.session.snapshotEvents())
+      expect(replay).toMatchObject({ status: 'cancelled', transitions: [], judgments: [{ result: { error: { code: 'CANCELLED' } } }] })
+    } finally {
+      release.resolve(undefined)
+      await running
+      await disposing
+    }
+  })
+
+  it.each(['cancel', 'timeout'] as const)('retains started custom-error %s as unknown without later inference', async (interruption) => {
+    const lifecycleProvider = { ...provider, rank: vi.fn(provider.rank.bind(provider)) }
+    const { ctx, agent } = await mounted(`operation-custom-${interruption}`, lifecycleProvider, { maxToolDeadlineMs: 100 })
+    const entered = Promise.withResolvers<undefined>()
+    const aborted = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const controller = new AbortController()
+    let effects = 0
+    const tool = defineTool({
+      name: 'custom_failure_fixture', description: 'fixture', parameters: {},
+      output: { schema: { type: 'object', additionalProperties: false, properties: { ok: { type: 'boolean', required: true } } }, render: () => [] },
+      async execute(_args, exec) {
+        effects += 1
+        exec.signal.addEventListener('abort', () => { aborted.resolve(undefined) }, { once: true })
+        entered.resolve(undefined)
+        await release.promise
+        throw new ToolOutputError('custom_failure_fixture', ['fixture-owned settled failure after interruption'])
+      },
+    })
+    ctx.effect(() => ctx.tools.register(tool), 'operation-test.customFailureTool')
+    ctx.effect(() => ctx.operations.toolPolicies.register(tool, completePolicy), 'operation-test.customFailurePolicy')
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    const running = runOperation(ctx, agent, oneStepPlan(tool.name), controller.signal)
+    try {
+      await entered.promise
+      if (interruption === 'cancel') controller.abort()
+      else await vi.advanceTimersByTimeAsync(100)
+      await aborted.promise
+      expect(agent.session.snapshotEvents().some(event => event.type === 'operation/run-end')).toBe(false)
+      release.resolve(undefined)
+      expect(await running).toMatchObject({ isError: true })
+      expect(effects).toBe(1)
+      expect(lifecycleProvider.rank).not.toHaveBeenCalled()
+      const events = agent.session.snapshotEvents()
+      const result = events.find(event => event.type === 'operation/step-result')
+      expect(result?.data).toMatchObject({
+        isError: true, error: { code: 'INVALID_TOOL_OUTPUT' },
+        execution: { body: 'started', callerCancelled: interruption === 'cancel', timedOut: interruption === 'timeout' },
+      })
+      if (result?.type !== 'operation/step-result') throw new Error('missing settled tool result')
+      expect(result.data.error?.message).toContain('fixture-owned settled failure')
+      expect(replayOperation(events)).toMatchObject({
+        status: interruption === 'cancel' ? 'cancelled' : 'failed',
+        steps: [{ dispatch: 'started', outcome: 'unknown', result: { error: { code: 'INVALID_TOOL_OUTPUT' } } }],
+      })
+      expect(events.filter(event => event.type.startsWith('operation/')).map(event => event.type)).toEqual([
+        'operation/run-start', 'operation/step-start', 'operation/step-result', 'operation/run-end',
+      ])
+    } finally {
+      controller.abort()
+      release.resolve(undefined)
+      await running
+      vi.useRealTimers()
+    }
+  })
+
+  it('retains timeout-policy body interruption when tool-owned finalization reports a custom error', async () => {
+    const lifecycleProvider = { ...provider, rank: vi.fn(provider.rank.bind(provider)) }
+    const { ctx, agent } = await mounted('operation-wrapper-timeout', lifecycleProvider, { maxToolDeadlineMs: 1_000 })
+    await ctx.plugin(timeoutPolicy)
+    const entered = Promise.withResolvers<undefined>()
+    const aborted = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const ownedFailure = new ToolOutputError('wrapped_timeout_fixture', ['fixture-owned settled failure'])
+    let policyCode: string | undefined
+    let effects = 0
+    const tool = defineTool({
+      name: 'wrapped_timeout_fixture', description: 'fixture', parameters: {}, timeoutMs: 50,
+      output: { schema: { type: 'object', additionalProperties: false, properties: { ok: { type: 'boolean', required: true } } }, render: () => [] },
+      async execute(_args, exec) {
+        effects += 1
+        exec.signal.addEventListener('abort', () => { aborted.resolve(undefined) }, { once: true })
+        entered.resolve(undefined)
+        await release.promise
+        throw ownedFailure
+      },
+      finalizeContent(_exec, result) {
+        if (!result.isError) return undefined
+        policyCode = result.error.info?.code
+        throw ownedFailure
+      },
+    })
+    ctx.effect(() => ctx.tools.register(tool), 'operation-test.wrappedTimeoutTool')
+    ctx.effect(() => ctx.operations.toolPolicies.register(tool, completePolicy), 'operation-test.wrappedTimeoutPolicy')
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    const running = runOperation(ctx, agent, oneStepPlan(tool.name))
+    try {
+      await entered.promise
+      await vi.advanceTimersByTimeAsync(50)
+      await aborted.promise
+      expect(agent.session.snapshotEvents().some(event => event.type === 'operation/run-end')).toBe(false)
+      release.resolve(undefined)
+      expect(await running).toMatchObject({ isError: true })
+      expect(effects).toBe(1)
+      expect(policyCode).toBe('TOOL_TIMEOUT')
+      expect(lifecycleProvider.rank).not.toHaveBeenCalled()
+      expect(replayOperation(agent.session.snapshotEvents())).toMatchObject({
+        status: 'failed', judgments: [],
+        steps: [{ dispatch: 'started', outcome: 'unknown', result: {
+          error: { code: 'INVALID_TOOL_OUTPUT', message: ownedFailure.message },
+          execution: { body: 'started', callerCancelled: false, timedOut: false, bodySignalAborted: true },
+        } }],
+      })
+    } finally {
+      release.resolve(undefined)
+      await running
+      vi.useRealTimers()
+    }
+  })
+
+  it.each(['before-body', 'masked-success'] as const)('records effective wrapper cancellation at %s without further inference', async (phase) => {
+    const lifecycleProvider = { ...provider, rank: vi.fn(provider.rank.bind(provider)) }
+    const { ctx, agent } = await mounted(`operation-wrapper-${phase}`, lifecycleProvider)
+    const entered = Promise.withResolvers<undefined>()
+    const aborted = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const controller = new AbortController()
+    let effects = 0
+    const tool = defineTool({
+      name: 'wrapped_abort_fixture', description: 'fixture', parameters: {},
+      output: { schema: { type: 'object', additionalProperties: false, properties: { ok: { type: 'boolean', required: true } } }, render: () => [] },
+      async execute(_args, exec) {
+        effects += 1
+        exec.signal.addEventListener('abort', () => { aborted.resolve(undefined) }, { once: true })
+        entered.resolve(undefined)
+        await release.promise
+        return { ok: true }
+      },
+    })
+    ctx.effect(() => ctx.tools.register(tool), 'operation-test.wrappedAbortTool')
+    ctx.effect(() => ctx.operations.toolPolicies.register(tool, completePolicy), 'operation-test.wrappedAbortPolicy')
+    ctx.on('tools/execute', async (exec, next) => {
+      if (exec.name !== tool.name) return next()
+      const original = exec.signal
+      exec.signal = controller.signal
+      if (phase === 'before-body') controller.abort()
+      try {
+        const result = await next()
+        return phase === 'masked-success' ? { isError: false as const, value: { ok: true }, content: [] } : result
+      } finally {
+        exec.signal = original
+      }
+    })
+    const running = runOperation(ctx, agent, oneStepPlan(tool.name))
+    try {
+      if (phase === 'masked-success') {
+        await entered.promise
+        controller.abort()
+        await aborted.promise
+        expect(agent.session.snapshotEvents().some(event => event.type === 'operation/run-end')).toBe(false)
+        release.resolve(undefined)
+      }
+      expect(await running).toMatchObject({ isError: true })
+      expect(effects).toBe(phase === 'before-body' ? 0 : 1)
+      expect(lifecycleProvider.rank).not.toHaveBeenCalled()
+      expect(replayOperation(agent.session.snapshotEvents())).toMatchObject({
+        status: 'failed', judgments: [], steps: [{
+          dispatch: phase === 'before-body' ? 'not-started' : 'started',
+          outcome: phase === 'before-body' ? 'failed' : 'unknown',
+          result: { execution: { callerCancelled: false, timedOut: false, bodySignalAborted: phase === 'masked-success' } },
+        }],
+      })
+    } finally {
+      controller.abort()
+      release.resolve(undefined)
+      await running
+    }
+  })
+
+  it.each(['cancel', 'deny'] as const)('records %s before the body as known not-started', async (action) => {
+    const lifecycleProvider = { ...provider, rank: vi.fn(provider.rank.bind(provider)) }
+    const { ctx, agent } = await mounted(`operation-predispatch-${action}`, lifecycleProvider)
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const controller = new AbortController()
+    let effects = 0
+    const tool = defineTool({
+      name: 'never_started_fixture', description: 'fixture', parameters: {},
+      output: { schema: { type: 'object', additionalProperties: false, properties: { ok: { type: 'boolean', required: true } } }, render: () => [] },
+      async execute() { effects += 1; return { ok: true } },
+    })
+    ctx.effect(() => ctx.tools.register(tool), 'operation-test.neverStartedTool')
+    ctx.effect(() => ctx.operations.toolPolicies.register(tool, completePolicy), 'operation-test.neverStartedPolicy')
+    ctx.on('tools/pre-execute', async (exec, next) => {
+      if (exec.name !== tool.name) return next()
+      entered.resolve(undefined)
+      await release.promise
+      return action === 'deny' ? { kind: 'deny', reason: 'fixture denial' } : next()
+    })
+    const running = runOperation(ctx, agent, oneStepPlan(tool.name), controller.signal)
+    try {
+      await entered.promise
+      if (action === 'cancel') controller.abort()
+      release.resolve(undefined)
+      expect(await running).toMatchObject({ isError: true })
+      expect(effects).toBe(0)
+      expect(lifecycleProvider.rank).not.toHaveBeenCalled()
+      expect(replayOperation(agent.session.snapshotEvents())).toMatchObject({
+        status: action === 'cancel' ? 'cancelled' : 'failed',
+        steps: [{ outcome: 'failed', dispatch: 'not-started', result: { execution: { callerCancelled: action === 'cancel', timedOut: false } } }],
+      })
+    } finally {
+      controller.abort()
+      release.resolve(undefined)
+      await running
+    }
+  })
+
+  it.each(['pre-policy', 'final-validator'] as const)('rejects an elapsed deadline at %s even before the timer callback runs', async (phase) => {
+    const lifecycleProvider = { ...provider, rank: vi.fn(provider.rank.bind(provider)) }
+    const { ctx, agent } = await mounted(`operation-boundary-clock-${phase}`, lifecycleProvider, { maxToolDeadlineMs: 100 })
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    let boundary = false
+    let effects = 0
+    const tool = defineTool({
+      name: 'expired_boundary_fixture', description: 'fixture', parameters: {},
+      output: { schema: { type: 'object', additionalProperties: false, properties: { ok: { type: 'boolean', required: true } } }, render: () => [] },
+      async execute() { effects += 1; return { ok: true } },
+    })
+    ctx.effect(() => ctx.tools.register(tool), 'operation-test.expiredBoundaryTool')
+    ctx.effect(() => ctx.operations.toolPolicies.register(tool, {
+      ...completePolicy,
+      validateArguments() { if (phase === 'final-validator' && boundary) vi.setSystemTime(Date.now() + 101) },
+    }), 'operation-test.expiredBoundaryPolicy')
+    ctx.on('tools/execute', async (exec, next) => {
+      if (exec.name !== tool.name) return next()
+      entered.resolve(undefined)
+      await release.promise
+      boundary = true
+      return next()
+    })
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    const running = runOperation(ctx, agent, oneStepPlan(tool.name))
+    try {
+      await entered.promise
+      if (phase === 'pre-policy') vi.setSystemTime(Date.now() + 101)
+      release.resolve(undefined)
+      expect(await running).toMatchObject({ isError: true })
+      expect(effects).toBe(0)
+      expect(lifecycleProvider.rank).not.toHaveBeenCalled()
+      expect(replayOperation(agent.session.snapshotEvents())).toMatchObject({
+        status: 'failed', steps: [{ dispatch: 'not-started', outcome: 'failed', result: { execution: { timedOut: true } } }],
+      })
+    } finally {
+      release.resolve(undefined)
+      await running
+      vi.useRealTimers()
+    }
   })
 
   it('forwards a nested concludeTurn marker and stops the operation', async () => {

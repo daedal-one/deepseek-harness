@@ -873,7 +873,7 @@ export interface OperationLimits {
 }
 ```
 
-Source: [`packages/experimental/operation/src/runner.ts:47`](../packages/experimental/operation/src/runner.ts)
+Source: [`packages/experimental/operation/src/runner.ts:51`](../packages/experimental/operation/src/runner.ts)
 
 <a id="deepseek-aidsh-experimental-operation-clm"></a>
 
@@ -925,9 +925,9 @@ export interface Config {
    */
   providerId?: string
   /**
-   * Optional serialization recipe identity.
+   * Pinned serialization recipe identity; other recipes are not implemented.
    */
-  serialization?: string
+  serialization?: typeof CLM_SERIALIZATION
   /**
    * Required CLM softmax temperature.
    */
@@ -949,7 +949,7 @@ export interface Config {
 
 Depends on: [`OperationDeploymentManifestVerification`](../packages/experimental/operation/src/index.ts)
 
-Source: [`packages/experimental/operation-clm/src/index.ts:36`](../packages/experimental/operation-clm/src/index.ts)
+Source: [`packages/experimental/operation-clm/src/index.ts:37`](../packages/experimental/operation-clm/src/index.ts)
 
 <a id="deepseek-aidsh-experimental-tool-agent-team"></a>
 
@@ -3918,7 +3918,7 @@ export interface ToolDiscoveryConfig {
 export type ToolPresentationMode = 'native' | 'ptc' | 'both'
 ```
 
-Source: [`packages/core/tools/src/index.ts:675`](../packages/core/tools/src/index.ts)
+Source: [`packages/core/tools/src/index.ts:676`](../packages/core/tools/src/index.ts)
 
 <a id="deepseek-aidsh-typert-loader"></a>
 

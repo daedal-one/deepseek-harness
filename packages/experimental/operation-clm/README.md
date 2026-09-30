@@ -46,13 +46,15 @@ Mount [operation](../operation/README.md) first, register a tokenizer hook with 
 
 `deploymentManifest` records the operator's explicit local verification of the immutable serving deployment. CLM does not echo an immutable deployment identity, so a response model name cannot verify the deployment. Autonomous operation execution requires this local verification and, when the runner's calibration policy is enabled, a calibration identity.
 
-`credentialRef` is optional. When configured, the adapter resolves it through `ctx.credentials` for every HTTP request and sends the value only as a bearer authorization header.
+`credentialRef` is optional. When configured, the adapter resolves it through `ctx.credentials` for every HTTP request and sends the value only as a bearer authorization header. Credentials embedded in endpoint URLs reject at load. Invalid credential header values reject locally without including the secret in an error message.
+
+The provider snapshots its resolved configuration for its lifetime and records a `configurationDigest` over the endpoint, credential reference, pinned protocol, model and encoding identities, deployment/calibration declarations, temperature, and token/body/deadline limits. Credential values are excluded; rotating a secret under the same reference does not change the configuration identity. The reference is hashed, not exposed in the provider identity. A prepared request from a different configuration rejects before transport, even when its model name matches.
 
 ## Protocol and validation
 
 The adapter sends exactly one `POST /v1/systemone` request with `{state, model, temperature, questions:{transition:{type:'choice',instructions,criteria}}}`. It rejects non-local HTTP endpoints, endpoints other than `/v1/systemone`, non-200 status, bodies larger than `maxResponseBytes`, missing `application/json`, incomplete JSON, model mismatch, malformed answers, unknown choice keys, incomplete probability coverage, and invalid distributions.
 
-The upstream wire has no request ID, encoder, deployment, truncation, or identity field. Transport completeness depends on the exact status, bounded complete body, and complete JSON parse rather than an invented response field.
+The serialization identity is fixed to `clm-systemone-bb42c6c5`; other configured recipes reject because this adapter does not implement them. The upstream wire has no request ID, encoder, deployment, truncation, or identity field. Transport completeness depends on the exact status, bounded complete body, and complete JSON parse rather than an invented response field.
 
 The response must contain `{model,answers:{transition:{type:'choice',choice,confidence,probabilities}},usage:{billing_units,input_tokens,output_tokens}}`. Its choice must name a highest-probability supplied candidate. This single-question request requires `billing_units: 1` and `output_tokens: 0`, as emitted by [the pinned server](https://github.com/Contrastive-LM/CLM/blob/bb42c6c5bf914fd449bed2f6ca65be80602cb1f7/src/clm/engine.py).
 

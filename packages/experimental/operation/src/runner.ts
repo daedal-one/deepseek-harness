@@ -8,7 +8,7 @@ import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { ToolDefinition, ToolExecutionResult, ToolRunContext } from '@deepseek-ai/dsh-tools'
 import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
 import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
-import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+import { deepFreeze, type JsonValue } from '@deepseek-ai/dsh-util-values'
 import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
 import { digestJson, equalJson, jsonBytes, requireJson } from './json.ts'
 import { OperationJudgmentRegistry } from './judgment.ts'
@@ -16,6 +16,7 @@ import { buildContinuationCandidates, completionControls, observeCanonicalResult
 import { parseOperationPlan, OperationPlanError } from './plan.ts'
 import type { OperationToolPolicy } from './policy.ts'
 import { OperationToolPolicyRegistry } from './policy.ts'
+import { preflightOperationPlan } from './preflight.ts'
 import { OperationRecorder } from './recorder.ts'
 import { assertionsPassed, evaluateOperationAssertions, resolveOperationExpression } from './resolution.ts'
 import type { OperationResolutionContext } from './resolution.ts'
@@ -23,6 +24,9 @@ import type {
   OperationActionCandidate,
   OperationAssertionResult,
   OperationCandidateId,
+  OperationDispatchFacts,
+  OperationEvidenceFingerprint,
+  OperationObservation,
   OperationJudgmentDraft,
   OperationJudgmentIdentity,
   OperationJudgmentProvider,
@@ -37,7 +41,7 @@ import type {
   OperationToolIdentity,
   OperationValueProvenance,
 } from './types.ts'
-import { OperationJudgmentRequestId, OperationRunId as toOperationRunId } from './types.ts'
+import { OperationJudgmentRequestId, OperationRunId as toOperationRunId } from './ids.ts'
 
 /**
 
@@ -115,6 +119,14 @@ interface PreparedStep {
   readonly admitted: AdmittedStep
 }
 
+interface DispatchOutcome {
+  readonly result: ToolExecutionResult
+  readonly elapsedMs: number
+  readonly callId: ToolCallId
+  readonly schemaDigest: string
+  readonly execution: OperationDispatchFacts
+}
+
 interface OperationSelection {
   readonly requestId: OperationJudgmentRequestId
   readonly candidate: OperationActionCandidate
@@ -131,6 +143,7 @@ interface RunnerState {
   readonly providerIdentity: OperationJudgmentIdentity
   readonly admitted: ReadonlyMap<string, AdmittedStep>
   readonly results: Map<string, JsonValue>
+  readonly selected: Map<string, JsonValue>
   readonly attempted: string[]
   readonly completed: string[]
   readonly startedAt: number
@@ -158,7 +171,9 @@ export class OperationRunner {
     private readonly judgments: OperationJudgmentRegistry,
     private readonly toolPolicies: OperationToolPolicyRegistry,
     private readonly config: OperationConfig,
-  ) {}
+  ) {
+    this.config = deepFreeze({ ...config, ...(config.forbiddenTools === undefined ? {} : { forbiddenTools: [...config.forbiddenTools] }) })
+  }
 
   /**
 
@@ -178,7 +193,8 @@ export class OperationRunner {
     const limits = resolveOperationLimits(this.config, plan.requestedLimits)
     if (jsonBytes(plan as unknown as JsonValue) > limits.maxPlanBytes) throw new OperationRunError(`operation plan exceeds ${limits.maxPlanBytes} bytes`, 'PLAN_LIMIT')
     const provider = this.judgments.requireProvider()
-    validateIdentity(provider.identity, limits.requireCalibration)
+    const providerIdentity = deepFreeze(requireJson(provider.identity, 'operation judgment identity')) as unknown as OperationJudgmentIdentity
+    validateIdentity(providerIdentity, limits.requireCalibration)
     const admitted = this.admit(plan, exec, limits)
     const runId = toOperationRunId(randomUUID())
     const recorder = new OperationRecorder(this.ctx, exec.agent.session)
@@ -188,9 +204,10 @@ export class OperationRunner {
       limits,
       recorder,
       provider,
-      providerIdentity: provider.identity,
+      providerIdentity,
       admitted,
       results: new Map(),
+      selected: new Map(),
       attempted: [],
       completed: [],
       startedAt: Date.now(),
@@ -200,6 +217,7 @@ export class OperationRunner {
       outputTokens: 0,
       ended: false,
     }
+    const forbiddenTools = [...new Set(['run_operation', ...this.config.forbiddenTools ?? []])].sort()
     try {
       await recorder.appendAndFlush('operation/run-start', {
         version: 1,
@@ -209,7 +227,10 @@ export class OperationRunner {
         planDigest: digestJson(plan as unknown as JsonValue),
         limits,
         toolIdentities: [...admitted.values()].map(entry => entry.identity),
-        judgmentIdentity: provider.identity,
+        judgmentIdentity: providerIdentity,
+        caller: { sessionId: exec.agent.session.id, callId: exec.callId },
+        configuration: { forbiddenTools },
+        configurationDigest: digestJson({ limits, forbiddenTools, judgmentIdentity: providerIdentity } as unknown as JsonValue),
       })
       if (signalAborted(exec.signal)) return await this.cancel(state, 'caller cancelled before first dispatch')
       const firstStep = plan.steps[0]
@@ -223,23 +244,27 @@ export class OperationRunner {
         if (prepared.step !== step) throw new OperationRunError('operation runner lost sequential step ordering', 'RUNNER_INVARIANT')
         const outcome = await this.dispatchStep(state, exec, prepared)
         if (outcome.result.isError) {
-          await this.recordStepResult(state, step, outcome.result, [], outcome.elapsedMs)
-          if (outcome.callerCancelled || signalAborted(exec.signal)) return await this.cancel(state, 'caller cancelled during tool dispatch')
-          if (outcome.timedOut) return await this.fail(state, `tool ${JSON.stringify(step.tool)} exceeded operation deadline`, 'TOOL_TIMEOUT')
+          await this.recordStepResult(state, step, outcome.result, [], outcome)
+          if (outcome.execution.callerCancelled || signalAborted(exec.signal)) return await this.cancel(state, 'caller cancelled during tool dispatch')
+          if (outcome.execution.timedOut) return await this.fail(state, `tool ${JSON.stringify(step.tool)} exceeded operation deadline`, 'TOOL_TIMEOUT')
           return await this.fail(state, `tool ${JSON.stringify(step.tool)} failed: ${outcome.result.error.message}`, 'TOOL_FAILED')
         }
-        if (outcome.callerCancelled || signalAborted(exec.signal)) {
-          await this.recordStepResult(state, step, outcome.result, [], outcome.elapsedMs)
+        if (outcome.execution.callerCancelled || signalAborted(exec.signal)) {
+          await this.recordStepResult(state, step, outcome.result, [], outcome)
           return await this.cancel(state, 'caller cancelled during tool dispatch')
         }
-        if (outcome.timedOut) {
-          await this.recordStepResult(state, step, outcome.result, [], outcome.elapsedMs)
+        if (outcome.execution.timedOut) {
+          await this.recordStepResult(state, step, outcome.result, [], outcome)
           return await this.fail(state, `tool ${JSON.stringify(step.tool)} exceeded operation deadline`, 'TOOL_TIMEOUT')
+        }
+        if (outcome.execution.bodySignalAborted) {
+          await this.recordStepResult(state, step, outcome.result, [], outcome)
+          return await this.fail(state, `tool ${JSON.stringify(step.tool)} effective body signal was interrupted`, 'TOOL_INTERRUPTED')
         }
         for (const context of outcome.result.additionalContexts ?? []) exec.deferContext(context)
         const resultBytes = jsonBytes(outcome.result.value)
         if (resultBytes > limits.maxResultBytes) {
-          await this.recordStepResult(state, step, outcome.result, [], outcome.elapsedMs, {
+          await this.recordStepResult(state, step, outcome.result, [], outcome, {
             omitPayload: true,
             reason: `canonical result omitted because ${resultBytes} bytes exceeds the ${limits.maxResultBytes}-byte limit`,
           })
@@ -249,20 +274,20 @@ export class OperationRunner {
         try {
           inspection = prepared.admitted.policy.inspectResult(outcome.result.value)
         } catch (error: unknown) {
-          await this.recordStepResult(state, step, outcome.result, [], outcome.elapsedMs)
+          await this.recordStepResult(state, step, outcome.result, [], outcome)
           return await this.fail(state, `trusted result inspection failed for step ${JSON.stringify(step.id)}: ${message(error)}`, 'PROCESS_FAILED')
         }
         if (inspection.kind === 'failed') {
-          await this.recordStepResult(state, step, outcome.result, [], outcome.elapsedMs)
+          await this.recordStepResult(state, step, outcome.result, [], outcome)
           return await this.fail(state, inspection.reason, 'PROCESS_FAILED')
         }
         if (inspection.kind === 'incomplete') {
-          await this.recordStepResult(state, step, outcome.result, [], outcome.elapsedMs)
+          await this.recordStepResult(state, step, outcome.result, [], outcome)
           return await this.finish(state, 'needs-replan', inspection.reason, [])
         }
         state.results.set(step.id, outcome.result.value)
         const assertions = evaluateOperationAssertions(step.assertions, resolutionContext(state))
-        await this.recordStepResult(state, step, outcome.result, assertions, outcome.elapsedMs)
+        await this.recordStepResult(state, step, outcome.result, assertions, outcome)
         if (signalAborted(exec.signal)) return await this.cancel(state, 'caller cancelled after tool dispatch')
         if (!assertionsPassed(assertions)) return await this.finish(state, 'stopped', `required assertions failed for step ${JSON.stringify(step.id)}`, assertions)
         state.completed.push(step.id)
@@ -358,6 +383,7 @@ export class OperationRunner {
         validateArguments(step, definition, policy, resolved.value)
       }
     }
+    preflightOperationPlan(plan, admitted)
     return admitted
   }
 
@@ -379,7 +405,9 @@ export class OperationRunner {
     const candidateArguments = candidate.arguments
     if (candidateArguments === undefined) throw new OperationRunError('selected continuation has no arguments', 'CANDIDATE_MISMATCH')
     if (!equalJson(resolved.value, candidateArguments)) throw new OperationRunError('selected candidate arguments no longer match recorded candidate mapping', 'CANDIDATE_MISMATCH')
-    return this.validatedPreparedStep(state, exec, step, resolved.value, resolved.provenance)
+    const prepared = this.validatedPreparedStep(state, exec, step, resolved.value, resolved.provenance)
+    if (candidate.source !== undefined) state.selected.set(candidate.source.step, candidate.source.value)
+    return prepared
   }
 
   private validatedPreparedStep(
@@ -418,6 +446,8 @@ export class OperationRunner {
       callId,
       arguments: prepared.arguments,
       bindings: prepared.bindings,
+      schemaDigest: prepared.admitted.identity.schemaDigest,
+      argumentsDigest: digestJson(prepared.arguments),
     })
   }
 
@@ -425,7 +455,7 @@ export class OperationRunner {
     state: RunnerState,
     exec: ToolRunContext,
     prepared: PreparedStep,
-  ): Promise<{ result: ToolExecutionResult; elapsedMs: number; callerCancelled: boolean; timedOut: boolean }> {
+  ): Promise<DispatchOutcome> {
     this.requireRemaining(state, exec.signal)
     const current = this.validatedPreparedStep(state, exec, prepared.step, prepared.arguments, prepared.bindings)
     const timeout = Math.min(state.limits.maxToolDeadlineMs, this.remainingMs(state))
@@ -434,8 +464,17 @@ export class OperationRunner {
     using d = deadline(exec.signal, timeout, 'OPERATION_TOOL_TIMEOUT')
     state.attempted.push(current.step.id)
     state.toolCalls += 1
+    const dispatch: { body: OperationDispatchFacts['body']; timedOut: boolean; signal?: AbortSignal } = { body: 'not-started', timedOut: false }
+    const requireDispatchBudget = (signal: AbortSignal): void => {
+      if (Date.now() - startedAt >= timeout) {
+        dispatch.timedOut = true
+        throw new OperationRunError('operation tool deadline expired before body dispatch', 'TOOL_TIMEOUT')
+      }
+      this.requireRemaining(state, signal)
+    }
+    const callId = nestedCallId(exec, state.runId, current.step.id)
     const execution = {
-      callId: nestedCallId(exec, state.runId, current.step.id),
+      callId,
       rootCallId: exec.rootCallId,
       parent: exec.token,
       name: current.step.tool,
@@ -444,7 +483,9 @@ export class OperationRunner {
       signal: d.signal,
       dispatchConstraint: {
         expectedDefinition: current.admitted.definition,
-        validate: (definition: ToolDefinition, argumentsValue: JsonValue) => {
+        validate: (definition: ToolDefinition, argumentsValue: JsonValue, signal: AbortSignal) => {
+          dispatch.signal = signal
+          requireDispatchBudget(signal)
           if (definition !== current.admitted.definition) {
             throw new OperationRunError(`tool ${JSON.stringify(current.step.tool)} definition changed at dispatch`, 'TOOL_CHANGED')
           }
@@ -464,6 +505,9 @@ export class OperationRunner {
             throw new OperationRunError(`tool ${JSON.stringify(current.step.tool)} arguments changed at dispatch`, 'TOOL_CHANGED')
           }
           validateArguments(current.step, definition, policy, argumentsValue)
+          requireDispatchBudget(signal)
+          // The registry invokes the body immediately after this private callback returns.
+          dispatch.body = 'started'
         },
       },
     }
@@ -471,8 +515,14 @@ export class OperationRunner {
     return {
       result,
       elapsedMs: Date.now() - startedAt,
-      callerCancelled: signalAborted(exec.signal),
-      timedOut: timeoutOf(d.signal, 'OPERATION_TOOL_TIMEOUT') !== undefined,
+      callId,
+      schemaDigest: current.admitted.identity.schemaDigest,
+      execution: {
+        body: dispatch.body,
+        bodySignalAborted: dispatch.signal?.aborted ?? false,
+        callerCancelled: signalAborted(exec.signal),
+        timedOut: dispatch.timedOut || Date.now() - startedAt >= timeout || timeoutOf(d.signal, 'OPERATION_TOOL_TIMEOUT') !== undefined,
+      },
     }
   }
 
@@ -481,7 +531,7 @@ export class OperationRunner {
     step: OperationStep,
     result: ToolExecutionResult,
     assertions: readonly OperationAssertionResult[],
-    elapsedMs: number,
+    outcome: DispatchOutcome,
     omission?: { readonly omitPayload: true; readonly reason: string },
   ): Promise<void> {
     const rendered = result.content as unknown as JsonValue
@@ -500,8 +550,12 @@ export class OperationRunner {
       rendered: omittedReason === undefined
         ? rendered
         : [{ type: 'text', text: omittedReason }],
-      elapsedMs,
+      elapsedMs: outcome.elapsedMs,
       assertions,
+      callId: outcome.callId,
+      schemaDigest: outcome.schemaDigest,
+      ...(!result.isError && omission === undefined ? { valueDigest: digestJson(result.value) } : {}),
+      execution: outcome.execution,
     })
   }
 
@@ -514,7 +568,7 @@ export class OperationRunner {
     exec: ToolRunContext,
     kind: 'continuation' | 'completion',
     step: OperationStep,
-    observations: readonly { readonly step: string; readonly pointer: string; readonly value: JsonValue }[],
+    observations: readonly OperationObservation[],
     question: string,
     candidates: readonly OperationActionCandidate[],
     completionEvidence: JsonValue,
@@ -569,6 +623,16 @@ export class OperationRunner {
       request: prepared,
       remainingInputTokens: state.limits.maxJudgmentInputTokens - state.inputTokens - prepared.inputTokens,
       remainingOutputTokens: state.limits.maxJudgmentOutputTokens - state.outputTokens,
+      fingerprints: {
+        stateDigest: digestJson(draft.state),
+        candidatesDigest: digestJson(candidates as unknown as JsonValue),
+        observations: observations.map(observation => evidenceFingerprint(state, observation)),
+        candidateSources: candidates.flatMap(candidate => candidate.source === undefined ? [] : [{
+          candidateId: candidate.id,
+          ...evidenceFingerprint(state, candidate.source),
+        }]),
+        completionEvidenceDigest: digestJson(completionEvidence),
+      },
     })
     state.inputTokens += prepared.inputTokens
     state.judgments += 1
@@ -740,9 +804,11 @@ const PROBABILITY_LIMITS = ['minimumProbability', 'minimumMargin'] as const
 
  */
 export function resolveOperationLimits(config: OperationConfig, requested: Partial<OperationLimits> | undefined): OperationLimits {
-  const configured: OperationLimits = { ...DEFAULT_OPERATION_LIMITS, ...config }
+  const configured: MutableOperationLimits = { ...DEFAULT_OPERATION_LIMITS }
+  for (const key of [...INTEGER_LIMITS, ...PROBABILITY_LIMITS]) configured[key] = config[key] ?? configured[key]
+  configured.requireCalibration = config.requireCalibration ?? configured.requireCalibration
   validateLimits(configured)
-  if (requested === undefined) return configured
+  if (requested === undefined) return Object.freeze(configured)
   const effective: MutableOperationLimits = { ...configured }
   const requestedCalibration = requested.requireCalibration
   if (requestedCalibration !== undefined) {
@@ -762,7 +828,7 @@ export function resolveOperationLimits(config: OperationConfig, requested: Parti
     effective[key] = value
   }
   validateLimits(effective)
-  return effective
+  return Object.freeze(effective)
 }
 
 function validateLimits(limits: OperationLimits): void {
@@ -779,11 +845,25 @@ function validateLimits(limits: OperationLimits): void {
 function toolIdentity(definition: ToolDefinition): OperationToolIdentity {
   const parameters = requireJson(definition.parameters, `tool ${JSON.stringify(definition.name)} parameter schema`)
   const output = requireJson(definition.output.schema, `tool ${JSON.stringify(definition.name)} output schema`)
-  return { name: definition.name, schemaDigest: digestJson({ parameters, output }) }
+  const schemas = { parameters, output }
+  return { name: definition.name, schemaDigest: digestJson(schemas), schemas }
+}
+
+function evidenceFingerprint(state: RunnerState, source: OperationObservation): OperationEvidenceFingerprint {
+  const result = state.results.get(source.step)
+  const admitted = state.admitted.get(source.step)
+  if (result === undefined || admitted === undefined) throw new OperationRunError('evidence has no admitted canonical source', 'RUNNER_INVARIANT')
+  return {
+    step: source.step,
+    pointer: source.pointer,
+    valueDigest: digestJson(source.value),
+    resultDigest: digestJson(result),
+    schemaDigest: admitted.identity.schemaDigest,
+  }
 }
 
 function resolutionContext(state: RunnerState): OperationResolutionContext {
-  return { inputs: state.plan.inputs, results: state.results }
+  return { inputs: state.plan.inputs, results: state.results, selected: state.selected }
 }
 
 function nestedCallId(exec: ToolRunContext, runId: OperationRunId, stepId: string) {

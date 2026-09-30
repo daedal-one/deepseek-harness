@@ -1,13 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import type { ToolDefinition, ToolRunContext } from '@deepseek-ai/dsh-tools'
+import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import type { ToolDefinition, ToolExecutionInput, ToolRunContext } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { OperationJudgmentRegistry } from '../src/judgment.ts'
 import { OperationToolPolicyRegistry } from '../src/policy.ts'
 import type { OperationToolPolicy } from '../src/policy.ts'
 import { replayOperation } from '../src/replay.ts'
 import { OperationRunner } from '../src/runner.ts'
+import { digestJson, requireJson } from '../src/json.ts'
 import type { OperationConfig } from '../src/runner.ts'
 import type { OperationJudgmentProvider, OperationPreparedJudgment } from '../src/types.ts'
 
@@ -59,6 +62,7 @@ function failure(message: string) {
 
 function setup(options: {
   flush?: () => boolean
+  append?: (type: string) => void
   provider?: OperationJudgmentProvider
   signal?: AbortSignal
   config?: OperationConfig
@@ -68,10 +72,11 @@ function setup(options: {
   const records: Array<{ type: string; data: unknown }> = []
   const flushes: string[][] = []
   const calls: JsonValue[] = []
-  const session = { append: (type: string, data: unknown) => { records.push({ type, data }) } }
+  const session = { id: SessionId('fixture-caller-session'), append: (type: string, data: unknown) => { options.append?.(type); records.push({ type, data }) } }
   const tools = {
     admitted: () => definition,
-    execute: async (input: { arguments: JsonValue; signal: AbortSignal }) => {
+    execute: async (input: ToolExecutionInput & { arguments: JsonValue }) => {
+      input.dispatchConstraint?.validate(definition, input.arguments, input.signal)
       calls.push(input.arguments)
       if (options.execute !== undefined) return await options.execute(input)
       return calls.length === 1 ? success({ choices: [{ target: 'alpha' }, { target: 'beta' }] }) : success({ ok: true })
@@ -142,6 +147,102 @@ describe('sequential operation runner', () => {
     expect(interrupted).toMatchObject({ status: 'interrupted', steps: [{ stepId: 'read', outcome: 'unknown' }] })
   })
 
+  it('records stable caller, effective configuration, schemas and canonical source fingerprints', async () => {
+    const fixture = setup({ config: { forbiddenTools: ['z-excluded', 'a-excluded', 'z-excluded'] } })
+    await fixture.runner.run({ ...fixture.exec, rootCallId: ToolCallId('root-transport') }, plan())
+    const replay = replayOperation(fixture.records as SessionEvent[])
+    const admission = replay.admission
+    expect(admission.caller).toEqual({ sessionId: 'fixture-caller-session', callId: 'outer' })
+    expect(admission.rootCallId).toBe('root-transport')
+    expect(admission.configuration).toEqual({ forbiddenTools: ['a-excluded', 'run_operation', 'z-excluded'] })
+    expect(admission.limits).not.toHaveProperty('forbiddenTools')
+    expect(admission.configurationDigest).toBe(digestJson({
+      limits: admission.limits, forbiddenTools: admission.configuration!.forbiddenTools, judgmentIdentity: identity,
+    } as unknown as JsonValue))
+    expect(admission.toolIdentities[0]?.schemaDigest).toBe(digestJson(requireJson({
+      parameters: definition.parameters, output: definition.output.schema,
+    }, 'fixture tool schemas')))
+    const first = replay.steps[0]!.result!
+    expect(first.valueDigest).toBe(digestJson(first.value!))
+    expect(first.schemaDigest).toBe(admission.toolIdentities[0]?.schemaDigest)
+    expect(first.callId).toContain('root-transport:operation:')
+    expect(replay.judgments[0]?.request.fingerprints?.observations[0]).toEqual({
+      step: 'read', pointer: '/choices', valueDigest: digestJson([{ target: 'alpha' }, { target: 'beta' }]),
+      resultDigest: first.valueDigest, schemaDigest: first.schemaDigest,
+    })
+    const equivalent = setup({ config: { forbiddenTools: ['a-excluded', 'z-excluded'] } })
+    await equivalent.runner.run(equivalent.exec, plan())
+    const second = replayOperation(equivalent.records as SessionEvent[])
+    expect(second.admission.configurationDigest).toBe(admission.configurationDigest)
+    expect(second.judgments[0]?.request.fingerprints).toEqual(replay.judgments[0]?.request.fingerprints)
+    for (const config of [{ forbiddenTools: ['different'] }, { maxToolDeadlineMs: 200 }]) {
+      const changed = setup({ config })
+      await changed.runner.run(changed.exec, plan())
+      expect(replayOperation(changed.records as SessionEvent[]).admission.configurationDigest).not.toBe(admission.configurationDigest)
+    }
+    const provider = { ...deterministicProvider(), identity: { ...identity, configurationDigest: digestJson({ temperature: 0.5 }) } }
+    const changed = setup({ config: { forbiddenTools: ['z-excluded', 'a-excluded'] }, provider: {
+      ...provider,
+      async prepare(draft, signal) { return { ...await deterministicProvider().prepare(draft, signal), identity: provider.identity } },
+      async rank(prepared, signal) { return { ...await deterministicProvider().rank(prepared, signal), identity: provider.identity } },
+    } })
+    await changed.runner.run(changed.exec, plan())
+    expect(replayOperation(changed.records as SessionEvent[]).admission.configurationDigest).not.toBe(admission.configurationDigest)
+  })
+
+  it('rejects tampered current fingerprints and correlation without consulting live tools', async () => {
+    const fixture = setup()
+    await fixture.runner.run(fixture.exec, plan())
+    const changes = [
+      ['operation/run-start', { planDigest: 'wrong' }, 'plan digest'],
+      ['operation/run-start', { configurationDigest: 'wrong' }, 'configuration digest'],
+      ['operation/run-start', { caller: { sessionId: '', callId: 'outer' } }, 'caller correlation'],
+      ['operation/step-start', { argumentsDigest: 'wrong' }, 'step arguments digest'],
+      ['operation/step-start', { schemaDigest: 'wrong' }, 'schema identity'],
+      ['operation/step-result', { valueDigest: 'wrong' }, 'canonical result digest'],
+      ['operation/step-result', { callId: 'wrong' }, 'call identity'],
+      ['operation/step-result', { schemaDigest: 'wrong' }, 'schema identity'],
+    ] as const
+    for (const [type, change, error] of changes) {
+      const events = structuredClone(fixture.records)
+      const index = events.findIndex(event => event.type === type)
+      events[index] = { ...events[index]!, data: { ...events[index]!.data as object, ...change } }
+      expect(() => replayOperation(events as SessionEvent[])).toThrow(error)
+    }
+    const events = structuredClone(fixture.records) as SessionEvent[]
+    const request = events.find(event => event.type === 'operation/judgment-request')!
+    if (request.type !== 'operation/judgment-request' || request.data.fingerprints === undefined) throw new Error('missing request fingerprints')
+    for (const change of [
+      { stateDigest: 'wrong' }, { candidatesDigest: 'wrong' }, { completionEvidenceDigest: 'wrong' },
+      { observations: [] }, { candidateSources: [] },
+    ]) {
+      const changed = { ...request, data: { ...request.data, fingerprints: { ...request.data.fingerprints, ...change } } }
+      expect(() => replayOperation(events.map(event => event === request ? changed : event))).toThrow(/digest|fingerprints/)
+    }
+    const admission = events.find(event => event.type === 'operation/run-start')!
+    if (admission.type !== 'operation/run-start') throw new Error('missing admission')
+    const changed = { ...admission, data: {
+      ...admission.data,
+      toolIdentities: admission.data.toolIdentities.map(tool => ({ ...tool, schemas: { parameters: {}, output: {} } })),
+    } }
+    expect(() => replayOperation(events.map(event => event === admission ? changed : event))).toThrow('tool schema digest')
+  })
+
+  it('does not treat matching digests as proof of invented evidence', async () => {
+    const fixture = setup()
+    await fixture.runner.run(fixture.exec, plan())
+    const events = structuredClone(fixture.records) as SessionEvent[]
+    const request = events.find(event => event.type === 'operation/judgment-request')!
+    if (request.type !== 'operation/judgment-request' || request.data.fingerprints === undefined) throw new Error('missing request fingerprints')
+    const state = { ...request.data.request.draft.state as object, observations: [{ step: 'read', pointer: '/choices', value: 'invented' }] }
+    const changed = { ...request, data: {
+      ...request.data,
+      fingerprints: { ...request.data.fingerprints, stateDigest: digestJson(state) },
+      request: { ...request.data.request, draft: { ...request.data.request.draft, state } },
+    } }
+    expect(() => replayOperation(events.map(event => event === request ? changed : event))).toThrow('state does not match canonical recorded sources')
+  })
+
   it('unconditionally rejects nested run_operation dispatch before effects', async () => {
     const candidate = plan() as { steps: Array<{ tool: string }> }
     candidate.steps[0]!.tool = 'run_operation'
@@ -195,6 +296,67 @@ describe('sequential operation runner', () => {
     await expect(fixture.runner.run(fixture.exec, plan())).rejects.toThrow('flush barrier')
     expect(inferences).toBe(failedBarrier <= 4 ? 0 : 1)
     expect(fixture.calls).toEqual([{ mode: 'read' }])
+  })
+
+  it.each([
+    ['operation/step-start', 1, 0, 0],
+    ['operation/step-result', 1, 1, 0],
+    ['operation/judgment-request', 1, 1, 0],
+    ['operation/judgment-result', 1, 1, 1],
+    ['operation/transition', 1, 1, 1],
+    ['operation/step-start', 2, 1, 1],
+  ] as const)('stops at append failure for %s #%i without later work', async (type, occurrence, calls, ranks) => {
+    const provider = deterministicProvider()
+    const rank = vi.fn(provider.rank.bind(provider))
+    provider.rank = rank
+    let seen = 0
+    const fixture = setup({ provider, append: (event) => {
+      if (event === type && ++seen === occurrence) throw new Error('fixture append failed')
+    } })
+    await expect(fixture.runner.run(fixture.exec, plan())).rejects.toThrow('fixture append failed')
+    expect(fixture.calls).toHaveLength(calls)
+    expect(rank).toHaveBeenCalledTimes(ranks)
+  })
+
+  it.each(['prepare', 'rank'] as const)('drains late %s settlement after cancellation without further judgment or dispatch', async (phase) => {
+    const controller = new AbortController()
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const provider = deterministicProvider()
+    const originalRank = provider.rank.bind(provider)
+    const rank = vi.fn(async (prepared: OperationPreparedJudgment, signal: AbortSignal) => {
+      if (phase === 'rank') {
+        entered.resolve(undefined)
+        await release.promise
+      }
+      return await originalRank(prepared, signal)
+    })
+    provider.rank = rank
+    if (phase === 'prepare') {
+      provider.prepare = async (draft, signal) => {
+        entered.resolve(undefined)
+        await release.promise
+        return await deterministicProvider().prepare(draft, signal)
+      }
+    }
+    const fixture = setup({ provider, signal: controller.signal })
+    const running = fixture.runner.run(fixture.exec, plan())
+    const rejection = expect(running).rejects.toMatchObject({ code: 'CANCELLED' })
+    try {
+      await entered.promise
+      controller.abort()
+      expect(fixture.records.some(record => record.type === 'operation/run-end')).toBe(false)
+      release.resolve(undefined)
+      await rejection
+      expect(fixture.calls).toHaveLength(1)
+      expect(fixture.records.some(record => record.type === 'operation/transition')).toBe(false)
+      expect(rank).toHaveBeenCalledTimes(phase === 'prepare' ? 0 : 1)
+      expect(fixture.records.filter(record => record.type === 'operation/judgment-request')).toHaveLength(phase === 'prepare' ? 0 : 1)
+    } finally {
+      controller.abort()
+      release.resolve(undefined)
+      await rejection
+    }
   })
 
   it('observes cancellation during the selected-transition barrier before next dispatch', async () => {

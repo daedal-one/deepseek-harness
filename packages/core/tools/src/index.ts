@@ -315,8 +315,9 @@ export interface ToolDispatchConstraint {
    * body invocation.
    * @param definition Exact currently resolved definition.
    * @param argumentsValue Frozen lossless-JSON arguments that the body will receive.
+   * @param signal Effective body signal after caller and wrapper cancellation are fused; observers may retain it through settlement.
    */
-  validate(this: void, definition: ToolDefinition, argumentsValue: JsonValue): void
+  validate(this: void, definition: ToolDefinition, argumentsValue: JsonValue, signal: AbortSignal): void
 }
 
 /**
@@ -1630,7 +1631,7 @@ export class ToolRuntime extends Service {
       if (!tool) throw new ToolNotFoundError(exec.name)
       if (constraint !== undefined) {
         if (tool !== constraint.expectedDefinition) throw new Error(`tool ${JSON.stringify(exec.name)} definition changed before dispatch`)
-        constraint.validate(tool, exec.arguments as JsonValue)
+        constraint.validate(tool, exec.arguments as JsonValue, signal)
       }
       state.bodyInvoked = true
       const returned = await tool.execute(exec.arguments, exec)

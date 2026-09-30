@@ -897,6 +897,56 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         expect(normalizedResult).toBe(await readFile(resultExpectedPath, 'utf8'))
       }
 
+      if (scenario.name === 'clm-operations') {
+        if (finalResult === undefined) throw new Error('operation SDK scenario has no run result')
+        const operationEvents = finalResult.events.filter(event => event.type.startsWith('operation/'))
+        const notifiedOperations = notifications.flatMap(notification => {
+          const event = notificationEvent(notification)
+          return typeof event?.type === 'string' && event.type.startsWith('operation/') ? [event] : []
+        })
+        expect(operationEvents).toEqual(notifiedOperations)
+        expect(operationEvents).toHaveLength(12)
+        expect(operationEvents.every(event => event.ignorable !== true)).toBe(true)
+        const admission = operationEvents[0]?.data as JsonObject | undefined
+        expect(admission).toMatchObject({
+          caller: { sessionId: finalResult.sessionId, callId: 'call_operation_fixture' },
+          rootCallId: 'call_operation_fixture',
+          configuration: { forbiddenTools: ['run_operation'] },
+          configurationDigest: expect.any(String),
+          toolIdentities: [
+            { name: 'fixture_list_records', schemas: { parameters: expect.any(Object), output: expect.any(Object) } },
+            { name: 'fixture_read_record', schemas: { parameters: expect.any(Object), output: expect.any(Object) } },
+          ],
+        })
+        const starts = operationEvents.filter(event => event.type === 'operation/step-start')
+        const outcomes = operationEvents.filter(event => event.type === 'operation/step-result')
+        expect(starts).toHaveLength(2)
+        expect(outcomes).toHaveLength(2)
+        for (const [index, start] of starts.entries()) {
+          expect(start.data).toMatchObject({ schemaDigest: expect.any(String), argumentsDigest: expect.any(String) })
+          expect(outcomes[index]?.data).toMatchObject({
+            stepId: start.data.stepId,
+            callId: start.data.callId,
+            schemaDigest: start.data.schemaDigest,
+            valueDigest: expect.any(String),
+            execution: { body: 'started', callerCancelled: false, timedOut: false, bodySignalAborted: false },
+          })
+        }
+        const requests = operationEvents.filter(event => event.type === 'operation/judgment-request')
+        expect(requests).toHaveLength(2)
+        for (const request of requests) {
+          expect(request.data).toMatchObject({
+            fingerprints: {
+              stateDigest: expect.any(String),
+              candidatesDigest: expect.any(String),
+              completionEvidenceDigest: expect.any(String),
+              observations: [expect.objectContaining({ valueDigest: expect.any(String), resultDigest: expect.any(String), schemaDigest: expect.any(String) })],
+              candidateSources: expect.any(Array),
+            },
+          })
+        }
+      }
+
       if (scenario.name === 'system-prompt-in-history') {
         const events = notifications.flatMap(notification => {
           const event = notificationEvent(notification)

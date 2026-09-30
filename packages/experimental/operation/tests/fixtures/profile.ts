@@ -59,7 +59,19 @@ export function apply(ctx: Context): void {
     output: {
       schema: {
         type: 'object', additionalProperties: false,
-        properties: { records: { type: 'array', required: true } },
+        properties: {
+          records: {
+            type: 'array', required: true,
+            items: {
+              type: 'object', additionalProperties: false,
+              properties: {
+                id: { type: 'string', required: true },
+                region: { type: 'string', required: true },
+                title: { type: 'string', required: true },
+              },
+            },
+          },
+        },
       },
       render: () => [{ type: 'text', text: 'Two records are available; canonical values carry their identities.' }],
     },

@@ -5326,7 +5326,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'OperationJudgmentIdentity',
-    declaration: 'export interface OperationJudgmentIdentity {\n    readonly provider: string;\n    readonly model: string;\n    readonly encoder: string;\n    readonly tokenizer: string;\n    readonly serialization: string;\n    readonly deployment: string;\n    readonly deploymentManifest?: OperationDeploymentManifestVerification;\n    readonly calibrationId?: string;\n}',
+    declaration: 'export interface OperationJudgmentIdentity {\n    readonly provider: string;\n    readonly model: string;\n    readonly encoder: string;\n    readonly tokenizer: string;\n    readonly serialization: string;\n    readonly deployment: string;\n    readonly deploymentManifest?: OperationDeploymentManifestVerification;\n    readonly calibrationId?: string;\n    readonly configurationDigest?: string;\n}',
   },
   {
     name: 'OperationJudgmentProvider',
@@ -6730,7 +6730,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ToolDispatchConstraint',
-    declaration: 'export interface ToolDispatchConstraint {\n    readonly expectedDefinition: ToolDefinition;\n    validate(this: void, definition: ToolDefinition, argumentsValue: JsonValue): void;\n}',
+    declaration: 'export interface ToolDispatchConstraint {\n    readonly expectedDefinition: ToolDefinition;\n    validate(this: void, definition: ToolDefinition, argumentsValue: JsonValue, signal: AbortSignal): void;\n}',
   },
   {
     name: 'ToolDispatchExecution',

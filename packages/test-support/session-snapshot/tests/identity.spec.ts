@@ -128,6 +128,28 @@ describe('session snapshot identity redaction', () => {
     expect(redactSessionSnapshotIds([redacted!])).toEqual([redacted])
   })
 
+  it('preserves operation caller and settled-call links without altering evidence fingerprints', () => {
+    const nestedCallId = `operation:${runId}:read`
+    const fingerprint = 'c'.repeat(64)
+    const source = [
+      { type: 'session', id: parentId },
+      { type: 'operation/run-start', data: {
+        runId, rootCallId: approvalId, caller: { sessionId: childId, callId: otherId }, configurationDigest: fingerprint,
+      } },
+      { type: 'operation/step-start', data: { runId, callId: nestedCallId, argumentsDigest: fingerprint } },
+      { type: 'operation/step-result', data: {
+        runId, callId: nestedCallId, valueDigest: fingerprint, value: { caller: { sessionId: proseUuid }, digest: fingerprint },
+      } },
+    ].map(record => JSON.stringify(record)).join('\n')
+    const [redacted] = redactSessionSnapshotIds([source])
+    expect(redacted).toContain('"rootCallId":"{{call:1}}"')
+    expect(redacted).toContain('"caller":{"sessionId":"{{session:2}}","callId":"{{call:2}}"}')
+    expect(redacted?.match(/"callId":"\{\{call:3\}\}"/g)).toHaveLength(2)
+    expect(redacted?.match(new RegExp(fingerprint, 'g'))).toHaveLength(4)
+    expect(redacted).toContain(`"value":{"caller":{"sessionId":"${proseUuid}"}`)
+    expect(redactSessionSnapshotIds([redacted!])).toEqual([redacted])
+  })
+
   it('keeps a canonical token first seen through a generic id key', () => {
     const canonical = '{{message:7}}'
     const nextMessage = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'

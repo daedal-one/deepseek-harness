@@ -7,6 +7,29 @@ function records(): SessionEvent[] {
   return readFileSync(new URL('../../../../snapshots/sdk/clm-operations/session.v3.jsonl', import.meta.url), 'utf8')
     .trim().split('\n').map(line => JSON.parse(line) as SessionEvent)
     .filter(event => event.type.startsWith('operation/'))
+    .map((event): SessionEvent => {
+      // Earlier committed v1 records have no optional fingerprint/dispatch metadata.
+      switch (event.type) {
+        case 'operation/run-start': {
+          const { caller: _caller, configuration: _configuration, configurationDigest: _digest, ...data } = event.data
+          return { ...event, data: { ...data, toolIdentities: data.toolIdentities.map(({ schemas: _schemas, ...identity }) => identity) } }
+        }
+        case 'operation/step-start': {
+          const { schemaDigest: _schema, argumentsDigest: _args, ...data } = event.data
+          return { ...event, data }
+        }
+        case 'operation/step-result': {
+          const { callId: _call, schemaDigest: _schema, valueDigest: _value, execution: _execution, ...data } = event.data
+          return { ...event, data }
+        }
+        case 'operation/judgment-request': {
+          const { fingerprints: _fingerprints, ...data } = event.data
+          return { ...event, data }
+        }
+        default:
+          return event
+      }
+    })
 }
 
 function replaceData(events: SessionEvent[], index: number, changes: Record<string, unknown>): void {
@@ -26,6 +49,14 @@ function tailThrough(events: SessionEvent[], type: string): SessionEvent[] {
 }
 
 describe('operation replay integrity', () => {
+  it('reconstructs earlier v1 records without fabricating newer identity or dispatch facts', () => {
+    const replay = replayOperation(records())
+    expect(replay.admission.caller).toBeUndefined()
+    expect(replay.admission.configurationDigest).toBeUndefined()
+    expect(replay.steps.every(step => step.dispatch === 'unknown' && step.result?.execution === undefined)).toBe(true)
+    expect(replay.judgments.every(judgment => judgment.request.fingerprints === undefined)).toBe(true)
+  })
+
   it('reconstructs the complete supported-profile record selection from recorded facts', () => {
     expect(replayOperation(records())).toMatchObject({
       status: 'completed',

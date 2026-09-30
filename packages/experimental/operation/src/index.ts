@@ -13,6 +13,7 @@ import { OperationRunner, type OperationConfig } from './runner.ts'
 import type { OperationJudgmentProvider, OperationSummary, OperationTokenizer } from './types.ts'
 
 export * from './types.ts'
+export { OperationRunId, OperationJudgmentRequestId, OperationCandidateId } from './ids.ts'
 export { OperationJudgmentError, OperationJudgmentRegistry } from './judgment.ts'
 export { OperationJsonError, canonicalJson, digestJson, equalJson, jsonBytes, parseJsonPointer, resolveJsonPointer } from './json.ts'
 export { OperationPlanError, parseOperationPlan } from './plan.ts'

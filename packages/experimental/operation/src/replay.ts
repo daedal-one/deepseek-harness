@@ -5,10 +5,14 @@
 
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import { equalJson, resolveJsonPointer } from './json.ts'
+import { digestJson, equalJson, resolveJsonPointer } from './json.ts'
+import { observeCanonicalResult } from './observation.ts'
 import { assertionsPassed, evaluateOperationAssertions, resolveOperationExpression } from './resolution.ts'
 import type {
   OperationActionCandidate,
+  OperationEvidenceFingerprint,
+  OperationObservation,
+  OperationStepStartEventData,
   OperationJudgmentRequestEventData,
   OperationJudgmentResponse,
   OperationJudgmentResultEventData,
@@ -48,9 +52,11 @@ export interface OperationReplayStep {
    */
   readonly arguments: unknown
   /**
-   * Whether no terminal step result was recorded.
+   * Interrupted started work remains unknown even when its settled tool error is available.
    */
   readonly outcome: 'succeeded' | 'failed' | 'unknown'
+  /** Actual registry-body entry when recorded; an intent alone or a legacy result cannot establish it. */
+  readonly dispatch: 'started' | 'not-started' | 'unknown'
   /** Canonical recorded result and execution diagnostics, when settlement survived. */
   readonly result?: OperationStepResultEventData
 }
@@ -137,7 +143,9 @@ export function replayOperation(events: readonly SessionEvent[], runId?: Operati
   if (selected === undefined) throw new OperationReplayError(runId === undefined
     ? 'operation replay requires exactly one operation/run-start event'
     : `operation run ${JSON.stringify(runId)} was not found`)
+  validateAdmission(selected.data)
   const id = selected.data.runId
+  const intents = new Map<string, OperationStepStartEventData>()
   const steps = new Map<string, OperationReplayStep>()
   const judgments = new Map<string, OperationReplayJudgment>()
   const settledJudgments = new Set<string>()
@@ -146,6 +154,7 @@ export function replayOperation(events: readonly SessionEvent[], runId?: Operati
   const transitions: OperationTransitionEventData[] = []
   const candidates: OperationActionCandidate[] = []
   const results = new Map<string, JsonValue>()
+  const selectedValues = new Map<string, JsonValue>()
   const plan = selected.data.plan
   let currentStep: OperationStep | undefined
   let checkpoint: OperationJudgmentRequestEventData | undefined
@@ -175,18 +184,41 @@ export function replayOperation(events: readonly SessionEvent[], runId?: Operati
           throw new OperationReplayError('operation step intent does not match its preceding accepted continuation')
         }
         if (steps.size === 0) validateBoundArguments(plan, results, expected, event.data.arguments)
+        validateSchemaCorrelation(selected.data, expected, event.data.schemaDigest)
+        validateDigest(event.data.argumentsDigest, event.data.arguments, 'step arguments')
+        if ([...intents.values()].some(intent => intent.callId === event.data.callId)) {
+          throw new OperationReplayError('operation steps reuse a nested call identity')
+        }
+        intents.set(expected.id, event.data)
         currentStep = expected
         checkpoint = undefined
         pendingContinuation = undefined
-        steps.set(event.data.stepId, { stepId: event.data.stepId, tool: event.data.tool, arguments: event.data.arguments, outcome: 'unknown' })
+        steps.set(event.data.stepId, { stepId: event.data.stepId, tool: event.data.tool, arguments: event.data.arguments, outcome: 'unknown', dispatch: 'unknown' })
         break
       }
       case 'operation/step-result': {
         const prior = steps.get(event.data.stepId)
         if (prior === undefined || settledSteps.has(event.data.stepId)) throw new OperationReplayError(`operation run ${JSON.stringify(id)} has an unpaired step result`)
         if (currentStep?.id !== event.data.stepId) throw new OperationReplayError('operation step result is out of sequence')
-        const outcome = event.data.error?.code === 'ABORTED' ? 'unknown' : event.data.isError ? 'failed' : 'succeeded'
-        steps.set(event.data.stepId, { ...prior, outcome, result: event.data })
+        if (event.data.callId !== undefined && event.data.callId !== intents.get(event.data.stepId)?.callId) {
+          throw new OperationReplayError('operation step result call identity does not match its intent')
+        }
+        validateSchemaCorrelation(selected.data, currentStep, event.data.schemaDigest)
+        if (event.data.valueDigest !== undefined && (event.data.isError || event.data.value === undefined)) {
+          throw new OperationReplayError('operation step value digest has no canonical successful value')
+        }
+        if (event.data.value !== undefined) validateDigest(event.data.valueDigest, event.data.value, 'canonical result')
+        const execution = event.data.execution
+        if (execution !== undefined && (!['started', 'not-started'].includes(execution.body)
+          || typeof execution.callerCancelled !== 'boolean' || typeof execution.timedOut !== 'boolean'
+          || (execution.bodySignalAborted !== undefined && typeof execution.bodySignalAborted !== 'boolean'))) {
+          throw new OperationReplayError('operation dispatch facts are malformed')
+        }
+        const interrupted = execution === undefined
+          ? event.data.error?.code === 'ABORTED'
+          : execution.body === 'started' && (execution.callerCancelled || execution.timedOut || execution.bodySignalAborted === true)
+        const outcome = interrupted ? 'unknown' : event.data.isError ? 'failed' : 'succeeded'
+        steps.set(event.data.stepId, { ...prior, outcome, dispatch: execution?.body ?? 'unknown', result: event.data })
         if (!event.data.isError && event.data.value !== undefined) results.set(event.data.stepId, event.data.value)
         settledSteps.add(event.data.stepId)
         break
@@ -201,6 +233,7 @@ export function replayOperation(events: readonly SessionEvent[], runId?: Operati
         if (event.data.request.draft.runId !== id || event.data.request.draft.kind !== expectedKind) {
           throw new OperationReplayError('operation judgment does not match its run and sequential checkpoint')
         }
+        validateJudgmentFingerprints(selected.data, currentStep, results, selectedValues, event.data)
         checkpoint = event.data
         judgments.set(event.data.request.draft.id, { request: event.data })
         candidates.push(...event.data.request.draft.candidates)
@@ -255,6 +288,7 @@ export function replayOperation(events: readonly SessionEvent[], runId?: Operati
             throw new OperationReplayError('operation selected source is not the preceding canonical step')
           }
           validateBoundArguments(plan, results, next, candidate.arguments, candidate)
+          if (candidate.source !== undefined) selectedValues.set(candidate.source.step, candidate.source.value)
           pendingContinuation = event.data
         } else if (candidate.kind === 'complete') {
           if (checkpoint.request.draft.kind !== 'completion' || steps.size !== plan.steps.length) {
@@ -268,7 +302,7 @@ export function replayOperation(events: readonly SessionEvent[], runId?: Operati
       }
       case 'operation/run-end':
         if (event.data.status === 'completed') {
-          validateCompleted(plan, steps, results, event.data, completedCheckpoint)
+          validateCompleted(plan, steps, results, selectedValues, event.data, completedCheckpoint)
         }
         terminal = event.data
         break
@@ -287,6 +321,96 @@ export function replayOperation(events: readonly SessionEvent[], runId?: Operati
     admission: selected.data,
     transitions,
     ...(terminal === undefined ? {} : { terminal }),
+  }
+}
+
+function validateDigest(recorded: string | undefined, value: JsonValue, label: string): void {
+  if (recorded !== undefined && recorded !== digestJson(value)) throw new OperationReplayError(`operation ${label} digest does not match recorded value`)
+}
+
+function validateAdmission(admission: OperationRunStartEventData): void {
+  validateDigest(admission.planDigest, admission.plan as unknown as JsonValue, 'plan')
+  for (const identity of admission.toolIdentities) {
+    if (identity.schemas !== undefined) validateDigest(identity.schemaDigest, identity.schemas, 'tool schema')
+  }
+  if (admission.caller !== undefined && (!admission.caller.sessionId || !admission.caller.callId || !admission.rootCallId)) {
+    throw new OperationReplayError('operation caller correlation requires session, outer call, and root call identities')
+  }
+  if (admission.configuration === undefined) {
+    if (admission.configurationDigest !== undefined) throw new OperationReplayError('operation configuration digest has no recorded configuration')
+    return
+  }
+  const forbiddenTools = admission.configuration.forbiddenTools
+  if (!equalJson([...forbiddenTools], [...new Set(['run_operation', ...forbiddenTools])].sort())) {
+    throw new OperationReplayError('operation configuration exclusions are not canonical')
+  }
+  validateDigest(admission.configurationDigest, {
+    limits: admission.limits,
+    forbiddenTools,
+    judgmentIdentity: admission.judgmentIdentity,
+  } as unknown as JsonValue, 'configuration')
+}
+
+function validateSchemaCorrelation(admission: OperationRunStartEventData, step: OperationStep, digest: string | undefined): void {
+  if (digest === undefined) return
+  const index = admission.plan.steps.findIndex(entry => entry.id === step.id)
+  const identity = admission.toolIdentities[index]
+  if (identity?.name !== step.tool || identity.schemaDigest !== digest) {
+    throw new OperationReplayError('operation step schema identity does not match admission')
+  }
+}
+
+function validateJudgmentFingerprints(
+  admission: OperationRunStartEventData,
+  step: OperationStep,
+  results: ReadonlyMap<string, JsonValue>,
+  selectedValues: ReadonlyMap<string, JsonValue>,
+  request: OperationJudgmentRequestEventData,
+): void {
+  const fingerprints = request.fingerprints
+  if (fingerprints === undefined) return
+  const draft = request.request.draft
+  const question = draft.kind === 'completion' ? admission.plan.completion.question : step.question
+  if (draft.question !== question
+    || !equalJson(request.request.identity as unknown as JsonValue, admission.judgmentIdentity as unknown as JsonValue)) {
+    throw new OperationReplayError('operation judgment question or provider identity does not match admission')
+  }
+  validateDigest(fingerprints.stateDigest, draft.state, 'judgment state')
+  validateDigest(fingerprints.candidatesDigest, draft.candidates as unknown as JsonValue, 'judgment candidates')
+  const result = results.get(step.id)
+  if (result === undefined) throw new OperationReplayError('operation evidence has no canonical result')
+  const observations = observeCanonicalResult(step, result, admission.limits.maxObservationBytes)
+  const completionEvidence = draft.kind === 'completion'
+    ? admission.plan.completion.evidence.map(expression => resolveOperationExpression(expression, {
+      inputs: admission.plan.inputs, results, selected: selectedValues,
+    }).value)
+    : []
+  const expectedState = { goal: admission.plan.goal, step: step.id, purpose: step.purpose, observations, completionEvidence }
+  if (!equalJson(draft.state, expectedState as unknown as JsonValue)) {
+    throw new OperationReplayError('operation judgment state does not match canonical recorded sources')
+  }
+  validateDigest(fingerprints.completionEvidenceDigest, completionEvidence, 'completion evidence')
+  const fingerprint = (source: OperationObservation): OperationEvidenceFingerprint => {
+    const canonical = results.get(source.step)
+    const selected = canonical === undefined ? undefined : resolveJsonPointer(canonical, source.pointer)
+    if (canonical === undefined || selected === undefined || !selected.found || !equalJson(selected.value, source.value)) {
+      throw new OperationReplayError('operation evidence source does not match its canonical recorded result')
+    }
+    const index = admission.plan.steps.findIndex(entry => entry.id === source.step)
+    const identity = admission.toolIdentities[index]
+    if (identity === undefined) throw new OperationReplayError('operation evidence source lacks an admitted tool schema')
+    return {
+      step: source.step, pointer: source.pointer, valueDigest: digestJson(source.value),
+      resultDigest: digestJson(canonical), schemaDigest: identity.schemaDigest,
+    }
+  }
+  const expectedObservations = observations.map(fingerprint)
+  const expectedCandidates = draft.candidates.flatMap(candidate => candidate.source === undefined ? [] : [{
+    candidateId: candidate.id, ...fingerprint(candidate.source),
+  }])
+  if (!equalJson(fingerprints.observations as unknown as JsonValue, expectedObservations as unknown as JsonValue)
+    || !equalJson(fingerprints.candidateSources as unknown as JsonValue, expectedCandidates)) {
+    throw new OperationReplayError('operation evidence fingerprints do not match canonical recorded sources')
   }
 }
 
@@ -322,6 +446,7 @@ function validateCompleted(
   plan: OperationPlan,
   steps: ReadonlyMap<string, OperationReplayStep>,
   results: ReadonlyMap<string, JsonValue>,
+  selectedValues: ReadonlyMap<string, JsonValue>,
   terminal: OperationRunEndEventData,
   completedCheckpoint: boolean,
 ): void {
@@ -332,7 +457,7 @@ function validateCompleted(
   if (!equalJson(expectedSteps, [...terminal.attemptedSteps]) || !equalJson(expectedSteps, [...terminal.completedSteps])) {
     throw new OperationReplayError('completed operation step lists contradict the admitted plan')
   }
-  const context = { inputs: plan.inputs, results }
+  const context = { inputs: plan.inputs, results, selected: selectedValues }
   for (const step of plan.steps) {
     const recorded = steps.get(step.id)
     const expected = evaluateOperationAssertions(step.assertions, context)

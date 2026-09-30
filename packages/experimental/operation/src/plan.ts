@@ -254,6 +254,10 @@ function validateExpression(
     case 'selected': {
       const source = stepIndexes.get(expression.step)
       if (source === undefined || source !== current - 1) throw new OperationPlanError(`${path} selected reference must name the immediately preceding step`)
+      const step = plan.steps[current]
+      if (allowCurrentResult && (step === undefined || !selectedSources(step.arguments).has(expression.step))) {
+        throw new OperationPlanError(`${path} selected reference requires the current step's arguments to select the same source`)
+      }
       return
     }
     case 'object':

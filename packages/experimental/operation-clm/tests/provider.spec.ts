@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { OperationCandidateId, OperationJudgmentRequestId, OperationRunId } from '@deepseek-ai/dsh-experimental-operation'
 import type { OperationJudgmentDraft, OperationPreparedJudgment, OperationTokenizer } from '@deepseek-ai/dsh-experimental-operation'
 import { ClmHttpProvider } from '../src/provider.ts'
+import { Config, resolveConfig } from '../src/index.ts'
 import { clmChoiceRequest, clmEncoderInputs, clmStateText } from '../src/wire.ts'
 
 const identity = {
@@ -66,6 +67,77 @@ function pendingRequest() {
 }
 
 describe('CLM System One operation provider', () => {
+  it('fingerprints nonsecret effective settings and pins them for the provider lifetime', async () => {
+    const mutableConfig = { ...config, temperature: 0.75, maxEncoderTokens: 2_048, deploymentManifest: { ...config.deploymentManifest } }
+    const provider = new ClmHttpProvider(mutableConfig, tokenizer())
+    const fingerprint = provider.identity.configurationDigest
+    expect(fingerprint).toMatch(/^[0-9a-f]{64}$/)
+    const authenticated = { ...config, credentialRef: 'private-reference' }
+    const authenticatedIdentity = new ClmHttpProvider(authenticated, tokenizer(), undefined, async () => 'first-secret').identity
+    expect(authenticatedIdentity.configurationDigest).not.toBe(fingerprint)
+    expect(new ClmHttpProvider(authenticated, tokenizer(), undefined, async () => 'rotated-secret').identity).toEqual(authenticatedIdentity)
+    expect(JSON.stringify(authenticatedIdentity)).not.toContain('private-reference')
+    expect(JSON.stringify(authenticatedIdentity)).not.toContain('secret')
+    for (const change of [{ credentialRef: 'other-reference' }, { temperature: 0.8 }, { maxEncoderTokens: 1_024 }, { timeoutMs: 2_000 }, { maxResponseBytes: 4_096 }]) {
+      expect(new ClmHttpProvider({ ...config, ...change }, tokenizer()).identity.configurationDigest).not.toBe(fingerprint)
+    }
+    mutableConfig.temperature = 0.8
+    mutableConfig.maxEncoderTokens = 1
+    // Mutating the caller-owned object must not rewrite the pinned manifest or request settings.
+    Object.assign(mutableConfig.deploymentManifest, { digest: 'changed-after-construction' })
+    const request = await prepared(provider)
+    expect(request.identity.configurationDigest).toBe(fingerprint)
+    expect(request.identity.deploymentManifest).toEqual(config.deploymentManifest)
+    expect(request.wire).toMatchObject({ temperature: 0.75 })
+    expect(request.encoding?.maxTokensPerText).toBe(2_048)
+    expect(JSON.stringify(request)).not.toContain('private-reference')
+  })
+
+  it('rejects preparation from another effective configuration before transport', async () => {
+    let requests = 0
+    const first = new ClmHttpProvider(config, tokenizer())
+    let credentials = 0
+    for (const change of [{ maxEncoderTokens: 1_024 }, { credentialRef: 'other-reference' }]) {
+      const second = new ClmHttpProvider({ ...config, ...change }, tokenizer(), async () => {
+        requests += 1
+        return new Response(JSON.stringify(response()))
+      }, async () => {
+        credentials += 1
+        return 'private-credential-value'
+      })
+      await expect(second.rank(await prepared(first), new AbortController().signal)).rejects.toMatchObject({ code: 'CLM_IDENTITY' })
+    }
+    expect(requests).toBe(0)
+    expect(credentials).toBe(0)
+  })
+
+  it('rejects serialization identities not implemented by the pinned wire', () => {
+    const unsupported = { ...config, serialization: 'not-the-implemented-wire' }
+    expect(() => new ClmHttpProvider(unsupported, tokenizer())).toThrow('CLM serialization must be clm-systemone-bb42c6c5')
+    expect(Config['~standard'].validate(unsupported)).toHaveProperty('issues.0')
+    expect(resolveConfig(config).serialization).toBe('clm-systemone-bb42c6c5')
+  })
+
+  it('rejects malformed credential headers without exposing their values or invoking transport', async () => {
+    let requests = 0
+    for (const secret of ['private-token\ninvalid', 'private-token\u0100']) {
+      const provider = new ClmHttpProvider({ ...config, credentialRef: 'private-reference' }, tokenizer(), async () => {
+        requests += 1
+        throw new Error('transport must not start')
+      }, async () => secret)
+      await expect(provider.rank(await prepared(provider), new AbortController().signal)).rejects.toMatchObject({
+        code: 'CLM_CREDENTIAL', message: 'CLM credential cannot be encoded as an HTTP header',
+      })
+    }
+    expect(requests).toBe(0)
+  })
+
+  it('requires credential resolution instead of credentials embedded in endpoint URLs', () => {
+    expect(() => new ClmHttpProvider({ ...config, endpoint: 'https://user:secret@example.test/v1/systemone' }, tokenizer()))
+      .toThrow('credential resolver')
+    expect(() => new ClmHttpProvider({ ...config, endpoint: 'http://[::1]/v1/systemone' }, tokenizer())).not.toThrow()
+  })
+
   it('renders upstream state text rather than JSON markup', () => {
     expect(clmStateText({ nested: { enabled: true }, records: [null, 'alpha'], empty: null }, 'choose')).toBe(
       'empty: \n\nnested:\n  enabled: true\n\nrecords:\n  - \n  - alpha\n\nchoose',

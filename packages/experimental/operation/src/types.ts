@@ -3,69 +3,12 @@
  * @module @deepseek-ai/dsh-experimental-operation/types
  */
 
-import { brandString, type Branded } from '@deepseek-ai/dsh-brand'
 import type { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+import type { OperationCandidateId, OperationJudgmentRequestId, OperationRunId } from './ids.ts'
 
-/**
-
- * Opaque identity of one immutable operation run.
-
- */
-export type OperationRunId = Branded<'OperationRunId'>
-
-/**
-
- * Brand one operation-run identifier.
-
- * @param value Raw identifier.
-
- * @returns Branded operation-run identifier.
-
- */
-export function OperationRunId(value: string): OperationRunId {
-  return brandString<OperationRunId>(value)
-}
-
-/**
-
- * Opaque identity of one provider request within an operation run.
-
- */
-export type OperationJudgmentRequestId = Branded<'OperationJudgmentRequestId'>
-
-/**
-
- * Brand one operation judgment request identifier.
-
- * @param value Raw identifier.
-
- * @returns Branded judgment request identifier.
-
- */
-export function OperationJudgmentRequestId(value: string): OperationJudgmentRequestId {
-  return brandString<OperationJudgmentRequestId>(value)
-}
-
-/**
-
- * Opaque identity of one supplied ranking choice.
-
- */
-export type OperationCandidateId = Branded<'OperationCandidateId'>
-
-/**
-
- * Brand one operation candidate identifier.
-
- * @param value Raw identifier.
-
- * @returns Branded operation candidate identifier.
-
- */
-export function OperationCandidateId(value: string): OperationCandidateId {
-  return brandString<OperationCandidateId>(value)
-}
+export type { OperationCandidateId, OperationJudgmentRequestId, OperationRunId } from './ids.ts'
 
 /**
 
@@ -294,6 +237,8 @@ export interface OperationToolIdentity {
    * SHA-256 digest of the canonical parameter and output schemas.
    */
   readonly schemaDigest: string
+  /** Canonical schemas used by schemaDigest; absent on earlier v1 records. */
+  readonly schemas?: { readonly parameters: JsonValue; readonly output: JsonValue }
 }
 
 /**
@@ -426,6 +371,8 @@ export interface OperationJudgmentIdentity {
    * Calibration identity required when autonomous acceptance is enabled.
    */
   readonly calibrationId?: string
+  /** Canonical digest of explicit nonsecret resolved provider settings, when available. */
+  readonly configurationDigest?: string
 }
 
 /**
@@ -643,6 +590,12 @@ export interface OperationRunStartEventData {
   readonly limits: OperationLimits
   readonly toolIdentities: readonly OperationToolIdentity[]
   readonly judgmentIdentity: OperationJudgmentIdentity
+  /** Stable session and immediate outer call, not process-local execution tokens; absent on earlier v1 records. */
+  readonly caller?: { readonly sessionId: SessionId; readonly callId: ToolCallId }
+  /** Sorted unique effective exclusions, including the unconditional run_operation exclusion; absent on earlier v1 records. */
+  readonly configuration?: { readonly forbiddenTools: readonly string[] }
+  /** digestJson({ limits, forbiddenTools, judgmentIdentity }); excludes volatile correlation IDs. Absent on earlier v1 records. */
+  readonly configurationDigest?: string
 }
 
 /**
@@ -658,6 +611,10 @@ export interface OperationStepStartEventData {
   readonly callId: ToolCallId
   readonly arguments: JsonValue
   readonly bindings: readonly OperationValueProvenance[]
+  /** Admitted schema identity; absent on earlier v1 records. */
+  readonly schemaDigest?: string
+  /** digestJson(arguments); absent on earlier v1 records. */
+  readonly argumentsDigest?: string
 }
 
 /**
@@ -675,6 +632,41 @@ export interface OperationStepResultEventData {
   readonly error?: { readonly message: string; readonly code?: string }
   readonly elapsedMs: number
   readonly assertions: readonly OperationAssertionResult[]
+  /** Exact nested intent correlation; absent on earlier v1 records. */
+  readonly callId?: ToolCallId
+  /** Admitted schema identity; absent on earlier v1 records. */
+  readonly schemaDigest?: string
+  /** digestJson(value) only when the canonical successful value is retained; absent on earlier v1 records. */
+  readonly valueDigest?: string
+  /** Independent registry-body and interruption facts after quiescence; absence on earlier v1 records does not prove no dispatch. */
+  readonly execution?: OperationDispatchFacts
+}
+
+/** Independent settled dispatch facts, never inferred from tool error codes or prose. */
+export interface OperationDispatchFacts {
+  readonly body: 'started' | 'not-started'
+  readonly callerCancelled: boolean
+  readonly timedOut: boolean
+  /** Whether the effective body signal was aborted, including ordinary around-wrapper deadlines; absent on earlier v1 records. */
+  readonly bodySignalAborted?: boolean
+}
+
+/** Canonical evidence identity tied to its exact producing result and admitted schema. */
+export interface OperationEvidenceFingerprint {
+  readonly step: string
+  readonly pointer: string
+  readonly valueDigest: string
+  readonly resultDigest: string
+  readonly schemaDigest: string
+}
+
+/** Canonical checkpoint fingerprints exclude request/run/caller correlation IDs. */
+export interface OperationJudgmentFingerprints {
+  readonly stateDigest: string
+  readonly candidatesDigest: string
+  readonly observations: readonly OperationEvidenceFingerprint[]
+  readonly candidateSources: readonly (OperationEvidenceFingerprint & { readonly candidateId: OperationCandidateId })[]
+  readonly completionEvidenceDigest: string
 }
 
 /**
@@ -688,6 +680,8 @@ export interface OperationJudgmentRequestEventData {
   readonly request: OperationPreparedJudgment
   readonly remainingInputTokens: number
   readonly remainingOutputTokens: number
+  /** Source-bound digests of complete checkpoint values; absent on earlier v1 records. */
+  readonly fingerprints?: OperationJudgmentFingerprints
 }
 
 /**

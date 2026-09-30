@@ -73,8 +73,14 @@ export function redactSessionSnapshotIds(logs: readonly string[]): string[] {
     if (typeof record.type !== 'string' || !record.type.startsWith('operation/') || !isRecord(record.data)) return
     const data = record.data
     claim(data.runId, 'operation')
-    if (record.type === 'operation/run-start') claim(data.rootCallId, 'call')
-    if (record.type === 'operation/step-start') claim(data.callId, 'call')
+    if (record.type === 'operation/run-start') {
+      claim(data.rootCallId, 'call')
+      if (isRecord(data.caller)) {
+        claim(data.caller.sessionId, 'session')
+        claim(data.caller.callId, 'call')
+      }
+    }
+    if (record.type === 'operation/step-start' || record.type === 'operation/step-result') claim(data.callId, 'call')
     if (record.type === 'operation/judgment-request' && isRecord(data.request) && isRecord(data.request.draft)) {
       claim(data.request.draft.id, 'judgment')
     }

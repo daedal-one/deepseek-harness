@@ -12,6 +12,9 @@ import {
   type OperationPreparedJudgment,
 } from '@deepseek-ai/dsh-experimental-operation'
 
+/** Identity of the serializer implemented for the pinned System One protocol. */
+export const CLM_SERIALIZATION = 'clm-systemone-bb42c6c5'
+
 /**
 
  * Exact request vocabulary sent to the pinned CLM System One endpoint.

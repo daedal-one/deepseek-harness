@@ -8,10 +8,11 @@ import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import z from '@deepseek-ai/schemastery'
 import type { OperationDeploymentManifestVerification } from '@deepseek-ai/dsh-experimental-operation'
 import { ClmHttpProvider, type ClmHttpConfig } from './provider.ts'
+import { CLM_SERIALIZATION } from './wire.ts'
 
 export { ClmHttpError, ClmHttpProvider, validateConfig } from './provider.ts'
 export type { ClmCredentialResolver, ClmFetch, ClmHttpConfig } from './provider.ts'
-export { clmChoiceRequest, clmEncoderInputs, ClmWireError, clmStateText, parseClmChoiceResponse, serializeClmChoice } from './wire.ts'
+export { CLM_SERIALIZATION, clmChoiceRequest, clmEncoderInputs, ClmWireError, clmStateText, parseClmChoiceResponse, serializeClmChoice } from './wire.ts'
 export type { ClmChoiceRequest } from './wire.ts'
 
 /**
@@ -71,9 +72,9 @@ export interface Config {
    */
   providerId?: string
   /**
-   * Optional serialization recipe identity.
+   * Pinned serialization recipe identity; other recipes are not implemented.
    */
-  serialization?: string
+  serialization?: typeof CLM_SERIALIZATION
   /**
    * Required CLM softmax temperature.
    */
@@ -110,7 +111,7 @@ export const Config: z<Config> = z.object({
   calibrationId: z.string(),
   credentialRef: z.string(),
   providerId: z.string().default('clm-http'),
-  serialization: z.string().default('clm-systemone-bb42c6c5'),
+  serialization: z.const(CLM_SERIALIZATION).default(CLM_SERIALIZATION),
   temperature: z.number().min(0).max(100).required(),
   maxEncoderTokens: z.natural().min(1).required(),
   timeoutMs: z.natural().min(1).default(15_000),
@@ -141,7 +142,7 @@ export function resolveConfig(config: Config): ClmHttpConfig {
     ...(config.calibrationId === undefined ? {} : { calibrationId: config.calibrationId }),
     ...(config.credentialRef === undefined ? {} : { credentialRef: config.credentialRef }),
     providerId: config.providerId ?? 'clm-http',
-    serialization: config.serialization ?? 'clm-systemone-bb42c6c5',
+    serialization: CLM_SERIALIZATION,
     temperature: config.temperature,
     maxEncoderTokens: config.maxEncoderTokens,
     timeoutMs: config.timeoutMs ?? 15_000,
