@@ -10,6 +10,8 @@ Per-conversation Git import, checkpoint capture, and automatic return make repos
 
 The optional shared runtime attaches one environment to one persistent Incus VM and an explicit set of disk-backed directory mounts. Sessions share those files and ordinary Git state. The guest command transport and filesystem/subprocess providers operate independently of conversation settlement. A turn ending does not copy files, commit changes, freeze the VM, or publish result refs. Automatic commits are outside this composition.
 
+Operator-configured Git remotes associate exact mounted sources with repository-scoped, expiring host-issued credentials. Ordinary commands receive these through the sealed in-memory process environment, including repository-specific SSH-to-HTTPS aliases; filesystem controllers do not. Authorization does not inspect guest Git configuration or restore import, checkpoint, and return transactions. Issuance occupies a command admission slot and finishes before cancellation or shutdown can admit the command.
+
 The [accepted task](../../../../.specs/tasks/shared-environment-workspace.spec.md) owns the delivery and verification requirements. The [conversation workspace decision](../../implemented/architecture/2026-09-20-conversation-git-workspace.md) and [development VM decision](../../implemented/architecture/2026-09-21-conversation-development-vm.md) retain their historical-data and explicitly selected legacy-composition obligations; they are not fully superseded while those consumers remain. The remote composition stops selecting the Git transaction lifecycle. Existing recovery data is preserved, not interpreted as permission to overwrite shared files.
 
 ## Alternatives considered
@@ -19,6 +21,8 @@ The [accepted task](../../../../.specs/tasks/shared-environment-workspace.spec.m
 **Share directories through per-command containers.** This shares files but not installed guest tools, services, and the environment lifetime requested by the user. The existing Incus setup already supplies the required VM boundary.
 
 **Create a worktree for every session.** This restores per-session divergence and reconciliation. A single operator-prepared worktree per repository can be mounted if desired, but the harness must not manufacture per-session Git state. Worktree metadata paths must be reachable through explicitly authorized mounts.
+
+**Mount host Git credentials or copy a token into the guest.** Host helpers and private keys expose authority beyond the admitted repositories; persistent tokens also outlive individual commands. Reuse the bounded host issuer and process-only transfer instead.
 
 ## Verification
 

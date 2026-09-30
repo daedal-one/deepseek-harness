@@ -14,6 +14,7 @@ This record separates Incus infrastructure checks from harness and UI acceptance
 - [Infrastructure evidence](#infrastructure-evidence)
 - [Repeatable volume probe](#repeatable-volume-probe)
 - [Harness acceptance](#harness-acceptance)
+- [Repository authentication](#repository-authentication)
 - [Dev Note](#dev-note)
 
 ## Infrastructure evidence
@@ -76,6 +77,18 @@ The following matrix separates observed behavior from remaining acceptance. Reco
 | Retained conversation recovery | Recovered CLM changes are on `codex/recovered-clm-20260929`; Phoebe's retained commits are on `codex/recovered-conversation-20260929`. Both original conversation directories remain intact. |
 | Harness code ownership | The effective service executable is in the managed release directory outside both guest-writable repositories. Discovery and handoff patches select packaged plugins, not repository source. The working directory alone does not identify the running release. |
 | Authenticated UI | Daedal-OpenAI completes a real tool-using turn on the existing main service, with no workspace save/wait barrier or host-execution fallback. |
+
+## Repository authentication
+
+On 2026-09-30, the candidate Git-access repair passed 88 focused tests covering shared-runtime admission and teardown, repository authorization, process-envelope validation, and legacy authorization consumers. The real Incus test passed both shared-files/cancellation isolation and authenticated `git ls-remote --exit-code <remote> HEAD` for `daedal-one/deepseek-harness` and `daedal-one/phoebe-lab`, each through HTTPS, SCP-style SSH, and `ssh://` aliases. A guest filesystem controller confirmed that its environment contains no `GIT_CONFIG_*` authorization. These are read-only transport checks, not evidence of a published commit or live-service activation.
+
+To reproduce, extend the operator's shared-VM configuration with `gitRemotes` containing each exact mounted host source, its credential-free HTTPS repository URL, the host's repository-scoped helper path, and a finite `credentialTimeoutMs`. Supply this non-secret JSON as `DSH_SHARED_VM_CONFIG`, then run:
+
+```sh
+pnpm exec vitest run --config vitest.e2e.config.ts packages/sandbox/local-container-runtime/tests/shared-vm.e2e.ts
+```
+
+The authentication case skips when no remotes are configured. The file and cancellation case runs whenever the shared VM configuration is supplied. Neither case publishes refs, changes repository configuration, or stops the VM. Publication acceptance additionally requires an explicitly authorized ordinary agent command to push its verified commit, followed by a remote-ref comparison; a host-side push alone does not qualify the shared runtime.
 
 ## Dev Note
 

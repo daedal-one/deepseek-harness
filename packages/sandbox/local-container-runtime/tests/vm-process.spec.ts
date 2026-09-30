@@ -21,6 +21,9 @@ describe('development VM guest Git authorization', () => {
     ['wrong count', ['GIT_CONFIG_COUNT=2', 'GIT_CONFIG_KEY_0=credential.helper', 'GIT_CONFIG_VALUE_0=']],
     ['unscoped key', ['GIT_CONFIG_COUNT=1', 'GIT_CONFIG_KEY_0=http.extraHeader', 'GIT_CONFIG_VALUE_0=Authorization: Basic dGVzdA==']],
     ['raw credential', ['TOKEN=secret']],
+    ...['git@github.example:', 'git@other.example:org/repo.git', 'ssh://git@github.example/other/repo.git'].map<[string, string[]]>(value => [
+      'broad or mismatched rewrite', ['GIT_CONFIG_COUNT=1', 'GIT_CONFIG_KEY_0=url.https://github.example/org/repo.git.insteadOf', `GIT_CONFIG_VALUE_0=${value}`],
+    ]),
     ['line break', ['GIT_CONFIG_COUNT=1', 'GIT_CONFIG_KEY_0=credential.helper\nsecret', 'GIT_CONFIG_VALUE_0=']],
   ])('rejects %s without including authorization values in the diagnostic', (_name, values) => {
     expect(() => validateGuestGitAuthorization(values)).toThrow('development-vm: guest Git authorization')

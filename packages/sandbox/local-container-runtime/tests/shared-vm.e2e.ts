@@ -9,8 +9,40 @@ import { IncusDevelopmentVms } from '../src/vm-engine.ts'
 import * as startup from '../src/startup.ts'
 
 const configuration = process.env.DSH_SHARED_VM_CONFIG
+const gitConfigured = configuration !== undefined
+  && (SharedVmRuntime.Config(JSON.parse(configuration) as SharedVmConfig).gitRemotes?.length ?? 0) > 0
 
 describe.skipIf(configuration === undefined)('persistent shared Incus execution', { retry: 0 }, () => {
+  it.skipIf(!gitConfigured)('authenticates configured HTTPS and SSH remotes without credentials in controllers', async () => {
+    if (configuration === undefined) throw new Error('shared VM configuration is required')
+    const config = SharedVmRuntime.Config(JSON.parse(configuration) as SharedVmConfig)
+    const ctx = new Context()
+    try {
+      await ctx.plugin(SharedVmRuntime, config)
+      await ctx.executionRuntime.ensureReady()
+      const controller = await ctx.executionRuntime.executeController({
+        argv: ['/usr/bin/python3', '-c', 'import os; assert not any(k.startswith("GIT_CONFIG_") for k in os.environ)'],
+        stdin: Buffer.alloc(0), maxOutputBytes: 4096, deadlineMs: 10000,
+      })
+      expect(controller.exitCode).toBe(0)
+      for (const remote of config.gitRemotes ?? []) {
+        const url = new URL(remote.url)
+        const aliases = url.port === '' ? [remote.url, `git@${url.host}:${url.pathname.slice(1)}`, `ssh://git@${url.host}${url.pathname}`] : [remote.url]
+        for (const alias of aliases) {
+          const handle = await ctx.executionRuntime.createProcess({
+            argv: ['/usr/bin/git', 'ls-remote', '--exit-code', alias, 'HEAD'],
+            cwd: '/workspace', environment: { GIT_TERMINAL_PROMPT: '0' }, tty: false, stdin: false,
+            signal: AbortSignal.timeout(30000),
+          })
+          try {
+            handle.stream.resume()
+            expect((await handle.done).exitCode).toBe(0)
+          } finally { await handle.terminate(); expect(await handle.waitForRemoval()).toBe(true) }
+        }
+      }
+    } finally { await ctx.fiber.dispose() }
+  })
+
   it('shares files and retains the VM across provider disposal and reattachment', async () => {
     if (configuration === undefined) throw new Error('shared VM configuration is required')
     const config = SharedVmRuntime.Config(JSON.parse(configuration) as SharedVmConfig)

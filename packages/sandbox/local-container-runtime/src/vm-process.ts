@@ -77,12 +77,21 @@ export function validateGuestGitAuthorization(entries: readonly string[]): strin
     const key = values.get(`GIT_CONFIG_KEY_${index}`)
     const value = values.get(`GIT_CONFIG_VALUE_${index}`)
     if (key === undefined || value === undefined
-      || (key !== 'credential.helper' && !/^http\.https:\/\/[^\s]+\/\.extraHeader$/u.test(key))
-      || (key === 'credential.helper' ? value !== '' : !/^Authorization: Basic [A-Za-z0-9+/]+=*$/u.test(value))) {
+      || !(key === 'credential.helper' ? value === ''
+        : /^http\.https:\/\/[^\s]+\/\.extraHeader$/u.test(key) ? /^Authorization: Basic [A-Za-z0-9+/]+=*$/u.test(value)
+          : repositoryRewrite(key, value))) {
       throw new Error('development-vm: guest Git authorization is not URL scoped')
     }
   }
   return [...entries]
+}
+
+function repositoryRewrite(key: string, value: string): boolean {
+  const target = /^url\.(https:\/\/[A-Za-z0-9.-]+\/[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*)\.insteadOf$/u.exec(key)?.[1]
+  if (target === undefined || !URL.canParse(target)) return false
+  const url = new URL(target)
+  if (url.href !== target) return false
+  return value === `git@${url.host}:${url.pathname.slice(1)}` || value === `ssh://git@${url.host}${url.pathname}`
 }
 
 /** Allocate a guest systemd service, with Docker workloads remaining guest-daemon owned.

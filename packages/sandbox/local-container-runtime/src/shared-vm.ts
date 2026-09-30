@@ -8,8 +8,9 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import type { ConversationWorkspaceId } from './workspace-types.ts'
 import { IncusDevelopmentVms, incusCommand, type DevelopmentVmConfig, type VmDirectoryMount } from './vm-engine.ts'
 import { createVmProcess } from './vm-process.ts'
+import { sharedGitAuthorization } from './shared-git.ts'
 import type { ExecutionRuntime, LocalContainerProcessHandle, LocalContainerProcessRequest,
-  PodmanControllerExecRequest, PodmanControllerExecResult } from './types.ts'
+  PodmanControllerExecRequest, PodmanControllerExecResult, WorkspaceGitRemote } from './types.ts'
 import { LocalContainerControllerAborted, LocalContainerControllerDeadlineExceeded } from './index.ts'
 
 /** Operator-owned shared VM identity, directory mounts, and command bounds. */
@@ -20,6 +21,8 @@ export interface SharedVmConfig extends DevelopmentVmConfig {
   workspaceDirectory: string
   /** Existing repositories shared by every admitted session. */
   repositories: VmDirectoryMount[]
+  /** Optional operator-approved Git access for exact mounted repository sources. */
+  gitRemotes?: WorkspaceGitRemote[]
   /** Complete non-secret guest command environment. */
   environment: Record<string, string>
   /** Bound on commands attached through this Harness process. */
@@ -80,6 +83,8 @@ export class SharedVmRuntime extends Service implements ExecutionRuntime {
     timeoutMs: z.natural().required(), readinessPollMs: z.natural().required(), maxOutputBytes: z.natural().required(),
     environmentId: z.string().required(), workspaceDirectory: z.string().required(),
     repositories: z.array(z.object({ source: z.string().required(), path: z.string().required() })).required(),
+    gitRemotes: z.array(z.object({ source: z.string().required(), url: z.string().required(),
+      credentialCommand: z.string().required(), credentialTimeoutMs: z.natural().required() })),
     environment: z.dict(z.string()).required(), maxLiveProcesses: z.natural().required(),
   })
   readonly executionWorld: object = Object.freeze({})
@@ -89,6 +94,7 @@ export class SharedVmRuntime extends Service implements ExecutionRuntime {
   private readonly command: ReturnType<typeof incusCommand>
   private readonly mapPath: (path: string) => string
   private readonly opening: Promise<void>
+  private readonly authorize: () => Promise<string[]>
   private readonly processes = new Set<LocalContainerProcessHandle>()
   private readonly allocating = new Set<Promise<LocalContainerProcessHandle>>()
   private closing = false
@@ -100,6 +106,7 @@ export class SharedVmRuntime extends Service implements ExecutionRuntime {
     this.containerName = this.engine.name(this.id)
     this.command = incusCommand(config)
     this.mapPath = sharedVmPaths(config)
+    this.authorize = sharedGitAuthorization(config.repositories, config.gitRemotes ?? [])
     if (!Number.isSafeInteger(config.maxLiveProcesses) || config.maxLiveProcesses < 1) throw new Error('shared-vm: invalid command limit')
     validateEnvironment(config.environment, true)
     this.opening = this.open()
@@ -151,6 +158,10 @@ export class SharedVmRuntime extends Service implements ExecutionRuntime {
    * @returns the owned systemd command handle; never owns the VM lifetime.
    */
   async createProcess(request: LocalContainerProcessRequest): Promise<LocalContainerProcessHandle> {
+    return await this.allocate(request, true)
+  }
+
+  private async allocate(request: LocalContainerProcessRequest, git: boolean): Promise<LocalContainerProcessHandle> {
     await this.ensureReady()
     if (this.processes.size + this.allocating.size >= this.config.maxLiveProcesses) throw new Error('shared-vm: attached command limit reached')
     request.signal?.throwIfAborted()
@@ -158,7 +169,12 @@ export class SharedVmRuntime extends Service implements ExecutionRuntime {
     validateEnvironment(environment, false)
     const cwd = this.mapPath(request.cwd)
     if (cwd !== '/workspace' && (!cwd.startsWith('/workspace/') || posix.normalize(cwd) !== cwd)) throw new Error('shared-vm: command directory is outside workspace')
-    const operation = createVmProcess(this.config, this.containerName, { ...request, cwd: cwd as LocalContainerProcessRequest['cwd'], environment }, this.command)
+    const operation = (async () => {
+      const authorization = git ? await this.authorize() : []
+      request.signal?.throwIfAborted()
+      if (this.closing) throw new Error('shared-vm: runtime is closing')
+      return await createVmProcess(this.config, this.containerName, { ...request, cwd: cwd as LocalContainerProcessRequest['cwd'], environment }, this.command, authorization)
+    })()
     this.allocating.add(operation)
     try {
       const handle = await operation
@@ -181,7 +197,7 @@ export class SharedVmRuntime extends Service implements ExecutionRuntime {
     const signal = request.signal === undefined ? cancel.signal : AbortSignal.any([cancel.signal, request.signal])
     let handle: LocalContainerProcessHandle | undefined
     try {
-      handle = await this.createProcess({ argv: request.argv as [string, ...string[]], cwd: '/workspace', environment: {}, tty: false, stdin: true, signal })
+      handle = await this.allocate({ argv: request.argv as [string, ...string[]], cwd: '/workspace', environment: {}, tty: false, stdin: true, signal }, false)
       handle.stream.end(request.stdin)
       const stdout: Buffer[] = []; const stderr: Buffer[] = []
       let pending = Buffer.alloc(0); let size = 0

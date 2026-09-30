@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import SharedVmRuntime, { sharedVmId, sharedVmPaths, type SharedVmConfig } from '../src/shared-vm.ts'
 import * as engine from '../src/vm-engine.ts'
 import * as transport from '../src/vm-process.ts'
+import * as git from '../src/shared-git.ts'
 import type { LocalContainerProcessHandle, LocalContainerProcessRequest } from '../src/types.ts'
 
 vi.mock('node:fs/promises', async importOriginal => ({
@@ -97,6 +98,46 @@ describe('shared environment directory mapping', () => {
 })
 
 describe('shared VM attachment', () => {
+  it('passes configured authorization only to ordinary commands', async () => {
+    const authorize = vi.fn(async () => ['GIT_CONFIG_COUNT=1', 'GIT_CONFIG_KEY_0=credential.helper', 'GIT_CONFIG_VALUE_0='])
+    const test = await fixture({}, () => vi.spyOn(git, 'sharedGitAuthorization').mockReturnValue(authorize))
+    const command = handle(); const controller = handle()
+    test.process.mockResolvedValueOnce(command.value).mockResolvedValueOnce(controller.value)
+    await test.runtime.createProcess(request)
+    const pending = test.runtime.executeController({ argv: ['/bin/true'], stdin: Buffer.alloc(0), maxOutputBytes: 4, deadlineMs: 1000 })
+    controller.finish(); await pending
+    expect(authorize).toHaveBeenCalledOnce()
+    expect(test.process.mock.calls[0]?.[4]).toEqual(await authorize())
+    expect(test.process.mock.calls[1]?.[4]).toEqual([])
+  })
+
+  it('releases admission after failed credential issuance without launching a command', async () => {
+    const authorize = vi.fn<() => Promise<string[]>>().mockRejectedValueOnce(new Error('issuer unavailable')).mockResolvedValue([])
+    const test = await fixture({ maxLiveProcesses: 1 }, () => vi.spyOn(git, 'sharedGitAuthorization').mockReturnValue(authorize))
+    await expect(test.runtime.createProcess(request)).rejects.toThrow('issuer unavailable')
+    expect(test.process).not.toHaveBeenCalled()
+    const command = handle(); test.process.mockResolvedValue(command.value)
+    await test.runtime.createProcess(request)
+    expect(test.process).toHaveBeenCalledOnce()
+  })
+
+  it.each(['cancel', 'dispose'] as const)('prevents launch after %s during bounded credential issuance', async (action) => {
+    const entered = Promise.withResolvers<undefined>(); const issued = Promise.withResolvers<string[]>()
+    const test = await fixture({ maxLiveProcesses: 1 }, () => vi.spyOn(git, 'sharedGitAuthorization').mockReturnValue(() => { entered.resolve(undefined); return issued.promise }))
+    const cancel = new AbortController()
+    const pending = test.runtime.createProcess({ ...request, signal: cancel.signal })
+    const rejected = expect(pending).rejects.toThrow(action === 'cancel' ? 'cancelled' : 'closing')
+    await entered.promise
+    let disposal: Promise<unknown> | undefined
+    try {
+      await expect(test.runtime.createProcess(request)).rejects.toThrow('command limit')
+      if (action === 'cancel') cancel.abort(new Error('cancelled'))
+      else { disposal = test.fiber.dispose(); await Promise.resolve() }
+    } finally { issued.resolve([]) }
+    await rejected; await disposal
+    expect(test.process).not.toHaveBeenCalled()
+  })
+
   it('verifies every mount without importing or saving repositories', async () => {
     const test = await fixture()
     await test.runtime.ensureReady()
