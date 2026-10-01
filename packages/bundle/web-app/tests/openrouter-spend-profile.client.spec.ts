@@ -9,8 +9,8 @@ import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { apply as applyRemotes } from '@deepseek-ai/dsh-api-remotes/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
-import * as SpendHostEntry from '@deepseek-ai/dsh-client-ui-openrouter-spend'
-import { apply as applySpendClient, inject as spendClientInject } from '@deepseek-ai/dsh-client-ui-openrouter-spend/client'
+import * as InfoHostEntry from '@deepseek-ai/dsh-client-ui-session-info'
+import { apply as applyInfoClient, inject as infoClientInject } from '@deepseek-ai/dsh-client-ui-session-info/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import OpenRouterSpendService from '@deepseek-ai/dsh-openrouter-spend'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
@@ -62,7 +62,7 @@ async function loadProfile(credential: string | undefined): Promise<Context> {
     "- name: '@deepseek-ai/dsh-openrouter-spend'",
     '  config:',
     '    baseURL: https://openrouter.test/api/v1',
-    "- name: '@deepseek-ai/dsh-client-ui-openrouter-spend'",
+    "- name: '@deepseek-ai/dsh-client-ui-session-info'",
     '',
   ].join('\n'))
 
@@ -78,7 +78,7 @@ async function loadProfile(credential: string | undefined): Promise<Context> {
     ['@deepseek-ai/dsh-session', SessionStore],
     ['@deepseek-ai/dsh-session-projection', SessionProjectionRegistry],
     ['@deepseek-ai/dsh-openrouter-spend', OpenRouterSpendService],
-    ['@deepseek-ai/dsh-client-ui-openrouter-spend', SpendHostEntry],
+    ['@deepseek-ai/dsh-client-ui-session-info', InfoHostEntry],
   ])
   ctx.loader.internal = {
     version: 'v2',
@@ -139,12 +139,15 @@ describe('OpenRouter spend Web profile slice', () => {
     const slotsFiber = await client.plugin(SlotRegistry)
     await slotsFiber.await()
     client.provide('locale', new LocaleRuntime(client))
-    new TestRemote(client, { openrouterSpend: { read: async () => ({ ok: true, value: { ok: false, error: { reason: 'not-configured', detail: 'unused' } } }) } })
+    new TestRemote(client, {
+      openrouterSpend: { read: async () => ({ ok: true, value: { ok: false, error: { reason: 'not-configured', detail: 'unused' } } }) },
+      sessionInfo: { read: async () => ({ ok: true, value: { ok: false, error: { reason: 'session-unavailable', detail: 'unused' } } }) },
+    })
     declareConversationView(client.get('slots') as SlotRegistry)
-    const clientFiber = client.plugin({ inject: [...spendClientInject], apply: applySpendClient })
+    const clientFiber = client.plugin({ inject: [...infoClientInject], apply: applyInfoClient })
     await clientFiber.await()
     expect((client.get('slots') as SlotRegistry).entries('conversation.view')).toEqual([
-      expect.objectContaining({ options: expect.objectContaining({ id: 'spend', order: 20 }) }),
+      expect.objectContaining({ options: expect.objectContaining({ id: 'info', order: 20 }) }),
     ])
   })
 

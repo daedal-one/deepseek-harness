@@ -1,6 +1,6 @@
-/** Shared money formatting for the Spend view. */
+/** Shared money formatting for the Info view's spend block. */
 
-import type { SpendKey } from './locales.ts'
+import type { SessionInfoKey } from './locales.ts'
 
 /**
  * Deterministic USD precision for every spend row: two decimal digits on a
@@ -18,7 +18,7 @@ const USD = new Intl.NumberFormat('en-US', {
  * @param value - amount in USD.
  * @returns the localized amount string.
  */
-export function formatUsd(t: (key: SpendKey, params?: Record<string, unknown>) => string, value: number): string {
+export function formatUsd(t: (key: SessionInfoKey, params?: Record<string, unknown>) => string, value: number): string {
   return t('money.usd', { amount: USD.format(value) })
 }
 
@@ -30,7 +30,7 @@ export function formatUsd(t: (key: SpendKey, params?: Record<string, unknown>) =
  * @returns the localized amount string or the no-limit wording.
  */
 export function formatUsdOptional(
-  t: (key: SpendKey, params?: Record<string, unknown>) => string,
+  t: (key: SessionInfoKey, params?: Record<string, unknown>) => string,
   value: number | null,
 ): string {
   return value === null ? t('money.none') : formatUsd(t, value)
