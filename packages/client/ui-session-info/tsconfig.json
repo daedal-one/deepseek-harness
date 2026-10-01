@@ -36,6 +36,9 @@
       "path": "../../llm/openrouter-spend"
     },
     {
+      "path": "../../api/session-info"
+    },
+    {
       "path": "../../core/session"
     }
   ]

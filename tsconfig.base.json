@@ -53,6 +53,7 @@
       "@deepseek-ai/dsh-api-session-controller/client": ["./packages/api/session-controller/src/client/index.ts"],
       "@deepseek-ai/dsh-api-session-controller/types": ["./packages/api/session-controller/src/types.ts"],
       "@deepseek-ai/dsh-openrouter-spend/types": ["./packages/llm/openrouter-spend/src/types.ts"],
+      "@deepseek-ai/dsh-session-info/types": ["./packages/api/session-info/src/types.ts"],
       "@deepseek-ai/dsh-api-session-controller/remote-events": ["./packages/api/session-controller/src/remote-events.ts"],
       "@deepseek-ai/dsh-api-settings-controller": ["./packages/api/settings-controller/src/index.ts"],
       "@deepseek-ai/dsh-api-settings-controller/types": ["./packages/api/settings-controller/src/types.ts"],
@@ -273,8 +274,8 @@
       "@deepseek-ai/dsh-local-container-runtime/vm-previews": ["./packages/sandbox/local-container-runtime/src/vm-previews.ts"],
       "@deepseek-ai/dsh-local-container-runtime/workspaces": ["./packages/sandbox/local-container-runtime/src/workspaces.ts"],
       "@deepseek-ai/dsh-local-container-runtime/workspace-types": ["./packages/sandbox/local-container-runtime/src/workspace-types.ts"],
-      // ui-openrouter-spend carries the client-ui npm prefix its directory omits.
-      "@deepseek-ai/dsh-client-ui-openrouter-spend": ["./packages/client/ui-openrouter-spend/src"],
+      // ui-session-info carries the client-ui npm prefix its directory omits.
+      "@deepseek-ai/dsh-client-ui-session-info": ["./packages/client/ui-session-info/src"],
       // BEGIN generated package aliases — pnpm run gen-tsconfig-paths
       "@deepseek-ai/dsh-acp": ["./packages/acp/acp/src"],
       "@deepseek-ai/dsh-acp-app": ["./packages/bundle/acp-app/src"],
@@ -395,6 +396,7 @@
       "@deepseek-ai/dsh-session-format-v0-to-v1": ["./packages/session/session-format-v0-to-v1/src"],
       "@deepseek-ai/dsh-session-format-v1-to-v2": ["./packages/session/session-format-v1-to-v2/src"],
       "@deepseek-ai/dsh-session-format-v2-to-v3": ["./packages/session/session-format-v2-to-v3/src"],
+      "@deepseek-ai/dsh-session-info": ["./packages/api/session-info/src"],
       "@deepseek-ai/dsh-session-log-deepseek": ["./packages/session/session-log-deepseek/src"],
       "@deepseek-ai/dsh-session-log-deepseek/invariant": ["./packages/session/session-log-deepseek/src/invariant.ts"],
       "@deepseek-ai/dsh-session-log-export": ["./packages/session-query/session-log-export/src"],

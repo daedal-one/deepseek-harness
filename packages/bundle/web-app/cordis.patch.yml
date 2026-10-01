@@ -119,6 +119,11 @@
       config:
         credentialRef: OPENROUTER_API_KEY
 
+    # Session identity, workspace, execution environment, and effective
+    # command-authorization policy for the Web Info view.
+    - id: session-info
+      name: '@deepseek-ai/dsh-session-info'
+
     # Session commands, cold reads, and live control over Typert Remote.
     - id: session-controller
       name: '@deepseek-ai/dsh-api-session-controller'
@@ -377,5 +382,5 @@
     - id: ui-trajectory
       name: '@deepseek-ai/dsh-client-ui-trajectory'
 
-    - id: ui-openrouter-spend
-      name: '@deepseek-ai/dsh-client-ui-openrouter-spend'
+    - id: ui-session-info
+      name: '@deepseek-ai/dsh-client-ui-session-info'

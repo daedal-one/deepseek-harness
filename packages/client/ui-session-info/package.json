@@ -1,6 +1,6 @@
 {
-  "name": "@deepseek-ai/dsh-client-ui-openrouter-spend",
-  "description": "Spend conversation view: the OpenRouter key's spend and limit plus the current session's estimated USD cost, read from the Host openrouterSpend Remote",
+  "name": "@deepseek-ai/dsh-client-ui-session-info",
+  "description": "Info conversation view: the Session's identity, workspace, execution environment, command-authorization policy, and OpenRouter spend, read from the Host sessionInfo and openrouterSpend Remotes",
   "version": "0.1.5-alpha.2",
   "publishConfig": {
     "access": "public"
@@ -8,7 +8,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
-    "directory": "packages/client/ui-openrouter-spend"
+    "directory": "packages/client/ui-session-info"
   },
   "type": "module",
   "main": "lib/index.js",
@@ -56,6 +56,7 @@
     "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
     "@deepseek-ai/dsh-openrouter-spend": "workspace:^",
     "@deepseek-ai/dsh-session": "workspace:^",
+    "@deepseek-ai/dsh-session-info": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^",
     "@testing-library/react": "^16.1.0",
     "@types/react": "~18.3.1",

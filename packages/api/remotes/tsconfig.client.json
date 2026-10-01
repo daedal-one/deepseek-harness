@@ -58,6 +58,9 @@
       "path": "../../llm/openrouter-spend"
     },
     {
+      "path": "../../api/session-info"
+    },
+    {
       "path": "../../preset/agent-presets"
     },
     {

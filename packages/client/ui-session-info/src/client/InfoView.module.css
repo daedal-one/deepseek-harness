@@ -1,4 +1,4 @@
-/* Spend view: a two-block projection of one Host reading. */
+/* Info view: sectioned Session, workspace, environment, policy, and spend facts. */
 .root {
   display: flex;
   flex-direction: column;
@@ -129,4 +129,29 @@
 
 .refresh:hover {
   border-color: var(--dsw-alias-border-l4);
+}
+
+.block h3,
+.block > h3 {
+  margin: 12px 0 8px;
+  font-size: 0.85em;
+  font-weight: 600;
+}
+
+.blockHeader h3 {
+  margin: 0;
+}
+
+.muted {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.spendSession {
+  margin-top: 12px;
+}
+
+.spendSession h3 {
+  margin: 0 0 4px;
+  font-size: 0.85em;
+  font-weight: 600;
 }
