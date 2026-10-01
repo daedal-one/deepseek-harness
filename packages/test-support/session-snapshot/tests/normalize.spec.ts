@@ -444,6 +444,29 @@ describe('normalizeSessionLog', () => {
     expect(out).toContain('"decision":"block"') // the decision is the behavior — kept
   })
 
+  it('normalizes only operation record-level elapsed clocks and preserves semantic elapsedMs values', () => {
+    const records = [
+      {
+        type: 'operation/step-result', seq: 2, time: 5,
+        data: { elapsedMs: 37, value: { elapsedMs: 91 }, rendered: [{ type: 'text', text: '{"elapsedMs":91}' }] },
+      },
+      {
+        type: 'operation/judgment-result', seq: 3, time: 6,
+        data: { elapsedMs: 42, response: { usage: { elapsedMs: 73 } } },
+      },
+      { type: 'tool/result', seq: 4, time: 7, data: { elapsedMs: 88, value: { elapsedMs: 99 } } },
+    ]
+    const normalized = normalizeSessionLog(
+      `${header({})}\n${records.map(record => JSON.stringify(record)).join('\n')}\n`,
+      ctx,
+    ).trimEnd().split('\n').slice(1).map(line => JSON.parse(line) as { data: Record<string, unknown> })
+
+    expect(normalized[0]?.data).toMatchObject({ elapsedMs: 0, value: { elapsedMs: 91 } })
+    expect(normalized[0]?.data.rendered).toEqual([{ type: 'text', text: '{"elapsedMs":91}' }])
+    expect(normalized[1]?.data).toMatchObject({ elapsedMs: 0, response: { usage: { elapsedMs: 73 } } })
+    expect(normalized[2]?.data).toEqual({ elapsedMs: 88, value: { elapsedMs: 99 } })
+  })
+
   it('preserves a packed chunk row\'s sequence, zeroes time, and zeroes volatile dt gaps', () => {
     const row = JSON.stringify({
       type: 'text-chunks', seq0: 7, time0: 999,
@@ -676,6 +699,26 @@ describe('normalizeSessionSnapshot', () => {
       records[4],
     ].map(record => JSON.stringify(record)).join('\n') + '\n')
     expect(normalizeSessionSnapshot(normalized, ctx)).toBe(normalized)
+  })
+
+  it('shares operation identity mapping across session records and embedded run_operation JSON', () => {
+    const runId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    const requestId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+    const unrelated = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+    const raw = [
+      { type: 'session', id: 'root' },
+      { type: 'operation/run-start', data: { runId, rootCallId: 'outer', plan: { inputs: { source: unrelated } } } },
+      { type: 'operation/judgment-request', data: { runId, request: { draft: { id: requestId, state: { source: unrelated } } } } },
+      { type: 'operation/judgment-result', data: { runId, requestId, elapsedMs: 29, response: { usage: { elapsedMs: 81 } } } },
+      { type: 'tool/result', data: { content: [{ type: 'text', text: JSON.stringify({ runId, status: 'completed', source: unrelated }) }] } },
+    ].map(record => JSON.stringify(record)).join('\n') + '\n'
+
+    const [normalized] = normalizeSessionSnapshots([raw], { sessionIds: [], cwd: '/unused' })
+    expect(normalized).toContain('"runId":"{{operation:1}}"')
+    expect(normalized).toContain('"requestId":"{{judgment:1}}"')
+    expect(normalized).toContain('\\"runId\\":\\"{{operation:1}}\\"')
+    expect(normalized).toContain(`\\"source\\":\\"${unrelated}\\"`)
+    expect(normalized).toContain('"elapsedMs":0,"response":{"usage":{"elapsedMs":81}}')
   })
 
   it('migrates and re-packs multi-session fixtures after relationship-preserving id redaction', () => {

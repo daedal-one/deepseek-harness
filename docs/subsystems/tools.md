@@ -204,6 +204,14 @@ interface ToolExecutionInput {
   readonly parent?: ToolExecutionToken
   /** Required caller-owned cancellation for this invocation. */
   readonly signal: AbortSignal
+  /**
+   * Optional trusted exact-definition constraint for composite consumers that
+   * admitted a definition before asynchronous policy. The registry captures it
+   * privately, rechecks it at the body boundary, and permits at most one body
+   * attempt for the constrained execution. Ordinary calls omit this field and
+   * retain existing around-wrapper retry behavior.
+   */
+  readonly dispatchConstraint?: ToolDispatchConstraint
 }
 ```
 
@@ -286,7 +294,7 @@ interface PtcDispatchLog {
  * readonly. The registry freezes the complete object before `tools/result`
  * observers run.
  */
-interface ToolExecution extends ToolExecutionInput {
+interface ToolExecution extends Omit<ToolExecutionInput, 'dispatchConstraint'> {
   /** Root model-requested call, resolved for every root and nested execution. */
   readonly rootCallId: ToolCallId
   /** Registry-assigned identity shared with nested calls only as their opaque `parent` token. */
@@ -473,6 +481,103 @@ The full presentation field docs live in [`packages/core/tools/src/presentation.
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxoperationjudgments--operationjudgmentregistry"></a>
+
+### `ctx.operationJudgments` — `OperationJudgmentRegistry`
+
+Narrow provider and tokenizer service seam used by the sequential runner.
+
+```ts cordis-catalog
+/**
+
+ * Register the sole ranking provider for this composition.
+
+ * @param provider Provider with pinned identity.
+
+ * @returns Disposer removing this exact provider.
+
+ */
+registerProvider(provider: OperationJudgmentProvider): () => void
+
+/**
+
+ * Return the configured provider or fail before any operation effect.
+
+ * @returns The sole configured ranking provider.
+
+ */
+requireProvider(): OperationJudgmentProvider
+
+/**
+
+ * Register one exact tokenizer hook.
+
+ * @param tokenizer Tokenizer implementation.
+
+ * @returns Disposer removing this exact tokenizer.
+
+ */
+registerTokenizer(tokenizer: OperationTokenizer): () => void
+
+/**
+
+ * Resolve an exact configured tokenizer hook.
+
+ * @param id Tokenizer identity requested by provider configuration.
+
+ * @returns Matching tokenizer.
+
+ */
+requireTokenizer(id: string): OperationTokenizer
+```
+
+Source: [`packages/experimental/operation/src/judgment.ts`](../../packages/experimental/operation/src/judgment.ts)
+
+<a id="ctxoperations--operationservice"></a>
+
+### `ctx.operations` — `OperationService`
+
+Cordis service exposing the operation runner and provider registration seam.
+
+```ts cordis-catalog
+/**
+
+ * Register the single configured judgment provider.
+
+ * @param provider Bounded ranking provider.
+
+ * @returns Disposer removing this exact provider.
+
+ */
+registerJudgmentProvider(provider: OperationJudgmentProvider): () => void
+
+/**
+
+ * Register one exact tokenizer provider available to CLM adapters.
+
+ * @param tokenizer Tokenizer hook.
+
+ * @returns Disposer removing this exact tokenizer.
+
+ */
+registerTokenizer(tokenizer: OperationTokenizer): () => void
+
+/**
+
+ * Execute one operation under the outer tool lifecycle.
+
+ * @param exec Outer tool execution.
+
+ * @param plan Raw plan.
+
+ * @returns Non-failure terminal summary.
+
+ */
+async run(exec: ToolRunContext, plan: unknown): Promise<OperationSummary>
+```
+
+Source: [`packages/experimental/operation/src/index.ts`](../../packages/experimental/operation/src/index.ts)
+
 <a id="ctxtools--toolruntime"></a>
 
 ### `ctx.tools` — `ToolRuntime`
@@ -534,6 +639,18 @@ guard(guard: ToolGuard): () => void
 get(name: string, scope?: ScopeKey): ToolDefinition | undefined
 
 /**
+ * Resolve a definition against the same visibility, deferred-discovery, and
+ * presentation-collapse rules the execution pipeline will apply, without
+ * entering policy or dispatch. Composite consumers use this only for
+ * fail-closed admission and must recheck before their following dispatch.
+ * @param name - registered tool name to inspect.
+ * @param agent - calling agent whose scoped visibility and discovery admission apply.
+ * @param nested - whether the planned call is a composite sub-dispatch.
+ * @returns the currently executable definition, or undefined when unavailable.
+ */
+admitted(name: string, agent: Agent | undefined, nested: boolean): ToolDefinition | undefined
+
+/**
  * Project the authorized registry inventory onto schema fields, excluding
  * execution and presentation callbacks. Includes undiscovered definitions;
  * model requests and program bindings additionally apply Session admission.
@@ -562,13 +679,14 @@ executionMode(exec: ToolExecutionInput): ToolExecutionMode
  * successful started outcome with `ABORTED`; already-started work is still
  * drained and may retain a tool-owned structured error.
  * @param exec - the typed same-process call input. The registry assigns its
- *   correlation token before policy begins.
+ *   correlation token before policy begins. An optional dispatch constraint
+ *   is captured privately and can only narrow the eventual body invocation.
  * @returns the materialized final result.
  */
 async execute(exec: ToolExecutionInput): Promise<ToolExecutionResult>
 ```
 
-Types: [ScopeKey](scope.md)
+Types: [Agent](core.md) · [ScopeKey](scope.md)
 
 Source: [`packages/core/tools/src/index.ts`](../../packages/core/tools/src/index.ts)
 

@@ -1,0 +1,17 @@
+# Authored read-only acceptance fixture over the shipped SDK profile.
+- id: skill-filesystem
+  name: '@deepseek-ai/dsh-skill-filesystem'
+  config:
+    includeDefaultRoots: false
+
+- id: session-persistence-jsonl
+  name: '@deepseek-ai/dsh-session-persistence-jsonl'
+  config:
+    root: !!js dshHomePath('sessions')
+    compression: none
+
+- insert:
+    - id: operations
+      name: '../../../packages/experimental/operation/lib/index.js'
+    - id: operation-sdk-fixture
+      name: '../../../packages/experimental/operation/tests/fixtures/profile.ts'

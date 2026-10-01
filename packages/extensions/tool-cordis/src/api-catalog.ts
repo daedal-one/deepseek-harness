@@ -1712,6 +1712,72 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'operationJudgments',
+    summary: 'Narrow provider and tokenizer service seam used by the sequential runner.',
+    description: 'Narrow provider and tokenizer service seam used by the sequential runner.',
+    methods: [
+      {
+        signature: 'registerProvider(provider: OperationJudgmentProvider): () => void',
+        description: 'Register the sole ranking provider for this composition.',
+        parameters: [{ name: 'provider', description: 'Provider with pinned identity.' }],
+        returns: 'Disposer removing this exact provider.',
+      },
+      {
+        signature: 'requireProvider(): OperationJudgmentProvider',
+        description: 'Return the configured provider or fail before any operation effect.',
+        parameters: [],
+        returns: 'The sole configured ranking provider.',
+      },
+      {
+        signature: 'registerTokenizer(tokenizer: OperationTokenizer): () => void',
+        description: 'Register one exact tokenizer hook.',
+        parameters: [{ name: 'tokenizer', description: 'Tokenizer implementation.' }],
+        returns: 'Disposer removing this exact tokenizer.',
+      },
+      {
+        signature: 'requireTokenizer(id: string): OperationTokenizer',
+        description: 'Resolve an exact configured tokenizer hook.',
+        parameters: [{ name: 'id', description: 'Tokenizer identity requested by provider configuration.' }],
+        returns: 'Matching tokenizer.',
+      },
+    ],
+  },
+  {
+    key: 'operations',
+    summary: 'Cordis service exposing the operation runner and provider registration seam.',
+    description: 'Cordis service exposing the operation runner and provider registration seam.',
+    methods: [
+      {
+        signature: 'readonly judgments: OperationJudgmentRegistry',
+        description: 'Narrow ranking provider registry owned by this operation composition.',
+        parameters: [],
+      },
+      {
+        signature: 'readonly toolPolicies: OperationToolPolicyRegistry',
+        description: 'Trusted operation eligibility keyed by exact registered tool definition.',
+        parameters: [],
+      },
+      {
+        signature: 'registerJudgmentProvider(provider: OperationJudgmentProvider): () => void',
+        description: 'Register the single configured judgment provider.',
+        parameters: [{ name: 'provider', description: 'Bounded ranking provider.' }],
+        returns: 'Disposer removing this exact provider.',
+      },
+      {
+        signature: 'registerTokenizer(tokenizer: OperationTokenizer): () => void',
+        description: 'Register one exact tokenizer provider available to CLM adapters.',
+        parameters: [{ name: 'tokenizer', description: 'Tokenizer hook.' }],
+        returns: 'Disposer removing this exact tokenizer.',
+      },
+      {
+        signature: 'async run(exec: ToolRunContext, plan: unknown): Promise<OperationSummary>',
+        description: 'Execute one operation under the outer tool lifecycle.',
+        parameters: [{ name: 'exec', description: 'Outer tool execution.' }, { name: 'plan', description: 'Raw plan.' }],
+        returns: 'Non-failure terminal summary.',
+      },
+    ],
+  },
+  {
     key: 'permissionPresets',
     summary: 'Owns the deployment\'s permission presets and their write path.',
     description: 'Owns the deployment\'s permission presets and their write path. Requires a confining `ctx.shell` executor and `ctx.approval`; unmatched knob values are reported as CUSTOM_PRESET, not an error.',
@@ -3094,6 +3160,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the definition the scope resolves, or undefined when none is visible.',
       },
       {
+        signature: 'admitted(name: string, agent: Agent | undefined, nested: boolean): ToolDefinition | undefined',
+        description: 'Resolve a definition against the same visibility, deferred-discovery, and presentation-collapse rules the execution pipeline will apply, without entering policy or dispatch. Composite consumers use this only for fail-closed admission and must recheck before their following dispatch.',
+        parameters: [{ name: 'name', description: 'registered tool name to inspect.' }, { name: 'agent', description: 'calling agent whose scoped visibility and discovery admission apply.' }, { name: 'nested', description: 'whether the planned call is a composite sub-dispatch.' }],
+        returns: 'the currently executable definition, or undefined when unavailable.',
+      },
+      {
         signature: 'schemas(scope?: ScopeKey): ToolSchema[]',
         description: 'Project the authorized registry inventory onto schema fields, excluding execution and presentation callbacks. Includes undiscovered definitions; model requests and program bindings additionally apply Session admission.',
         parameters: [{ name: 'scope', description: 'the viewing scope (the agent); omitted = the global view.' }],
@@ -3108,7 +3180,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       {
         signature: 'async execute(exec: ToolExecutionInput): Promise<ToolExecutionResult>',
         description: 'Execute through pre-policy, guards, around-dispatch, post-policy, definition-owned content finalization, and final notification. Tool and listener failures resolve as materialized error results; an invisible tool reports `UNKNOWN_TOOL`. The returned outcome is the same lossless, frozen snapshot final observers receive. Cancellation arriving after entry and before final result materialization skips a not-yet-started body with `ABORTED_BEFORE_DISPATCH` or replaces a successful started outcome with `ABORTED`; already-started work is still drained and may retain a tool-owned structured error.',
-        parameters: [{ name: 'exec', description: 'the typed same-process call input. The registry assigns its correlation token before policy begins.' }],
+        parameters: [{ name: 'exec', description: 'the typed same-process call input. The registry assigns its correlation token before policy begins. An optional dispatch constraint is captured privately and can only narrow the eventual body invocation.' }],
         returns: 'the materialized final result.',
       },
     ],
@@ -5418,6 +5490,82 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface OneShotSubagentDescriptorData extends SubagentDescriptorBase {\n    readonly mode: \'one-shot\';\n    readonly label?: string;\n}',
   },
   {
+    name: 'OperationActionCandidate',
+    declaration: 'export interface OperationActionCandidate {\n    readonly id: OperationCandidateId;\n    readonly kind: \'continue\' | \'needs-replan\' | \'stop\' | \'complete\';\n    readonly nextStep?: string;\n    readonly arguments?: JsonValue;\n    readonly source?: OperationObservation;\n    readonly description: string;\n}',
+  },
+  {
+    name: 'OperationAssertionResult',
+    declaration: 'export interface OperationAssertionResult {\n    readonly index: number;\n    readonly passed: boolean;\n    readonly reason: string;\n}',
+  },
+  {
+    name: 'OperationCandidateId',
+    declaration: 'export type OperationCandidateId = Branded<\'OperationCandidateId\'>;',
+  },
+  {
+    name: 'OperationDeploymentManifestVerification',
+    declaration: 'export interface OperationDeploymentManifestVerification {\n    readonly reference: string;\n    readonly digest: string;\n}',
+  },
+  {
+    name: 'OperationJudgmentDraft',
+    declaration: 'export interface OperationJudgmentDraft {\n    readonly id: OperationJudgmentRequestId;\n    readonly runId: OperationRunId;\n    readonly kind: \'continuation\' | \'completion\';\n    readonly state: JsonValue;\n    readonly question: string;\n    readonly candidates: readonly OperationActionCandidate[];\n}',
+  },
+  {
+    name: 'OperationJudgmentIdentity',
+    declaration: 'export interface OperationJudgmentIdentity {\n    readonly provider: string;\n    readonly model: string;\n    readonly encoder: string;\n    readonly tokenizer: string;\n    readonly serialization: string;\n    readonly deployment: string;\n    readonly deploymentManifest?: OperationDeploymentManifestVerification;\n    readonly calibrationId?: string;\n    readonly configurationDigest?: string;\n}',
+  },
+  {
+    name: 'OperationJudgmentProvider',
+    declaration: 'export interface OperationJudgmentProvider {\n    readonly identity: OperationJudgmentIdentity;\n    prepare(draft: OperationJudgmentDraft, signal: AbortSignal): Promise<OperationPreparedJudgment>;\n    rank(prepared: OperationPreparedJudgment, signal: AbortSignal): Promise<OperationJudgmentResponse>;\n}',
+  },
+  {
+    name: 'OperationJudgmentRegistry',
+    declaration: 'export class OperationJudgmentRegistry extends Service {\n    constructor(ctx: Context);\n    registerProvider(provider: OperationJudgmentProvider): () => void;\n    requireProvider(): OperationJudgmentProvider;\n    registerTokenizer(tokenizer: OperationTokenizer): () => void;\n    requireTokenizer(id: string): OperationTokenizer;\n}',
+  },
+  {
+    name: 'OperationJudgmentRequestId',
+    declaration: 'export type OperationJudgmentRequestId = Branded<\'OperationJudgmentRequestId\'>;',
+  },
+  {
+    name: 'OperationJudgmentResponse',
+    declaration: 'export interface OperationJudgmentResponse {\n    readonly requestId: OperationJudgmentRequestId;\n    readonly identity: OperationJudgmentIdentity;\n    readonly probabilities: Readonly<Record<string, number>>;\n    readonly usage?: {\n        readonly billingUnits: number;\n        readonly inputTokens: number;\n        readonly outputTokens: number;\n    };\n    readonly providerConfidence?: number;\n    readonly wire?: JsonValue;\n    readonly providerLatencyMs?: number;\n}',
+  },
+  {
+    name: 'OperationObservation',
+    declaration: 'export interface OperationObservation {\n    readonly step: string;\n    readonly pointer: string;\n    readonly value: JsonValue;\n}',
+  },
+  {
+    name: 'OperationPreparedJudgment',
+    declaration: 'export interface OperationPreparedJudgment {\n    readonly draft: OperationJudgmentDraft;\n    readonly wire: JsonValue;\n    readonly encoding?: {\n        readonly maxTokensPerText: number;\n        readonly inputs: readonly {\n            readonly text: string;\n            readonly tokens: number;\n        }[];\n    };\n    readonly inputTokens: number;\n    readonly identity: OperationJudgmentIdentity;\n}',
+  },
+  {
+    name: 'OperationRunId',
+    declaration: 'export type OperationRunId = Branded<\'OperationRunId\'>;',
+  },
+  {
+    name: 'OperationStatus',
+    declaration: 'export type OperationStatus = \'completed\' | \'needs-replan\' | \'stopped\' | \'failed\' | \'cancelled\';',
+  },
+  {
+    name: 'OperationSummary',
+    declaration: 'export interface OperationSummary {\n    readonly runId: OperationRunId;\n    readonly status: OperationStatus;\n    readonly attemptedSteps: readonly string[];\n    readonly completedSteps: readonly string[];\n    readonly reason: string;\n    readonly verification: readonly OperationAssertionResult[];\n}',
+  },
+  {
+    name: 'OperationTokenizer',
+    declaration: 'export interface OperationTokenizer {\n    readonly id: string;\n    count(text: string, signal: AbortSignal): Promise<number>;\n}',
+  },
+  {
+    name: 'OperationToolInspection',
+    declaration: 'export type OperationToolInspection = {\n    readonly kind: \'complete\';\n} | {\n    readonly kind: \'failed\';\n    readonly reason: string;\n} | {\n    readonly kind: \'incomplete\';\n    readonly reason: string;\n};',
+  },
+  {
+    name: 'OperationToolPolicy',
+    declaration: 'export interface OperationToolPolicy {\n    readonly allowOutputReferences: boolean;\n    validateArguments(this: void, args: JsonValue): void;\n    inspectResult(this: void, value: JsonValue): OperationToolInspection;\n}',
+  },
+  {
+    name: 'OperationToolPolicyRegistry',
+    declaration: 'export class OperationToolPolicyRegistry {\n    register(definition: ToolDefinition, policy: OperationToolPolicy): () => void;\n    require(definition: ToolDefinition): OperationToolPolicy;\n}',
+  },
+  {
     name: 'OptionalSessionSeq',
     declaration: 'export type OptionalSessionSeq = SessionSeq | null;',
   },
@@ -6786,6 +6934,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ToolDefinition extends ToolSchema {\n    readonly output: ToolOutputDefinition;\n    execute(args: unknown, exec: ToolRunContext): Promise<unknown>;\n    finalizeContent?(exec: Readonly<ToolExecution>, result: Readonly<ToolExecutionResult>): ContentBlock[] | undefined;\n    timeoutMs?: number;\n    isConcurrencySafe?(args: unknown): boolean;\n    presentCall?(args: unknown): ToolCallView | undefined;\n    presentResult?(args: unknown, result: ToolResult): ToolResultView | undefined;\n}',
   },
   {
+    name: 'ToolDispatchConstraint',
+    declaration: 'export interface ToolDispatchConstraint {\n    readonly expectedDefinition: ToolDefinition;\n    validate(this: void, definition: ToolDefinition, argumentsValue: JsonValue, signal: AbortSignal): void;\n}',
+  },
+  {
     name: 'ToolDispatchExecution',
     declaration: 'export interface ToolDispatchExecution extends Omit<ToolExecution, \'signal\'> {\n    signal: AbortSignal;\n}',
   },
@@ -6795,7 +6947,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ToolExecution',
-    declaration: 'export interface ToolExecution extends ToolExecutionInput {\n    readonly rootCallId: ToolCallId;\n    readonly token: ToolExecutionToken;\n}',
+    declaration: 'export interface ToolExecution extends Omit<ToolExecutionInput, \'dispatchConstraint\'> {\n    readonly rootCallId: ToolCallId;\n    readonly token: ToolExecutionToken;\n}',
   },
   {
     name: 'ToolExecutionFailure',
@@ -6803,7 +6955,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ToolExecutionInput',
-    declaration: 'export interface ToolExecutionInput {\n    readonly callId: ToolCallId;\n    readonly rootCallId?: ToolCallId;\n    readonly name: string;\n    readonly arguments: unknown;\n    readonly agent?: Agent;\n    readonly parent?: ToolExecutionToken;\n    readonly signal: AbortSignal;\n}',
+    declaration: 'export interface ToolExecutionInput {\n    readonly callId: ToolCallId;\n    readonly rootCallId?: ToolCallId;\n    readonly name: string;\n    readonly arguments: unknown;\n    readonly agent?: Agent;\n    readonly parent?: ToolExecutionToken;\n    readonly signal: AbortSignal;\n    readonly dispatchConstraint?: ToolDispatchConstraint;\n}',
   },
   {
     name: 'ToolExecutionMode',
@@ -6899,7 +7051,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ToolRuntime',
-    declaration: 'export class ToolRuntime extends Service {\n    static inject;\n    static Config: z<Config>;\n    readonly [TOOL_RUNTIME_SCHEDULER]: ToolRuntimeScheduler;\n    constructor(ctx: Context, config: Config = {});\n    presentAs(mode: ToolPresentationMode): () => void;\n    register(definition: ToolDefinition): () => void;\n    restrict(filter: ToolRestriction): () => void;\n    guard(guard: ToolGuard): () => void;\n    get(name: string, scope?: ScopeKey): ToolDefinition | undefined;\n    schemas(scope?: ScopeKey): ToolSchema[];\n    executionMode(exec: ToolExecutionInput): ToolExecutionMode;\n    async execute(exec: ToolExecutionInput): Promise<ToolExecutionResult>;\n}',
+    declaration: 'export class ToolRuntime extends Service {\n    static inject;\n    static Config: z<Config>;\n    readonly [TOOL_RUNTIME_SCHEDULER]: ToolRuntimeScheduler;\n    constructor(ctx: Context, config: Config = {});\n    presentAs(mode: ToolPresentationMode): () => void;\n    register(definition: ToolDefinition): () => void;\n    restrict(filter: ToolRestriction): () => void;\n    guard(guard: ToolGuard): () => void;\n    get(name: string, scope?: ScopeKey): ToolDefinition | undefined;\n    admitted(name: string, agent: Agent | undefined, nested: boolean): ToolDefinition | undefined;\n    schemas(scope?: ScopeKey): ToolSchema[];\n    executionMode(exec: ToolExecutionInput): ToolExecutionMode;\n    async execute(exec: ToolExecutionInput): Promise<ToolExecutionResult>;\n}',
   },
   {
     name: 'ToolRuntimeScheduler',

@@ -843,6 +843,176 @@ export interface InspectorOptions {
 
 Source: [`packages/experimental/inspector/src/index.ts:66`](../packages/experimental/inspector/src/index.ts)
 
+<a id="deepseek-aidsh-experimental-operation"></a>
+
+## `@deepseek-ai/dsh-experimental-operation`
+
+Requires: `tools` · `sessions`
+
+```ts config-catalog
+/**
+
+ * Deployment configuration accepted by the operation service.
+
+ */
+export interface OperationConfig extends Partial<OperationLimits> {
+  /**
+   * Additional fixed tool names that operation plans may never dispatch.
+   */
+  forbiddenTools?: string[]
+}
+
+/**
+
+ * Fully resolved deployment limits frozen in every run-start event.
+
+ */
+export interface OperationLimits {
+  /**
+   * Maximum canonical bytes of the submitted plan.
+   */
+  readonly maxPlanBytes: number
+  /**
+   * Maximum finite sequential step count.
+   */
+  readonly maxSteps: number
+  /**
+   * Maximum wall-clock duration for the whole run.
+   */
+  readonly maxWallMs: number
+  /**
+   * Maximum cooperative deadline for one tool dispatch.
+   */
+  readonly maxToolDeadlineMs: number
+  /**
+   * Maximum cooperative deadline for one judgment request.
+   */
+  readonly maxJudgmentDeadlineMs: number
+  /**
+   * Maximum tool calls accepted by one run.
+   */
+  readonly maxToolCalls: number
+  /**
+   * Maximum judgment calls accepted by one run.
+   */
+  readonly maxJudgments: number
+  /**
+   * Maximum bytes in one canonical successful result.
+   */
+  readonly maxResultBytes: number
+  /**
+   * Maximum bytes in one complete selected observation.
+   */
+  readonly maxObservationBytes: number
+  /**
+   * Maximum supplied complete action candidates.
+   */
+  readonly maxCandidates: number
+  /**
+   * Maximum bytes in one candidate action description.
+   */
+  readonly maxCandidateBytes: number
+  /**
+   * Maximum exact input tokens admitted across judgment requests.
+   */
+  readonly maxJudgmentInputTokens: number
+  /**
+   * Maximum provider-reported output tokens admitted across judgment requests.
+   */
+  readonly maxJudgmentOutputTokens: number
+  /**
+   * Minimum top probability required for an autonomous continuation.
+   */
+  readonly minimumProbability: number
+  /**
+   * Minimum top-minus-runner-up probability required for an autonomous continuation.
+   */
+  readonly minimumMargin: number
+  /**
+   * Whether provider identity must carry a calibration identifier.
+   */
+  readonly requireCalibration: boolean
+}
+```
+
+Source: [`packages/experimental/operation/src/runner.ts:51`](../packages/experimental/operation/src/runner.ts)
+
+<a id="deepseek-aidsh-experimental-operation-clm"></a>
+
+## `@deepseek-ai/dsh-experimental-operation-clm`
+
+Requires: `operations`
+
+```ts config-catalog
+/**
+
+ * CLM adapter configuration before defaults are resolved.
+
+ */
+export interface Config {
+  /**
+   * Exact absolute CLM System One endpoint.
+   */
+  endpoint: string
+  /**
+   * Exact tokenizer hook registered on `ctx.operations`.
+   */
+  tokenizerId: string
+  /**
+   * Immutable ranking model identity sent to CLM and pinned locally.
+   */
+  model: string
+  /**
+   * Immutable encoder identity recorded locally.
+   */
+  encoder: string
+  /**
+   * Immutable deployment digest recorded locally.
+   */
+  deployment: string
+  /**
+   * Local manifest reference and digest required for autonomous execution.
+   */
+  deploymentManifest?: OperationDeploymentManifestVerification
+  /**
+   * Optional calibration artifact identity.
+   */
+  calibrationId?: string
+  /**
+   * Optional credential reference resolved through `ctx.credentials` per request.
+   */
+  credentialRef?: string
+  /**
+   * Optional provider route identity.
+   */
+  providerId?: string
+  /**
+   * Pinned serialization recipe identity; other recipes are not implemented.
+   */
+  serialization?: typeof CLM_SERIALIZATION
+  /**
+   * Required CLM softmax temperature.
+   */
+  temperature: number
+  /**
+   * Reviewed server encoder ceiling, counted with the exact deployed tokenizer including special tokens.
+   */
+  maxEncoderTokens: number
+  /**
+   * Optional per-request deadline.
+   */
+  timeoutMs?: number
+  /**
+   * Optional complete response body cap.
+   */
+  maxResponseBytes?: number
+}
+```
+
+Depends on: [`OperationDeploymentManifestVerification`](../packages/experimental/operation/src/index.ts)
+
+Source: [`packages/experimental/operation-clm/src/index.ts:37`](../packages/experimental/operation-clm/src/index.ts)
+
 <a id="deepseek-aidsh-experimental-tool-agent-team"></a>
 
 ## `@deepseek-ai/dsh-experimental-tool-agent-team`
@@ -3858,7 +4028,7 @@ export interface ToolDiscoveryConfig {
 export type ToolPresentationMode = 'native' | 'ptc' | 'both'
 ```
 
-Source: [`packages/core/tools/src/index.ts:651`](../packages/core/tools/src/index.ts)
+Source: [`packages/core/tools/src/index.ts:676`](../packages/core/tools/src/index.ts)
 
 <a id="deepseek-aidsh-typert-loader"></a>
 

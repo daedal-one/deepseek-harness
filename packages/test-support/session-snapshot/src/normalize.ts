@@ -376,6 +376,11 @@ export function normalizeSessionLog(
       const data = record.data as Record<string, unknown>
       if ('durationMs' in data) data.durationMs = 0
     }
+    if ((record.type === 'operation/step-result' || record.type === 'operation/judgment-result')
+      && record.data !== null && typeof record.data === 'object') {
+      const data = record.data as Record<string, unknown>
+      if ('elapsedMs' in data) data.elapsedMs = 0
+    }
     normalizeFeedbackClocks(record)
     if (record.type === 'goal/change' && record.data !== null && typeof record.data === 'object') {
       const data = record.data as Record<string, unknown>

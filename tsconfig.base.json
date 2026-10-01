@@ -264,6 +264,8 @@
       "@deepseek-ai/dsh-experimental-inspector": ["./packages/experimental/inspector/src"],
       "@deepseek-ai/dsh-experimental-inspector/client": ["./packages/experimental/inspector/src/client/index.ts"],
       "@deepseek-ai/dsh-experimental-code-runtime-python": ["./packages/experimental/code-runtime-python/src"],
+      "@deepseek-ai/dsh-experimental-operation": ["./packages/experimental/operation/src"],
+      "@deepseek-ai/dsh-experimental-operation-clm": ["./packages/experimental/operation-clm/src"],
       "@deepseek-ai/dsh-util-crypto": ["./packages/util/crypto/src"],
       "@deepseek-ai/dsh-util-values": ["./packages/util/values/src"],
       // util/ folders are role-named without the util- prefix their npm names carry,

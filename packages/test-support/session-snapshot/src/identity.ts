@@ -2,10 +2,10 @@
 
 const UUID_FRAGMENT_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
 const LEGACY_TOKEN_RE = /^\{\{(?:sessionId|messageId)\}\}$/
-const CANONICAL_TOKEN_RE = /^\{\{(session|message|approval|workflow|command|rpc|retry|id):([1-9]\d*)\}\}$/
+const CANONICAL_TOKEN_RE = /^\{\{(session|message|approval|workflow|operation|judgment|call|command|rpc|retry|id):([1-9]\d*)\}\}$/
 const ID_KEY_RE = /(?:^id$|Id$|Ids$)/
 
-type IdentityKind = 'session' | 'message' | 'approval' | 'workflow' | 'command' | 'rpc' | 'retry' | 'id'
+type IdentityKind = 'session' | 'message' | 'approval' | 'workflow' | 'operation' | 'judgment' | 'call' | 'command' | 'rpc' | 'retry' | 'id'
 
 interface ParsedLog {
   readonly records: Record<string, unknown>[]
@@ -69,6 +69,26 @@ export function redactSessionSnapshotIds(logs: readonly string[]): string[] {
     if (header?.type === 'session') claim(header.id, 'session', true)
   }
 
+  const collectOperation = (record: Record<string, unknown>): void => {
+    if (typeof record.type !== 'string' || !record.type.startsWith('operation/') || !isRecord(record.data)) return
+    const data = record.data
+    claim(data.runId, 'operation')
+    if (record.type === 'operation/run-start') {
+      claim(data.rootCallId, 'call')
+      if (isRecord(data.caller)) {
+        claim(data.caller.sessionId, 'session')
+        claim(data.caller.callId, 'call')
+      }
+    }
+    if (record.type === 'operation/step-start' || record.type === 'operation/step-result') claim(data.callId, 'call')
+    if (record.type === 'operation/judgment-request' && isRecord(data.request) && isRecord(data.request.draft)) {
+      claim(data.request.draft.id, 'judgment')
+    }
+    if (record.type === 'operation/judgment-result' || record.type === 'operation/transition') {
+      claim(data.requestId, 'judgment')
+    }
+  }
+
   const collect = (value: unknown, recordType?: unknown): void => {
     if (typeof value === 'string') {
       for (const match of value.matchAll(/\bas message ([0-9a-f-]{36})\b/gi)) claim(match[1], 'message')
@@ -105,7 +125,8 @@ export function redactSessionSnapshotIds(logs: readonly string[]): string[] {
       if (record.type === 'feedback/message-put' && isRecord(record.data) && isRecord(record.data.item)) {
         claim(record.data.item.version, 'id')
       }
-      collect(record, record.type)
+      if (typeof record.type === 'string' && record.type.startsWith('operation/')) collectOperation(record)
+      else collect(record, record.type)
     }
   }
 

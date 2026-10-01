@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import inspect
 import sys
@@ -1171,3 +1172,186 @@ for line in sys.stdin:
         assert len(provenance) == 1
         assert len(provenance[0]["refs"]) == 2
         assert provenance[0]["createdCommits"] == ["d" * 40]
+
+
+def test_recorded_operation_records_match_the_typescript_sdk(tmp_path: Path) -> None:
+    fixture = Path(__file__).resolve().parents[3] / "snapshots/sdk/clm-operations/notifications.expected.jsonl"
+    expected_path = Path(__file__).parent / "expected/clm-operations.json"
+    script = tmp_path / "recorded_operation_runtime.py"
+    script.write_text(
+        """
+import json
+import sys
+from pathlib import Path
+
+frames = [json.loads(line) for line in Path(sys.argv[1]).read_text().splitlines()]
+for frame in frames:
+    frame["params"]["sessionId"] = "main"
+accepted = next(
+    frame["params"]["event"]["data"]["inserted"][0]["id"]
+    for frame in frames
+    if frame["method"] == "session.event"
+    and frame["params"]["event"]["type"] == "agent/inbox/spliced"
+    and frame["params"]["event"]["data"].get("inserted")
+)
+for line in sys.stdin:
+    msg = json.loads(line)
+    if msg["method"] == "initialize":
+        result = {"serverInfo": {"name": "recorded-operation-fixture"}}
+    elif msg["method"] == "session/prompt":
+        for frame in frames:
+            print(json.dumps({"jsonrpc": "2.0", **frame}), flush=True)
+        result = {"messageId": accepted}
+    else:
+        result = {}
+    print(json.dumps({"jsonrpc": "2.0", "id": msg["id"], "result": result}), flush=True)
+    if msg["method"] == "shutdown":
+        break
+""".strip()
+    )
+    seen: list[Notification] = []
+    with DeepSeekHarness(_launch_args=(sys.executable, str(script), str(fixture)), cwd=str(tmp_path)) as harness:
+        result = harness.run("verify the complete beta record", session_id="main", on_notification=seen.append)
+
+    frames = [json.loads(line) for line in fixture.read_text().splitlines()]
+    operation_frames = [
+        frame for frame in frames
+        if frame["method"] == "session.event" and frame["params"]["event"]["type"].startswith("operation/")
+    ]
+    raw_operations = [frame["params"]["event"] for frame in operation_frames]
+    actual = [event for event in result.events if event["type"].startswith("operation/")]
+    assert actual == raw_operations
+    assert [
+        notification.payload["event"]
+        for notification in seen
+        if notification.method == "session.event" and notification.payload["event"]["type"].startswith("operation/")
+    ] == raw_operations
+    assert all("ignorable" not in event for event in actual)
+
+    def fixture_digest(value: object) -> str:
+        # This fixture uses ASCII and numbers with identical Python/JS JSON spellings.
+        encoded = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
+        assert encoded.isascii()
+        return hashlib.sha256(encoded.encode("ascii")).hexdigest()
+
+    admission = actual[0]["data"]
+    run_id = admission["runId"]
+    assert all(event["data"]["runId"] == run_id for event in actual)
+    outer_call = next(
+        event["data"] for event in result.events
+        if event["type"] == "tool/call" and event["data"]["name"] == "run_operation"
+    )
+    # Only the replay transport session was remapped to main; recorded caller facts stay intact.
+    assert admission["caller"] == {
+        "sessionId": operation_frames[0]["params"]["sessionId"],
+        "callId": outer_call["callId"],
+    }
+    assert admission["rootCallId"] == outer_call["callId"]
+    assert admission["plan"] == json.loads(outer_call["arguments"])["plan"]
+    assert admission["planDigest"] == fixture_digest(admission["plan"])
+    assert admission["configurationDigest"] == fixture_digest({
+        "limits": admission["limits"],
+        "forbiddenTools": admission["configuration"]["forbiddenTools"],
+        "judgmentIdentity": admission["judgmentIdentity"],
+    })
+
+    starts = [event["data"] for event in actual if event["type"] == "operation/step-start"]
+    outcomes = [event["data"] for event in actual if event["type"] == "operation/step-result"]
+    identities = {identity["name"]: identity for identity in admission["toolIdentities"]}
+    assert len(identities) == len(starts) == len(outcomes) == 2
+    assert len({start["callId"] for start in starts}) == 2
+    assert outer_call["callId"] not in {start["callId"] for start in starts}
+    starts_by_step = {start["stepId"]: start for start in starts}
+    outcomes_by_step = {outcome["stepId"]: outcome for outcome in outcomes}
+    for identity in identities.values():
+        assert identity["schemaDigest"] == fixture_digest(identity["schemas"])
+    for start, outcome in zip(starts, outcomes):
+        assert outcome["stepId"] == start["stepId"]
+        assert outcome["callId"] == start["callId"]
+        assert outcome["schemaDigest"] == start["schemaDigest"] == identities[start["tool"]]["schemaDigest"]
+        assert start["argumentsDigest"] == fixture_digest(start["arguments"])
+        assert outcome["valueDigest"] == fixture_digest(outcome["value"])
+        assert outcome["execution"] == {"body": "started", "callerCancelled": False, "timedOut": False, "bodySignalAborted": False}
+        assert outcome["isError"] is False
+
+    request_records = [event["data"] for event in actual if event["type"] == "operation/judgment-request"]
+    requests = [record["request"] for record in request_records]
+    responses = [event["data"] for event in actual if event["type"] == "operation/judgment-result"]
+    transitions = [event["data"] for event in actual if event["type"] == "operation/transition"]
+    assert len(requests) == len(responses) == len(transitions) == 2
+    assert len({request["draft"]["id"] for request in requests}) == 2
+    assert [request["draft"]["id"] for request in requests] == [response["requestId"] for response in responses]
+    assert [request["draft"]["id"] for request in requests] == [transition["requestId"] for transition in transitions]
+    for record, response, transition in zip(request_records, responses, transitions):
+        request = record["request"]
+        draft = request["draft"]
+        assert draft["runId"] == run_id
+        assert response["response"]["requestId"] == draft["id"]
+        assert response["response"]["identity"] == request["identity"] == admission["judgmentIdentity"]
+        fingerprints = record["fingerprints"]
+        assert fingerprints["stateDigest"] == fixture_digest(draft["state"])
+        assert fingerprints["candidatesDigest"] == fixture_digest(draft["candidates"])
+        assert fingerprints["completionEvidenceDigest"] == fixture_digest(draft["state"]["completionEvidence"])
+        observed = draft["state"]["observations"]
+        candidates_with_sources = [candidate for candidate in draft["candidates"] if "source" in candidate]
+        assert len(fingerprints["observations"]) == len(observed)
+        assert len(fingerprints["candidateSources"]) == len(candidates_with_sources)
+        sources = observed + [candidate["source"] for candidate in candidates_with_sources]
+        evidence_fingerprints = fingerprints["observations"] + fingerprints["candidateSources"]
+        for source, fingerprint in zip(sources, evidence_fingerprints):
+            assert fingerprint["step"] == source["step"]
+            assert fingerprint["pointer"] == source["pointer"]
+            producer = outcomes_by_step[source["step"]]
+            selected_value = producer["value"]
+            for component in source["pointer"].split("/")[1:]:
+                # The authored paths are only /records, /records/0, /records/1, or the root.
+                assert "~" not in component
+                selected_value = selected_value[int(component)] if isinstance(selected_value, list) else selected_value[component]
+            assert source["value"] == selected_value
+            assert fingerprint["valueDigest"] == fixture_digest(selected_value)
+            assert fingerprint["resultDigest"] == fixture_digest(producer["value"]) == producer["valueDigest"]
+            assert fingerprint["schemaDigest"] == producer["schemaDigest"]
+        assert [fingerprint["candidateId"] for fingerprint in fingerprints["candidateSources"]] == [
+            candidate["id"] for candidate in candidates_with_sources
+        ]
+        selected = next(candidate for candidate in draft["candidates"] if candidate["id"] == transition["candidateId"])
+        assert transition["accepted"] is True
+        assert response["response"]["probabilities"][selected["id"]] == 1
+        if selected["kind"] == "continue":
+            next_start = starts_by_step[transition["nextStep"]]
+            assert selected["nextStep"] == next_start["stepId"]
+            assert selected["source"]["value"] == selected["arguments"] == transition["arguments"] == next_start["arguments"]
+            assert next_start["argumentsDigest"] == fixture_digest(selected["source"]["value"])
+        else:
+            assert selected["kind"] == "complete"
+            assert draft["state"]["completionEvidence"] == [outcomes[-1]["value"]]
+
+    projection = {
+        "final_response": result.final_response,
+        "finish_reason": result.finish_reason,
+        "event_types": [event["type"] for event in actual],
+        "admission": {
+            key: admission[key] for key in ("caller", "rootCallId", "planDigest", "configuration", "configurationDigest")
+        },
+        "tool_identities": [
+            {"name": identity["name"], "schemaDigest": identity["schemaDigest"]}
+            for identity in admission["toolIdentities"]
+        ],
+        "steps": [
+            {"step": start["stepId"], **{key: start[key] for key in ("tool", "arguments", "callId", "schemaDigest", "argumentsDigest")}}
+            for start in starts
+        ],
+        "canonical_results": [outcome["value"] for outcome in outcomes],
+        "executions": [
+            {key: outcome[key] for key in ("stepId", "callId", "schemaDigest", "valueDigest", "execution")}
+            for outcome in outcomes
+        ],
+        "judgment_kinds": [request["draft"]["kind"] for request in requests],
+        "judgment_fingerprints": [
+            {"requestId": record["request"]["draft"]["id"], "fingerprints": record["fingerprints"]}
+            for record in request_records
+        ],
+        "distributions": [response["response"]["probabilities"] for response in responses],
+        "terminal": {key: value for key, value in actual[-1]["data"].items() if key != "runId"},
+    }
+    assert projection == json.loads(expected_path.read_text())

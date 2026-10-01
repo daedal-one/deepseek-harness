@@ -304,6 +304,23 @@ declare const toolExecutionTokenBrand: unique symbol
 export type ToolExecutionToken = symbol & { readonly [toolExecutionTokenBrand]: true }
 
 /**
+ * Trusted same-process dispatch narrowing captured outside the plugin-visible
+ * execution object. It never grants visibility, discovery, or policy access.
+ */
+export interface ToolDispatchConstraint {
+  /** Exact definition instance that must still resolve at the body boundary. */
+  readonly expectedDefinition: ToolDefinition
+  /**
+   * Synchronous final validation after exact resolution and immediately before
+   * body invocation.
+   * @param definition Exact currently resolved definition.
+   * @param argumentsValue Frozen lossless-JSON arguments that the body will receive.
+   * @param signal Effective body signal after caller and wrapper cancellation are fused; observers may retain it through settlement.
+   */
+  validate(this: void, definition: ToolDefinition, argumentsValue: JsonValue, signal: AbortSignal): void
+}
+
+/**
  * Caller-supplied description of one tool call. {@link ToolRuntime.execute}
  * adds the registry-owned token to form a pipeline {@link ToolExecution};
  * callers do not choose that token.
@@ -332,6 +349,14 @@ export interface ToolExecutionInput {
   readonly parent?: ToolExecutionToken
   /** Required caller-owned cancellation for this invocation. */
   readonly signal: AbortSignal
+  /**
+   * Optional trusted exact-definition constraint for composite consumers that
+   * admitted a definition before asynchronous policy. The registry captures it
+   * privately, rechecks it at the body boundary, and permits at most one body
+   * attempt for the constrained execution. Ordinary calls omit this field and
+   * retain existing around-wrapper retry behavior.
+   */
+  readonly dispatchConstraint?: ToolDispatchConstraint
 }
 
 /**
@@ -373,7 +398,7 @@ export interface PtcDispatchLog {
  * readonly. The registry freezes the complete object before `tools/result`
  * observers run.
  */
-export interface ToolExecution extends ToolExecutionInput {
+export interface ToolExecution extends Omit<ToolExecutionInput, 'dispatchConstraint'> {
   /** Root model-requested call, resolved for every root and nested execution. */
   readonly rootCallId: ToolCallId
   /** Registry-assigned identity shared with nested calls only as their opaque `parent` token. */
@@ -764,6 +789,11 @@ interface ToolCancellationState {
   bodyInvoked: boolean
 }
 
+/** Trusted dispatch constraint captured outside every plugin-visible execution view. */
+interface ToolDispatchConstraintState extends ToolDispatchConstraint {
+  attempted: boolean
+}
+
 /** One dispatch-scoped fused signal plus listener cleanup after the body settles. */
 interface FusedToolSignal {
   readonly signal: AbortSignal
@@ -812,6 +842,8 @@ export class ToolRuntime extends Service {
   private concludingExecutions = new WeakSet<ToolExecution>()
   /** Original caller cancellation, kept outside the wrapper-mutable execution object. */
   private cancellationStates = new WeakMap<ToolRunContext, ToolCancellationState>()
+  /** Trusted exact-definition constraints kept outside plugin-visible execution objects. */
+  private dispatchConstraints = new WeakMap<ToolRunContext, ToolDispatchConstraintState>()
   /** Definition-owned final content transform snapshotted before policy begins. */
   private contentFinalizers = new WeakMap<ToolRunContext, ToolDefinition['finalizeContent']>()
   private readonly layers = new ScopedLayers(
@@ -1219,6 +1251,20 @@ export class ToolRuntime extends Service {
   }
 
   /**
+   * Resolve a definition against the same visibility, deferred-discovery, and
+   * presentation-collapse rules the execution pipeline will apply, without
+   * entering policy or dispatch. Composite consumers use this only for
+   * fail-closed admission and must recheck before their following dispatch.
+   * @param name - registered tool name to inspect.
+   * @param agent - calling agent whose scoped visibility and discovery admission apply.
+   * @param nested - whether the planned call is a composite sub-dispatch.
+   * @returns the currently executable definition, or undefined when unavailable.
+   */
+  admitted(name: string, agent: Agent | undefined, nested: boolean): ToolDefinition | undefined {
+    return this.resolveExecution(name, agent, nested)
+  }
+
+  /**
    * Resolve the definition that MAY EXECUTE for a call, applying the mode
    * collapse at the operation boundary that owns it. The registry view
    * (`get`) is presentation-agnostic; here a MODEL-DIRECT call under `ptc`
@@ -1357,7 +1403,8 @@ export class ToolRuntime extends Service {
    * successful started outcome with `ABORTED`; already-started work is still
    * drained and may retain a tool-owned structured error.
    * @param exec - the typed same-process call input. The registry assigns its
-   *   correlation token before policy begins.
+   *   correlation token before policy begins. An optional dispatch constraint
+   *   is captured privately and can only narrow the eventual body invocation.
    * @returns the materialized final result.
    */
   async execute(exec: ToolExecutionInput): Promise<ToolExecutionResult> {
@@ -1391,6 +1438,12 @@ export class ToolRuntime extends Service {
     const agent = exec.agent
     const parent = exec.parent
     const signal = exec.signal
+    const dispatchConstraint = exec.dispatchConstraint === undefined
+      ? undefined
+      : {
+        expectedDefinition: exec.dispatchConstraint.expectedDefinition,
+        validate: exec.dispatchConstraint.validate,
+      }
     // Distinguish a mode-collapsed call (visible in the scope, denied only by
     // the `ptc` collapse) from a genuinely unknown tool. A collapsed call is
     // deterministically denied, so it terminates BEFORE the extensible policy
@@ -1441,6 +1494,13 @@ export class ToolRuntime extends Service {
         callerSignal: signal,
         bodyInvoked: false,
       })
+      if (dispatchConstraint !== undefined) {
+        this.dispatchConstraints.set(execution, {
+          expectedDefinition: dispatchConstraint.expectedDefinition,
+          validate: dispatchConstraint.validate,
+          attempted: false,
+        })
+      }
       if (collapsed) {
         // The collapse denies the call before the policy pipeline, but a
         // pre-dispatch abort still keeps the established cancellation
@@ -1564,8 +1624,15 @@ export class ToolRuntime extends Service {
     }
     exec.signal = signal
     try {
+      const constraint = this.dispatchConstraints.get(exec)
+      if (constraint?.attempted === true) throw new Error('constrained tool dispatch body may be attempted only once')
+      if (constraint !== undefined) constraint.attempted = true
       const tool = this.resolveExecution(exec.name, exec.agent, exec.parent !== undefined)
       if (!tool) throw new ToolNotFoundError(exec.name)
+      if (constraint !== undefined) {
+        if (tool !== constraint.expectedDefinition) throw new Error(`tool ${JSON.stringify(exec.name)} definition changed before dispatch`)
+        constraint.validate(tool, exec.arguments as JsonValue, signal)
+      }
       state.bodyInvoked = true
       const returned = await tool.execute(exec.arguments, exec)
       const result = this.createSuccessResult(exec, tool, returned)

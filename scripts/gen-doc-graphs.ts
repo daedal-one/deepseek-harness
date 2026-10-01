@@ -123,6 +123,23 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Opt-in guest execution, source writer barriers, and durable Docker storage for conversation workspaces.',
   },
   {
+    key: 'operations',
+    pkg: 'experimental-operation',
+    title: 'Bounded sequential operation execution',
+    mode: 'core',
+    consumers: ['experimental-operation-clm'],
+    note: 'Opt-in runner owns fixed-tool admission, source-bound sequential dispatch, required records, and replay; shipped profiles do not mount it by default.',
+  },
+  {
+    key: 'operationJudgments',
+    pkg: 'experimental-operation',
+    title: 'Closed-set operation judgments and tokenizers',
+    mode: 'seam',
+    implementations: ['experimental-operation-clm'],
+    consumers: ['experimental-operation'],
+    note: 'The operation service owns the sole ranking provider and exact-tokenizer registrations; the CLM adapter supplies bounded System One requests.',
+  },
+  {
     key: 'conversationWorkspaces',
     pkg: 'local-container-runtime',
     title: 'Conversation Git workspace lifecycle',
