@@ -1,7 +1,7 @@
 /** Resolve the calling session's execution providers across preset-owned scopes. @module */
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { serviceForAgent } from '@deepseek-ai/dsh-agent-presets'
+import { executionContextForAgent } from '@deepseek-ai/dsh-agent-presets'
 import type {} from '@deepseek-ai/dsh-fs'
 import type {} from '@deepseek-ai/dsh-subprocess'
 
@@ -12,8 +12,10 @@ import type {} from '@deepseek-ai/dsh-subprocess'
  * @returns whether both filesystem and subprocess providers execute on the host.
  */
 export function isHostExecution(ctx: Context, agent?: Agent): boolean {
-  const files = agent === undefined ? ctx.fs : serviceForAgent(ctx, agent, 'fs') ?? ctx.fs
-  const processes = agent === undefined ? ctx.subprocess : serviceForAgent(ctx, agent, 'subprocess') ?? ctx.subprocess
+  const execution = agent === undefined ? ctx : executionContextForAgent(ctx, agent)
+  const files = execution.get('fs')
+  const processes = execution.get('subprocess')
   const host = Symbol.for('@deepseek-ai/dsh/host-execution-world')
-  return files.executionWorld === host && processes.executionWorld === host
+  const observe = (): boolean => files?.executionWorld === host && processes?.executionWorld === host
+  return agent === undefined ? observe() : ctx.agents.withInitiator(agent, observe)
 }

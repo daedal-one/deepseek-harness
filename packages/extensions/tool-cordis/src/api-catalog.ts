@@ -962,9 +962,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Configured transport with a human decision before every task dispatch.',
     methods: [
       {
-        signature: 'handoff(agent: Agent, callId: ToolCallId, task: { title: string; task: string }, signal: AbortSignal): Promise<HandoffResult>',
+        signature: 'handoff( agent: Agent, callId: ToolCallId, task: { target?: string; title: string; task: string }, signal: AbortSignal, ): Promise<HandoffResult>',
         description: 'Review one complete task and dispatch only an exact human approval.',
-        parameters: [{ name: 'agent', description: 'exact live root Agent in a Daedal preset.' }, { name: 'callId', description: 'current tool call identity, used for duplicate delivery protection.' }, { name: 'task', description: 'title and complete summary including committed work and remaining steps.' }, { name: 'signal', description: 'source operation cancellation; cancellation after dispatch can leave acceptance unknown.' }],
+        parameters: [{ name: 'agent', description: 'exact live root Agent in a Daedal preset.' }, { name: 'callId', description: 'current tool call identity, used for duplicate delivery protection.' }, { name: 'task', description: 'target identifier, title, and complete summary; omit the target for discovery.' }, { name: 'signal', description: 'source operation cancellation; cancellation after dispatch can leave acceptance unknown.' }],
         returns: 'explicit rejection, unavailability, successful receipt, or uncertain acceptance with a destination id.',
       },
     ],
@@ -4923,7 +4923,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'HandoffResult',
-    declaration: 'export interface HandoffResult {\n    status: \'unavailable\' | \'declined\' | \'started\' | \'unknown\';\n    message: string;\n    sessionId?: SessionId;\n    destination?: string;\n    destinationUrl?: string;\n}',
+    declaration: 'export interface HandoffResult {\n    status: \'targets\' | \'unavailable\' | \'declined\' | \'started\' | \'unknown\';\n    message: string;\n    sessionId?: SessionId;\n    destination?: string;\n    destinationUrl?: string;\n    targets?: HandoffTarget[];\n}',
+  },
+  {
+    name: 'HandoffTarget',
+    declaration: 'export type HandoffTarget = z.infer<typeof targetSchema>;',
   },
   {
     name: 'ImageAttachmentLimits',

@@ -19,14 +19,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import Handoff from '../src/index.ts'
 import * as tool from '../src/tool.ts'
 import * as receiver from '../src/receiver.ts'
-import { HANDOFF_PATH, handoffSessionId, requestSchema } from '../src/protocol.ts'
+import { HANDOFF_PATH, destinationSchema, handoffSessionId } from '../src/protocol.ts'
 
 const token = 'test-token-for-handoff-only-0123456789'
 const contexts: Context[] = []
 const roots: string[] = []
 const host = Symbol.for('@deepseek-ai/dsh/host-execution-world')
 const signal = (): AbortSignal => new AbortController().signal
-const task = { title: 'Update running harness', task: 'Use committed branch codex/fix at abc123. Focused tests passed. Activate and verify readiness.' }
+const task = { target: 'deployment', title: 'Update running harness', task: 'Use committed branch codex/fix at abc123. Focused tests passed. Activate and verify readiness.' }
+const profile = { id: 'deployment', name: 'Deployment', agentPreset: 'maintenance', permissionPreset: 'policy-reviewed',
+  environment: 'host' as const, sandbox: 'danger-full-access' as const, approval: 'ask' as const }
 afterEach(async () => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
@@ -46,6 +48,12 @@ async function destination(publicUrl?: string) {
   const create = vi.fn(async () => ({ sessionId: SessionId('unused') }))
   const prompt = vi.fn(async (_request: unknown, _signal: AbortSignal) => ({ accepted: true as const }))
   ctx.provide('sessionController', { create, prompt } as never)
+  const resolve = vi.fn(async (): Promise<{ id: string; trust: string; permissionPreset?: string }> =>
+    ({ id: 'maintenance', trust: 'system', permissionPreset: 'policy-reviewed' }))
+  ctx.provide('agentPresets', { resolve } as never)
+  ctx.provide('permissionPresets', { defaultPreset: 'workspace-write', current: () => 'policy-reviewed',
+    resolve: () => ({ sandbox: 'danger-full-access', approval: 'ask' }) } as never)
+  ctx.provide('agents', { get: () => ({ ctx, session: {} }), withInitiator: (_agent: Agent, run: () => unknown) => run() } as never)
   const cwd = await mkdtemp(join(tmpdir(), 'dsh-handoff-')); roots.push(cwd)
   await ctx.plugin(WebServer, { host: '127.0.0.1', port: 0 })
   const seen = vi.fn<(request: IncomingMessage) => void>()
@@ -54,15 +62,17 @@ async function destination(publicUrl?: string) {
     seen(req)
     return route.handler(req, res)
   } }))
-  const fiber = ctx.plugin(receiver, { name: 'Maintenance host', cwd, token, ...publicUrl === undefined ? {} : { publicUrl }, maxBytes: 8192, timeoutMs: 5000 })
+  const config = { name: 'Maintenance host', targets: [{ id: 'deployment', name: 'Deployment', cwd, agentPreset: 'maintenance' }], token,
+    ...publicUrl === undefined ? {} : { publicUrl }, maxBytes: 8192, timeoutMs: 5000 }
+  const fiber = ctx.plugin(receiver, config)
   await fiber
   const url = `http://127.0.0.1:${ctx.webServer.port}`
-  const request = { sourceSessionId: 'source', callId: 'call', preset: 'daedal' as const, destination: { name: 'Maintenance host', cwd }, ...task }
+  const request = { sourceSessionId: 'source', callId: 'call', destination: { name: 'Maintenance host', target: { ...profile, cwd } }, title: task.title, task: task.task }
   const send = (body: unknown = request, auth = token, method = 'POST') => fetch(url + HANDOFF_PATH, {
     method, headers: { authorization: `Bearer ${auth}`, 'content-type': 'application/json' },
     ...method === 'POST' ? { body: typeof body === 'string' ? body : JSON.stringify(body) } : {},
   })
-  return { ctx, fiber, create, prompt, url, request, send, seen }
+  return { ctx, fiber, create, prompt, url, request, send, seen, config, resolve }
 }
 async function source(url?: string, preset = 'daedal', identity = Symbol('container')) {
   const ctx = context()
@@ -88,12 +98,39 @@ function approve(ctx: Context, selected = ['Start host session'], custom?: strin
 }
 
 describe('Daedal host handoff', () => {
+  it('lists configured targets without asking for approval or starting a session', async () => {
+    const target = await destination(); const { ctx, agent } = await source(target.url)
+    const ask = vi.spyOn(ctx.userQuestions, 'ask')
+    const result = await ctx.daedalHandoff.handoff(agent, ToolCallId('discover'), { title: task.title, task: task.task }, signal())
+    expect(result).toMatchObject({ status: 'targets', targets: [{ ...profile, cwd: target.request.destination.target.cwd }] })
+    expect(ask).not.toHaveBeenCalled()
+    expect(target.create).not.toHaveBeenCalled()
+  })
+
+  it('rejects an unknown target before asking for approval', async () => {
+    const target = await destination(); const { ctx, agent } = await source(target.url)
+    const ask = vi.spyOn(ctx.userQuestions, 'ask')
+    await expect(ctx.daedalHandoff.handoff(agent, ToolCallId('unknown'), { ...task, target: 'arbitrary-profile' }, signal())).rejects.toThrow('Unknown')
+    expect(ask).not.toHaveBeenCalled()
+    expect(target.create).not.toHaveBeenCalled()
+  })
+
+  it('requires fresh approval when destination permissions change during review', async () => {
+    const target = await destination(); const { ctx, run } = await source(target.url)
+    ctx.on('user-questions/request', async () => {
+      target.resolve.mockResolvedValue({ id: 'maintenance', trust: 'system', permissionPreset: 'workspace-write' })
+      return { answers: [{ id: 'daedal-host-handoff', selected: ['Start host session'] }] }
+    })
+    expect(await run()).toMatchObject({ status: 'declined' })
+    expect(target.create).not.toHaveBeenCalled()
+  })
   it('uses preset-owned providers before inherited service providers', async () => {
     const { ctx, agent } = await source()
     expect(isHostExecution(ctx, agent)).toBe(false)
     await ctx.plugin(tool)
     expect(renderContextSnapshot(await ctx.systemPrompt.assemble({ agent, scope: agent }))).toContain('isolated workspace')
-    vi.spyOn(presetServices, 'serviceForAgent').mockReturnValue({ executionWorld: host } as never)
+    const execution = context(); world(execution)
+    vi.spyOn(presetServices, 'executionContextForAgent').mockReturnValue(execution)
     expect(isHostExecution(ctx, agent)).toBe(true)
     expect(renderContextSnapshot(await ctx.systemPrompt.assemble({ agent, scope: agent }))).toContain('Execution environment: host')
   })
@@ -134,16 +171,16 @@ describe('Daedal host handoff', () => {
   it('reports a mismatched acknowledgement as uncertain without dispatching again', async () => {
     const { ctx, run } = await source('https://host.example')
     approve(ctx)
-    const fetcher = vi.fn().mockResolvedValueOnce(Response.json({ name: 'Host', cwd: '/srv' }))
+    const fetcher = vi.fn().mockResolvedValueOnce(Response.json({ name: 'Host', targets: [{ ...profile, cwd: '/srv' }] }))
       .mockResolvedValueOnce(Response.json({ sessionId: 'different-session', accepted: true }))
     vi.stubGlobal('fetch', fetcher)
     expect(await run()).toMatchObject({ status: 'unknown' })
     expect(fetcher).toHaveBeenCalledTimes(2)
   })
 
-  it('rejects direct host execution and presents missing configuration through the tool', async () => {
+  it('presents missing configuration through the tool in either execution environment', async () => {
     const mounted = await source(undefined, 'daedal', host)
-    await expect(mounted.run()).rejects.toThrow('already runs on the host')
+    expect(await mounted.run()).toMatchObject({ status: 'unavailable' })
     const isolated = await source()
     await isolated.ctx.plugin(tool)
     const definition = isolated.ctx.tools.get('handoff_to_host')!
@@ -180,8 +217,12 @@ describe('Daedal host handoff', () => {
     const decision = Promise.withResolvers<undefined>()
     ctx.on('user-questions/request', async (request) => {
       expect(request.questions[0]?.detail).toContain(task.task)
-      expect(request.questions[0]?.detail).toContain(target.request.destination.cwd)
-      expect(request.questions[0]?.detail).toContain('daedal-openai')
+      expect(request.questions[0]?.detail).toContain(target.request.destination.target.cwd)
+      expect(request.questions[0]?.detail).toContain('Agent profile: maintenance')
+      expect(request.questions[0]?.detail).toContain('Permission profile: policy-reviewed')
+      expect(request.questions[0]?.detail).toContain('Sandbox: danger-full-access')
+      expect(request.questions[0]?.detail).toContain('Approval: ask')
+      expect(request.questions[0]?.detail).not.toContain('daedal-openai')
       asked.resolve(undefined); await decision.promise
       return { answers: [{ id: 'daedal-host-handoff', selected: ['Start host session'] }] }
     })
@@ -190,7 +231,7 @@ describe('Daedal host handoff', () => {
     expect(target.create).not.toHaveBeenCalled()
     decision.resolve(undefined)
     expect(await running).toMatchObject({ status: 'started', destination: 'Maintenance host' })
-    expect(target.create).toHaveBeenCalledWith(expect.objectContaining({ cwd: target.request.destination.cwd, agentPreset: 'daedal-openai' }))
+    expect(target.create).toHaveBeenCalledWith(expect.objectContaining({ cwd: target.request.destination.target.cwd, agentPreset: 'maintenance' }))
     expect(target.prompt).toHaveBeenCalledWith(expect.objectContaining({ content: [{ type: 'text', text: expect.stringContaining(task.task) as string }] }), expect.any(AbortSignal))
   })
 
@@ -286,22 +327,63 @@ describe('Daedal host handoff', () => {
     expect(renderContextSnapshot(await ctx.systemPrompt.assemble())).not.toContain('Execution environment:')
   })
 
-  it('explains host execution and refuses a redundant host handoff', async () => {
-    const { ctx, agent } = await source(undefined, 'daedal', host)
+  it('allows a host coding session to request a different maintenance profile and policy', async () => {
+    const target = await destination()
+    const { ctx, agent } = await source(target.url, 'daedal', host)
+    approve(ctx)
     await ctx.plugin(tool)
     expect(renderContextSnapshot(await ctx.systemPrompt.assemble())).toContain('Execution environment: host')
     const result = await ctx.tools.execute({ name: 'handoff_to_host', arguments: task, agent, callId: ToolCallId('x'), signal: signal() })
-    expect(result.isError).toBe(true)
-    expect(JSON.stringify(result.content)).toContain('already runs on the host')
+    expect(result.isError).not.toBe(true)
+    expect(JSON.stringify(result.content)).toContain('started')
+    expect(target.create).toHaveBeenCalledWith(expect.objectContaining({ agentPreset: 'maintenance' }))
   })
 })
 
 describe('separate host receiver', () => {
+  it('advertises the receiver default when a target profile inherits its permission policy', async () => {
+    const target = await destination()
+    target.resolve.mockResolvedValueOnce({ id: 'maintenance', trust: 'system' })
+    const response = await target.send(undefined, token, 'GET')
+    expect(await response.json()).toMatchObject({ targets: [{ permissionPreset: 'workspace-write' }] })
+  })
+  it('refuses unknown and removed targets before creating a session', async () => {
+    const target = await destination()
+    expect((await target.send({ ...target.request, destination: { ...target.request.destination,
+      target: { ...target.request.destination.target, id: 'arbitrary' } } })).status).toBe(409)
+    await target.fiber.dispose()
+    await target.ctx.plugin(receiver, { ...target.config, targets: [{ ...target.config.targets[0]!, id: 'replacement' }] })
+    expect((await target.send()).status).toBe(409)
+    expect(target.create).not.toHaveBeenCalled()
+  })
+
+  it('does not prompt a created session with mismatched permissions or execution placement', async () => {
+    const target = await destination()
+    vi.spyOn(target.ctx.permissionPresets, 'current').mockReturnValue('workspace-write')
+    expect((await target.send()).status).toBe(503)
+    expect(target.prompt).not.toHaveBeenCalled()
+    vi.spyOn(target.ctx.permissionPresets, 'current').mockReturnValue('policy-reviewed')
+    const isolated = context(); world(isolated, Symbol('VM'))
+    vi.spyOn(presetServices, 'executionContextForAgent').mockReturnValue(isolated)
+    expect((await target.send()).status).toBe(503)
+    expect(target.prompt).not.toHaveBeenCalled()
+  })
+
+  it('rejects unusable, user-authored, and duplicate target configurations', async () => {
+    const target = await destination()
+    target.resolve.mockResolvedValueOnce({ id: 'maintenance', trust: 'user', permissionPreset: 'policy-reviewed' })
+    await expect(receiver.apply(target.ctx, target.config)).rejects.toThrow('system-trusted')
+    target.config.targets.push({ ...target.config.targets[0]! })
+    await expect(receiver.apply(target.ctx, target.config)).rejects.toThrow('unique')
+    target.config.targets.pop()
+    target.config.targets[0]!.cwd = 'relative'
+    await expect(receiver.apply(target.ctx, target.config)).rejects.toThrow('absolute cwd')
+  })
   it('requires authentication and validates destination, mode, input and byte limits before creation', async () => {
     const target = await destination()
     expect((await target.send(undefined, 'wrong')).status).toBe(401)
     expect((await target.send({ ...target.request, preset: 'standard' })).status).toBe(400)
-    expect((await target.send({ ...target.request, destination: { name: 'different', cwd: '/' } })).status).toBe(409)
+    expect((await target.send({ ...target.request, destination: { ...target.request.destination, name: 'different' } })).status).toBe(409)
     expect((await target.send('not json')).status).toBe(400)
     expect((await target.send('x'.repeat(8193))).status).toBe(413)
     expect(target.create).not.toHaveBeenCalled()
@@ -313,8 +395,8 @@ describe('separate host receiver', () => {
     target.create.mockImplementationOnce(async () => { entered.resolve(undefined); await release.promise; return { sessionId: SessionId('unused') } })
     const first = target.send(); await entered.promise
     const validated = Promise.withResolvers<undefined>()
-    const parse = requestSchema.safeParse.bind(requestSchema)
-    vi.spyOn(requestSchema, 'safeParse').mockImplementationOnce((...args) => {
+    const parse = destinationSchema.parse.bind(destinationSchema)
+    vi.spyOn(destinationSchema, 'parse').mockImplementationOnce((...args) => {
       const result = parse(...args)
       validated.resolve(undefined)
       return result
@@ -398,8 +480,8 @@ describe('separate host receiver', () => {
 
   it('rejects an invalid or non-directory configured destination before mounting', async () => {
     const ctx = context(); world(ctx)
-    await expect(receiver.apply(ctx, { name: '', cwd: tmpdir(), token, maxBytes: 8192, timeoutMs: 5000 })).rejects.toThrow('requires a name')
-    await expect(receiver.apply(ctx, { name: 'file', cwd: new URL('../package.json', import.meta.url).pathname,
+    await expect(receiver.apply(ctx, { name: '', targets: [], token, maxBytes: 8192, timeoutMs: 5000 })).rejects.toThrow('requires a name')
+    await expect(receiver.apply(ctx, { name: 'file', targets: [{ id: 'file', name: 'file', agentPreset: 'maintenance', cwd: new URL('../package.json', import.meta.url).pathname }],
       token, maxBytes: 8192, timeoutMs: 5000 })).rejects.toThrow('must be a directory')
   })
 
@@ -411,6 +493,6 @@ describe('separate host receiver', () => {
 
   it('refuses isolated providers even when mounted directly', async () => {
     const ctx = context(); world(ctx, Symbol('container'))
-    await expect(receiver.apply(ctx, { name: 'invalid', cwd: tmpdir(), token, maxBytes: 8192, timeoutMs: 5000 })).rejects.toThrow('host filesystem')
+    await expect(receiver.apply(ctx, { name: 'invalid', targets: [], token, maxBytes: 8192, timeoutMs: 5000 })).rejects.toThrow('host filesystem')
   })
 })

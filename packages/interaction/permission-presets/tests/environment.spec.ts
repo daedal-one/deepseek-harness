@@ -1,9 +1,22 @@
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
+import * as presets from '@deepseek-ai/dsh-agent-presets'
 import { executionEnvironment } from '../src/environment.ts'
 
 const host = Symbol.for('@deepseek-ai/dsh/host-execution-world')
+afterEach(() => { vi.restoreAllMocks() })
+
+it('keeps VM execution when the profile has only auxiliary host file and process providers', () => {
+  const ctx = new Context()
+  const world = {}
+  ctx.provide('fs', { executionWorld: world } as never)
+  ctx.provide('subprocess', { executionWorld: world } as never)
+  const auxiliary = vi.fn(() => ({ executionWorld: host }))
+  ctx.provide('agentPresets', { serviceFor: auxiliary } as never)
+  expect(executionEnvironment(ctx, { ctx } as Agent)).toBe('external')
+  expect(auxiliary).not.toHaveBeenCalled()
+})
 
 it('does not claim isolation for missing, mixed, or unverified external providers', () => {
   const ctx = new Context()
@@ -43,11 +56,11 @@ it('uses profile-owned providers inside the agent execution context', () => {
   } }
   ctx.provide('fs', { executionWorld: host } as never)
   ctx.provide('subprocess', { executionWorld: host } as never)
-  ctx.provide('agentPresets', { serviceFor(_agent: Agent, name: string) {
-    if (name === 'fs' || name === 'subprocess') return provider
-    if (name === 'localContainerExecutionWorld') return world
-    return undefined
-  } } as never)
+  const execution = new Context()
+  execution.provide('fs', provider as never)
+  execution.provide('subprocess', provider as never)
+  execution.provide('localContainerExecutionWorld', world)
+  vi.spyOn(presets, 'executionContextForAgent').mockReturnValue(execution)
   ctx.provide('agents', { withInitiator(_agent: Agent, run: () => unknown) {
     initiated = true
     try { return run() } finally { initiated = false }

@@ -703,11 +703,11 @@ Configured transport with a human decision before every task dispatch.
  * Review one complete task and dispatch only an exact human approval.
  * @param agent - exact live root Agent in a Daedal preset.
  * @param callId - current tool call identity, used for duplicate delivery protection.
- * @param task - title and complete summary including committed work and remaining steps.
+ * @param task - target identifier, title, and complete summary; omit the target for discovery.
  * @param signal - source operation cancellation; cancellation after dispatch can leave acceptance unknown.
  * @returns explicit rejection, unavailability, successful receipt, or uncertain acceptance with a destination id.
  */
-handoff(agent: Agent, callId: ToolCallId, task: { title: string; task: string }, signal: AbortSignal): Promise<HandoffResult>
+handoff( agent: Agent, callId: ToolCallId, task: { target?: string; title: string; task: string }, signal: AbortSignal, ): Promise<HandoffResult>
 ```
 
 Types: [Agent](core.md) · [ToolCallId](llm-streaming.md)

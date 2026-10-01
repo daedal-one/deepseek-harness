@@ -7,7 +7,11 @@
       name: '@deepseek-ai/dsh-daedal-handoff/receiver'
       config:
         name: Host fixture
-        cwd: !!js process.cwd()
+        targets:
+          - id: inspect
+            name: Host inspection
+            cwd: !!js process.cwd()
+            agentPreset: maintenance
         token: composition-only-handoff-token-0123456789
         maxBytes: 8192
         timeoutMs: 15000

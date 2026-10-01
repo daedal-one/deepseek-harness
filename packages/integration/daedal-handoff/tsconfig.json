@@ -8,6 +8,8 @@
     "src"
   ],
   "references": [
+    { "path": "../../util/brand" },
+    { "path": "../../interaction/permission-presets" },
     {
       "path": "../../../vendor/cordis"
     },

@@ -203,9 +203,10 @@ const TOOL_PACKAGES: ToolPackage[] = [
     pkg: '@deepseek-ai/dsh-daedal-handoff',
     dir: 'daedal-handoff',
     source: 'packages/integration/daedal-handoff/src/tool.ts',
-    requires: ['ctx.tools', 'ctx.systemPrompt', 'ctx.fs', 'ctx.subprocess', 'ctx.daedalHandoff (execution time)'],
+    requires: ['ctx.tools', 'ctx.systemPrompt', 'ctx.fs', 'ctx.subprocess', 'ctx.agents', 'ctx.daedalHandoff (execution time)'],
     writes: ['tool/call', 'tool/result after user confirmation or refusal'],
     async mount(ctx) {
+      await ctx.plugin(AgentRegistry)
       await ctx.plugin(LocalFileSystem)
       await ctx.plugin(LocalSubprocessRuntime)
       await ctx.plugin(DaedalHandoffTool)

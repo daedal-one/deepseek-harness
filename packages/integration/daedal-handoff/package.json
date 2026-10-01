@@ -36,6 +36,7 @@
   ],
   "license": "MIT",
   "dependencies": {
+    "@deepseek-ai/dsh-brand": "workspace:^",
     "@deepseek-ai/schemastery": "workspace:^",
     "zod": "^4.4.3"
   },
@@ -52,6 +53,7 @@
     "@deepseek-ai/dsh-tools": "workspace:^",
     "@deepseek-ai/dsh-user-questions": "workspace:^",
     "@deepseek-ai/dsh-agent-presets": "workspace:^",
+    "@deepseek-ai/dsh-permission-presets": "workspace:^",
     "@deepseek-ai/dsh-llm": "workspace:^"
   },
   "devDependencies": {
@@ -67,6 +69,7 @@
     "@deepseek-ai/dsh-tools": "workspace:^",
     "@deepseek-ai/dsh-user-questions": "workspace:^",
     "@deepseek-ai/dsh-agent-presets": "workspace:^",
+    "@deepseek-ai/dsh-permission-presets": "workspace:^",
     "@deepseek-ai/dsh-llm": "workspace:^",
     "@deepseek-ai/dsh-fs-local": "workspace:^",
     "@deepseek-ai/dsh-subprocess-local": "workspace:^"

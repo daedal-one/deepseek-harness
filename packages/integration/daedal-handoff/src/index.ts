@@ -3,15 +3,15 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { ToolCallId } from '@deepseek-ai/dsh-llm'
-import type {} from '@deepseek-ai/dsh-fs'
-import type {} from '@deepseek-ai/dsh-subprocess'
 import type {} from '@deepseek-ai/dsh-agent-presets'
 import type {} from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-user-questions'
-import { HANDOFF_PATH, daedalPreset, destinationSchema, handoffSessionId, receiptSchema, taskSchema } from './protocol.ts'
-import { isHostExecution } from './world.ts'
+import { HANDOFF_PATH, catalogSchema, daedalPreset, handoffSessionId, receiptSchema, taskSchema } from './protocol.ts'
 import type { HandoffResult } from './types.ts'
 export type { HandoffResult } from './types.ts'
+
+/** A protocol refusal that confirms no task was admitted under changed settings. */
+class DestinationChanged extends Error {}
 
 /** Deployment-owned destination; omitted leaves handoff unavailable. */
 export interface Config {
@@ -33,7 +33,7 @@ declare module '@deepseek-ai/cordis' {
 
 /** Configured transport with a human decision before every task dispatch. */
 export class DaedalHandoff extends Service {
-  static inject = ['agents', 'sessionProjections', 'userQuestions', 'fs', 'subprocess']
+  static inject = ['agents', 'sessionProjections', 'userQuestions']
   static Config: z<Config> = z.object({
     destinationUrl: z.string(), token: z.string(),
     timeoutMs: z.number().step(1).min(1).default(15_000),
@@ -65,11 +65,13 @@ export class DaedalHandoff extends Service {
    * Review one complete task and dispatch only an exact human approval.
    * @param agent - exact live root Agent in a Daedal preset.
    * @param callId - current tool call identity, used for duplicate delivery protection.
-   * @param task - title and complete summary including committed work and remaining steps.
+   * @param task - target identifier, title, and complete summary; omit the target for discovery.
    * @param signal - source operation cancellation; cancellation after dispatch can leave acceptance unknown.
    * @returns explicit rejection, unavailability, successful receipt, or uncertain acceptance with a destination id.
    */
-  handoff(agent: Agent, callId: ToolCallId, task: { title: string; task: string }, signal: AbortSignal): Promise<HandoffResult> {
+  handoff(
+    agent: Agent, callId: ToolCallId, task: { target?: string; title: string; task: string }, signal: AbortSignal,
+  ): Promise<HandoffResult> {
     const operation = this.transfer(agent, callId, task, AbortSignal.any([signal, this.lifetime.signal]))
       .finally(() => { this.pending.delete(operation) })
     this.pending.add(operation)
@@ -77,27 +79,29 @@ export class DaedalHandoff extends Service {
   }
 
   private async transfer(
-    agent: Agent, callId: ToolCallId, task: { title: string; task: string }, signal: AbortSignal,
+    agent: Agent, callId: ToolCallId, task: { target?: string; title: string; task: string }, signal: AbortSignal,
   ): Promise<HandoffResult> {
     signal.throwIfAborted()
     const preset = daedalPreset.parse(this.ctx.sessionProjections.stateOf(agent.session, 'agentPreset'))
     if (this.ctx.agents.get(agent.id) !== agent || !this.ctx.agents.roots().includes(agent)) {
       throw new Error('Only a live root Daedal session can request host handoff; delegated agents must report the need to their parent.')
     }
-    if (isHostExecution(this.ctx, agent)) {
-      throw new Error('This session already runs on the host; perform authorized maintenance here.')
-    }
     const transport = this.destination
     if (transport === undefined) return { status: 'unavailable', message: 'Host handoff is not configured. Ask the user to open a separate host-maintenance session; do not probe host paths from this session.' }
-    const parsed = taskSchema.parse(task)
-    const destination = destinationSchema.parse(await this.request(transport, 'GET', signal))
-    const request = { sourceSessionId: agent.id, callId, preset, destination, ...parsed }
+    const catalog = catalogSchema.parse(await this.request(transport, 'GET', signal))
+    if (task.target === undefined) return { status: 'targets', targets: catalog.targets,
+      message: 'Select a configured target identifier and call handoff_to_host again with the complete task. No session was started.' }
+    const target = catalog.targets.find(item => item.id === task.target)
+    if (target === undefined) throw new Error('Unknown host handoff target; discover the configured targets before selecting one.')
+    const parsed = taskSchema.parse({ title: task.title, task: task.task })
+    const destination = { name: catalog.name, ...catalog.url === undefined ? {} : { url: catalog.url }, target }
+    const request = { sourceSessionId: agent.id, callId, destination, ...parsed }
     const body = JSON.stringify(request)
     if (Buffer.byteLength(body) > this.config.maxBytes) throw new Error('Handoff exceeds the configured byte limit; shorten the task summary.')
     const answer = await this.ctx.userQuestions.ask({ agent, signal, questions: [{
       id: 'daedal-host-handoff', header: 'Host handoff',
-      question: `Start a new host-maintenance session on ${destination.name}?`,
-      detail: `Destination: ${destination.name}\nAddress: ${destination.url ?? transport.endpoint.origin}\nWorking directory: ${destination.cwd}\nMode: ${preset}\n\nThe new session runs on the host with that profile's permissions. This source session keeps its current access.\n\n# ${parsed.title}\n\n${parsed.task}`,
+      question: `Start ${target.name} on ${destination.name}?`,
+      detail: `Destination: ${destination.name}\nAddress: ${destination.url ?? transport.endpoint.origin}\nTarget: ${target.name} (${target.id})\nEnvironment: ${target.environment}\nWorking directory: ${target.cwd}\nAgent profile: ${target.agentPreset}\nPermission profile: ${target.permissionPreset}\nSandbox: ${target.sandbox}\nApproval: ${target.approval}\n\nThe new session uses these destination settings. This source session keeps its current access.\n\n# ${parsed.title}\n\n${parsed.task}`,
       options: [{ label: 'Start host session' }, { label: 'Stay here' }],
     }] })
     signal.throwIfAborted()
@@ -115,7 +119,9 @@ export class DaedalHandoff extends Service {
       if (receipt.sessionId !== sessionId) throw new Error('Handoff receipt identity mismatch')
       return { status: 'started', sessionId, destination: destination.name, destinationUrl: destination.url ?? transport.endpoint.origin,
         message: 'Continue in the new host session. Stop host-maintenance work in this source session.' }
-    } catch {
+    } catch (error) {
+      if (error instanceof DestinationChanged) return { status: 'declined',
+        message: 'The destination profile changed or was removed. Discover targets and request a new confirmation. No host task was started.' }
       // A failed or cancelled HTTP exchange cannot prove whether the destination admitted the task.
       return { status: 'unknown', sessionId, destinationUrl: destination.url ?? transport.endpoint.origin,
         message: 'Host acceptance is unknown. Inspect this session at the destination before requesting another handoff; do not automatically retry.' }
@@ -132,6 +138,7 @@ export class DaedalHandoff extends Service {
     })
     if (!response.ok) {
       await response.body?.cancel()
+      if (response.status === 409) throw new DestinationChanged('Destination settings changed')
       throw new Error(`Host handoff destination refused the request (HTTP ${response.status}).`)
     }
     if (response.body === null) throw new Error('Host handoff destination returned no response body')

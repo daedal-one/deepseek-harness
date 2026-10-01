@@ -14,6 +14,8 @@ The [conversation workspace decision](2026-09-20-conversation-git-workspace.md) 
 
 The [operator-admitted host conversation](2026-09-23-admitted-host-conversations.md) decision adds an explicit mixed-Host path while retaining these launch-profile and handoff guarantees.
 
+The [handoff target profile decision](2026-10-01-host-handoff-target-profiles.md) gives each configured destination independent agent and permission defaults. Source settings do not choose destination authority.
+
 ## Alternatives considered
 
 **Change the execution world with a permission selector.** Existing permission events record sandbox mode and approval policy. They do not transfer process ownership, durable workspace recovery, filesystem paths, or background jobs, so treating them as a container-to-host transition would misrepresent what is running.

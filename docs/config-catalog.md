@@ -608,7 +608,7 @@ Source: [`packages/credentials/credentials-local/src/index.ts:64`](../packages/c
 
 ## `@deepseek-ai/dsh-daedal-handoff`
 
-Requires: `agents` · `sessionProjections` · `userQuestions` · `fs` · `subprocess`
+Requires: `agents` · `sessionProjections` · `userQuestions`
 
 ```ts config-catalog
 /** Deployment-owned destination; omitted leaves handoff unavailable. */

@@ -293,6 +293,23 @@ export function serviceForAgent<K extends string & keyof Context>(
 }
 
 /**
+ * Resolve the context supplying an agent's command executor and its file/process dependencies.
+ * Auxiliary providers in other isolated groups do not select the execution environment.
+ * @param ctx - inherited execution context when the preset supplies no shell.
+ * @param agent - agent joined to a standing preset.
+ * @returns the preset shell provider's context, or the inherited context.
+ */
+export function executionContextForAgent(ctx: Context, agent: { ctx: Context }): Context {
+  const mount = standingMountFor(agent.ctx)
+  if (mount === undefined) return ctx
+  for (const key of Object.getOwnPropertySymbols(ctx.reflect.store)) {
+    const impl = ctx.reflect.store[key]
+    if (impl?.name === 'shell' && withinFiber(impl.fiber, mount.fiber)) return impl.fiber.ctx
+  }
+  return ctx
+}
+
+/**
  * Rows that did not reach a usable state, each rendered as one diagnostic line.
  *
  * A row whose module failed to import or whose plugin threw already rejects the

@@ -126,7 +126,7 @@ This section explains the design behind the roster and the standing mount; obser
 
 ### The standing mount
 
-`ensureStanding` keeps one pending promise per preset id, single-flight, so two agents racing the first use of a preset share one composition. A settled failure is removed so a later session retries a preset whose file has been fixed. The mount runs in the roster service's own untraced context — a subtree minted from a traced context would resolve services through the caller's shadow fiber — so it survives every agent and unwinds only with whole-tree teardown. `serviceForAgent` reads an agent's instance of a service its preset mounted behind an `isolate` realm, which is otherwise invisible outside the group.
+`ensureStanding` keeps one pending promise per preset id, single-flight, so two agents racing the first use of a preset share one composition. A settled failure is removed so a later session retries a preset whose file has been fixed. The mount runs in the roster service's own untraced context — a subtree minted from a traced context would resolve services through the caller's shadow fiber — so it survives every agent and unwinds only with whole-tree teardown. `serviceForAgent` reads an agent's instance of a service its preset mounted behind an `isolate` realm, which is otherwise invisible outside the group. `executionContextForAgent` resolves the context supplying the preset shell and its execution dependencies, falling back to inherited providers when no shell is mounted; auxiliary filesystem or subprocess services do not select execution placement.
 
 ### The composition inventory
 

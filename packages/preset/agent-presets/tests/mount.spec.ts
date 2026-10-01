@@ -15,7 +15,7 @@ import AgentRegistry, { assembleContextFor, type Agent } from '@deepseek-ai/dsh-
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AgentPresets, {
-  COMPOSITION_FILE, leakedServices, livePresetMounts, mountPreset, serviceForAgent,
+  COMPOSITION_FILE, executionContextForAgent, leakedServices, livePresetMounts, mountPreset, serviceForAgent,
 } from '@deepseek-ai/dsh-agent-presets'
 import type { Config } from '@deepseek-ai/dsh-agent-presets'
 import type {} from '@deepseek-ai/dsh-agent-presets/types'
@@ -98,6 +98,27 @@ beforeEach(async () => {
 })
 
 describe('composing an agent from a preset', () => {
+  it('ignores auxiliary host providers and follows a profile-owned shell execution context', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-preset-execution-'))
+    roots.push(root)
+    const plugin = join(FIXTURES, 'plugins', 'execution-services.js')
+    for (const preset of ['auxiliary', 'maintenance']) {
+      await mkdir(join(root, preset))
+      await writeFile(join(root, preset, COMPOSITION_FILE), `- id: helper\n  name: cordis:group\n  group: true\n  isolate:\n    fs: true\n    subprocess: true\n  config:\n    - id: helper-services\n      name: ${plugin}\n      config:\n        services: [fs, subprocess]\n        world: host-helper\n${preset === 'maintenance' ? `- id: execution\n  name: cordis:group\n  group: true\n  isolate:\n    fs: true\n    subprocess: true\n    shell: true\n  config:\n    - id: executor\n      name: ${plugin}\n      config:\n        services: [fs, subprocess, shell]\n        world: host-executor\n` : ''}`)
+    }
+    const scoped = await harness({ default: 'auxiliary', roots: [{ path: root, trust: 'system' }], includeShippedRoot: false, includeUserRoot: false })
+    try {
+      const ordinary = await agentOn(scoped, 'vm-session', 'auxiliary')
+      expect(scoped.agentPresets.serviceFor(ordinary, 'fs')?.executionWorld).toBe(Symbol.for('host-helper'))
+      expect(executionContextForAgent(scoped, ordinary)).toBe(scoped)
+      const maintenance = await agentOn(scoped, 'host-session', 'maintenance')
+      const execution = executionContextForAgent(scoped, maintenance)
+      expect(execution.get('fs')?.executionWorld).toBe(Symbol.for('host-executor'))
+      expect(execution.get('subprocess')?.executionWorld).toBe(Symbol.for('host-executor'))
+      expect(execution.get('shell')?.executionWorld).toBe(Symbol.for('host-executor'))
+      expect(executionContextForAgent(scoped, { ctx: scoped })).toBe(scoped)
+    } finally { await scoped.fiber.dispose() }
+  })
   it('hands an absolute plugin path to Node as a file URL', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-preset-absolute-plugin-'))
     roots.push(root)

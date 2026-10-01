@@ -1,0 +1,6 @@
+- id: host-context
+  name: '@deepseek-ai/dsh-daedal-handoff/tool'
+- id: maintenance-tool
+  name: ../../maintenance-tool.js
+- id: file-tools
+  name: '@deepseek-ai/dsh-tool-fs'

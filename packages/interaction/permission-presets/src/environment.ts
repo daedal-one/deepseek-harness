@@ -1,7 +1,7 @@
 /** Observe execution placement independently of the permission table. @module */
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import type {} from '@deepseek-ai/dsh-agent-presets'
+import { executionContextForAgent } from '@deepseek-ai/dsh-agent-presets'
 import type {} from '@deepseek-ai/dsh-fs'
 import type {} from '@deepseek-ai/dsh-subprocess'
 import type {} from '@deepseek-ai/dsh-local-container-runtime'
@@ -16,9 +16,8 @@ import type { ExecutionEnvironment } from './types.ts'
  * @returns container only with a verified container marker; mixed or absent providers remain unknown.
  */
 export function executionEnvironment(ctx: Context, agent: Agent): ExecutionEnvironment {
-  const presets = ctx.get('agentPresets')
-  const service = <K extends string & keyof Context>(name: K): Context[K] | undefined =>
-    presets?.serviceFor(agent, name) ?? ctx.get(name)
+  const execution = executionContextForAgent(ctx, agent)
+  const service = <K extends string & keyof Context>(name: K): Context[K] | undefined => execution.get(name)
   const files = service('fs')
   const processes = service('subprocess')
   if (files === undefined || processes === undefined) return 'unknown'
