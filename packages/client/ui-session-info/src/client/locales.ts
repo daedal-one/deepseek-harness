@@ -6,6 +6,7 @@ export const NS = 'sessionInfo'
 /** English copy for this feature. */
 export const en = {
   'view.info': 'Info',
+  'heading.summary': 'Conversation summary',
   'heading.session': 'Session',
   'heading.workspace': 'Workspace',
   'heading.environment': 'Environment',
@@ -44,6 +45,7 @@ export const en = {
   'value.yes': 'Yes',
   'value.no': 'No',
   'model.none': 'No model selected',
+  'summary.none': 'No summary has been generated for this session yet.',
   'spend.key': 'OpenRouter key',
   'spend.row.total': 'Total spend',
   'spend.row.daily': 'Daily spend',

@@ -3,6 +3,7 @@ import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-sess
 import type { WorkspaceId, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionPendingInteractionBase } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { ScheduleId, ScheduleRecord } from '@deepseek-ai/dsh-schedule/client'
+import type {} from '@deepseek-ai/dsh-session-summary-llm/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
   deriveFlat, deriveGroups, deriveSearchResults, owningGroupKey, workspaceLabel,
@@ -183,6 +184,22 @@ describe('deriveGroups', () => {
     expect(deriveSearchResults(
       sessions, workspaces, 'project', noArchive, noAttention, { items: [], hasMore: false }, 10,
     ).items.map(node => [node.id, node.hasActiveSchedule])).toEqual(expected)
+  })
+
+  it('projects the conversation-summary projection into grouped and flat session rows (absent = null)', () => {
+    const summarized = { ...summary('summarized', 3), projectionValues: { summary: 'What this session is about' } }
+    const bare = summary('bare', 2)
+    const sessions = list(summarized, bare)
+    const workspaces = [workspace('project', ['summarized', 'bare'], 'Project')]
+    const expected = [
+      [sid('summarized'), 'What this session is about'],
+      [sid('bare'), null],
+    ]
+    expect(deriveGroups(
+      sessions, workspaces, noArchive, noAttention, view(['project']),
+    )[0]!.sessions.map(node => [node.id, node.summary])).toEqual(expected)
+    expect(deriveFlat(sessions, noArchive, noAttention)
+      .map(node => [node.id, node.summary])).toEqual(expected)
   })
 
   it('hides subagent-origin sessions without hiding ordinary forks', () => {

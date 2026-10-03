@@ -83,6 +83,7 @@ function reasoningEffort(effort: NonNullable<GenerateOptions['reasoningEffort']>
 function resolveThinking(options: GenerateOptions, defaults: RequestDefaults): ResolvedThinking {
   if (options.purpose === 'activity-summary'
     || options.purpose === 'session-title'
+    || options.purpose === 'session-summary'
     || options.purpose === 'workspace-commit'
     || options.purpose === 'workspace-branch-name') return { thinking: 'disabled' }
   const effort = options.reasoningEffort === undefined

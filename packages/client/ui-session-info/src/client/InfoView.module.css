@@ -146,6 +146,10 @@
   color: var(--dsw-alias-label-secondary);
 }
 
+.summary {
+  margin: 0;
+}
+
 .spendSession {
   margin-top: 12px;
 }

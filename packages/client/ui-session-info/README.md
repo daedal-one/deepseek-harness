@@ -1,5 +1,5 @@
 ---
-description: "Info conversation view tab: the Session's identity, workspace, execution environment, and effective command-authorization policy plus the OpenRouter key's spend and the session's estimated USD cost, read from the Host sessionInfo and openrouterSpend Remotes."
+description: "Info conversation view tab: the Session's conversation summary, identity, workspace, execution environment, and effective command-authorization policy plus the OpenRouter key's spend and the session's estimated USD cost, read from the Host sessionInfo and openrouterSpend Remotes."
 kind: "package-reference"
 ---
 
@@ -7,7 +7,7 @@ kind: "package-reference"
 
 ## Summary
 
-The **Info** tab is the session's general information view. It reads the Host's `sessionInfo.read` snapshot and renders four sectioned blocks — **Session** (id, title, agent preset, latest durable model route, working directory, turn and step counts), **Workspace** (the registered Workspace accounting the session, or an explicit absence), **Environment** (verified execution placement plus Host platform, architecture, OS release, Node version, and home directory), and **Command authorization** (effective and default file policy, the resolved workspace boundary, effective and default approval policy, and the effective permission preset with its declared description) — then appends a **Spend** block from the Host's separate `openrouterSpend.read` reading (the OpenRouter key's total, daily, weekly, and monthly spend with its remaining limit or free-tier marker, plus the session's estimated USD cost). It renders an in-flight state, the settled reading, and one distinct stated failure per Host-reported reason. The spend read settles independently: a spend failure degrades only the spend block, while a session-info failure fails the view. The view owns no timers and holds no credentials; it reads on open and on request.
+The **Info** tab is the session's general information view. It reads the Host's `sessionInfo.read` snapshot and renders five sectioned blocks — **Conversation summary** (the latest accepted summary, or an explicit absence), **Session**, **Workspace**, **Environment**, and **Command authorization** — then appends a **Spend** block from the Host's separate `openrouterSpend.read` reading. Each Remote renders an in-flight state, the settled reading, and one distinct stated failure per Host-reported reason; the spend read settles independently, so its failure degrades only the spend block while a session-info failure fails the view. The view owns no timers and holds no credentials.
 
 ## Table of Contents
 
@@ -27,7 +27,7 @@ Open a Session's conversation view and select the **Info** tab (order 20, after 
 
 ### Reading the view
 
-Every fact whose owner is not composed in the deployment is shown through the locale-owned unavailable wording rather than a fabricated value: no registered Workspace, no composed sandbox policy, no approval service, or no permission projection each render their own explicit absence. Policy values are shown as their machine keys (`read-only`, `workspace-write`, `danger-full-access`, `ask`, `never`, and the preset key) because they are product concepts the `/permission` command already names. The reading's read time is shown under the blocks.
+Every fact whose owner is not composed in the deployment is shown through the locale-owned unavailable wording rather than a fabricated value: no accepted conversation summary, no registered Workspace, no composed sandbox policy, no approval service, or no permission projection each render their own explicit absence. Policy values are shown as their machine keys (`read-only`, `workspace-write`, `danger-full-access`, `ask`, `never`, and the preset key) because they are product concepts the `/permission` command already names. The reading's read time is shown under the blocks. The summary block leads the view and shows the Session's latest accepted summary text, or the stated absence when the Session has none.
 
 Each spend row labels its period and shows the amount through the single shared money formatter (en-US, two to four fraction digits, locale-owned unit wording). Separate locale-owned rows show the configured limit and its remaining headroom. A key with no configured limit shows the same locale-owned unlimited wording in both rows instead of fabricating an amount. A free-tier key carries a marker beside its label. The session block names the routed model and provider, then shows the estimated USD cost — or an explicit statement that the model has no OpenRouter catalog price, in which case no zero is fabricated. Every failure state shows its locale-owned reason without rendering Host or carrier diagnostics.
 

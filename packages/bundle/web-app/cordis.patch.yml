@@ -102,6 +102,21 @@
         provider: openrouter
         model: deepseek/deepseek-v4.1-flash
 
+    # One bounded auxiliary request per closed Turn keeps a short durable
+    # account of the conversation's topic and progress in the `summary`
+    # projection, which the Info view and the Session hover card both read.
+    - id: session-summary
+      name: '@deepseek-ai/dsh-session-summary-llm'
+      config:
+        targetSentences: 3
+        maxEntryBytes: 2048
+        maxInputBytes: 16384
+        maxOutputTokens: 200
+        maxSummaryBytes: 1200
+        timeoutMs: 20000
+        provider: openrouter
+        model: deepseek/deepseek-v4.1-flash
+
     # Resolve bind host, SSH launch, and display once at boot, then mount the
     # matching dual-face directory picker. Mount -native or -browse directly in
     # an overlay to pin the interaction.

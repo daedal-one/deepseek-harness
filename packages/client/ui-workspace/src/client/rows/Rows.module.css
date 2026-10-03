@@ -312,6 +312,15 @@
   overflow-wrap: break-word;
 }
 
+/* Conversation summary: up to a few sentences, so it wraps inside the
+   fixed-width card rather than truncating. */
+.hoverSummary {
+  font-size: 12px;
+  line-height: 16px;
+  color: #CFD3D6;
+  overflow-wrap: break-word;
+}
+
 .hoverPath {
   font-size: 12px;
   line-height: 16px;

@@ -42,6 +42,9 @@
       "path": "../../schedule/schedule"
     },
     {
+      "path": "../../session/session-summary-llm"
+    },
+    {
       "path": "../ui-sidebar"
     },
     {

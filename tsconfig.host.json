@@ -199,6 +199,7 @@
     { "path": "./packages/session/session-projection" },
     { "path": "./packages/session/session-projection-cache" },
     { "path": "./packages/session/session-stats" },
+    { "path": "./packages/session/session-summary-llm" },
     { "path": "./packages/session-query/session-query" },
     { "path": "./packages/session-query/session-query-sqlite" },
     { "path": "./packages/session-query/session-log-export/tsconfig.host.json" },

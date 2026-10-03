@@ -1,4 +1,4 @@
-/** Info view: Session identity, workspace, environment, command-authorization policy, and spend. */
+/** Info view: conversation summary, Session identity, workspace, environment, command-authorization policy, and spend. */
 import { useEffect, type ReactNode } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { PropsStore } from '@deepseek-ai/dsh-client-store'
@@ -65,6 +65,19 @@ function Row({ label, value }: { readonly label: string; readonly value: ReactNo
 /** A nullable fact rendered through one unavailable/none wording rather than a fabricated value. */
 function optional(value: string | null, t: Translate): ReactNode {
   return value === null ? t('value.unavailable') : <code>{value}</code>
+}
+
+/** The conversation summary block, or its stated absence. */
+function SummaryBlock({ snapshot, t }: { readonly snapshot: SessionInfoSnapshot; readonly t: Translate }): ReactNode {
+  const summary = snapshot.summary
+  return (
+    <section className={css.block}>
+      <h2>{t('heading.summary')}</h2>
+      {summary === null
+        ? <p className={css.muted}>{t('summary.none')}</p>
+        : <p className={css.summary}>{summary}</p>}
+    </section>
+  )
 }
 
 /** The Session identity block. */
@@ -256,6 +269,7 @@ export function InfoView({ loadInfo, loadSpend, useStore, t }: InfoViewProps): R
       ) : null}
       {state.info.status === 'ready' ? (
         <div className={css.content}>
+          <SummaryBlock snapshot={state.info.snapshot} t={t} />
           <SessionBlock snapshot={state.info.snapshot} t={t} />
           <WorkspaceBlock snapshot={state.info.snapshot} t={t} />
           <EnvironmentBlock snapshot={state.info.snapshot} t={t} />

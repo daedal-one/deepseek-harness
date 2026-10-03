@@ -917,6 +917,28 @@ Source: [`packages/schedule/schedule/src/types.ts:219`](../packages/schedule/sch
 
 Source: [`packages/core/session/src/types.ts:402`](../packages/core/session/src/types.ts)
 
+<a id="sessionsummary--log-only"></a>
+
+#### `session/summary` — log-only
+
+```ts persistence-catalog
+/** Latest-wins accepted conversation summary. Log-only: it never enters the model surface. */
+'session/summary': SessionSummaryEventData
+```
+
+Source: [`packages/session/session-summary-llm/src/index.ts:83`](../packages/session/session-summary-llm/src/index.ts)
+
+<a id="sessionsummary-llm-request--log-only"></a>
+
+#### `session/summary-llm-request` — log-only
+
+```ts persistence-catalog
+/** Log-only pre-dispatch record of one conversation-summary model request. */
+'session/summary-llm-request': SessionSummaryRequestEventData
+```
+
+Source: [`packages/session/session-summary-llm/src/index.ts:81`](../packages/session/session-summary-llm/src/index.ts)
+
 <a id="sessiontitle--log-only"></a>
 
 #### `session/title` — log-only

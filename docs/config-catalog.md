@@ -2600,6 +2600,36 @@ export interface Config {
 
 Source: [`packages/context/session-reference/src/config.ts:11`](../packages/context/session-reference/src/config.ts)
 
+<a id="deepseek-aidsh-session-summary-llm"></a>
+
+## `@deepseek-ai/dsh-session-summary-llm`
+
+Requires: `llm` · `sessions` · `sessionProjections`
+
+```ts config-catalog
+/** Required deployment policy for durable conversation summaries. */
+export interface Config {
+  /** Target sentence count stated in the system prompt. */
+  readonly targetSentences: number
+  /** Maximum UTF-8 bytes retained from one source entry's text. */
+  readonly maxEntryBytes: number
+  /** Maximum UTF-8 bytes in the complete JSON-framed request. */
+  readonly maxInputBytes: number
+  /** Auxiliary output-token cap. */
+  readonly maxOutputTokens: number
+  /** Maximum UTF-8 bytes accepted in one summary. */
+  readonly maxSummaryBytes: number
+  /** End-to-end request deadline in milliseconds. */
+  readonly timeoutMs: number
+  /** Explicit auxiliary provider route. */
+  readonly provider: string
+  /** Explicit auxiliary model id. */
+  readonly model: string
+}
+```
+
+Source: [`packages/session/session-summary-llm/src/index.ts:88`](../packages/session/session-summary-llm/src/index.ts)
+
 <a id="deepseek-aidsh-session-telemetry-otel"></a>
 
 ## `@deepseek-ai/dsh-session-telemetry-otel`

@@ -93,6 +93,8 @@ export interface SessionInfoPolicyFacts {
 export interface SessionInfoSnapshot {
   /** Session identity and whole-log figures. */
   readonly session: SessionInfoSessionFacts
+  /** The Session's latest accepted conversation summary, or null before one lands. */
+  readonly summary: string | null
   /** Workspace registration accounting the Session, or null when unregistered. */
   readonly workspace: SessionInfoWorkspaceFacts | null
   /** Host process and execution-environment facts. */

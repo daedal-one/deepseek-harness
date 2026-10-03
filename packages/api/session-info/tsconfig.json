@@ -30,6 +30,9 @@
       "path": "../../session/session-stats"
     },
     {
+      "path": "../../session/session-summary-llm"
+    },
+    {
       "path": "../../preset/agent-presets"
     },
     {

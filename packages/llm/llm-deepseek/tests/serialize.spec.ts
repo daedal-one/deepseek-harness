@@ -326,7 +326,7 @@ describe('serializeRequest', () => {
     )).toThrow(expect.objectContaining({ code: 'UNSUPPORTED_REASONING_EFFORT' }))
   })
 
-  it.each(['activity-summary', 'session-title', 'workspace-commit', 'workspace-branch-name'] as const)(
+  it.each(['activity-summary', 'session-title', 'session-summary', 'workspace-commit', 'workspace-branch-name'] as const)(
     'disables thinking for %s requests without changing adapter defaults',
     (purpose) => {
       const wire = serializeRequest(

@@ -53,6 +53,7 @@ const INFO: SessionInfoSnapshot = {
     turns: 4,
     steps: 9,
   },
+  summary: 'Fixture summary',
   workspace: { workspaceId: 'ws-1', path: '/work/fixture', title: 'Fixture workspace' },
   environment: {
     placement: 'host',
@@ -113,6 +114,17 @@ describe('InfoView', () => {
     const view = render(<InfoView {...viewProps(settled(), vi.fn(), vi.fn())} />)
 
     expect(view.container.firstElementChild?.getAttribute('aria-busy')).toBe('false')
+    // The Summary block renders first, ahead of the Session block.
+    expect(screen.getAllByRole('heading', { level: 2 }).map(h => h.textContent))
+      .toEqual([
+        en['heading.summary'],
+        en['heading.session'],
+        en['heading.workspace'],
+        en['heading.environment'],
+        en['heading.policies'],
+        en['heading.spend'],
+      ])
+    expect(screen.getByText('Fixture summary')).toBeTruthy()
     expect(screen.getByText(en['heading.session'])).toBeTruthy()
     expect(screen.getByText(SID)).toBeTruthy()
     expect(screen.getByText('Fixture session')).toBeTruthy()
@@ -179,6 +191,13 @@ describe('InfoView', () => {
 
     expect(screen.getByText(en['workspace.none'])).toBeTruthy()
     expect(screen.getAllByText(en['value.unavailable']).length).toBeGreaterThanOrEqual(6)
+  })
+
+  it('states the absence when the summary is null', () => {
+    render(<InfoView {...viewProps(settled({ ...INFO, summary: null }), vi.fn(), vi.fn())} />)
+
+    expect(screen.getByText(en['heading.summary'])).toBeTruthy()
+    expect(screen.getByText(en['summary.none'])).toBeTruthy()
   })
 
   it('marks a free-tier key and renders both limit rows as unlimited when no limit is configured', () => {

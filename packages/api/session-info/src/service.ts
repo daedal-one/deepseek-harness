@@ -26,6 +26,8 @@ import type {} from '@deepseek-ai/dsh-session-title/types'
 import type {} from '@deepseek-ai/dsh-agent-presets/types'
 // Type-only: supplies the `sessionStats` projection declaration.
 import type {} from '@deepseek-ai/dsh-session-stats/types'
+// Type-only: supplies the `summary` projection declaration.
+import type {} from '@deepseek-ai/dsh-session-summary-llm/types'
 // Type-only: supplies the `permissions` projection declaration.
 import type {} from '@deepseek-ai/dsh-permission-presets/types'
 // Type-only: declares `ctx.sandboxPolicy` on the Cordis Context.
@@ -41,7 +43,7 @@ import type {
 } from './types.ts'
 
 /** Client-visible projection units this reading consumes, in one consistent cut. */
-const PROJECTION_KEYS = ['title', 'agentPreset', 'modelSelection', 'sessionStats', 'permissions'] as const
+const PROJECTION_KEYS = ['title', 'summary', 'agentPreset', 'modelSelection', 'sessionStats', 'permissions'] as const
 
 /**
  * Remote-only service answering, for the Web client, what a Session is running
@@ -101,6 +103,7 @@ export class SessionInfoService extends TypertRemoteService {
         turns: stats?.turns ?? 0,
         steps: stats?.steps ?? 0,
       },
+      summary: values.summary ?? null,
       workspace: workspace === null
         ? null
         : { workspaceId: workspace.id, path: workspace.path, title: workspace.title },

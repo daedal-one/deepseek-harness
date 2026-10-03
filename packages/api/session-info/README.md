@@ -7,7 +7,7 @@ kind: "package-reference"
 
 ## Summary
 
-`dsh-session-info` answers one question for the Web GUI: what is this Session, where is it running, and what may it do? Its single Remote method, `sessionInfo.read({ sessionId })`, assembles a point-in-time snapshot from the services that already own each fact — the Session header (identity and working directory), the registered projection units (`title`, `agentPreset`, `modelSelection`, `sessionStats`, `permissions`), the sandbox policy (`ctx.sandboxPolicy`), the approval service (`ctx.approval`), the Workspace registry (`ctx.workspaceRegistry`), and the Host process itself (platform, architecture, release, Node version, home directory). Every fact whose owner is not composed degrades to an explicit `null` rather than a fabricated value, and a Session that is not live on the Host answers `session-unavailable`.
+`dsh-session-info` answers one question for the Web GUI: what is this Session, where is it running, and what may it do? Its single Remote method, `sessionInfo.read({ sessionId })`, assembles a point-in-time snapshot from the services that already own each fact — the Session header, the registered projection units (`title`, `summary`, `agentPreset`, `modelSelection`, `sessionStats`, `permissions`), the sandbox policy, the approval service, the Workspace registry, and the Host process. Every fact whose owner is not composed degrades to an explicit `null` rather than a fabricated value, and a Session that is not live on the Host answers `session-unavailable`.
 
 ## Table of Contents
 
@@ -30,11 +30,11 @@ const result = await ctx.remote.sessionInfo.read({ sessionId }, signal)
 if (result.ok && result.value.ok) render(result.value.value)
 ```
 
-The shipped Web profile mounts this package as the `session-info` Host row, and the [Info view](../../client/ui-session-info/README.md) renders the reading. The snapshot carries four blocks: **session** (id, title, preset, latest durable model route, working directory, turn and step counts), **workspace** (the registered Workspace accounting the Session, or null), **environment** (verified execution placement plus Host platform, architecture, OS release, Node version, and home directory), and **policies** (effective and default sandbox mode, the resolved `workspace-write` root, effective and default approval policy, and the effective permission preset with its declared description). The reading's timestamp is `readAt`.
+The shipped Web profile mounts this package as the `session-info` Host row, and the [Info view](../../client/ui-session-info/README.md) renders the reading. The snapshot carries the **session** block (id, title, preset, latest durable model route, working directory, turn and step counts), the **summary** (the latest accepted conversation summary, or null before one lands), **workspace** (the registered Workspace accounting the Session, or null), **environment** (verified execution placement plus Host platform, architecture, OS release, Node version, and home directory), and **policies** (effective and default sandbox mode, the resolved `workspace-write` root, effective and default approval policy, and the effective permission preset with its declared description). The reading's timestamp is `readAt`.
 
 ### Reading the snapshot
 
-`sessionInfo.read` is a pure read: it appends no Session event, mutates no policy, and writes no file. It answers `session-unavailable` only when the Session is absent from the live registry. A field with no owner — no sandbox policy service, no approval service, no Workspace registration, no permission projection — is `null`, so a consumer distinguishes "not composed" from "composed and set".
+`sessionInfo.read` is a pure read: it appends no Session event, mutates no policy, and writes no file. It answers `session-unavailable` only when the Session is absent from the live registry. A field with no owner — no sandbox policy service, no approval service, no Workspace registration, no permission projection — is `null`, so a consumer distinguishes "not composed" from "composed and set". An absent summary is likewise an explicit `null`, distinguishable from an empty-string summary, before one lands.
 
 -----
 

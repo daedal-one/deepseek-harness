@@ -60,6 +60,7 @@ export const en = {
   'schedule.active': 'Has active scheduled task',
   'hover.created': 'Created {time}',
   'hover.copied': 'Copied',
+  'hover.summaryNone': 'No summary yet',
   'date.ymd': '{y}-{m}-{d}',
   'time.now': 'now',
   'time.minutes': '{n}min',

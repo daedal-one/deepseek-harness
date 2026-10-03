@@ -27,6 +27,11 @@ function displayTitle(node: SessionNode, t: RowTranslate): string {
   return node.blank ? t('session.new') : node.title
 }
 
+/** Hover-card summary line: the accepted summary text, or the stated absence. */
+function hoverSummaryText(node: SessionNode, t: RowTranslate): string {
+  return node.summary !== null && node.summary !== '' ? node.summary : t('hover.summaryNone')
+}
+
 /** Compact relative time using the active locale’s labels. */
 function timeLabel(updatedAt: number, now: number, t: RowTranslate): string {
   const { unit, n } = relativeTime(updatedAt, now)
@@ -301,8 +306,9 @@ function SessionHoverContent({ node, now, t }: { node: SessionNode; now: number;
   return (
     <div className={css.hoverContent}>
       <div className={css.hoverTitle}>{displayTitle(node, t)}</div>
-      {/* Same placeholder rule as the row's trailing cell: no timestamp
-          before the first prompt. */}
+      {/* Same placeholder rule as the row's trailing cell: no summary and no
+          timestamp before the first prompt. */}
+      {!node.blank && <div className={css.hoverSummary}>{hoverSummaryText(node, t)}</div>}
       {!node.blank && <div className={css.hoverTime}>{hoverTimeLabel(node.updatedAt, now, t)}</div>}
       {statuses.map(status => (
         <div className={css.hoverStatus} key={status.label}>

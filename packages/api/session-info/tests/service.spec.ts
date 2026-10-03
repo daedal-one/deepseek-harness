@@ -14,9 +14,10 @@ afterEach(async () => {
 })
 
 /** One session projection cut with every key the service consumes. */
-function projectionValues(): Record<string, unknown> {
+function projectionValues(withSummary = true): Record<string, unknown> {
   return {
     title: 'Fixture session',
+    ...(withSummary ? { summary: 'Fixture summary' } : {}),
     agentPreset: 'default',
     modelSelection: {
       lastUsed: { provider: 'openrouter', model: 'vendor/model-x' },
@@ -38,6 +39,7 @@ function projectionValues(): Record<string, unknown> {
 interface HarnessOptions {
   readonly liveSession?: boolean
   readonly withPeers?: boolean
+  readonly withSummary?: boolean
 }
 
 async function harness(options: HarnessOptions = {}): Promise<SessionInfoService> {
@@ -50,7 +52,7 @@ async function harness(options: HarnessOptions = {}): Promise<SessionInfoService
     get: (id: string) => (options.liveSession === false ? undefined : id === SESSION_ID ? session : undefined),
   } as never)
   ctx.provide('sessionProjections', {
-    snapshot: () => ({ asOfSeq: 0, values: projectionValues() }),
+    snapshot: () => ({ asOfSeq: 0, values: projectionValues(options.withSummary !== false) }),
   } as never)
   if (options.withPeers !== false) {
     ctx.provide('sandboxPolicy', {
@@ -92,6 +94,7 @@ describe('SessionInfoService.read', () => {
       turns: 4,
       steps: 9,
     })
+    expect(value.summary).toBe('Fixture summary')
     expect(value.workspace).toEqual({ workspaceId: 'ws-1', path: '/work/fixture', title: 'Fixture workspace' })
     expect(value.environment.placement).toBe('host')
     expect(value.environment.platform).toBe(process.platform)
@@ -110,6 +113,15 @@ describe('SessionInfoService.read', () => {
       canChangePermission: false,
     })
     expect(typeof value.readAt).toBe('number')
+  })
+
+  it('reports an absent summary as an explicit null rather than a fabricated value', async () => {
+    const service = await harness({ withSummary: false })
+    const result = await service.read({ sessionId: SESSION_ID }, new AbortController().signal)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.value.summary).toBeNull()
   })
 
   it('degrades every absent optional owner to null instead of a fabricated value', async () => {
