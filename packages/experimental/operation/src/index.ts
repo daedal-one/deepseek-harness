@@ -23,7 +23,7 @@ export {
   OperationToolPolicyError,
   OperationToolPolicyRegistry,
 } from './policy.ts'
-export type { ForegroundProcessPolicyOptions, OperationToolInspection, OperationToolPolicy } from './policy.ts'
+export type { ForegroundProcessPolicyOptions, OperationToolCallerContext, OperationToolInspection, OperationToolPolicy } from './policy.ts'
 export { OperationEvidenceError, buildContinuationCandidates, completionControls, observeCanonicalResult, withIntermediateControls } from './observation.ts'
 export { OperationRecordingError, OperationRecorder } from './recorder.ts'
 export { OperationResolutionError, assertionsPassed, evaluateOperationAssertions, resolveOperationExpression } from './resolution.ts'

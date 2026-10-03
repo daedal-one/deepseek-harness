@@ -1155,9 +1155,10 @@ for line in sys.stdin:
     assert [event["phase"] for event in actual] == ["saving", "pending", "returned"]
 
 
-def test_recorded_operation_records_match_the_typescript_sdk(tmp_path: Path) -> None:
-    fixture = Path(__file__).resolve().parents[3] / "snapshots/sdk/clm-operations/notifications.expected.jsonl"
-    expected_path = Path(__file__).parent / "expected/clm-operations.json"
+@pytest.mark.parametrize("scenario", ["clm-operations", "kev-operations"])
+def test_recorded_operation_records_match_the_typescript_sdk(tmp_path: Path, scenario: str) -> None:
+    fixture = Path(__file__).resolve().parents[3] / f"snapshots/sdk/{scenario}/notifications.expected.jsonl"
+    expected_path = Path(__file__).parent / f"expected/{scenario}.json"
     script = tmp_path / "recorded_operation_runtime.py"
     script.write_text(
         """
@@ -1306,6 +1307,25 @@ for line in sys.stdin:
         else:
             assert selected["kind"] == "complete"
             assert draft["state"]["completionEvidence"] == [outcomes[-1]["value"]]
+
+    if scenario == "kev-operations":
+        for request, response in zip(requests, responses):
+            wire = request["wire"]
+            preparation = wire["preparation"]
+            encoded = wire["request"].encode("utf8")
+            assert preparation["tokenIds"] == list(encoded)  # Explicit synthetic byte-tokenizer fixture.
+            assert preparation["inputTokens"] == request["inputTokens"] == len(encoded)
+            assert preparation["requestDigest"] == "sha256:" + hashlib.sha256(encoded).hexdigest()
+            assert request["identity"]["tokenizer"] == "fixture-utf8-bytes"
+            normalized = response["response"]
+            assert "billingUnits" not in normalized["usage"]
+            assert normalized["usage"]["outputTokens"] > 0
+            assert normalized["wire"]["probabilities"] == normalized["probabilities"]
+            assert normalized["wire"]["requestDigest"] == preparation["requestDigest"]
+            assert normalized["wire"]["result"]["usage"] == {
+                "input_tokens": normalized["usage"]["inputTokens"],
+                "output_tokens": normalized["usage"]["outputTokens"],
+            }
 
     projection = {
         "final_response": result.final_response,

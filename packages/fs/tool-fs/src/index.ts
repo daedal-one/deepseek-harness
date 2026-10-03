@@ -15,6 +15,9 @@ import { applyReadImageTool } from './read-image.ts'
 import { READ_MAX_BYTES, READ_MAX_LINE_LENGTH } from './read-render.ts'
 import { FsSandboxController } from './sandbox.ts'
 
+export { applyReadTool } from './read.ts'
+export type { ReadToolCaps } from './read.ts'
+
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'tool-fs'
 

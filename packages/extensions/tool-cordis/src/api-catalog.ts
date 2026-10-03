@@ -5342,7 +5342,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'OperationJudgmentResponse',
-    declaration: 'export interface OperationJudgmentResponse {\n    readonly requestId: OperationJudgmentRequestId;\n    readonly identity: OperationJudgmentIdentity;\n    readonly probabilities: Readonly<Record<string, number>>;\n    readonly usage?: {\n        readonly billingUnits: number;\n        readonly inputTokens: number;\n        readonly outputTokens: number;\n    };\n    readonly providerConfidence?: number;\n    readonly wire?: JsonValue;\n    readonly providerLatencyMs?: number;\n}',
+    declaration: 'export interface OperationJudgmentResponse {\n    readonly requestId: OperationJudgmentRequestId;\n    readonly identity: OperationJudgmentIdentity;\n    readonly probabilities: Readonly<Record<string, number>>;\n    readonly usage?: {\n        readonly billingUnits?: number;\n        readonly inputTokens: number;\n        readonly outputTokens: number;\n    };\n    readonly providerConfidence?: number;\n    readonly wire?: JsonValue;\n    readonly providerLatencyMs?: number;\n}',
   },
   {
     name: 'OperationObservation',
@@ -5366,7 +5366,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'OperationTokenizer',
-    declaration: 'export interface OperationTokenizer {\n    readonly id: string;\n    count(text: string, signal: AbortSignal): Promise<number>;\n}',
+    declaration: 'export interface OperationTokenizer {\n    readonly id: string;\n    count(text: string, signal: AbortSignal): Promise<number>;\n    countMany?(texts: readonly string[], signal: AbortSignal): Promise<readonly number[]>;\n}',
+  },
+  {
+    name: 'OperationToolCallerContext',
+    declaration: 'export interface OperationToolCallerContext {\n    readonly cwd: string | undefined;\n}',
   },
   {
     name: 'OperationToolInspection',
@@ -5374,7 +5378,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'OperationToolPolicy',
-    declaration: 'export interface OperationToolPolicy {\n    readonly allowOutputReferences: boolean;\n    validateArguments(this: void, args: JsonValue): void;\n    inspectResult(this: void, value: JsonValue): OperationToolInspection;\n}',
+    declaration: 'export interface OperationToolPolicy {\n    readonly allowOutputReferences: boolean;\n    validateArguments(this: void, args: JsonValue, caller: OperationToolCallerContext): void;\n    inspectResult(this: void, value: JsonValue): OperationToolInspection;\n}',
   },
   {
     name: 'OperationToolPolicyRegistry',

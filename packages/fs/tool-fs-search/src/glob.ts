@@ -14,7 +14,7 @@ import { sep } from 'node:path'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView, SearchResultView, ToolResult } from '@deepseek-ai/dsh-tools'
 import type { SpillRef } from '@deepseek-ai/dsh-spill'
-import { runRipgrep, toWorkdirRelative, trySaveFormattedResult } from './search-core.ts'
+import { SearchError, runRipgrep, toWorkdirRelative, trySaveFormattedResult } from './search-core.ts'
 import { globSearchMeta, searchViewFromMeta } from './presentation.ts'
 import { acceptedDirectCallValue } from './direct-call.ts'
 
@@ -82,8 +82,9 @@ export function parseGlobArgs(args: { pattern: string; path?: string }): GlobInp
  * is a plain argv element — no shell layer exists, so no quoting applies; the
  * search root rides behind `--` so a leading-dash path can never be parsed as
  * a flag. `--sort=modified` orders by modification time, `--no-ignore
- * --hidden` searches ignored and hidden files, and
- * {@link GLOB_VCS_EXCLUDES} keeps VCS metadata out.
+ * --hidden` searches ignored and hidden files, `--null` separates paths without
+ * splitting embedded newlines, and {@link GLOB_VCS_EXCLUDES} keeps VCS metadata out.
+ * A bare `-` root becomes `./-` so ripgrep searches that filesystem target, not stdin.
  *
  * @param input - the validated arguments.
  * @returns the complete ripgrep argument vector (excluding the binary itself).
@@ -91,6 +92,7 @@ export function parseGlobArgs(args: { pattern: string; path?: string }): GlobInp
 export function buildGlobCommand(input: GlobInput): string[] {
   const parts = [
     '--files',
+    '--null',
     `--glob=${input.pattern}`,
     '--sort=modified',
     '--no-ignore',
@@ -104,7 +106,7 @@ export function buildGlobCommand(input: GlobInput): string[] {
       `--glob=!**/${name}/**`,
     ]),
   ]
-  if (input.path !== undefined) parts.push('--', input.path)
+  if (input.path !== undefined) parts.push('--', input.path === '-' ? './-' : input.path)
   return parts
 }
 
@@ -294,8 +296,13 @@ export function presentGlobResult(_args: { pattern: string; path?: string }, res
  * @param ctx - the plugin context; registrations are effects scoped to it, and
  *   execution uses its `subprocess` service.
  * @param caps - the deployment's resolved glob caps (plugin config after defaulting).
+ * @returns the exact registered definition for trusted composition with instance-bound policy.
  */
-export function applyGlobTool(ctx: Context, caps: GlobToolCaps): void {
+export function applyGlobTool(ctx: Context, caps: GlobToolCaps): ReturnType<typeof registerGlobTool> {
+  return registerGlobTool(ctx, caps)
+}
+
+function registerGlobTool(ctx: Context, caps: GlobToolCaps) {
   const overCapGuidance = caps.sampleOverCapGlobResults
     ? 'while a larger one is sampled across top-level entries, so it spans the tree instead of one subtree.'
     : 'while a larger one keeps the modification-time-ordered head.'
@@ -346,15 +353,15 @@ export function applyGlobTool(ctx: Context, caps: GlobToolCaps): void {
       const input = parseGlobArgs(args)
       const run = await runRipgrep(ctx, exec, 'glob', buildGlobCommand(input), caps.rawOutputMaxBytes, caps.graceMs, caps.stderrMaxBytes, caps.ripgrepCommand)
       const root = input.path === undefined ? '.' : toWorkdirRelative(input.path, run.workdir)
-      if (run.noMatches) return { root, paths: [] }
-
-      const all: string[] = []
-      for (const line of run.stdout.split('\n')) {
-        if (line.length === 0) continue
-        const displayPath = toWorkdirRelative(line, run.workdir)
-        all.push(displayPath)
+      if (run.stdout.length === 0) return { root, paths: [] }
+      if (!run.stdout.endsWith('\0')) {
+        throw new SearchError('glob received malformed ripgrep --files --null output (unterminated path)', 'SEARCH_FAILED')
       }
-      return { root, paths: all }
+      const paths = run.stdout.slice(0, -1).split('\0')
+      if (run.noMatches || paths.some(path => path.length === 0)) {
+        throw new SearchError('glob received malformed ripgrep --files --null output (unexpected path record)', 'SEARCH_FAILED')
+      }
+      return { root, paths: paths.map(path => toWorkdirRelative(path, run.workdir)) }
     },
     presentCall: presentGlobCall,
     presentResult: presentGlobResult,
@@ -374,4 +381,5 @@ export function applyGlobTool(ctx: Context, caps: GlobToolCaps): void {
       ...decision.additionalContexts !== undefined ? { additionalContexts: decision.additionalContexts } : {},
     }
   })
+  return tool
 }

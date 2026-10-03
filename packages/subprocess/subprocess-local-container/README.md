@@ -41,7 +41,7 @@ Mount the runtime first and configure every exact host Session cwd alias that re
 <a id="understand-lifecycle-and-output"></a>
 ## Understand lifecycle and output
 
-The provider attaches before starting each process container, decodes Docker's byte-framed non-terminal streams with backpressure, and exposes raw terminal bytes for TTY processes. Collected streams keep the exact configured byte tail. When a configured spill remains within its cap, the provider publishes the complete bytes under `/workspace/.dsh-spill`; the matching `ctx.fs` provider can read that path after the process container is removed.
+The provider attaches before starting each process container, decodes Docker's byte-framed non-terminal streams with backpressure, and exposes raw terminal bytes for TTY processes. A consumer-closed raw pipe discards subsequent frames for that destination without blocking other frames or termination. Backpressure waits settle on drain, writable completion, closure, or error and remove their listeners. Collected streams keep the exact configured byte tail. When a configured spill remains within its cap, the provider publishes the complete bytes under `/workspace/.dsh-spill`; the matching `ctx.fs` provider can read that path after the process container is removed.
 
 Natural process exit and explicit termination both end at force-capable container removal. The runtime tracks every sibling and refuses to remove the shared backing directory until all siblings are gone. `maxLiveProcesses` on the runtime bounds concurrency; CPU, memory, and PID controls apply per sibling, so the aggregate maximum is the configured per-container bound multiplied by the owner plus that concurrency limit.
 

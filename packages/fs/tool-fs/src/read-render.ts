@@ -21,7 +21,7 @@ export interface ReadWindow {
   limit: number
   /** Maximum characters returned for a single line; overflow is truncated with a suffix. */
   maxLineLength: number
-  /** Maximum bytes of selected output; overflow stops the scan and marks `truncatedByBytes`. */
+  /** Maximum UTF-8 bytes of selected line text and separators; overflow ends retention, not line counting. */
   maxBytes: number
 }
 
@@ -39,8 +39,10 @@ export interface WindowResult {
   lines: FileTextLine[]
   /** Exact total line count in the file. */
   totalLines: number
-  /** Whether selected output hit the byte cap. */
+  /** Whether the byte cap omitted at least one line in the requested window. */
   truncatedByBytes: boolean
+  /** Numbers of returned lines shortened by the UTF-16 code-unit cap; not inferred from their text. */
+  truncatedLineNumbers: number[]
 }
 
 /** Outcome of a bounded text read — what {@link formatReadOutput} renders. */
@@ -55,15 +57,12 @@ export interface FileReadOutcome {
   truncatedByBytes?: true
 }
 
-interface WindowAccumulator {
-  lines: FileTextLine[]
-  totalLines: number
+interface WindowAccumulator extends WindowResult {
   outputBytes: number
-  truncatedByBytes: boolean
 }
 
 function newAccumulator(): WindowAccumulator {
-  return { lines: [], totalLines: 0, outputBytes: 0, truncatedByBytes: false }
+  return { lines: [], totalLines: 0, outputBytes: 0, truncatedByBytes: false, truncatedLineNumbers: [] }
 }
 
 function truncateLine(line: string, maxLineLength: number): string {
@@ -86,6 +85,7 @@ function consumeLine(acc: WindowAccumulator, rawLine: string, request: ReadWindo
   }
   acc.outputBytes += bytes
   acc.lines.push({ number: acc.totalLines, text })
+  if (rawLine.length > request.maxLineLength) acc.truncatedLineNumbers.push(acc.totalLines)
 }
 
 function stripCarriageReturn(line: string): string {
@@ -96,7 +96,12 @@ function finish(acc: WindowAccumulator, request: ReadWindow, displayPath: string
   if (!acc.truncatedByBytes && request.offset > acc.totalLines && !(acc.totalLines === 0 && request.offset === 1)) {
     throw new FsError(`offset ${request.offset} is out of range for "${displayPath}" (${acc.totalLines} lines)`, 'FS_NOT_FOUND')
   }
-  return { lines: acc.lines, totalLines: acc.totalLines, truncatedByBytes: acc.truncatedByBytes }
+  return {
+    lines: acc.lines,
+    totalLines: acc.totalLines,
+    truncatedByBytes: acc.truncatedByBytes,
+    truncatedLineNumbers: acc.truncatedLineNumbers,
+  }
 }
 
 /**
@@ -106,7 +111,7 @@ function finish(acc: WindowAccumulator, request: ReadWindow, displayPath: string
  * @param chunks - decoded text chunks in file order; chunk boundaries carry no meaning.
  * @param request - the resolved window; the caller has already applied its defaults and caps.
  * @param displayPath - the caller-facing path used in the offset-out-of-range error.
- * @returns the numbered window lines, the total line count seen, and the byte-cap truncation flag.
+ * @returns the numbered decoded-text window, total line count, and explicit byte/line clipping facts; no source-byte fidelity is asserted.
  */
 export async function buildWindow(
   chunks: AsyncIterable<string> | Iterable<string>,
@@ -114,8 +119,8 @@ export async function buildWindow(
   displayPath: string,
 ): Promise<WindowResult> {
   const acc = newAccumulator()
-  // One char past the truncation point is enough to prove a line overflows.
-  const lineBufferCap = request.maxLineLength + 1
+  // Keep overflow evidence even when stripping a trailing CR from a buffered prefix.
+  const lineBufferCap = request.maxLineLength + 2
   let lineBuffer = ''
 
   function appendToLineBuffer(segment: string): void {

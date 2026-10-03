@@ -105,7 +105,7 @@ export function parseGrepArgs(args: { pattern: string; path?: string; include?: 
  * {@link GrepInput.include}) is a plain argv element — no shell layer exists,
  * so no quoting applies; the pattern and include ride in `--flag=value` form
  * and the target behind `--`, so a leading-dash value can never be parsed as
- * a flag.
+ * a flag. A bare `-` target becomes `./-` so ripgrep searches that file, not stdin.
  *
  * @param input - the validated arguments.
  * @returns the complete ripgrep argument vector (excluding the binary itself).
@@ -113,7 +113,7 @@ export function parseGrepArgs(args: { pattern: string; path?: string; include?: 
 export function buildGrepCommand(input: GrepInput): string[] {
   const parts = ['--json', `--regexp=${input.pattern}`]
   if (input.include !== undefined) parts.push(`--glob=${input.include}`)
-  if (input.path !== undefined) parts.push('--', input.path)
+  if (input.path !== undefined) parts.push('--', input.path === '-' ? './-' : input.path)
   return parts
 }
 
@@ -130,8 +130,8 @@ function malformedRecord(detail: string, cause?: unknown): SearchError {
  * non-match record types (`begin`/`end`/`context`/`summary`). A line that is
  * not JSON, or a `match` record missing its path / line number / line content,
  * throws {@link SearchError} `SEARCH_FAILED`. A match whose line is not valid
- * UTF-8 (ripgrep sends base64 `bytes` instead of `text`) yields a placeholder
- * preview rather than failing the whole search.
+ * UTF-8 (ripgrep sends base64 `bytes` instead of `text`) fails the whole search;
+ * successful canonical matches never substitute a placeholder for source text.
  */
 function parseRecord(line: string): GrepMatch | undefined {
   let parsed: unknown
@@ -156,7 +156,7 @@ function parseRecord(line: string): GrepMatch | undefined {
     return { path: pathText, lineNumber: data.line_number, line: lines.text.replace(/\r?\n$/, '') }
   }
   if (typeof lines.bytes === 'string') {
-    return { path: pathText, lineNumber: data.line_number, line: '(line is not valid UTF-8)' }
+    throw new SearchError('grep cannot return a matched line that is not valid UTF-8', 'SEARCH_FAILED')
   }
   throw malformedRecord('a match record has neither line text nor bytes')
 }
@@ -272,8 +272,13 @@ export function presentGrepResult(
  * @param ctx - the plugin context; registrations are effects scoped to it, and
  *   execution uses its `subprocess` service.
  * @param caps - the deployment's resolved grep caps (plugin config after defaulting).
+ * @returns the exact registered definition for trusted composition with instance-bound policy.
  */
-export function applyGrepTool(ctx: Context, caps: GrepToolCaps): void {
+export function applyGrepTool(ctx: Context, caps: GrepToolCaps): ReturnType<typeof registerGrepTool> {
+  return registerGrepTool(ctx, caps)
+}
+
+function registerGrepTool(ctx: Context, caps: GrepToolCaps) {
   ctx.systemPrompt.section({
     name: 'tool:grep',
     order: ctx.systemPrompt.getSectionOrder('TOOL_GREP'),
@@ -366,4 +371,5 @@ export function applyGrepTool(ctx: Context, caps: GrepToolCaps): void {
       ...decision.additionalContexts !== undefined ? { additionalContexts: decision.additionalContexts } : {},
     }
   })
+  return tool
 }

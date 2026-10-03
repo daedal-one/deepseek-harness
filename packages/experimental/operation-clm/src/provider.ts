@@ -191,24 +191,42 @@ export class ClmHttpProvider implements OperationJudgmentProvider {
   async prepare(draft: OperationJudgmentDraft, signal: AbortSignal): Promise<OperationPreparedJudgment> {
     return await this.owned(signal, async (ownedSignal) => {
       const wire = clmChoiceRequest(draft, this.identity, this.config.temperature)
+      const texts = clmEncoderInputs(wire)
       let inputTokens = 0
       const inputs: Array<{ text: string; tokens: number }> = []
-      for (const text of clmEncoderInputs(wire)) {
-        this.throwPreparationAbort(ownedSignal)
-        let count: number
+      const append = (text: string, count: number | undefined): void => {
+        if (count === undefined || !Number.isSafeInteger(count) || count < 0) throw new ClmHttpError('CLM tokenizer returned an invalid token count', 'CLM_TOKENIZER')
+        if (count > this.config.maxEncoderTokens) throw new ClmHttpError('CLM encoder input would exceed the reviewed server token ceiling', 'CLM_INPUT_LIMIT')
+        inputTokens += count
+        if (!Number.isSafeInteger(inputTokens)) throw new ClmHttpError('CLM tokenizer total exceeds safe integer accounting', 'CLM_TOKENIZER')
+        inputs.push({ text, tokens: count })
+      }
+      this.throwPreparationAbort(ownedSignal)
+      if (this.tokenizer.countMany !== undefined) {
+        let counts: readonly number[]
         try {
-          count = await this.tokenizer.count(text, ownedSignal)
+          counts = await this.tokenizer.countMany(texts, ownedSignal)
         } catch (error: unknown) {
           this.throwPreparationAbort(ownedSignal)
           throw new ClmHttpError(`CLM tokenizer failed: ${message(error)}`, 'CLM_TOKENIZER')
         }
         this.throwPreparationAbort(ownedSignal)
-        if (!Number.isSafeInteger(count) || count < 0) throw new ClmHttpError('CLM tokenizer returned an invalid token count', 'CLM_TOKENIZER')
-        if (count > this.config.maxEncoderTokens) throw new ClmHttpError('CLM encoder input would exceed the reviewed server token ceiling', 'CLM_INPUT_LIMIT')
-        inputTokens += count
-        inputs.push({ text, tokens: count })
+        if (counts.length !== texts.length) throw new ClmHttpError('CLM tokenizer returned the wrong number of token counts', 'CLM_TOKENIZER')
+        for (const [index, text] of texts.entries()) append(text, counts[index])
+      } else {
+        for (const text of texts) {
+          this.throwPreparationAbort(ownedSignal)
+          let count: number
+          try {
+            count = await this.tokenizer.count(text, ownedSignal)
+          } catch (error: unknown) {
+            this.throwPreparationAbort(ownedSignal)
+            throw new ClmHttpError(`CLM tokenizer failed: ${message(error)}`, 'CLM_TOKENIZER')
+          }
+          this.throwPreparationAbort(ownedSignal)
+          append(text, count)
+        }
       }
-      if (!Number.isSafeInteger(inputTokens) || inputTokens < 0) throw new ClmHttpError('CLM tokenizer returned an invalid token count', 'CLM_TOKENIZER')
       return {
         draft, wire: wire as unknown as import('@deepseek-ai/dsh-util-values').JsonValue, inputTokens, identity: this.identity,
         encoding: { maxTokensPerText: this.config.maxEncoderTokens, inputs },

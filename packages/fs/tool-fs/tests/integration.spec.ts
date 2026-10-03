@@ -123,6 +123,30 @@ describe('default deployment (with dsh-fs-observation-policy)', () => {
       expect(text(result)).toContain('(End of file - total 2 lines)')
     })
 
+    it.each([false, true])('rejects invalid UTF-8 instead of certifying decoded evidence (streaming=%s)', async (streaming) => {
+      await fiber.dispose()
+      fiber = await ctx.plugin(ToolFs, { readStreamMinSize: streaming ? 1 : 1024 })
+      await writeFile(join(dir, 'invalid.txt'), Buffer.from([0x61, 0xff, 0x0d, 0x0a]))
+      const result = await call('read', { file_path: 'invalid.txt' })
+      expect(result.isError).toBe(true)
+      expect(result.error).toMatchObject({ info: { code: 'FS_NOT_TEXT' } })
+      expect(result).not.toHaveProperty('value')
+    })
+
+    it.each([false, true])('describes decoded-line completeness after BOM and CRLF handling (streaming=%s)', async (streaming) => {
+      await fiber.dispose()
+      fiber = await ctx.plugin(ToolFs, { readStreamMinSize: streaming ? 1 : 1024 })
+      const source = Buffer.from('\ufeffa�\r\n', 'utf8')
+      await writeFile(join(dir, 'decoded.txt'), source)
+      const result = await call('read', { file_path: 'decoded.txt' })
+      if (result.isError) throw new Error('expected provider-decoded text')
+      expect(result.value).toEqual({
+        path: join(dir, 'decoded.txt'), offset: 1, lines: [{ number: 1, text: 'a�' }], totalLines: 1,
+        truncatedByBytes: false, truncatedLineNumbers: [],
+      })
+      expect(await readFile(join(dir, 'decoded.txt'))).toEqual(source)
+    })
+
     it('reports a binary file as an error', async () => {
       await writeFile(join(dir, 'bin'), Buffer.from([0x00, 0x01, 0x02]))
       const result = await call('read', { file_path: 'bin' })

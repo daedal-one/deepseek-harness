@@ -164,6 +164,26 @@ describe('registration', () => {
     expect(ctx.tools.schemas().map(s => s.name).sort()).toEqual(['edit', 'read', 'write'])
   })
 
+  it('returns the exact read definition from the owned registrar and disposes its guidance', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ToolRuntime)
+    await ctx.plugin(FakeFs)
+    let registered: ReturnType<typeof ToolFs.applyReadTool> | undefined
+    const fiber = await ctx.plugin({
+      inject: ['tools', 'systemPrompt', 'fs'],
+      apply(owner: Context) {
+        registered = ToolFs.applyReadTool(owner, { limit: 10, maxLineLength: 100, maxBytes: 1000, streamMinSize: 1024 })
+      },
+    })
+    expect(ctx.tools.get('read')).toBe(registered)
+    expect(ctx.tools.schemas().map(schema => schema.name)).toEqual(['read'])
+    expect(renderPrompt(await ctx.systemPrompt.assemble())).toContain('Use the read tool')
+    await fiber.dispose()
+    expect(ctx.tools.get('read')).toBeUndefined()
+    expect(renderPrompt(await ctx.systemPrompt.assemble())).not.toContain('Use the read tool')
+  })
+
   it('declares read parallel-safe while write/edit remain exclusive', async () => {
     const { ctx } = await setup()
     expect(ctx.tools.executionMode({ signal: testToolSignal, callId: ToolCallId('read-safe'), name: 'read', arguments: { file_path: 'a.txt' } }))
@@ -221,6 +241,8 @@ describe('read tool', () => {
       offset: 1,
       lines: [{ number: 1, text: 'hello' }, { number: 2, text: 'world' }],
       totalLines: 2,
+      truncatedByBytes: false,
+      truncatedLineNumbers: [],
     })
     expect(text(result)).toBe(`<path>/abs/a.txt</path>
 <type>file</type>
@@ -237,8 +259,28 @@ describe('read tool', () => {
     fs.files.set('key:empty.txt', '')
     const result = await call(ctx, 'read', { file_path: 'empty.txt' })
     if (result.isError) throw new Error('expected empty read success')
-    expect(result.value).toEqual({ path: '/abs/empty.txt', offset: 1, lines: [], totalLines: 0 })
+    expect(result.value).toEqual({ path: '/abs/empty.txt', offset: 1, lines: [], totalLines: 0, truncatedByBytes: false, truncatedLineNumbers: [] })
     expect(text(result)).toContain('(End of file - total 0 lines)')
+  })
+
+  it('distinguishes a complete requested window from a whole decoded file', async () => {
+    const { ctx, fs } = await setup()
+    fs.files.set('key:a.txt', 'one\ntwo\nthree')
+    const result = await call(ctx, 'read', { file_path: 'a.txt', offset: 2, limit: 1 })
+    if (result.isError) throw new Error('expected window read success')
+    expect(result.value).toEqual({
+      path: '/abs/a.txt', offset: 2, lines: [{ number: 2, text: 'two' }], totalLines: 3,
+      truncatedByBytes: false, truncatedLineNumbers: [],
+    })
+  })
+
+  it('does not infer clipping from literal truncation markers or replacement characters', async () => {
+    const { ctx, fs } = await setup()
+    const source = '... (line truncated to 3 chars)\n�'
+    fs.files.set('key:a.txt', source)
+    const result = await call(ctx, 'read', { file_path: 'a.txt' })
+    if (result.isError) throw new Error('expected decoded-text success')
+    expect(result.value).toMatchObject({ truncatedByBytes: false, truncatedLineNumbers: [], totalLines: 2 })
   })
 
   it('rejects a non-positive offset via arg validation', async () => {
@@ -724,6 +766,8 @@ describe('read caps are plugin config', () => {
     fs.files.set('key:a.txt', 'abcdefgh')
     const result = await call(ctx, 'read', { file_path: 'a.txt' })
     expect(text(result)).toContain('1: abcd... (line truncated to 4 chars)')
+    if (result.isError) throw new Error('expected clipped read success')
+    expect(result.value).toMatchObject({ totalLines: 1, truncatedByBytes: false, truncatedLineNumbers: [1] })
   })
 
   it('a configured readMaxBytes caps the window at the configured bytes', async () => {
@@ -732,7 +776,10 @@ describe('read caps are plugin config', () => {
     const result = await call(ctx, 'read', { file_path: 'a.txt' })
     expect(result.isError).toBe(false)
     if (result.isError) throw new Error('expected read success')
-    expect(result.value).toMatchObject({ totalLines: 3 })
+    expect(result.value).toEqual({
+      path: '/abs/a.txt', offset: 1, lines: [{ number: 1, text: 'aaaa' }, { number: 2, text: 'bbbb' }], totalLines: 3,
+      truncatedByBytes: true, truncatedLineNumbers: [],
+    })
     expect(text(result)).toContain('Output capped.')
     expect(text(result)).not.toContain('cccc')
   })

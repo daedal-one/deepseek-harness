@@ -48,6 +48,14 @@ The policy plugin is optional: without it the tools run against the bare provide
 
 Field names are snake_case to match Claude Code and existing harness tool schemas. Successes return compact envelopes — a read window, an image reference, or a `Created file`/`Updated file` confirmation — and `write`/`edit` derive replayable diff-card metadata for UI presentation.
 
+### Canonical read values and trusted composition
+
+The canonical `read` value contains `path`, `offset`, `lines: [{ number, text }]`, `totalLines`, `truncatedByBytes: boolean`, and `truncatedLineNumbers: number[]`. The boolean reports byte-budget omission within the requested window; the list names returned lines shortened by the per-line UTF-16 code-unit cap. These facts come from acquisition, not rendered markers. A whole decoded-file result requires `offset === 1`, `lines.length === totalLines`, no byte omission, and no clipped lines; an empty file satisfies this condition. An unclipped partial window is not a whole file.
+
+Completeness describes provider-decoded line text, not source-byte fidelity: CRLF terminators are stripped and final-newline presence is not represented. The local provider rejects invalid UTF-8 with `FS_NOT_TEXT` and strips a leading UTF-8 BOM during decoding; this tool receives decoded strings, not original bytes. A literal replacement character or truncation marker does not prove decoding loss or clipping. The byte cap counts re-encoded UTF-8 selected line text and separators, not the complete result envelope or original bytes.
+
+`applyReadTool(ctx, caps)` accepts resolved `ReadToolCaps`, registers only `read` and its scope-aware guidance, and returns that exact definition for trusted instance-bound policy registration. Contributions belong to the supplied plugin context and unwind on disposal. Compositions using this registrar instead of the full plugin avoid duplicate definitions and do not mount mutation tools.
+
 ### Configuration
 
 All keys are optional; the defaults are the shipped read caps.

@@ -1,0 +1,19 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": { "rootDir": "src", "outDir": "lib/types" },
+  "include": ["src"],
+  "references": [
+    { "path": "../../../vendor/cordis" },
+    { "path": "../../../vendor/schemastery" },
+    { "path": "../operation" },
+    { "path": "../../fs/fs" },
+    { "path": "../../fs/tool-fs" },
+    { "path": "../../fs/tool-fs-search" },
+    { "path": "../../core/scope" },
+    { "path": "../../core/system-prompt" },
+    { "path": "../../core/tools" },
+    { "path": "../../subprocess/subprocess" },
+    { "path": "../../util/timeout" },
+    { "path": "../../util/values" }
+  ]
+}

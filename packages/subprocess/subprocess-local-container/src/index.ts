@@ -7,7 +7,7 @@
 import type {} from '@deepseek-ai/dsh-local-container-runtime/workspaces'
 import { randomUUID } from 'node:crypto'
 import { posix } from 'node:path'
-import { PassThrough, type Readable, type Writable } from 'node:stream'
+import { finished, PassThrough, type Readable, type Writable } from 'node:stream'
 import { once } from 'node:events'
 import { Context } from '@deepseek-ai/cordis'
 import { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
@@ -102,6 +102,23 @@ class TailCollector implements SubprocessOutputReader {
   }
 }
 
+/** A consumer may close its pipe while container frames are still arriving. */
+async function writeOutput(destination: Writable, chunk: Buffer): Promise<void> {
+  if (destination.destroyed || destination.closed || destination.writableEnded) return
+  if (destination.errored !== null) throw destination.errored
+  if (destination.write(chunk)) return
+  await new Promise<void>((resolve, reject) => {
+    const drained = (): void => { cleanup(); resolve() }
+    const cleanup = finished(destination, { readable: false }, (error) => {
+      cleanup()
+      destination.off('drain', drained)
+      if (error !== undefined && error !== null && error.code !== 'ERR_STREAM_PREMATURE_CLOSE') reject(error)
+      else resolve()
+    })
+    destination.once('drain', drained)
+  })
+}
+
 interface OutputBinding {
   readonly exposed: Readable | undefined
   readonly collector: TailCollector | undefined
@@ -125,7 +142,7 @@ function outputBinding(
     async push(chunk) {
       collector?.push(chunk)
       const destination = mode === 'pipe' ? exposed : mode === 'inherit' ? inherited : undefined
-      if (destination !== undefined && !destination.write(chunk)) await once(destination, 'drain')
+      if (destination !== undefined) await writeOutput(destination, chunk)
     },
     async seal() {
       if (exposed !== undefined) exposed.end()

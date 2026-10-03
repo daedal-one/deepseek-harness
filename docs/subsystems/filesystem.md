@@ -219,6 +219,10 @@ interface FsObservationActor {
 
 ## Read outcome (consumer / read rendering)
 
+The [read tool's canonical result](../../packages/fs/tool-fs/README.md) separately exposes structured byte and line clipping facts for consumers that require complete decoded-text evidence. The presentational type below does not establish whole-file completeness.
+
+[Filesystem search](../../packages/fs/tool-fs-search/README.md) owns bounded raw stdout acquisition, strict UTF-8 filename preservation, and literal filesystem target semantics. Display retention is separate from canonical source completeness.
+
 A text read is bounded by line window, byte cap, and backend limits. After the byte cap is reached, scanning continues without retaining more lines so `totalLines` remains exact. The result the model-facing `read` tool renders is purely presentational; there is no `full`/`partial` view — authorization is freshness-based (the tool emits a present `fs/observed` directly with the stat's version), so any windowed read can authorize a later write/edit when the file is unchanged. A metadata miss emits an absent observation before the tool returns `FS_NOT_FOUND`, allowing a later guarded write to recreate an externally deleted target without authorizing edit. `dsh-tool-fs`, the executor that owns the read, implements read windowing and constructs this result; the policy plugin does not.
 
 ```ts type-equiv

@@ -1,0 +1,8 @@
+version: 1
+scenario: kev-operations
+profile: sdk
+composition: sdk-kev-operations
+recording: authored
+header:
+  class: sdk-kev-operations
+  pin: true

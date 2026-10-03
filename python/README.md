@@ -1,6 +1,6 @@
-# DeepSeek Harness Python SDK
+# DeepSeek Harness Python packages
 
-Python packages for driving DeepSeek Harness as a subprocess. The client SDK communicates with the bundled runtime over newline-delimited JSON-RPC on stdio.
+Python packages provide the subprocess SDK/runtime and an opt-in local decision service. The client SDK communicates with the bundled runtime over newline-delimited JSON-RPC on stdio; the independent decision service exposes bounded local preparation and scoring.
 
 ## Packages
 
@@ -8,6 +8,7 @@ Python packages for driving DeepSeek Harness as a subprocess. The client SDK com
 |---|---|---|
 | [sdk](sdk/README.md) | `deepseek-harness-sdk` / `deepseek_harness` | High-level turns API and lower-level JSON-RPC client |
 | [sdk-runtime](sdk-runtime/README.md) | `deepseek-harness-runtime-bin` / `deepseek_harness_runtime` | Bundled `dsh` CLI executable and native sidecars |
+| [decision-service](decision-service/README.md) | `dsh-local-decision-service` / `dsh_decision_service` | Private opt-in CPU decision and tokenizer service with pinned local artifacts |
 
 ## Behavior
 

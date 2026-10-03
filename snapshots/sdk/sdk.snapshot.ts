@@ -9,6 +9,7 @@
  * fixtures and rewrites expected outputs.
  */
 
+import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -897,7 +898,7 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         expect(normalizedResult).toBe(await readFile(resultExpectedPath, 'utf8'))
       }
 
-      if (scenario.name === 'clm-operations') {
+      if (scenario.name === 'clm-operations' || scenario.name === 'kev-operations') {
         if (finalResult === undefined) throw new Error('operation SDK scenario has no run result')
         const operationEvents = finalResult.events.filter(event => event.type.startsWith('operation/'))
         const notifiedOperations = notifications.flatMap(notification => {
@@ -944,6 +945,30 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
               candidateSources: expect.any(Array),
             },
           })
+        }
+        if (scenario.name === 'kev-operations') {
+          for (const event of requests) {
+            const prepared = event.data.request as JsonObject
+            const wire = prepared.wire as JsonObject
+            const preparation = wire.preparation as JsonObject
+            if (typeof wire.request !== 'string') throw new Error('Kev SDK fixture lost exact request text')
+            const tokens = Array.from(Buffer.from(wire.request, 'utf8'))
+            expect(preparation.tokenIds).toEqual(tokens)
+            expect(preparation.inputTokens).toBe(tokens.length)
+            expect(prepared.inputTokens).toBe(tokens.length)
+            expect(preparation.requestDigest).toBe(`sha256:${createHash('sha256').update(wire.request, 'utf8').digest('hex')}`)
+            expect(prepared.identity).toMatchObject({ provider: 'synthetic-kev-protocol', tokenizer: 'fixture-utf8-bytes' })
+          }
+          for (const event of operationEvents.filter(row => row.type === 'operation/judgment-result')) {
+            const response = event.data.response as JsonObject
+            const usage = response.usage as JsonObject
+            expect(usage).not.toHaveProperty('billingUnits')
+            expect(usage.outputTokens).toBeGreaterThan(0)
+            expect(response.wire).toMatchObject({
+              probabilities: response.probabilities,
+              result: { usage: { input_tokens: usage.inputTokens, output_tokens: usage.outputTokens } },
+            })
+          }
         }
       }
 

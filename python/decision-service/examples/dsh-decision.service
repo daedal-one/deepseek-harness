@@ -1,0 +1,29 @@
+# Reference only: not installed or activated by this repository.
+[Unit]
+Description=Private local DSH decision worker
+After=network.target
+
+[Service]
+Type=simple
+User=dsh-decision
+Group=dsh-decision
+WorkingDirectory=/srv/dsh-decision
+EnvironmentFile=/etc/dsh-decision/credentials.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/srv/dsh-decision/venv/bin/python -B -m dsh_decision_service --config /etc/dsh-decision/server.json
+Restart=no
+KillMode=control-group
+TimeoutStopSec=15
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+IPAddressDeny=any
+IPAddressAllow=localhost
+StandardOutput=null
+StandardError=journal
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

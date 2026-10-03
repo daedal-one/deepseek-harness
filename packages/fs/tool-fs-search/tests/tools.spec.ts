@@ -2,7 +2,7 @@
  * Consumer-surface tests for the search tools over a FAKE subprocess service
  * and a FAKE spill backend, exercised through `ctx.tools.execute()` so nothing
  * bypasses the tool registry. The fake service makes every seam outcome
- * scriptable — spawn failure, truncated stdout with/without a raw spill path,
+ * scriptable — spawn failure, bounded raw stdout, invalid UTF-8 and pipe errors,
  * abort/timeout kills, signal kills, ripgrep exit codes — so these tests
  * verify schemas, argument validation, argv construction, workdir derivation,
  * signal forwarding, `SEARCH_*` error classification, retention,
@@ -14,6 +14,8 @@ import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
 import { join, sep } from 'node:path'
+import { PassThrough, Readable } from 'node:stream'
+import { getEventListeners } from 'node:events'
 import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt, { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { TOOL_ABORTED_BEFORE_DISPATCH, type ToolExecution, type ToolExecutionToken } from '@deepseek-ai/dsh-tools'
@@ -56,22 +58,22 @@ interface ScriptedStream {
   spillPath?: string
 }
 
-/** One scripted spawn: exit facts plus the collected streams the tool reads. */
+/** One scripted spawn: exit facts, the raw pipe, and the retained stderr. */
 interface ScriptedRun {
-  outcome: SubprocessOutcome
-  stdout: ScriptedStream
+  outcome: SubprocessOutcome | Promise<SubprocessOutcome>
+  stdout: Readable | undefined
   stderr: ScriptedStream
 }
 
 /** A successful run over the given stdout; overrides script the failure shapes. */
 function runResult(
-  stdout: string,
-  overrides?: Partial<SubprocessOutcome> & { stdout?: Partial<ScriptedStream>; stderr?: ScriptedStream },
+  stdout: string | Readable,
+  overrides?: Partial<SubprocessOutcome> & { stderr?: ScriptedStream },
 ): ScriptedRun {
-  const { stdout: stdoutOverrides, stderr: stderrOverrides, ...outcome } = overrides ?? {}
+  const { stderr: stderrOverrides, ...outcome } = overrides ?? {}
   return {
     outcome: { exitCode: 0, signal: null, ...outcome },
-    stdout: { text: stdout, ...stdoutOverrides },
+    stdout: typeof stdout === 'string' ? Readable.from([Buffer.from(stdout)]) : stdout,
     stderr: { text: '', ...stderrOverrides },
   }
 }
@@ -98,7 +100,7 @@ class FakeReader implements SubprocessOutputReader {
  */
 class FakeHandle implements SubprocessHandle {
   readonly stdin = undefined
-  readonly stdout = undefined
+  readonly stdout: Readable | undefined
   readonly stderr = undefined
   readonly collected: SubprocessCollectedOutputs
   readonly done: Promise<SubprocessOutcome>
@@ -109,26 +111,32 @@ class FakeHandle implements SubprocessHandle {
   /** Scripted handle that drops one requested collect reader (the defensive branch). */
   readonly dropReaders: boolean
 
-  constructor(spec: SubprocessSpawnSpec, script: () => ScriptedRun | { reject: Error }, dropReaders = false) {
+  rangeWaits = 0
+
+  constructor(
+    spec: SubprocessSpawnSpec,
+    script: () => ScriptedRun | { reject: Error },
+    dropReaders = false,
+    private readonly rangeExit: Promise<boolean> = Promise.resolve(true),
+  ) {
     this.dropReaders = dropReaders
-    // The abort listener attaches BEFORE the scripted run resolves, mirroring
-    // a real spawn: the escalation is armed when the process starts.
-    spec.signal?.addEventListener('abort', () => { this.terminated = true }, { once: true })
+    const abort = (): void => { this.terminated = true }
+    spec.signal?.addEventListener('abort', abort, { once: true })
     const scripted = script()
     if ('reject' in scripted) {
-      // A spawn failure produces no process output, so no readers exist.
-      this.collected = {}
+      this.stdout = Readable.from([])
+      this.collected = { stderr: new FakeReader({ text: '' }) }
       this.done = Promise.reject(scripted.reject)
     } else {
-      this.collected = {
-        ...dropReaders ? {} : { stdout: new FakeReader(scripted.stdout), stderr: new FakeReader(scripted.stderr) },
-      }
+      this.stdout = scripted.stdout
+      this.collected = { ...dropReaders ? {} : { stderr: new FakeReader(scripted.stderr) } }
       this.done = Promise.resolve(scripted.outcome)
     }
-    this.done.then(
-      () => { this.settled = true },
-      () => { this.settled = true },
-    )
+    const settle = (): void => {
+      this.settled = true
+      spec.signal?.removeEventListener('abort', abort)
+    }
+    this.done.then(settle, settle)
   }
 
   terminate(): void {
@@ -136,7 +144,8 @@ class FakeHandle implements SubprocessHandle {
   }
 
   waitForExit(_signal?: AbortSignal): Promise<boolean> {
-    return Promise.resolve(true)
+    this.rangeWaits += 1
+    return this.rangeExit
   }
 }
 
@@ -163,10 +172,11 @@ class FakeSubprocess extends SubprocessRuntime {
   handler: (spec: SubprocessSpawnSpec) => ScriptedRun | { reject: Error } = () => runResult('')
   /** When true, spawned handles drop their collect readers (the defensive branch). */
   dropReaders = false
+  rangeExit: Promise<boolean> = Promise.resolve(true)
 
   override spawn(spec: SubprocessSpawnSpec): SubprocessHandle {
     this.spawns.push(spec)
-    const handle = new FakeHandle(spec, () => this.handler(spec), this.dropReaders)
+    const handle = new FakeHandle(spec, () => this.handler(spec), this.dropReaders, this.rangeExit)
     this.handles.push(handle)
     return handle
   }
@@ -265,6 +275,32 @@ describe('registration', () => {
     expect(ctx.tools.schemas()).toHaveLength(0)
   })
 
+  it('owned registrars return the exact definitions and dispose all contributions', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ToolRuntime)
+    await ctx.plugin(FakeSubprocess)
+    let glob: ReturnType<typeof ToolFsSearch.applyGlobTool> | undefined
+    let grep: ReturnType<typeof ToolFsSearch.applyGrepTool> | undefined
+    const caps = { maxMetaBytes: 1000, rawOutputMaxBytes: 1000, graceMs: 100, stderrMaxBytes: 100, timeoutMs: 1000 }
+    const fiber = await ctx.plugin({
+      inject: ['tools', 'systemPrompt', 'subprocess'],
+      apply(owner: Context) {
+        glob = ToolFsSearch.applyGlobTool(owner, { ...caps, maxResults: 10, sampleOverCapGlobResults: false })
+        grep = ToolFsSearch.applyGrepTool(owner, { ...caps, maxMatches: 10, maxLineBytes: 100 })
+      },
+    })
+    expect(ctx.tools.get('glob')).toBe(glob)
+    expect(ctx.tools.get('grep')).toBe(grep)
+    expect(ctx.tools.schemas().map(schema => schema.name).sort()).toEqual(['glob', 'grep'])
+    expect(renderPrompt(await ctx.systemPrompt.assemble())).toContain('Use the glob tool')
+    expect(renderPrompt(await ctx.systemPrompt.assemble())).toContain('Use the grep tool')
+    await fiber.dispose()
+    expect(ctx.tools.schemas()).toEqual([])
+    expect(renderPrompt(await ctx.systemPrompt.assemble())).not.toContain('Use the glob tool')
+    expect(renderPrompt(await ctx.systemPrompt.assemble())).not.toContain('Use the grep tool')
+  })
+
   it('unregisters everything on fiber disposal (HMR safety)', async () => {
     const { ctx, fiber } = await setup()
     expect(ctx.tools.schemas()).toHaveLength(2)
@@ -357,9 +393,18 @@ describe('config validation', () => {
 })
 
 describe('command construction (plain argv)', () => {
+  it('literalizes only the stdin sentinel path without mutating tool arguments', () => {
+    const args = { pattern: '*', path: '-' }
+    expect(buildGlobCommand(args).slice(-2)).toEqual(['--', './-'])
+    expect(buildGrepCommand(args).slice(-2)).toEqual(['--', './-'])
+    expect(args).toEqual({ pattern: '*', path: '-' })
+    expect(buildGlobCommand({ ...args, path: './-' }).slice(-2)).toEqual(['--', './-'])
+    expect(buildGrepCommand({ ...args, path: 'dir/-' }).slice(-2)).toEqual(['--', 'dir/-'])
+  })
   it('glob: fixed rg --files argv with the pattern and paired VCS excludes', () => {
     expect(buildGlobCommand({ pattern: '**/*.ts' })).toEqual([
       '--files',
+      '--null',
       '--glob=**/*.ts',
       '--sort=modified',
       '--no-ignore',
@@ -374,7 +419,7 @@ describe('command construction (plain argv)', () => {
   })
 
   it('glob: the search root rides behind -- as a plain element', () => {
-    expect(buildGlobCommand({ pattern: '*.md', path: 'docs dir' })).toEqual(['--files', '--glob=*.md', '--sort=modified', '--no-ignore', '--hidden',
+    expect(buildGlobCommand({ pattern: '*.md', path: 'docs dir' })).toEqual(['--files', '--null', '--glob=*.md', '--sort=modified', '--no-ignore', '--hidden',
       '--glob=!**/.git', '--glob=!**/.git/**',
       '--glob=!**/.svn', '--glob=!**/.svn/**',
       '--glob=!**/.hg', '--glob=!**/.hg/**',
@@ -405,14 +450,14 @@ describe('command construction (plain argv)', () => {
     // The argv vector is handed to rg verbatim: hostile text cannot break out
     // of its argument because there is no shell between the vector and rg.
     expect(buildGrepCommand({ pattern: raw })).toEqual(['--json', `--regexp=${raw}`])
-    expect(buildGlobCommand({ pattern: raw })[1]).toBe(`--glob=${raw}`)
+    expect(buildGlobCommand({ pattern: raw })[2]).toBe(`--glob=${raw}`)
   })
 })
 
 describe('workdir derivation and signal forwarding', () => {
   it('forwards the session cwd as the spawn cwd', async () => {
     const { ctx, subprocess } = await setup()
-    subprocess.handler = () => runResult('a.ts\n')
+    subprocess.handler = () => runResult('a.ts\0')
     await call(ctx, 'glob', { pattern: '*' }, { agent: agent('/sessions/s1') })
     expect(subprocess.spawns[0]?.cwd).toBe('/sessions/s1')
   })
@@ -420,7 +465,7 @@ describe('workdir derivation and signal forwarding', () => {
   it('uses the subprocess provider working-directory mapping for spawn and display', async () => {
     const { ctx, subprocess } = await setup()
     subprocess.mappedWorkingDirectory = '/workspace'
-    subprocess.handler = () => runResult('/workspace/a.ts\n')
+    subprocess.handler = () => runResult('/workspace/a.ts\0')
     const result = await call(ctx, 'glob', { pattern: '*' }, { agent: agent('/host/project') })
     expect(subprocess.spawns[0]?.cwd).toBe('/workspace')
     expect(text(result)).toContain('a.ts')
@@ -429,7 +474,7 @@ describe('workdir derivation and signal forwarding', () => {
 
   it('defaults the spawn cwd to process.cwd() without a session cwd', async () => {
     const { ctx, subprocess } = await setup()
-    subprocess.handler = () => runResult('a.ts\n')
+    subprocess.handler = () => runResult('a.ts\0')
     await call(ctx, 'glob', { pattern: '*' }, { agent: agent() })
     expect(subprocess.spawns[0]?.cwd).toBe(process.cwd())
     // A non-agent caller takes the same default.
@@ -448,9 +493,8 @@ describe('workdir derivation and signal forwarding', () => {
     // preprocessor into this unconfined spawn.
     expect(spec?.argv).toEqual([rgPath, '--no-config', '--json', '--regexp=needle'])
     expect(spec?.stdio.stdin).toBe('ignore')
-    // stdout gets the tool's parse budget; stderr is a diagnostic excerpt;
-    // both are the seam's diagnostic-tail shape (no spill files requested).
-    expect((spec?.stdio.stdout as { maxBytes: number }).maxBytes).toBe(1234)
+    // Only stderr uses lossy diagnostic collection; stdout must remain raw bytes.
+    expect(spec?.stdio.stdout).toBe('pipe')
     expect((spec?.stdio.stderr as { maxBytes: number }).maxBytes).toBe(4096)
     expect(spec?.graceMs).toBe(5_000)
   })
@@ -589,7 +633,7 @@ describe('workdir derivation and signal forwarding', () => {
     const result = await call(ctx, 'glob', { pattern: '*' })
     expect(result.isError).toBe(true)
     expect(result.error).toMatchObject({ info: { name: 'SearchError', code: 'SEARCH_FAILED' } })
-    expect(text(result)).toContain('no collected output streams')
+    expect(text(result)).toContain('no collected stderr stream')
   })
 })
 
@@ -664,30 +708,158 @@ describe('exit semantics and failure classification', () => {
 })
 
 describe('raw output acquisition', () => {
-  it('fails with SEARCH_RAW_OUTPUT_OVERFLOW when truncated stdout has a raw spill path', async () => {
+  it.each(['glob', 'grep'])('drains %s overflow without parsing partial output or leaving listeners', async (tool) => {
     const { ctx, subprocess } = await setup({ config: { rawOutputMaxBytes: 16 } })
-    subprocess.handler = () => runResult('', { stdout: { text: 'x', lossy: true, spillPath: '/does/not/get-read' } })
-    const result = await call(ctx, 'glob', { pattern: '*' })
+    let drained = false
+    const stdout = Readable.from((function* () {
+      yield Buffer.from('short')
+      yield Buffer.alloc(64, 0xff)
+      yield Buffer.alloc(64)
+      drained = true
+    })())
+    subprocess.handler = () => runResult(stdout)
+    const result = await call(ctx, tool, { pattern: '*' })
     expect(result.error).toMatchObject({ info: { code: 'SEARCH_RAW_OUTPUT_OVERFLOW' } })
     expect(text(result)).toContain('narrow pattern, path, or include')
+    expect(drained).toBe(true)
+    expect(subprocess.handles[0]?.rangeWaits).toBe(1)
+    for (const event of ['data', 'end', 'close', 'error', 'finish']) expect(stdout.listenerCount(event)).toBe(0)
   })
 
-  it('fails with SEARCH_RAW_OUTPUT_OVERFLOW when UNTRUNCATED inline stdout exceeds the cap', async () => {
-    // A subprocess implementation retaining more inline than this package's
-    // cap (or a deployment lowering rawOutputMaxBytes below the retention
-    // budget) must not smuggle an over-cap parse through the untruncated path.
-    const { ctx, subprocess } = await setup({ config: { rawOutputMaxBytes: 16 } })
-    subprocess.handler = () => runResult(`${'x'.repeat(64)}\n`)
-    const result = await call(ctx, 'grep', { pattern: 'x' })
-    expect(result.error).toMatchObject({ info: { name: 'SearchError', code: 'SEARCH_RAW_OUTPUT_OVERFLOW' } })
-    expect(text(result)).toContain('narrow pattern, path, or include')
+  it('counts raw bytes and decodes split multibyte sequences only after EOF', async () => {
+    const { ctx, subprocess } = await setup({ config: { rawOutputMaxBytes: 3 } })
+    subprocess.handler = () => runResult(Readable.from([Buffer.from([0xc3]), Buffer.from([0xa9, 0])]))
+    expect(await call(ctx, 'glob', { pattern: '*' })).toMatchObject({ isError: false, value: { paths: ['é'] } })
   })
 
-  it('fails with SEARCH_RAW_OUTPUT_OVERFLOW when truncated stdout has no spill path', async () => {
+  it('preserves a leading BOM and valid replacement character in filename bytes', async () => {
     const { ctx, subprocess } = await setup()
-    subprocess.handler = () => runResult('', { stdout: { text: 'partial', lossy: true } })
-    const result = await call(ctx, 'grep', { pattern: 'x' })
-    expect(result.error).toMatchObject({ info: { code: 'SEARCH_RAW_OUTPUT_OVERFLOW' } })
+    subprocess.handler = () => runResult('\ufeffa.ts\0bad\ufffd.ts\0')
+    expect(await call(ctx, 'glob', { pattern: '*' })).toMatchObject({
+      isError: false, value: { paths: ['\ufeffa.ts', 'bad\ufffd.ts'] },
+    })
+  })
+
+  it.each([[0xff, 0], [0xe2, 0x82]])('rejects invalid or incomplete UTF-8 bytes %j', async (...bytes) => {
+    const { ctx, subprocess } = await setup()
+    subprocess.handler = () => runResult(Readable.from([Buffer.from(bytes)]))
+    const result = await call(ctx, 'glob', { pattern: '*' })
+    expect(result.error).toMatchObject({ info: { code: 'SEARCH_FAILED' } })
+    expect(text(result)).toContain('not valid UTF-8')
+  })
+
+  it('terminates and observes exit when the provider omits the requested raw pipe', async () => {
+    const { ctx, subprocess } = await setup()
+    subprocess.handler = () => ({ ...runResult(''), stdout: undefined })
+    const result = await call(ctx, 'glob', { pattern: '*' })
+    expect(result.error).toMatchObject({ info: { code: 'SEARCH_FAILED' } })
+    expect(text(result)).toContain('no raw stdout pipe')
+    expect(subprocess.handles[0]).toMatchObject({ terminated: true, settled: true, rangeWaits: 1 })
+  })
+
+  it('rejects an already-decoded stdout pipe instead of trusting replacement text', async () => {
+    const { ctx, subprocess } = await setup()
+    subprocess.handler = () => runResult(Readable.from(['decoded text']))
+    expect(await call(ctx, 'glob', { pattern: '*' })).toMatchObject({
+      isError: true, error: { info: { code: 'SEARCH_FAILED' } },
+    })
+  })
+
+  it.each(['error', 'cancel', 'premature-close', 'provider-error'])('awaits managed-range quiescence and removes listeners after %s', async (mode) => {
+    const { ctx, subprocess } = await setup()
+    const stdout = new PassThrough()
+    const started = Promise.withResolvers<undefined>()
+    const range = Promise.withResolvers<boolean>()
+    const controller = new AbortController()
+    const outcome = Promise.withResolvers<SubprocessOutcome>()
+    subprocess.rangeExit = range.promise
+    subprocess.handler = () => {
+      started.resolve(undefined)
+      return { ...runResult(stdout), ...(mode === 'provider-error' ? { outcome: outcome.promise } : {}) }
+    }
+    let returned = false
+    const pending = call(ctx, 'glob', { pattern: '*' }, { signal: controller.signal }).then((result) => {
+      returned = true
+      return result
+    })
+    await started.promise
+    if (mode === 'cancel') controller.abort('stop')
+    else if (mode === 'provider-error') outcome.reject(new Error('provider failed'))
+    else stdout.destroy(mode === 'error' ? new Error('raw pipe failed') : undefined)
+    await expect.poll(() => subprocess.handles[0]?.terminated).toBe(true)
+    expect(returned).toBe(false)
+    range.resolve(true)
+    const result = await pending
+    expect(result.error).toMatchObject({ info: { code: mode === 'cancel' ? 'SEARCH_ABORTED' : 'SEARCH_FAILED' } })
+    expect(stdout.destroyed).toBe(true)
+    expect(subprocess.handles[0]?.settled).toBe(true)
+    for (const event of ['data', 'end', 'close', 'error', 'finish']) expect(stdout.listenerCount(event)).toBe(0)
+    expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0)
+  })
+
+  it('waits for the process outcome after a pipe failure even when range exit was already observed', async () => {
+    const { ctx, subprocess } = await setup()
+    const stdout = new PassThrough()
+    const started = Promise.withResolvers<undefined>()
+    const outcome = Promise.withResolvers<SubprocessOutcome>()
+    subprocess.handler = () => {
+      started.resolve(undefined)
+      return { ...runResult(stdout), outcome: outcome.promise }
+    }
+    let returned = false
+    const pending = call(ctx, 'glob', { pattern: '*' }).then((result) => { returned = true; return result })
+    await started.promise
+    stdout.destroy(new Error('raw pipe failed'))
+    await expect.poll(() => subprocess.handles[0]?.terminated).toBe(true)
+    expect(subprocess.handles[0]?.settled).toBe(false)
+    expect(returned).toBe(false)
+    outcome.resolve({ exitCode: null, signal: 'SIGTERM' })
+    expect(await pending).toMatchObject({ isError: true, error: { info: { code: 'SEARCH_FAILED' } } })
+    expect(subprocess.handles[0]?.settled).toBe(true)
+    expect(stdout.listenerCount('error')).toBe(0)
+  })
+
+  it('does not return successful output until managed-range exit is observed', async () => {
+    const { ctx, subprocess } = await setup()
+    const started = Promise.withResolvers<undefined>()
+    const range = Promise.withResolvers<boolean>()
+    const stdout = Readable.from([Buffer.from('a.ts\0')])
+    subprocess.rangeExit = range.promise
+    subprocess.handler = () => { started.resolve(undefined); return runResult(stdout) }
+    let returned = false
+    const pending = call(ctx, 'glob', { pattern: '*' }).then((result) => { returned = true; return result })
+    await started.promise
+    await expect.poll(() => stdout.readableEnded).toBe(true)
+    expect(returned).toBe(false)
+    range.resolve(true)
+    expect(await pending).toMatchObject({ isError: false, value: { paths: ['a.ts'] } })
+  })
+
+  it('reports cancellation after stdout closes but before managed-range exit', async () => {
+    const { ctx, subprocess } = await setup()
+    const stdout = Readable.from([Buffer.from('a.ts\0')])
+    const range = Promise.withResolvers<boolean>()
+    const controller = new AbortController()
+    subprocess.rangeExit = range.promise
+    subprocess.handler = () => runResult(stdout)
+    const pending = call(ctx, 'glob', { pattern: '*' }, { signal: controller.signal })
+    await expect.poll(() => stdout.closed).toBe(true)
+    controller.abort('cancel while observing range')
+    range.resolve(true)
+    expect(await pending).toMatchObject({ isError: true, error: { info: { code: 'SEARCH_ABORTED' } } })
+    expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0)
+  })
+
+  it('reports failed exit observation and still settles the raw pipe', async () => {
+    const { ctx, subprocess } = await setup()
+    const stdout = new PassThrough()
+    subprocess.handler = () => runResult(stdout)
+    subprocess.rangeExit = Promise.reject(new Error('provider lost range'))
+    const result = await call(ctx, 'glob', { pattern: '*' })
+    expect(result.error).toMatchObject({ info: { code: 'SEARCH_FAILED' } })
+    expect(text(result)).toContain('could not observe its subprocess range exit')
+    expect(stdout.destroyed).toBe(true)
+    expect(stdout.listenerCount('error')).toBe(0)
   })
 })
 
@@ -781,11 +953,45 @@ describe('cross-directory sampling', () => {
 describe('glob results', () => {
   it('lists workdir-relative paths (absolute output under the workdir is relativized)', async () => {
     const { ctx, subprocess } = await setup()
-    subprocess.handler = () => runResult('/sessions/s1/src/a.ts\n/elsewhere/b.ts\nrel/c.ts\n')
+    subprocess.handler = () => runResult('/sessions/s1/src/a.ts\0/elsewhere/b.ts\0rel/c.ts\0')
     const result = await call(ctx, 'glob', { pattern: '*' }, { agent: agent('/sessions/s1') })
     if (result.isError) throw new Error('expected glob success')
     expect(result.value).toEqual({ root: '.', paths: [join('src', 'a.ts'), '/elsewhere/b.ts', 'rel/c.ts'] })
     expect(text(result)).toBe(`${join('src', 'a.ts')}\n/elsewhere/b.ts\nrel/c.ts`)
+  })
+
+  it('preserves embedded newlines, carriage returns, and whitespace in canonical filenames', async () => {
+    const { ctx, subprocess } = await setup()
+    subprocess.handler = () => runResult('/sessions/s1/a\nb.ts\0 leading\r.ts \0')
+    const result = await call(ctx, 'glob', { pattern: '*' }, { agent: agent('/sessions/s1') })
+    if (result.isError) throw new Error('expected glob success')
+    expect(result.value).toEqual({ root: '.', paths: ['a\nb.ts', ' leading\r.ts '] })
+    expect(result.meta).toMatchObject({ paths: ['a\nb.ts', ' leading\r.ts '], total: 2 })
+  })
+
+  it.each(['partial.ts', 'complete.ts\0partial.ts', '\0', 'a.ts\0\0'])('rejects malformed NUL path framing %j', async (stdout) => {
+    const { ctx, subprocess } = await setup()
+    subprocess.handler = () => runResult(stdout)
+    const result = await call(ctx, 'glob', { pattern: '*' })
+    expect(result.isError).toBe(true)
+    expect(result.error).toMatchObject({ info: { code: 'SEARCH_FAILED' } })
+    expect(result).not.toHaveProperty('value')
+  })
+
+  it('rejects contradictory no-match output instead of silently dropping paths', async () => {
+    const { ctx, subprocess } = await setup()
+    subprocess.handler = () => runResult('a.ts\0', { exitCode: 1 })
+    const result = await call(ctx, 'glob', { pattern: '*' })
+    expect(result.isError).toBe(true)
+    expect(result.error).toMatchObject({ info: { code: 'SEARCH_FAILED' } })
+  })
+
+  it.each([0, 1])('returns an empty canonical collection on empty successful output (exit %i)', async (exitCode) => {
+    const { ctx, subprocess } = await setup()
+    subprocess.handler = () => runResult('', { exitCode })
+    const result = await call(ctx, 'glob', { pattern: '*' })
+    if (result.isError) throw new Error('expected empty search success')
+    expect(result.value).toEqual({ root: '.', paths: [] })
   })
 
   it('validates arguments (blank pattern, blank path)', async () => {
@@ -796,10 +1002,10 @@ describe('glob results', () => {
 
   it('threads a valid path through to the spawn as the plain search root element', async () => {
     const { ctx, subprocess } = await setup()
-    subprocess.handler = () => runResult('sub/a.ts\n')
+    subprocess.handler = () => runResult('sub/a.ts\0')
     const result = await call(ctx, 'glob', { pattern: '*.ts', path: 'sub' })
     expect(result.isError).toBe(false)
-    expect(subprocess.spawns[0]?.argv).toEqual([rgPath, '--no-config', '--files', '--glob=*.ts', '--sort=modified', '--no-ignore', '--hidden',
+    expect(subprocess.spawns[0]?.argv).toEqual([rgPath, '--no-config', '--files', '--null', '--glob=*.ts', '--sort=modified', '--no-ignore', '--hidden',
       '--glob=!**/.git', '--glob=!**/.git/**',
       '--glob=!**/.svn', '--glob=!**/.svn/**',
       '--glob=!**/.hg', '--glob=!**/.hg/**',
@@ -817,7 +1023,7 @@ describe('glob results', () => {
         content: [{ type: 'text', text: 'glob context' }], source: { kind: 'plugin', plugin: 'test' },
       })],
     }))
-    subprocess.handler = () => runResult('a.ts\nb.ts\nc.ts\nd.ts\n')
+    subprocess.handler = () => runResult('a.ts\0b.ts\0c.ts\0d.ts\0')
     const result = await call(ctx, 'glob', { pattern: '*.ts' }, { agent: agent('/w') })
     expect(result.isError).toBe(false)
     if (result.isError) throw new Error('expected glob success')
@@ -840,7 +1046,7 @@ describe('glob results', () => {
     // freshly-unpacked subtree first, and a head-of-3 reads like the entire
     // workspace. The sample reaches every top-level entry instead.
     const { ctx, subprocess } = await setup({ config: { globMaxResults: 3 } })
-    subprocess.handler = () => runResult(['vendor/a.ts', 'vendor/b.ts', 'vendor/c.ts', 'src/d.ts', 'guide/e.md', 'top.txt'].map(w).join('\n'))
+    subprocess.handler = () => runResult(['vendor/a.ts', 'vendor/b.ts', 'vendor/c.ts', 'src/d.ts', 'guide/e.md', 'top.txt', ''].map(w).join('\0'))
     const result = await call(ctx, 'glob', { pattern: '*' }, { agent: agent('/w') })
     expect(text(result)).toBe(['vendor/a.ts', 'src/d.ts', 'guide/e.md'].map(w).join('\n') + '\n\n'
       + '(Showing 3 of 6 paths, sampled across 3 of the 4 top-level entries this pattern matched '
@@ -852,7 +1058,7 @@ describe('glob results', () => {
     const { ctx, subprocess } = await setup({
       config: { globMaxResults: 3, sampleOverCapGlobResults: false },
     })
-    subprocess.handler = () => runResult(['vendor/a.ts', 'vendor/b.ts', 'vendor/c.ts', 'src/d.ts', 'guide/e.md'].join('\n'))
+    subprocess.handler = () => runResult(['vendor/a.ts', 'vendor/b.ts', 'vendor/c.ts', 'src/d.ts', 'guide/e.md', ''].join('\0'))
     expect(text(await call(ctx, 'glob', { pattern: '*' }, { agent: agent('/w') })))
       .toBe('vendor/a.ts\nvendor/b.ts\nvendor/c.ts\n\n'
         + '(Showing 3 of 5 paths. The complete result could not be saved; narrow pattern or path to see more.)')
@@ -865,7 +1071,8 @@ describe('glob results', () => {
       'workspace/vendor/b.ts',
       'workspace/source/c.ts',
       'workspace/guides/d.md',
-    ].map(w).join('\n'))
+      '',
+    ].map(w).join('\0'))
     const result = await call(ctx, 'glob', { pattern: '*', path: w('workspace') }, { agent: agent('/w') })
     expect(text(result)).toContain(['workspace/vendor/a.ts', 'workspace/source/c.ts', 'workspace/guides/d.md'].map(w).join('\n'))
     expect(text(result)).toContain('sampled across 3 of the 3 top-level entries')
@@ -878,7 +1085,8 @@ describe('glob results', () => {
       '/w/workspace/vendor/b.ts',
       '/w/workspace/source/c.ts',
       '/w/workspace/guides/d.md',
-    ].map(w).join('\n'))
+      '',
+    ].map(w).join('\0'))
     const result = await call(ctx, 'glob', { pattern: '*', path: w('/w/workspace') }, { agent: agent(w('/w')) })
     expect(text(result)).toContain(['workspace/vendor/a.ts', 'workspace/source/c.ts', 'workspace/guides/d.md'].map(w).join('\n'))
     expect(text(result)).toContain('sampled across 3 of the 3 top-level entries')
@@ -886,7 +1094,7 @@ describe('glob results', () => {
 
   it('drops the narrowing hint when the sample reaches every top-level entry', async () => {
     const { ctx, subprocess } = await setup({ config: { globMaxResults: 3 } })
-    subprocess.handler = () => runResult(['vendor/a.ts', 'vendor/b.ts', 'vendor/c.ts', 'src/d.ts'].map(w).join('\n'))
+    subprocess.handler = () => runResult(['vendor/a.ts', 'vendor/b.ts', 'vendor/c.ts', 'src/d.ts', ''].map(w).join('\0'))
     expect(text(await call(ctx, 'glob', { pattern: '*' }, { agent: agent('/w') })))
       .toBe(['vendor/a.ts', 'vendor/b.ts', 'src/d.ts'].map(w).join('\n') + '\n\n'
         + '(Showing 3 of 4 paths, sampled across 2 of the 2 top-level entries this pattern matched '
@@ -896,21 +1104,21 @@ describe('glob results', () => {
 
   it('keeps modification-time order untouched when the whole result fits', async () => {
     const { ctx, subprocess } = await setup({ config: { globMaxResults: 4 } })
-    subprocess.handler = () => runResult('vendor/a.ts\nvendor/b.ts\nsrc/c.ts\n')
+    subprocess.handler = () => runResult('vendor/a.ts\0vendor/b.ts\0src/c.ts\0')
     expect(text(await call(ctx, 'glob', { pattern: '*' }, { agent: agent('/w') })))
       .toBe('vendor/a.ts\nvendor/b.ts\nsrc/c.ts')
   })
 
   it('keeps the plain footer for a flat result, where the sample is the modification-time head', async () => {
     const { ctx, subprocess } = await setup({ config: { globMaxResults: 2 } })
-    subprocess.handler = () => runResult('a.ts\nb.ts\nc.ts\n')
+    subprocess.handler = () => runResult('a.ts\0b.ts\0c.ts\0')
     expect(text(await call(ctx, 'glob', { pattern: '*' }, { agent: agent('/w') })))
       .toBe('a.ts\nb.ts\n\n(Showing 2 of 3 paths. The complete result could not be saved; narrow pattern or path to see more.)')
   })
 
   it('does not create a spill file when the result fits inline', async () => {
     const { ctx, subprocess, spill } = await setup({ spill: true })
-    subprocess.handler = () => runResult('a.ts\nb.ts\n')
+    subprocess.handler = () => runResult('a.ts\0b.ts\0')
     const result = await call(ctx, 'glob', { pattern: '*' }, { agent: agent('/w') })
     expect(text(result)).toBe('a.ts\nb.ts')
     expect(spill?.saves).toHaveLength(0)
@@ -922,7 +1130,7 @@ describe('glob results', () => {
       kind: 'accept' as const,
       value: { root: '.', paths: ['replacement-a.ts', 'replacement-b.ts'] },
     }))
-    subprocess.handler = () => runResult('old-a.ts\nold-b.ts\n')
+    subprocess.handler = () => runResult('old-a.ts\0old-b.ts\0')
 
     const result = await call(ctx, 'glob', { pattern: '*.ts' }, { agent: agent('/w') })
 
@@ -935,7 +1143,7 @@ describe('glob results', () => {
 
   it('keeps the full nested Code value without creating a top-level spill', async () => {
     const { ctx, subprocess, spill } = await setup({ config: { globMaxResults: 2 }, spill: true })
-    subprocess.handler = () => runResult('a.ts\nb.ts\nc.ts\nd.ts\n')
+    subprocess.handler = () => runResult('a.ts\0b.ts\0c.ts\0d.ts\0')
     const result = await call(ctx, 'glob', { pattern: '*.ts' }, {
       agent: agent('/w'),
       parent: Symbol('run_code') as ToolExecutionToken,
@@ -953,7 +1161,7 @@ describe('glob results', () => {
   ])('keeps the inline page and reports the unsaved remainder when %s', async (_label, mode) => {
     const { ctx, subprocess, spill } = await setup({ config: { globMaxResults: 1 }, spill: mode.spill })
     if (mode.fail && spill) spill.failWith = new Error('disk full')
-    subprocess.handler = () => runResult('a.ts\nb.ts\n')
+    subprocess.handler = () => runResult('a.ts\0b.ts\0')
     const result = await call(ctx, 'glob', { pattern: '*' }, mode.ownerless ? {} : { agent: agent('/w') })
     expect(result.isError).toBe(false) // spill unavailability never fails the search
     expect(text(result)).toBe('a.ts\n\n(Showing 1 of 2 paths. The complete result could not be saved; narrow pattern or path to see more.)')
@@ -1009,11 +1217,25 @@ describe('grep results', () => {
     expect(text(result)).toContain('Line 1: aéaéa (line truncated)')
   })
 
-  it('renders a non-UTF-8 line (rg bytes form) as a placeholder instead of failing', async () => {
-    const { ctx, subprocess } = await setup()
+  it('fails the whole search on a non-UTF-8 match even beyond the display cap', async () => {
+    const { ctx, subprocess, spill } = await setup({ config: { grepMaxMatches: 1 }, spill: true })
     const record = JSON.stringify({ type: 'match', data: { path: { text: 'bin.dat' }, lines: { bytes: 'AAECww==' }, line_number: 4 } })
-    subprocess.handler = () => runResult(`${record}\n`)
-    expect(text(await call(ctx, 'grep', { pattern: 'x' }))).toContain('Line 4: (line is not valid UTF-8)')
+    subprocess.handler = () => runResult(`${matchLine('a.txt', 1, 'valid')}\n${record}\n`)
+    const result = await call(ctx, 'grep', { pattern: 'x' }, { agent: agent('/w') })
+    expect(result.isError).toBe(true)
+    expect(result.error).toMatchObject({ info: { code: 'SEARCH_FAILED' } })
+    expect(text(result)).toContain('matched line that is not valid UTF-8')
+    expect(result).not.toHaveProperty('value')
+    expect(spill?.saves).toEqual([])
+  })
+
+  it('returns literal placeholder text without confusing it with an encoding error', async () => {
+    const { ctx, subprocess } = await setup()
+    const literal = '(line is not valid UTF-8)'
+    subprocess.handler = () => runResult(`${matchLine('a.txt', 1, literal)}\n`)
+    const result = await call(ctx, 'grep', { pattern: 'line' })
+    if (result.isError) throw new Error('expected literal text success')
+    expect(result.value).toEqual({ matches: [{ path: 'a.txt', lineNumber: 1, line: literal }] })
   })
 
   it('strips a CRLF terminator from the matched line text', () => {
@@ -1145,7 +1367,7 @@ describe('rg --json transport failures (SEARCH_FAILED)', () => {
 describe('the no-background-job invariant', () => {
   it('settles every spawned search handle across successful and failed searches', async () => {
     const { ctx, subprocess } = await setup()
-    subprocess.handler = () => runResult('a.ts\n')
+    subprocess.handler = () => runResult('a.ts\0')
     await call(ctx, 'glob', { pattern: '*' })
     subprocess.handler = () => runResult('', { exitCode: 2, stderr: { text: 'boom' } })
     await call(ctx, 'grep', { pattern: 'x' })
@@ -1196,7 +1418,7 @@ describe('presentation', () => {
 
   it('glob projects a search card from a real execute, a flat path list with total and truncation', async () => {
     const { ctx, subprocess } = await setup({ config: { globMaxResults: 2 } })
-    subprocess.handler = () => runResult('a.ts\nb.ts\nc.ts\n')
+    subprocess.handler = () => runResult('a.ts\0b.ts\0c.ts\0')
     const result = await call(ctx, 'glob', { pattern: '*.ts' }, { agent: agent('/w') })
     if (result.isError) throw new Error('expected glob success')
     expect(result.meta).toEqual({ shape: 'paths', paths: ['a.ts', 'b.ts'], truncated: true, total: 3 })

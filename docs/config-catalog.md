@@ -951,6 +951,112 @@ Depends on: [`OperationDeploymentManifestVerification`](../packages/experimental
 
 Source: [`packages/experimental/operation-clm/src/index.ts:37`](../packages/experimental/operation-clm/src/index.ts)
 
+<a id="deepseek-aidsh-experimental-operation-fs"></a>
+
+## `@deepseek-ai/dsh-experimental-operation-fs`
+
+Requires: `operations` · `tools` · `systemPrompt` · `fs` · `subprocess`
+
+```ts config-catalog
+/** Every bound is deployment-owned; this composition supplies no workload defaults. */
+export interface Config {
+  /** Absolute host roots admitting source paths, not a symlink-safe read fence. */
+  approvedRoots: string[]
+  /** Maximum UTF-8 bytes in each source path. */
+  maxPathBytes: number
+  /** Maximum UTF-8 bytes in each glob, regular expression, or include filter. */
+  maxPatternBytes: number
+  /** Maximum explicit read limit, also the normal read tool's line cap. */
+  readMaxLines: number
+  /** Maximum UTF-16 code units returned for one read line. */
+  readMaxLineLength: number
+  /** Maximum UTF-8 bytes returned for selected read lines. */
+  readMaxBytes: number
+  /** File size at which the normal read tool streams instead of buffering. */
+  readStreamMinSize: number
+  /** Maximum glob paths displayed; canonical results remain complete. */
+  globMaxResults: number
+  /** Whether an over-cap glob display samples top-level entries. */
+  sampleOverCapGlobResults: boolean
+  /** Maximum grep matches displayed; canonical results remain complete. */
+  grepMaxMatches: number
+  /** Maximum bytes in a grep line preview; canonical lines are not clipped. */
+  grepMaxLineBytes: number
+  /** Maximum bytes in persisted search presentation metadata. */
+  searchMetaMaxBytes: number
+  /** Maximum complete ripgrep stdout bytes; overflow fails instead of clipping. */
+  rawOutputMaxBytes: number
+  /** Subprocess termination escalation grace in milliseconds. */
+  graceMs: number
+  /** Maximum bytes in the retained search stderr diagnostic tail. */
+  stderrMaxBytes: number
+  /** Normal search tool timeout in milliseconds; the operation deadline also applies. */
+  timeoutMs: number
+}
+```
+
+Source: [`packages/experimental/operation-fs/src/config.ts:10`](../packages/experimental/operation-fs/src/config.ts)
+
+<a id="deepseek-aidsh-experimental-operation-kev"></a>
+
+## `@deepseek-ai/dsh-experimental-operation-kev`
+
+Requires: `operations` · `credentials`
+
+```ts config-catalog
+/** Required provider configuration; readiness never supplies a calibration declaration. */
+export interface Config extends LocalHttpConfig {
+  /** Required service authorization reference, resolved afresh per HTTP request. */
+  readonly credentialRef: string
+  /** Local provider identifier, independent of the wire model route. */
+  readonly providerId: string
+  /** Immutable model artifact identity, not a route alias. */
+  readonly model: string
+  /** Exact official System One model route accepted by the local service. */
+  readonly wireModel: string
+  /** Immutable encoder identity binding the deployed base and adapter artifacts. */
+  readonly encoder: string
+  /** Immutable tokenizer and special-token recipe identity echoed by preparation. */
+  readonly tokenizerId: string
+  /** Pinned official single-question encoding and System One serialization recipe. */
+  readonly serialization: 'kev-90512f1c-systemone-choice-v1'
+  /** SHA-256 of exact serving-manifest bytes; must equal deploymentManifest.digest. */
+  readonly deployment: string
+  /** Operator-reviewed reference to that same serving manifest, not a separate review artifact. */
+  readonly deploymentManifest: OperationDeploymentManifestVerification
+  /** Supported CPU model precision; other precision deployments are not implemented. */
+  readonly dtype: 'float32'
+  /** Reviewed service limits that must exactly match the manifest-owned response identity. */
+  readonly serviceCaps: KevServiceCaps
+  /** Separate operator calibration declaration about this deployment; this provider performs no model qualification. */
+  readonly calibrationId?: string
+}
+
+/** Reviewed service limits included in the deployment/configuration identity. */
+export interface KevServiceCaps {
+  /** Maximum complete official encoder input; exceeding this ceiling rejects rather than truncates. */
+  readonly maxInputTokens: number
+  /** One past the largest actual tokenizer id, including added and special tokens. */
+  readonly vocabSize: number
+  /** Maximum complete choice candidates accepted by one service request. */
+  readonly maxCandidates: number
+  /** Service ceiling in bytes for the complete incoming HTTP request body. */
+  readonly maxRequestBytes: number
+  /** Service ceiling in bytes for the complete outgoing HTTP response body. */
+  readonly maxResponseBytes: number
+  /** Maximum waiting requests admitted behind the single supervised worker. */
+  readonly maxQueueSize: number
+  /** Manifest queue-wait plus execution budget in milliseconds, independent of the client's HTTP deadline. */
+  readonly requestTimeoutMs: number
+  /** Maximum worker execution time in milliseconds before termination and join are required. */
+  readonly executionTimeoutMs: number
+}
+```
+
+Depends on: `LocalHttpConfig` (`@deepseek-ai/dsh-experimental-operation-clm/local-http`) · [`OperationDeploymentManifestVerification`](../packages/experimental/operation/src/index.ts)
+
+Source: [`packages/experimental/operation-kev/src/config.ts:33`](../packages/experimental/operation-kev/src/config.ts)
+
 <a id="deepseek-aidsh-experimental-tool-agent-team"></a>
 
 ## `@deepseek-ai/dsh-experimental-tool-agent-team`
@@ -3264,7 +3370,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/fs/tool-fs/src/index.ts:25`](../packages/fs/tool-fs/src/index.ts)
+Source: [`packages/fs/tool-fs/src/index.ts:28`](../packages/fs/tool-fs/src/index.ts)
 
 <a id="deepseek-aidsh-tool-fs-search"></a>
 

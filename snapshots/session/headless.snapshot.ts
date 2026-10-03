@@ -550,6 +550,26 @@ function pinOf(scenario: HeadlessScenario): HeadlessScenario {
   return pin
 }
 
+/** Reject a refreshed PTC image transcript that loses successful dispatch or model-visible image evidence. */
+function verifyPtcImageEvidence(log: string, expectedImages: number): void {
+  const events = parseSessionLog(log)
+  const dispatches = events.flatMap(event => event.type === 'tool/ptc-dispatch' && event.data.name === 'read_image'
+    ? [event.data]
+    : [])
+  expect(dispatches, 'successful nested image reads').toHaveLength(expectedImages)
+  const attachments = dispatches.flatMap(dispatch => {
+    expect(dispatch.isError, 'read_image must succeed before refreshing its scenario').toBe(false)
+    const images = dispatch.content.filter(block => block.type === 'image')
+    expect(images, 'each read_image dispatch retains an image block').toHaveLength(1)
+    return images.map(image => image.attachment)
+  })
+  const delivered = events.flatMap(event => event.type === 'user/message'
+    && event.data.source.kind === 'plugin' && event.data.source.plugin === 'tools-ptc'
+    ? event.data.content.flatMap(block => block.type === 'image' ? [block.attachment] : [])
+    : [])
+  expect(delivered, 'nested images must reach the persisted model input').toEqual(attachments)
+}
+
 /** Require successful verification and the complete canonical event before refresh can write a fixture. */
 async function verifySessionQuerySpill(log: string, spillRoot: string, locatorRoot: string): Promise<void> {
   const events = parseSessionLog(log)
@@ -637,6 +657,23 @@ describe('headless recorded-session snapshots', () => {
       expect(ownerOf(scenario), `${scenario.name}: composition owner`).toBeDefined()
       expect(pinOf(scenario).manifest.sessionFormat, `${scenario.name}: current-writer header pin`).toBeUndefined()
     }
+  })
+
+  it('refuses PTC image refresh when dispatch or persisted model input loses the image', async () => {
+    const scenario = scenarioByName.get('ptc-read-image')!
+    const [fixture] = await fixtureSessions(scenario)
+    expect(fixture).toBeDefined()
+    verifyPtcImageEvidence(fixture!, 1)
+    const events = records(fixture!)
+    const serialize = (values: JsonObject[]): string => values.map(value => JSON.stringify(value)).join('\n') + '\n'
+    const failed = events.map(event => event.type === 'tool/ptc-dispatch'
+      && (event.data as JsonObject).name === 'read_image'
+      ? { ...event, data: { ...(event.data as JsonObject), isError: true } }
+      : event)
+    expect(() => verifyPtcImageEvidence(serialize(failed), 1)).toThrow()
+    const missing = events.filter(event => event.type !== 'user/message'
+      || ((event.data as JsonObject).source as JsonObject).plugin !== 'tools-ptc')
+    expect(() => verifyPtcImageEvidence(serialize(missing), 1)).toThrow()
   })
 
   it('recognizes the supported OS-assigned listener forms', () => {
@@ -963,6 +1000,9 @@ describe('headless recorded-session snapshots', () => {
           },
           inspect: async (cwd) => {
             actualLogs = await persistedSessions(cwd)
+            if (scenario.name === 'ptc-read-image' || scenario.name === 'ptc-read-image-attachment-path') {
+              verifyPtcImageEvidence(actualLogs[0]!.content, scenario.name === 'ptc-read-image' ? 1 : 2)
+            }
             if (scenario.name === 'session-query-spill') {
               await verifySessionQuerySpill(actualLogs[0]!.content, spillRoot, locatorRoot)
             }

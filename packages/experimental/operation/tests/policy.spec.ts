@@ -66,9 +66,9 @@ describe('foreground process operation policy', () => {
   it('rejects background arguments before dispatch and accepts foreground arguments', () => {
     const policy = createForegroundProcessOperationPolicy()
     expect(policy.allowOutputReferences).toBe(false)
-    expect(() => { policy.validateArguments({ command: 'status', run_in_background: true }) }).toThrow('cannot run in the background')
-    expect(() => { policy.validateArguments({ command: 'status', run_in_background: false }) }).not.toThrow()
-    expect(() => { policy.validateArguments('status') }).toThrow('process arguments must be a JSON object')
+    expect(() => { policy.validateArguments({ command: 'status', run_in_background: true }, { cwd: '/workspace' }) }).toThrow('cannot run in the background')
+    expect(() => { policy.validateArguments({ command: 'status', run_in_background: false }, { cwd: '/workspace' }) }).not.toThrow()
+    expect(() => { policy.validateArguments('status', { cwd: '/workspace' }) }).toThrow('process arguments must be a JSON object')
   })
 
   it('hard-stops background, timeout, abort, signal, sandbox, and missing exit outcomes', () => {
