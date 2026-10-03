@@ -15,11 +15,19 @@
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
     },
+    "./tokenizer": {
+      "types": "./lib/types/tokenizer.d.ts",
+      "default": "./lib/tokenizer.js"
+    },
+    "./local-http": {
+      "types": "./lib/types/local-http.d.ts",
+      "default": "./lib/local-http.js"
+    },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
   "files": [
-    "lib/index.js",
+    "lib/*.js",
     "lib/types/**/*.js",
     "lib/types/**/*.d.ts"
   ],
@@ -39,7 +47,10 @@
     "@deepseek-ai/cordis": "workspace:^",
     "@deepseek-ai/dsh-credentials": "workspace:^",
     "@deepseek-ai/dsh-experimental-operation": "workspace:^",
+    "@deepseek-ai/dsh-session": "workspace:^",
+    "@deepseek-ai/dsh-system-prompt": "workspace:^",
     "@deepseek-ai/dsh-timeout": "workspace:^",
+    "@deepseek-ai/dsh-tools": "workspace:^",
     "@deepseek-ai/dsh-util-values": "workspace:^"
   }
 }

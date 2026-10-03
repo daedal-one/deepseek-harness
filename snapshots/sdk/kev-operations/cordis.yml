@@ -1,0 +1,17 @@
+# Real Kev provider with synthetic external protocol replies; no model inference.
+- id: skill-filesystem
+  name: '@deepseek-ai/dsh-skill-filesystem'
+  config:
+    includeDefaultRoots: false
+
+- id: session-persistence-jsonl
+  name: '@deepseek-ai/dsh-session-persistence-jsonl'
+  config:
+    root: !!js dshHomePath('sessions')
+    compression: none
+
+- insert:
+    - id: operations
+      name: '../../../packages/experimental/operation/lib/index.js'
+    - id: operation-kev-sdk-fixture
+      name: '../../../packages/experimental/operation/tests/fixtures/kev-profile.ts'

@@ -608,7 +608,7 @@ interface GenerateOptions {
    * map the purpose to model-hidden transport metadata or purpose-specific
    * generation policy. Ordinary conversation requests leave it unset.
    */
-  purpose?: 'activity-summary' | 'compaction' | 'session-title' | 'workspace-commit' | 'workspace-branch-name'
+  purpose?: 'activity-summary' | 'compaction' | 'session-title' | 'session-summary' | 'workspace-commit' | 'workspace-branch-name'
 }
 ```
 

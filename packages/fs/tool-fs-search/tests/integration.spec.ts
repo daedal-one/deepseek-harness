@@ -68,6 +68,7 @@ describe('search tools over the real subprocess service + the packaged rg', () =
   })
 
   afterEach(async () => {
+    await ctx.fiber.dispose()
     await rm(dir, { recursive: true, force: true })
   })
 
@@ -86,6 +87,38 @@ describe('search tools over the real subprocess service + the packaged rg', () =
     it('scopes to a directory search root (path arg)', async () => {
       const result = await call('glob', { pattern: '*.ts', path: 'src' }, agent())
       expect(text(result).split('\n').sort()).toEqual([join('src', 'alpha.ts'), join('src', 'beta.ts')])
+    })
+
+    it.skipIf(process.platform === 'win32')('preserves newlines and carriage returns inside source filenames', async () => {
+      const filename = 'line\nbreak\r.ts'
+      await writeFile(join(dir, filename), 'text\n')
+      const result = await call('glob', { pattern: '*break*', path: dir }, agent())
+      if (result.isError) throw new Error('expected glob success')
+      expect(result.value).toEqual({ root: '.', paths: [filename] })
+      expect(result.meta).toMatchObject({ paths: [filename], total: 1, truncated: false })
+    })
+
+    // Linux permits the invalid UTF-8 filename bytes required by this case.
+    it.skipIf(process.platform !== 'linux')('rejects an invalid-byte filename rather than aliasing a valid replacement-character file', async () => {
+      const invalid = Buffer.concat([Buffer.from(join(dir, 'bad')), Buffer.from([0xff]), Buffer.from('.ts')])
+      await writeFile(invalid, 'invalid-byte filename source\n')
+      await writeFile(join(dir, 'bad\ufffd.ts'), 'different valid filename source\n')
+      const result = await call('glob', { pattern: 'bad*.ts' }, agent())
+      expect(result).toMatchObject({ isError: true, error: { info: { code: 'SEARCH_FAILED' } } })
+      expect(text(result)).toContain('not valid UTF-8')
+    })
+
+    it.each(['bad\ufffd.ts', '\ufeffbom.ts'])('preserves the actual valid filename %j', async (filename) => {
+      await writeFile(join(dir, filename), 'intended source\n')
+      const result = await call('glob', { pattern: '*', path: filename }, agent())
+      expect(result).toMatchObject({ isError: false, value: { paths: [filename] } })
+    })
+
+    it('searches a literal bare-dash file instead of reporting stdin', async () => {
+      await writeFile(join(dir, '-'), 'literal dash source\n')
+      const result = await call('glob', { pattern: '*', path: '-' }, agent())
+      expect(result).toMatchObject({ isError: false, value: { root: '-', paths: ['./-'] } })
+      expect(text(result)).not.toContain('<stdin>')
     })
 
     it('reports zero discoveries as No files found', async () => {
@@ -113,6 +146,29 @@ describe('search tools over the real subprocess service + the packaged rg', () =
       expect(output).toContain('Found 3 matches')
       expect(output).toContain(`${join('src', 'alpha.ts')}\nLine 1: export const alpha = 1\nLine 2: // TODO: refit alpha`)
       expect(output).toContain('notes.md\nLine 1: alpha appears here too')
+    })
+
+    it('rejects non-UTF-8 matched bytes instead of returning substitute evidence', async () => {
+      await writeFile(join(dir, 'invalid.txt'), Buffer.from([0x68, 0x69, 0xff, 0x0a]))
+      const result = await call('grep', { pattern: 'hi', path: 'invalid.txt' }, agent())
+      expect(result.isError).toBe(true)
+      expect(result.error).toMatchObject({ info: { code: 'SEARCH_FAILED' } })
+      expect(text(result)).toContain('matched line that is not valid UTF-8')
+    })
+
+    it('keeps literal placeholder text as an ordinary complete match', async () => {
+      await writeFile(join(dir, 'literal.txt'), '(line is not valid UTF-8)\n')
+      const result = await call('grep', { pattern: 'line is not valid', path: 'literal.txt' }, agent())
+      if (result.isError) throw new Error('expected grep success')
+      expect(result.value).toEqual({ matches: [{ path: 'literal.txt', lineNumber: 1, line: '(line is not valid UTF-8)' }] })
+    })
+
+    it('matches a literal bare-dash file instead of returning empty stdin evidence', async () => {
+      await writeFile(join(dir, '-'), 'literal dash source\n')
+      const result = await call('grep', { pattern: 'literal dash', path: '-' }, agent())
+      expect(result).toMatchObject({
+        isError: false, value: { matches: [{ path: './-', lineNumber: 1, line: 'literal dash source' }] },
+      })
     })
 
     it('greps a single FILE target', async () => {

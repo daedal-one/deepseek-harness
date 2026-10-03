@@ -11,9 +11,10 @@
  * task. Local deployments use the binary shipped inside the npm package;
  * another execution world may supply a configured `rg`. No shell layer exists
  * between the argv vector and ripgrep, so no shell quoting is involved. Raw `rg` stdout is an internal
- * transport detail: the tools request a per-run stdout capture budget from the
- * subprocess seam, parse only complete in-memory stdout within
- * `rawOutputMaxBytes`, and never read spill files. The model-facing recovery
+ * transport detail: the tools retain the raw stdout pipe within
+ * `rawOutputMaxBytes`, drain excess bytes without retaining them, and decode
+ * complete output as strict UTF-8 without stripping a filename's BOM. They
+ * never read spill files. The model-facing recovery
  * artifact is the formatted result saved through `ctx.spillStore.saveText()`
  * ({@link trySaveFormattedResult}).
  *
@@ -22,11 +23,13 @@
 
 import { existsSync } from 'node:fs'
 import { isAbsolute, join, parse, relative, sep } from 'node:path'
+import type { Readable } from 'node:stream'
+import { finished } from 'node:stream/promises'
 import type { Context } from '@deepseek-ai/cordis'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { ItemRetainer, TextRetainer } from '@deepseek-ai/dsh-output-retention'
 import type { RetainedItems } from '@deepseek-ai/dsh-output-retention'
-import type { SubprocessHandle, SubprocessOutcome, SubprocessOutputRead, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
+import type { SubprocessHandle, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import type { SaveTextSpill, SpillRef } from '@deepseek-ai/dsh-spill'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
 
@@ -99,7 +102,7 @@ export class SearchError extends HarnessError {
 
 /** The completed acquisition of one `rg` run: complete stdout plus the resolved workdir. */
 export interface RipgrepRun {
-  /** Complete raw stdout retained by the subprocess seam within the requested cap. */
+  /** Complete raw stdout decoded as strict UTF-8, with a leading BOM preserved. */
   stdout: string
   /** True when ripgrep exited 1: a successful search with zero results. */
   noMatches: boolean
@@ -130,29 +133,54 @@ function classifyRunFailure(toolName: string, exitCode: number, stderrText: stri
   return new SearchError(`${toolName} search failed (exit ${exitCode})${stderr.length > 0 ? `: ${stderr}` : ''}`, 'SEARCH_FAILED')
 }
 
-/**
- * Acquire the COMPLETE raw stdout of a finished run, enforcing
- * `rawOutputMaxBytes` on the in-memory transport. A truncated result means the
- * subprocess seam could not retain complete stdout within the requested
- * budget, so the tool fails clearly instead of parsing a silently-partial
- * stream.
- */
-function completeStdout(toolName: string, stdout: SubprocessOutputRead, rawOutputMaxBytes: number): string {
-  const narrow = 'narrow pattern, path, or include and retry'
-  if (!stdout.lossy) {
-    const inlineBytes = Buffer.byteLength(stdout.text, 'utf8')
-    if (inlineBytes > rawOutputMaxBytes) {
-      throw new SearchError(
-        `${toolName} produced ${inlineBytes} bytes of raw output, over the ${rawOutputMaxBytes}-byte cap; ${narrow}`,
-        'SEARCH_RAW_OUTPUT_OVERFLOW',
-      )
+interface RawStdout {
+  readonly chunks: Buffer[]
+  readonly overflow: boolean
+}
+
+/** Retain at most the raw-byte cap while draining the entire caller-owned pipe. */
+async function collectStdout(toolName: string, stream: Readable | undefined, maxBytes: number): Promise<RawStdout> {
+  if (stream === undefined) throw new SearchError(`${toolName} search command produced no raw stdout pipe`, 'SEARCH_FAILED')
+  const chunks: Buffer[] = []
+  let bytes = 0
+  let overflow = false
+  const retain = (chunk: unknown): void => {
+    if (!(chunk instanceof Uint8Array)) {
+      stream.destroy(new Error('ripgrep stdout pipe did not deliver raw bytes'))
+      return
     }
-    return stdout.text
+    if (overflow) return
+    if (chunk.byteLength > maxBytes - bytes) {
+      overflow = true
+      chunks.length = 0
+      return
+    }
+    bytes += chunk.byteLength
+    chunks.push(Buffer.from(chunk))
   }
-  throw new SearchError(
-    `${toolName} produced more raw output than the subprocess seam retained within the ${rawOutputMaxBytes}-byte cap; ${narrow}`,
-    'SEARCH_RAW_OUTPUT_OVERFLOW',
-  )
+  const closed = finished(stream, { cleanup: true })
+  stream.on('data', retain)
+  try {
+    await closed
+  } finally {
+    stream.off('data', retain)
+  }
+  return { chunks, overflow }
+}
+
+/** Decode complete raw bytes without replacement characters or BOM removal. */
+function completeStdout(toolName: string, stdout: RawStdout, rawOutputMaxBytes: number): string {
+  if (stdout.overflow) {
+    throw new SearchError(
+      `${toolName} produced more raw output than the ${rawOutputMaxBytes}-byte cap; narrow pattern, path, or include and retry`,
+      'SEARCH_RAW_OUTPUT_OVERFLOW',
+    )
+  }
+  try {
+    return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(Buffer.concat(stdout.chunks))
+  } catch (cause: unknown) {
+    throw new SearchError(`${toolName} raw output is not valid UTF-8`, 'SEARCH_FAILED', { cause })
+  }
 }
 
 let rgPathPromise: Promise<string> | undefined
@@ -192,9 +220,12 @@ export function resolveRgPath(): Promise<string> {
  * The spawn is unconfined (a plain `ctx.subprocess` call), so `--no-config`
  * is prepended: a host `RIPGREP_CONFIG_PATH` (or `rg.conf` next to the
  * binary) can otherwise inject `--pre` and make ripgrep execute an arbitrary
- * preprocessor for every matched file. The collect dispositions are the
- * seam's diagnostic-tail shape (no spill files): the tools never read a raw
- * spill path, and truncated stdout fails as `SEARCH_RAW_OUTPUT_OVERFLOW`.
+ * preprocessor for every matched file. Stderr uses the seam's bounded
+ * diagnostic tail; stdout uses its raw pipe. The caller drains and owns that
+ * pipe, retaining at most `rawOutputMaxBytes`, and waits for managed-range
+ * quiescence. Overflow fails as `SEARCH_RAW_OUTPUT_OVERFLOW`; invalid UTF-8
+ * fails as `SEARCH_FAILED`. Errors and cancellation terminate the managed
+ * range and close the pipe before awaiting their settlement.
  *
  * Exit semantics are tool-owned: exit 0 is success with results, exit 1 is
  * success with zero results (`noMatches`), anything else throws a
@@ -244,7 +275,7 @@ export async function runRipgrep(
       cwd: workdir,
       stdio: {
         stdin: 'ignore',
-        stdout: { maxBytes: rawOutputMaxBytes },
+        stdout: 'pipe',
         stderr: { maxBytes: stderrMaxBytes },
       },
       graceMs,
@@ -262,31 +293,55 @@ export async function runRipgrep(
     }
     throw new SearchError(`${toolName} could not start its search command (ripgrep launch failed)`, 'SEARCH_FAILED', { cause: error })
   }
-  let outcome: SubprocessOutcome
-  try {
-    outcome = await handle.done
-  } catch (error: unknown) {
-    throw new SearchError(`${toolName} subprocess failed before reporting an outcome (ripgrep provider failure)`, 'SEARCH_FAILED', { cause: error })
+  const done = handle.done.catch((cause: unknown) => {
+    throw new SearchError(`${toolName} subprocess failed before reporting an outcome (ripgrep provider failure)`, 'SEARCH_FAILED', { cause })
+  })
+  const stdoutRead = collectStdout(toolName, handle.stdout, rawOutputMaxBytes)
+  const rangeExited = Promise.resolve().then(() => handle.waitForExit())
+  const cancel = (): void => {
+    handle.terminate()
+    handle.stdout?.destroy()
   }
-  const stdout = handle.collected.stdout?.readFrom(0)
-  const stderr = handle.collected.stderr?.readFrom(0)
-  if (stdout === undefined || stderr === undefined) {
-    throw new SearchError(`${toolName} search command produced no collected output streams`, 'SEARCH_FAILED')
-  }
-  // The signal can abort while the spawn is awaited; the static narrowing that
-  // proves this re-check "always false" cannot see AbortSignal state changes.
+  exec.signal.addEventListener('abort', cancel, { once: true })
+  // Cancellation may have raced spawn and listener installation.
   // oxlint-disable-next-line typescript/no-unnecessary-condition
-  if (exec.signal.aborted) {
-    throw new SearchError(`${toolName} was aborted before completion (tool timeout or caller cancellation)`, 'SEARCH_ABORTED')
+  if (exec.signal.aborted) cancel()
+  try {
+    const [outcome, stdout] = await Promise.all([done, stdoutRead, rangeExited])
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
+    if (exec.signal.aborted) {
+      throw new SearchError(`${toolName} was aborted before completion (tool timeout or caller cancellation)`, 'SEARCH_ABORTED')
+    }
+    const stderr = handle.collected.stderr?.readFrom(0)
+    if (stderr === undefined) {
+      throw new SearchError(`${toolName} search command produced no collected stderr stream`, 'SEARCH_FAILED')
+    }
+    if (outcome.signal !== null || outcome.exitCode === null) {
+      throw new SearchError(`${toolName} search command was killed by signal ${outcome.signal ?? '(unknown)'}`, 'SEARCH_FAILED')
+    }
+    if (outcome.exitCode !== 0 && outcome.exitCode !== 1) {
+      throw classifyRunFailure(toolName, outcome.exitCode, stderr.text, stderr.lossy)
+    }
+    const text = completeStdout(toolName, stdout, rawOutputMaxBytes)
+    return { stdout: text, noMatches: outcome.exitCode === 1, workdir }
+  } catch (cause: unknown) {
+    cancel()
+    const settled = await Promise.allSettled([done, stdoutRead, rangeExited])
+    const range = settled[2]
+    if (range.status === 'rejected') {
+      throw new SearchError(`${toolName} could not observe its subprocess range exit`, 'SEARCH_FAILED', {
+        cause: new AggregateError([cause, range.reason], 'ripgrep acquisition and cleanup failed'),
+      })
+    }
+    if (cause instanceof SearchError) throw cause
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
+    if (exec.signal.aborted) {
+      throw new SearchError(`${toolName} was aborted before completion (tool timeout or caller cancellation)`, 'SEARCH_ABORTED', { cause })
+    }
+    throw new SearchError(`${toolName} could not acquire complete raw stdout`, 'SEARCH_FAILED', { cause })
+  } finally {
+    exec.signal.removeEventListener('abort', cancel)
   }
-  if (outcome.signal !== null || outcome.exitCode === null) {
-    throw new SearchError(`${toolName} search command was killed by signal ${outcome.signal ?? '(unknown)'}`, 'SEARCH_FAILED')
-  }
-  if (outcome.exitCode !== 0 && outcome.exitCode !== 1) {
-    throw classifyRunFailure(toolName, outcome.exitCode, stderr.text, stderr.lossy)
-  }
-  const text = completeStdout(toolName, stdout, rawOutputMaxBytes)
-  return { stdout: text, noMatches: outcome.exitCode === 1, workdir }
 }
 
 /**

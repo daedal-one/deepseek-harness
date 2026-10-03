@@ -355,6 +355,8 @@
     { "path": "./packages/experimental/agent-team-web-profile" },
     { "path": "./packages/experimental/operation" },
     { "path": "./packages/experimental/operation-clm" },
+    { "path": "./packages/experimental/operation-fs" },
+    { "path": "./packages/experimental/operation-kev" },
     { "path": "./packages/workflow/workflow" },
     { "path": "./packages/workflow/workflow-worker-thread" },
     { "path": "./packages/workflow/tool-workflow" },

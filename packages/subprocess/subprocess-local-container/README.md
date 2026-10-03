@@ -43,7 +43,7 @@ With the [shared VM runtime](../../sandbox/local-container-runtime/README.md#sha
 <a id="understand-lifecycle-and-output"></a>
 ## Understand lifecycle and output
 
-The provider attaches before starting each process container, decodes Docker's byte-framed non-terminal streams with backpressure, and exposes raw terminal bytes for TTY processes. Collected streams keep the exact configured byte tail. When a configured spill remains within its cap, the provider publishes the complete bytes under `/workspace/.dsh-spill`; the matching `ctx.fs` provider can read that path after the process container is removed.
+The provider attaches before starting each process container, decodes Docker's byte-framed non-terminal streams with backpressure, and exposes raw terminal bytes for TTY processes. A consumer-closed raw pipe discards subsequent frames for that destination without blocking other frames or termination. Backpressure waits settle on drain, writable completion, closure, or error and remove their listeners. Collected streams keep the exact configured byte tail. When a configured spill remains within its cap, the provider publishes the complete bytes under `/workspace/.dsh-spill`; the matching `ctx.fs` provider can read that path after the process container is removed.
 
 Each process starts from the runtime's fixed replacement environment, then applies explicit entries from its trusted subprocess request. Ambient host and image credentials never enter the container. The shell environment owner may resolve a stored credential granted to the calling session lineage into those explicit entries. Values remain absent from composition, session events, workspace checkpoints, and provider diagnostics.
 

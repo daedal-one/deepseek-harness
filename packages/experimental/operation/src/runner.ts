@@ -14,7 +14,7 @@ import { digestJson, equalJson, jsonBytes, requireJson } from './json.ts'
 import { OperationJudgmentRegistry } from './judgment.ts'
 import { buildContinuationCandidates, completionControls, observeCanonicalResult, withIntermediateControls } from './observation.ts'
 import { parseOperationPlan, OperationPlanError } from './plan.ts'
-import type { OperationToolPolicy } from './policy.ts'
+import type { OperationToolCallerContext, OperationToolPolicy } from './policy.ts'
 import { OperationToolPolicyRegistry } from './policy.ts'
 import { preflightOperationPlan } from './preflight.ts'
 import { OperationRecorder } from './recorder.ts'
@@ -107,6 +107,7 @@ export class OperationRunError extends Error {
 }
 
 interface AdmittedStep {
+  readonly caller: OperationToolCallerContext
   readonly definition: ToolDefinition
   readonly identity: OperationToolIdentity
   readonly policy: OperationToolPolicy
@@ -360,6 +361,7 @@ export class OperationRunner {
     if (limits.maxCandidates < 3) throw new OperationRunError('operation candidate limit cannot fit the mandatory control choices', 'CANDIDATE_LIMIT')
     const forbidden = new Set(this.config.forbiddenTools ?? [])
     const admitted = new Map<string, AdmittedStep>()
+    const caller = Object.freeze({ cwd: exec.agent?.session.header.cwd })
     for (const step of plan.steps) {
       if (step.tool === 'run_operation' || forbidden.has(step.tool)) {
         throw new OperationRunError(`operation plan cannot dispatch excluded tool ${JSON.stringify(step.tool)}`, 'TOOL_EXCLUDED')
@@ -376,11 +378,11 @@ export class OperationRunner {
       if (!staticallyResolvable && !policy.allowOutputReferences) {
         throw new OperationRunError(`operation tool ${JSON.stringify(step.tool)} does not allow output-derived arguments`, 'TOOL_POLICY')
       }
-      const entry = { definition, identity: toolIdentity(definition), policy }
+      const entry = { definition, identity: toolIdentity(definition), policy, caller }
       admitted.set(step.id, entry)
       if (staticallyResolvable) {
         const resolved = resolveOperationExpression(step.arguments, { inputs: plan.inputs, results: new Map() })
-        validateArguments(step, definition, policy, resolved.value)
+        validateArguments(step, definition, policy, resolved.value, exec, caller)
       }
     }
     preflightOperationPlan(plan, admitted)
@@ -430,7 +432,7 @@ export class OperationRunner {
     }
     if (currentPolicy !== admitted.policy) throw new OperationRunError(`tool ${JSON.stringify(step.tool)} operation policy changed after admission`, 'TOOL_CHANGED')
     if (toolIdentity(current).schemaDigest !== admitted.identity.schemaDigest) throw new OperationRunError(`tool ${JSON.stringify(step.tool)} schema changed after admission`, 'TOOL_CHANGED')
-    validateArguments(step, current, currentPolicy, argumentsValue)
+    validateArguments(step, current, currentPolicy, argumentsValue, exec, admitted.caller)
     return { step, arguments: argumentsValue, bindings, admitted }
   }
 
@@ -504,7 +506,7 @@ export class OperationRunner {
           if (!equalJson(argumentsValue, current.arguments)) {
             throw new OperationRunError(`tool ${JSON.stringify(current.step.tool)} arguments changed at dispatch`, 'TOOL_CHANGED')
           }
-          validateArguments(current.step, definition, policy, argumentsValue)
+          validateArguments(current.step, definition, policy, argumentsValue, exec, current.admitted.caller)
           requireDispatchBudget(signal)
           // The registry invokes the body immediately after this private callback returns.
           dispatch.body = 'started'
@@ -892,13 +894,19 @@ function validateArguments(
   definition: ToolDefinition,
   policy: OperationToolPolicy,
   argumentsValue: JsonValue,
+  exec: ToolRunContext,
+  admittedCaller: OperationToolCallerContext,
 ): void {
+  const caller = Object.freeze({ cwd: exec.agent?.session.header.cwd })
+  if (caller.cwd !== admittedCaller.cwd) {
+    throw new OperationRunError('operation caller cwd changed after admission', 'CALLER_CHANGED')
+  }
   const violations = validateJsonSchemaValue(definition.parameters, argumentsValue, 'arguments')
   if (violations.length > 0) {
     throw new OperationRunError(`resolved arguments for ${JSON.stringify(step.tool)} are invalid: ${violations.join('; ')}`, 'INVALID_ARGS')
   }
   try {
-    policy.validateArguments(argumentsValue)
+    policy.validateArguments(argumentsValue, caller)
   } catch (error: unknown) {
     throw new OperationRunError(`resolved arguments for ${JSON.stringify(step.tool)} violate its operation policy: ${message(error)}`, 'TOOL_POLICY')
   }
@@ -952,7 +960,7 @@ function validateResponse(
   if (Math.abs(sum - 1) > DISTRIBUTION_TOLERANCE) throw new OperationRunError('provider probabilities must sum to one', 'PROVIDER_RESPONSE')
   if (response.usage !== undefined) {
     const { billingUnits, inputTokens, outputTokens } = response.usage
-    if (!Number.isSafeInteger(billingUnits) || billingUnits < 0
+    if ((billingUnits !== undefined && (!Number.isSafeInteger(billingUnits) || billingUnits < 0))
       || !Number.isSafeInteger(inputTokens) || inputTokens < 0
       || !Number.isSafeInteger(outputTokens) || outputTokens < 0) {
       throw new OperationRunError('provider usage is invalid', 'PROVIDER_TOKENS')

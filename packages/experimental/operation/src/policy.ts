@@ -12,6 +12,12 @@ export type OperationToolInspection =
   | { readonly kind: 'failed'; readonly reason: string }
   | { readonly kind: 'incomplete'; readonly reason: string }
 
+/** Immutable caller facts captured from the actual tool caller, never from plan arguments. */
+export interface OperationToolCallerContext {
+  /** Session workspace at this validation point; absent callers have no workspace fallback. */
+  readonly cwd: string | undefined
+}
+
 /**
  * Trusted eligibility policy for one exact registered tool definition.
  */
@@ -22,8 +28,9 @@ export interface OperationToolPolicy {
    * Reject arguments that select an unsupported execution mode before dispatch.
    * Normal tool schema and runtime policy validation remain authoritative.
    * @param args Concrete lossless JSON arguments.
+   * @param caller Frozen snapshot of trusted caller facts, refreshed immediately before the body.
    */
-  validateArguments(this: void, args: JsonValue): void
+  validateArguments(this: void, args: JsonValue, caller: OperationToolCallerContext): void
   /**
    * Classify the post-policy canonical result without consulting rendered output.
    * @param value Canonical tool value returned by the ordinary registry pipeline.

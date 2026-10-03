@@ -429,7 +429,7 @@ export interface OperationPreparedJudgment {
     readonly inputs: readonly { readonly text: string; readonly tokens: number }[]
   }
   /**
-   * Exact local tokenizer count of all CLM encoder inputs.
+   * Exact complete input accounting from the configured encoder, independent of cache-dependent provider usage.
    */
   readonly inputTokens: number
   /**
@@ -459,7 +459,7 @@ export interface OperationJudgmentResponse {
   /**
    * Provider-reported token and billing accounting when available.
    */
-  readonly usage?: { readonly billingUnits: number; readonly inputTokens: number; readonly outputTokens: number }
+  readonly usage?: { readonly billingUnits?: number; readonly inputTokens: number; readonly outputTokens: number }
   /**
    * Provider-reported choice confidence, retained separately from local acceptance margins.
    */
@@ -489,6 +489,13 @@ export interface OperationTokenizer {
    * @returns Non-negative safe token count.
    */
   count(text: string, signal: AbortSignal): Promise<number>
+  /**
+   * Count every complete input in order; counts include deployed special-token framing, not cache misses.
+   * @param texts Exact independently encoded inputs.
+   * @param signal Cancellation signal.
+   * @returns One non-negative safe token count per input in its original order.
+   */
+  countMany?(texts: readonly string[], signal: AbortSignal): Promise<readonly number[]>
 }
 
 /**

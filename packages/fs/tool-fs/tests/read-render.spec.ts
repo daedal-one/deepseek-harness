@@ -32,6 +32,7 @@ describe('buildWindow', () => {
     ])
     expect(result.totalLines).toBe(3)
     expect(result.truncatedByBytes).toBe(false)
+    expect(result.truncatedLineNumbers).toEqual([])
   })
 
   it('applies offset/limit', async () => {
@@ -50,10 +51,49 @@ describe('buildWindow', () => {
     expect(result.lines[0]?.text).toContain(`... (line truncated to ${READ_MAX_LINE_LENGTH} chars)`)
   })
 
+  it('records only returned clipped lines, never literal truncation markers or omitted lines', async () => {
+    const literal = '... (line truncated to 2 chars)'
+    const result = await buildWindow(whole(`ignored${'x'.repeat(100)}\n${literal}\n${'a'.repeat(60)}\n${'z'.repeat(100)}`), {
+      offset: 2, limit: 2, maxLineLength: 40, maxBytes: 200,
+    }, 'f')
+    expect(result.lines).toEqual([
+      { number: 2, text: literal },
+      { number: 3, text: `${'a'.repeat(40)}... (line truncated to 40 chars)` },
+    ])
+    expect(result.truncatedLineNumbers).toEqual([3])
+    expect(result.truncatedByBytes).toBe(false)
+    expect(result.totalLines).toBe(4)
+  })
+
+  it.each(['abc\r\n', 'abc\r', 'abc\rd\n', 'abcd\r\n', 'abc\rde\n'])('reports clipping after CR handling for %j across chunk boundaries', async (source) => {
+    const expectedClipped = !['abc\r\n', 'abc\r'].includes(source)
+    for (const chunks of [whole(source), chunked(source, 1)]) {
+      const result = await buildWindow(chunks, { offset: 1, limit: 2, maxLineLength: 3, maxBytes: 100 }, 'f')
+      expect(result.truncatedLineNumbers).toEqual(expectedClipped ? [1] : [])
+      expect(result.lines[0]?.text).toBe(expectedClipped ? 'abc... (line truncated to 3 chars)' : 'abc')
+    }
+  })
+
   it('caps output bytes and reports truncatedByBytes', async () => {
     const big = Array.from({ length: 2000 }, () => 'y'.repeat(100)).join('\n')
     const result = await buildWindow(whole(big), READ_ALL, 'f')
     expect(result.truncatedByBytes).toBe(true)
+  })
+
+  it.each([
+    [4, ['éé'], false],
+    [3, [], true],
+  ])('counts UTF-8 bytes at the exact selected-line budget %i', async (maxBytes, retained, truncatedByBytes) => {
+    const result = await buildWindow(whole('éé'), { ...READ_ALL, maxBytes }, 'f')
+    expect(result.lines.map(line => line.text)).toEqual(retained)
+    expect(result.truncatedByBytes).toBe(truncatedByBytes)
+    expect(result.truncatedLineNumbers).toEqual([])
+    expect(result.totalLines).toBe(1)
+  })
+
+  it('keeps byte omission separate from returned-line clipping', async () => {
+    const result = await buildWindow(whole('a\nlong line'), { ...READ_ALL, maxLineLength: 3, maxBytes: 1 }, 'f')
+    expect(result).toEqual({ lines: [{ number: 1, text: 'a' }], totalLines: 2, truncatedByBytes: true, truncatedLineNumbers: [] })
   })
 
   it('reads an empty file at offset 1 as zero lines', async () => {

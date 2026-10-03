@@ -13,7 +13,9 @@ const records = [
   { id: 'alpha', region: 'west', title: 'First record' },
   { id: 'beta', region: 'east', title: 'Selected record' },
 ]
-const selected = records[1]!
+/** Complete selected record shared by the two synthetic SDK judgment fixtures. */
+export const selectedFixtureRecord = records[1]!
+const selected = selectedFixtureRecord
 const identity = {
   provider: 'deterministic-fixture', model: 'closed-record-selector',
   encoder: 'fixture-utf8', tokenizer: 'fixture-byte-tokenizer',
@@ -51,7 +53,7 @@ const provider: OperationJudgmentProvider = {
  * Register two fixed in-memory readers and their exact-definition eligibility.
  * @param ctx SDK profile context with the opt-in operation service.
  */
-export function apply(ctx: Context): void {
+export function registerFixtureReaders(ctx: Context): void {
   const listRecords = defineTool({
     name: 'fixture_list_records',
     description: 'Read the complete fixed catalog of two fixture records without side effects.',
@@ -126,5 +128,13 @@ export function apply(ctx: Context): void {
       return { kind: 'complete' }
     },
   }), 'operation-fixture.readPolicy')
+}
+
+/**
+ * Mount the original synthetic provider with the shared exact-definition readers.
+ * @param ctx SDK profile context with the opt-in operation service.
+ */
+export function apply(ctx: Context): void {
+  registerFixtureReaders(ctx)
   ctx.effect(() => ctx.operations.registerJudgmentProvider(provider), 'operation-fixture.provider')
 }

@@ -25,10 +25,7 @@ kind: "package-reference"
 
 Compose the Host row and call its Remote method from a Client that has mounted the generated `sessionInfo` namespace through [`dsh-api-remotes`](../../api/remotes/README.md):
 
-```ts
-const result = await ctx.remote.sessionInfo.read({ sessionId }, signal)
-if (result.ok && result.value.ok) render(result.value.value)
-```
+The Client calls `ctx.remote.sessionInfo.read({ sessionId }, signal)`. It checks the outer RPC result's `ok` field and the inner reading's `ok` field before rendering `result.value.value`.
 
 The shipped Web profile mounts this package as the `session-info` Host row, and the [Info view](../../client/ui-session-info/README.md) renders the reading. The snapshot carries the **session** block (id, title, preset, latest durable model route, working directory, turn and step counts), the **summary** (the latest accepted conversation summary, or null before one lands), **workspace** (the registered Workspace accounting the Session, or null), **environment** (verified execution placement plus Host platform, architecture, OS release, Node version, and home directory), and **policies** (effective and default sandbox mode, the resolved `workspace-write` root, effective and default approval policy, and the effective permission preset with its declared description). The reading's timestamp is `readAt`.
 

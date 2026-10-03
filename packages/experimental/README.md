@@ -29,7 +29,9 @@ The experimental group contains prototype capabilities whose contracts can chang
 | [`code-runtime-python`](code-runtime-python/README.md) | CPython subprocess backend for the code-execution seam | `ctx.codeRuntime` |
 | [`inspector`](inspector/README.md) | Cross-realm CDP hub for Host debugging, Client Runtime inspection, network capture, and Cordis trees | `ctx.inspector` |
 | [`operation`](operation/README.md) | Private bounded sequential operation tool, durable replay records, and judgment seam | `ctx.operations` |
-| [`operation-clm`](operation-clm/README.md) | Private CLM HTTP ranking provider with exact tokenizer accounting | registers on `ctx.operations.judgments` |
+| [`operation-clm`](operation-clm/README.md) | Private CLM HTTP ranking provider and exact local batch tokenizer hook | registers on `ctx.operations.judgments` |
+| [`operation-fs`](operation-fs/README.md) | Explicit host read-only tool composition with exact-definition operation policies | registers on `ctx.tools` and `ctx.operations.toolPolicies` |
+| [`operation-kev`](operation-kev/README.md) | Private local Kev decision provider with recorded preparation evidence | registers on `ctx.operations.judgments` |
 | [`tool-agent-team`](tool-agent-team/README.md) | Nine tools that let the model create, message, and coordinate teammates | registers scoped tools on `ctx.tools` |
 | [`webworker-packer`](webworker-packer/README.md) | Builds the gzip-compressed VFS image consumed by the browser worker preview | library and CLI — no ctx key |
 | [`webworker-runtime`](webworker-runtime/README.md) | Runs the harness plugin tree inside a dedicated browser worker | library and worker entry — no ctx key |

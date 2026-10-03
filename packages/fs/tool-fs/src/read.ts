@@ -64,8 +64,13 @@ export function parseReadArgs(args: { file_path: string; offset?: number; limit?
  * Register the `read` tool and its scope-aware system-prompt guidance.
  * @param ctx - the plugin context; registrations are effects scoped to it, and execution uses its `fs` service.
  * @param caps - the deployment's resolved read caps (plugin config after defaulting).
+ * @returns the exact registered definition for trusted composition with instance-bound policy.
  */
-export function applyReadTool(ctx: Context, caps: ReadToolCaps): void {
+export function applyReadTool(ctx: Context, caps: ReadToolCaps): ReturnType<typeof registerReadTool> {
+  return registerReadTool(ctx, caps)
+}
+
+function registerReadTool(ctx: Context, caps: ReadToolCaps) {
   ctx.systemPrompt.section({
     name: 'tool:read',
     order: ctx.systemPrompt.getSectionOrder('TOOL_READ'),
@@ -74,7 +79,7 @@ export function applyReadTool(ctx: Context, caps: ReadToolCaps): void {
       : 'Use the read tool — not shell commands like cat — to inspect text files. Results include line numbers. Use offset and limit to continue reading large files.',
   })
 
-  ctx.tools.register(defineTool({
+  const tool = defineTool({
     name: 'read',
     description: 'Read a UTF-8 text file and return line-numbered content.',
     parameters: {
@@ -102,22 +107,25 @@ export function applyReadTool(ctx: Context, caps: ReadToolCaps): void {
             },
           },
           totalLines: { type: 'integer', required: true },
+          truncatedByBytes: {
+            type: 'boolean', required: true,
+            description: 'Whether the byte cap omitted a line in the requested decoded-text window.',
+          },
+          truncatedLineNumbers: {
+            type: 'array', required: true, items: { type: 'integer' },
+            description: 'Numbers of returned lines shortened by the per-line UTF-16 code-unit cap.',
+          },
         },
       },
-      render: (args, value) => {
-        const input = parseReadArgs(args, caps.limit)
-        const endLine = value.lines.at(-1)?.number ?? Math.max(0, value.offset - 1)
-        const truncatedByBytes = value.lines.length < input.limit && endLine < value.totalLines
-        return [{
-          type: 'text',
-          text: formatReadOutput(value.path, {
-            offset: value.offset,
-            lines: value.lines,
-            totalLines: value.totalLines,
-            ...truncatedByBytes ? { truncatedByBytes: true } : {},
-          }),
-        }]
-      },
+      render: (_args, value) => [{
+        type: 'text',
+        text: formatReadOutput(value.path, {
+          offset: value.offset,
+          lines: value.lines,
+          totalLines: value.totalLines,
+          ...value.truncatedByBytes ? { truncatedByBytes: true } : {},
+        }),
+      }],
       // Project the structured window into persisted `meta` so a UI's read card
       // survives replay: the raw canonical output object is not on the wire, only
       // the model-facing text, from which the line/lang data cannot be recovered.
@@ -156,6 +164,8 @@ export function applyReadTool(ctx: Context, caps: ReadToolCaps): void {
         offset: input.offset,
         lines: window.lines,
         totalLines: window.totalLines,
+        truncatedByBytes: window.truncatedByBytes,
+        truncatedLineNumbers: window.truncatedLineNumbers,
       }
       // Record the present observation (a no-op when no policy plugin listens). The
       // read already succeeded; an fs/observed listener is contractually a
@@ -206,5 +216,7 @@ export function applyReadTool(ctx: Context, caps: ReadToolCaps): void {
         locations: [{ path: args.file_path, line: offset ?? 1 }],
       }
     },
-  }))
+  })
+  ctx.tools.register(tool)
+  return tool
 }

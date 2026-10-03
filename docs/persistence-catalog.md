@@ -673,7 +673,7 @@ Source: [`packages/api/session-controller/src/types.ts:40`](../packages/api/sess
 'operation/judgment-request': OperationJudgmentRequestEventData
 ```
 
-Source: [`packages/experimental/operation/src/types.ts:753`](../packages/experimental/operation/src/types.ts)
+Source: [`packages/experimental/operation/src/types.ts:760`](../packages/experimental/operation/src/types.ts)
 
 <a id="operationjudgment-result--log-only"></a>
 
@@ -687,7 +687,7 @@ Source: [`packages/experimental/operation/src/types.ts:753`](../packages/experim
 'operation/judgment-result': OperationJudgmentResultEventData
 ```
 
-Source: [`packages/experimental/operation/src/types.ts:758`](../packages/experimental/operation/src/types.ts)
+Source: [`packages/experimental/operation/src/types.ts:765`](../packages/experimental/operation/src/types.ts)
 
 <a id="operationrun-end--log-only"></a>
 
@@ -701,7 +701,7 @@ Source: [`packages/experimental/operation/src/types.ts:758`](../packages/experim
 'operation/run-end': OperationRunEndEventData
 ```
 
-Source: [`packages/experimental/operation/src/types.ts:768`](../packages/experimental/operation/src/types.ts)
+Source: [`packages/experimental/operation/src/types.ts:775`](../packages/experimental/operation/src/types.ts)
 
 <a id="operationrun-start--log-only"></a>
 
@@ -715,7 +715,7 @@ Source: [`packages/experimental/operation/src/types.ts:768`](../packages/experim
 'operation/run-start': OperationRunStartEventData
 ```
 
-Source: [`packages/experimental/operation/src/types.ts:738`](../packages/experimental/operation/src/types.ts)
+Source: [`packages/experimental/operation/src/types.ts:745`](../packages/experimental/operation/src/types.ts)
 
 <a id="operationstep-result--log-only"></a>
 
@@ -729,7 +729,7 @@ Source: [`packages/experimental/operation/src/types.ts:738`](../packages/experim
 'operation/step-result': OperationStepResultEventData
 ```
 
-Source: [`packages/experimental/operation/src/types.ts:748`](../packages/experimental/operation/src/types.ts)
+Source: [`packages/experimental/operation/src/types.ts:755`](../packages/experimental/operation/src/types.ts)
 
 <a id="operationstep-start--log-only"></a>
 
@@ -743,7 +743,7 @@ Source: [`packages/experimental/operation/src/types.ts:748`](../packages/experim
 'operation/step-start': OperationStepStartEventData
 ```
 
-Source: [`packages/experimental/operation/src/types.ts:743`](../packages/experimental/operation/src/types.ts)
+Source: [`packages/experimental/operation/src/types.ts:750`](../packages/experimental/operation/src/types.ts)
 
 <a id="operationtransition--log-only"></a>
 
@@ -757,7 +757,7 @@ Source: [`packages/experimental/operation/src/types.ts:743`](../packages/experim
 'operation/transition': OperationTransitionEventData
 ```
 
-Source: [`packages/experimental/operation/src/types.ts:763`](../packages/experimental/operation/src/types.ts)
+Source: [`packages/experimental/operation/src/types.ts:770`](../packages/experimental/operation/src/types.ts)
 
 ### `permission/*`
 

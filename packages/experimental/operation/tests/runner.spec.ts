@@ -67,15 +67,18 @@ function setup(options: {
   signal?: AbortSignal
   config?: OperationConfig
   policy?: OperationToolPolicy
+  cwd?: string
+  beforeBody?: () => void
   execute?: (input: { arguments: JsonValue; signal: AbortSignal }) => Promise<unknown>
 } = {}) {
   const records: Array<{ type: string; data: unknown }> = []
   const flushes: string[][] = []
   const calls: JsonValue[] = []
-  const session = { id: SessionId('fixture-caller-session'), append: (type: string, data: unknown) => { options.append?.(type); records.push({ type, data }) } }
+  const session = { id: SessionId('fixture-caller-session'), header: { cwd: options.cwd ?? '/fixture-workspace' }, append: (type: string, data: unknown) => { options.append?.(type); records.push({ type, data }) } }
   const tools = {
     admitted: () => definition,
     execute: async (input: ToolExecutionInput & { arguments: JsonValue }) => {
+      options.beforeBody?.()
       input.dispatchConstraint?.validate(definition, input.arguments, input.signal)
       calls.push(input.arguments)
       if (options.execute !== undefined) return await options.execute(input)
@@ -126,6 +129,72 @@ function deterministicProvider(): OperationJudgmentProvider {
 }
 
 describe('sequential operation runner', () => {
+  it('passes fresh frozen caller facts to static, resolved-candidate and immediate-body validators', async () => {
+    const contexts: unknown[] = []
+    const argumentsSeen: JsonValue[] = []
+    const fixture = setup({
+      cwd: '/actual-session',
+      policy: {
+        allowOutputReferences: true,
+        validateArguments(args, caller) {
+          expect(Object.isFrozen(caller)).toBe(true)
+          expect(caller).toEqual({ cwd: '/actual-session' })
+          contexts.push(caller)
+          argumentsSeen.push(args)
+        },
+        inspectResult: () => ({ kind: 'complete' }),
+      },
+    })
+    expect(await fixture.runner.run(fixture.exec, plan())).toMatchObject({ status: 'completed' })
+    expect(argumentsSeen).toEqual([
+      { mode: 'read' }, { mode: 'read' }, { mode: 'read' }, { mode: 'read' },
+      { target: 'alpha' }, { target: 'alpha' }, { target: 'alpha' },
+    ])
+    expect(new Set(contexts).size).toBe(contexts.length)
+  })
+
+  it.each(['preparation', 'body'] as const)('pins the admitted cwd across caller-owner changes at %s', async (phase) => {
+    const other = setup({ cwd: '/other-approved-session' })
+    const otherAgent = other.exec.agent
+    if (otherAgent === undefined) throw new Error('fixture requires another agent')
+    let current = otherAgent
+    const fixture = setup({
+      flush: () => { if (phase === 'preparation') current = otherAgent; return true },
+      beforeBody: () => { if (phase === 'body') current = otherAgent },
+    })
+    if (fixture.exec.agent === undefined) throw new Error('fixture requires a caller agent')
+    current = fixture.exec.agent
+    // A caller-owned accessor can change owners while async policy or persistence settles.
+    const exec = { ...fixture.exec, get agent() { return current } }
+    await expect(fixture.runner.run(exec, plan())).rejects.toMatchObject({ code: 'CALLER_CHANGED' })
+    expect(fixture.calls).toEqual([])
+  })
+
+  it('preserves honest provider usage without inventing billing units', async () => {
+    const original = deterministicProvider()
+    const fixture = setup({ provider: {
+      ...original,
+      async rank(prepared, signal) {
+        return { ...await original.rank(prepared, signal), usage: { inputTokens: 1, outputTokens: 0 } }
+      },
+    } })
+    expect(await fixture.runner.run(fixture.exec, plan())).toMatchObject({ status: 'completed' })
+    const response = fixture.records.find(record => record.type === 'operation/judgment-result')?.data as { response: { usage: unknown } }
+    expect(response.response.usage).toEqual({ inputTokens: 1, outputTokens: 0 })
+  })
+
+  it.each([-1, 0.5, Number.NaN, Number.POSITIVE_INFINITY])('rejects invalid explicitly reported billing units %s', async (billingUnits) => {
+    const original = deterministicProvider()
+    const fixture = setup({ provider: {
+      ...original,
+      async rank(prepared, signal) {
+        return { ...await original.rank(prepared, signal), usage: { billingUnits, inputTokens: 1, outputTokens: 0 } }
+      },
+    } })
+    await expect(fixture.runner.run(fixture.exec, plan())).rejects.toMatchObject({ code: 'JUDGMENT_RESPONSE' })
+    expect(fixture.calls).toHaveLength(1)
+  })
+
   it('flushes judgment input and selected transition with next intent before following dispatch', async () => {
     const fixture = setup()
     const result = await fixture.runner.run(fixture.exec, plan())

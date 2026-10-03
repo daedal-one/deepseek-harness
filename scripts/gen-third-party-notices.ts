@@ -86,6 +86,10 @@ const OVERRIDES: Record<string, { license?: string; repo?: string }> = {
  * the generator fails when a manifest names a package this map misses.
  */
 const PYTHON_METADATA: Record<string, { license: string; repo: string; role: string }> = {
+  fastapi: { license: 'MIT', repo: 'https://github.com/fastapi/fastapi', role: 'HTTP runtime of `dsh-local-decision-service`' },
+  uvicorn: { license: 'BSD-3-Clause', repo: 'https://github.com/Kludex/uvicorn', role: 'ASGI runtime of `dsh-local-decision-service`' },
+  httpx: { license: 'BSD-3-Clause', repo: 'https://github.com/encode/httpx', role: 'HTTP client for decision-service tests' },
+  setuptools: { license: 'MIT', repo: 'https://github.com/pypa/setuptools', role: 'decision-service build backend' },
   pydantic: { license: 'MIT', repo: 'https://github.com/pydantic/pydantic', role: 'runtime dependency of `deepseek-harness-sdk`' },
   hatchling: { license: 'MIT', repo: 'https://github.com/pypa/hatch', role: 'build backend' },
   pytest: { license: 'MIT', repo: 'https://github.com/pytest-dev/pytest', role: 'test-only' },

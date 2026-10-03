@@ -46,7 +46,17 @@ A subprocess backend, then the tools; the spill backend is optional and makes ca
 | `glob` | `pattern`, `path?` | Finds files whose paths match a glob pattern, including hidden and ignored files but excluding VCS metadata; a pattern with no `/` matches basenames at any depth, so `*` matches the whole tree; complete results stay modification-time ordered |
 | `grep` | `pattern`, `path?`, `include?` | Searches file contents with a ripgrep regex and returns matches grouped by file as `Line N: <preview>`; `include` is one positive glob filter, with comma-separated lists and negated values rejected up front |
 
-Routine budgets stay out of the model-facing schema: a model that needs surrounding context reads the matched file with `read`, and one that needs later results follows the returned spill locator's retrieval hint.
+Routine budgets stay out of the model-facing schema: a model that needs surrounding context reads the matched file with `read`, and one that needs later results follows the returned spill locator's retrieval hint. In both tools, `path: "-"` names the actual filesystem entry: the argv builder passes `./-` so ripgrep does not interpret the approved target as stdin. The tool argument itself stays unchanged.
+
+### Canonical results and trusted composition
+
+Canonical `glob` values contain `{ root, paths }`; canonical `grep` values contain `{ matches: [{ path, lineNumber, line }] }`. These retain the complete parsed search before display and preview caps. Empty arrays are complete successful searches, not proof that a caller's goal is satisfied. Raw-output overflow, cancellation, subprocess failure, or malformed output produces an error rather than successful partial evidence.
+
+`glob` requests NUL-terminated filenames and rejects unterminated or empty records. The raw stdout pipe is decoded once as strict UTF-8 with BOM preservation; invalid filename bytes fail the whole search rather than aliasing another file through replacement decoding. Valid U+FFFD characters, leading U+FEFF, embedded newlines, carriage returns, and whitespace survive, subject only to the existing workdir-relative path mapping. Human text and spill files remain newline-separated presentations, not an unambiguous machine-readable filename list.
+
+`grep` accepts ripgrep JSON path and line `text` fields. A matched line emitted as base64 `bytes` fails the entire search with `SEARCH_FAILED`, including matches beyond the display cap; no placeholder can stand in for source evidence. Unsupported path encoding also fails. Successful text reflects ripgrep's decoding and has its final LF or CRLF removed; it is not a source-byte copy.
+
+`applyGlobTool(ctx, caps)` and `applyGrepTool(ctx, caps)` accept resolved `GlobToolCaps` / `GrepToolCaps`, register their production definitions with guidance and spill effects, and return those exact instances for trusted instance-bound policy registration. Contributions unwind with the supplied plugin context. Use these registrars instead of mounting the full search plugin when composition needs to retain definition identities; they grant no operation eligibility themselves.
 
 ### Configuration
 
@@ -73,7 +83,7 @@ Node deployments receive the `@vscode/ripgrep` platform package on supported mac
 
 ### Failures and recovery
 
-Search failures carry the package-owned codes `SEARCH_INVALID_PATTERN` (ripgrep rejected the regex or glob), `SEARCH_FAILED` (a failed launch, inaccessible target, signal kill, or malformed `--json` output), `SEARCH_RAW_OUTPUT_OVERFLOW` (raw output over the cap), and `SEARCH_ABORTED` (cooperative timeout or caller cancellation). Exit 0 is success with results and exit 1 is a successful empty search; model argument mistakes stay ordinary tool argument errors.
+Search failures carry the package-owned codes `SEARCH_INVALID_PATTERN` (ripgrep rejected the regex or glob), `SEARCH_FAILED` (a failed launch, inaccessible target, signal kill, malformed path/JSON output, or unsupported match encoding), `SEARCH_RAW_OUTPUT_OVERFLOW` (raw output over the cap), and `SEARCH_ABORTED` (cooperative timeout or caller cancellation). Exit 0 is success with results and exit 1 is a successful empty search; model argument mistakes stay ordinary tool argument errors.
 
 -----
 
@@ -87,7 +97,7 @@ This section explains the design decisions behind the search tools and points at
 
 ### Design concept
 
-Local workspace discovery is naturally a process-backed `rg` workflow, and putting search on `ctx.fs` would force every filesystem backend to grow a search API. The subprocess seam owns spawn execution, process-tree termination, environment scrubbing, and bounded output capture; this package owns schemas, argument validation, argv construction, parsing, retention, formatted-result spill, and timeout declaration. The tools never expose a background job — the call returns only after `rg` exits, is terminated by the cooperative timeout, is aborted, or fails.
+Local workspace discovery is naturally a process-backed `rg` workflow, and putting search on `ctx.fs` would force every filesystem backend to grow a search API. The subprocess seam owns spawn execution, process-tree termination, environment scrubbing, and bounded stderr capture; this package owns raw stdout acquisition, schemas, argument validation, argv construction, parsing, retention, formatted-result spill, and timeout declaration. The tools never expose a background job — the call returns only after `rg` exits, is terminated by the cooperative timeout, is aborted, or fails.
 
 ### Source map
 
@@ -102,7 +112,7 @@ Local workspace discovery is naturally a process-backed `rg` workflow, and putti
 
 ### How a search runs
 
-Each call resolves either the packaged binary (`@vscode/ripgrep`, or the executable's `-rg` sidecar in a pkg single-file runtime) or the configured `ripgrepCommand` through `ctx.subprocess`, prepends `--no-config` so ambient ripgrep configuration cannot inject a `--pre` preprocessor, and passes every model-controlled value as a plain argv element — no shell layer exists, so no quoting applies. Collect-mode budgets bound complete stdout and a stderr tail; a lossy stdout read fails as `SEARCH_RAW_OUTPUT_OVERFLOW` rather than parsing a silently-partial stream. The tools never read a raw spill path.
+Each call resolves either the packaged binary (`@vscode/ripgrep`, or the executable's `-rg` sidecar in a pkg single-file runtime) or the configured `ripgrepCommand` through `ctx.subprocess`, prepends `--no-config` so ambient ripgrep configuration cannot inject a `--pre` preprocessor, and passes every model-controlled value as a plain argv element — no shell layer exists, so no quoting applies. The caller retains raw stdout bytes within `rawOutputMaxBytes`, continues draining while discarding excess, and rejects overflow before parsing. Complete bytes undergo one fatal UTF-8 decode without BOM stripping. Stderr retains its bounded diagnostic tail. Pipe errors and cancellation terminate the managed range, close the owned stream, await stream/process settlement and range quiescence, and remove listeners. A failed range observation is an error, not claimed quiescence. The tools never read a raw spill path.
 
 ### Two budgets, two artifacts
 
