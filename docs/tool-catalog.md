@@ -16,6 +16,7 @@ This table connects model-visible tool names to the plugin package and service s
 | Tool package | Model-visible names | Requires | Writes / affects | Shipped aliases | Deployment note |
 | --- | --- | --- | --- | --- | --- |
 | `@deepseek-ai/dsh-daedal-handoff` | `handoff_to_host` | `ctx.tools`, `ctx.systemPrompt`, `ctx.fs`, `ctx.subprocess`, `ctx.agents`, `ctx.daedalHandoff (execution time)` | `tool/call`, `tool/result after user confirmation or refusal` | - | Mounted only by the Daedal and Daedal OpenAI presets. The default service does not publish this tool globally. |
+| `@deepseek-ai/dsh-tool-artifact` | `artifact_list`, `artifact_publish`, `artifact_read`, `artifact_restore` | `ctx.tools`, `ctx.artifacts`, `ctx.workspaceRegistry`, `owning agent Session` | `tool/call`, `artifact/published`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-ask-user` | `ask_user_question` | `ctx.tools`, `ctx.userQuestions` | `tool/call`, `tool/result after a UI/provider answers the question` | - | ask_user_question pauses the tool call until the active UI provider returns a human answer. |
 | `@deepseek-ai/dsh-tools` | `run_code`, `tool_search` | `ctx.tools`, `ctx.codeRuntime (execution time)`, `ctx.systemPrompt` | `tool/call`, `one tool/ptc-dispatch-start + tool/ptc-dispatch pair per bridged sub-call`, `tool/result` | - | `tool_search` is present only when discovery is configured; these example bounds defer the MCP namespace. Successful recorded search results admit authorized names for subsequent requests. `run_code` is the reserved transport under `mode: ptc` / `mode: both`. Under `ptc` it is the registry's only wire contribution; other admitted capabilities, including tool_search, are declared in the runtime language's generated SDK. Their program bindings re-enter the guarded tool pipeline and link each nested execution to the outer result. |
 | `@deepseek-ai/dsh-plan-mode` | `exit_plan_mode` | `ctx.tools`, `ctx.systemPrompt`, `ctx.userQuestions (execution time, opportunistic)` | `tool/call`, `plan/mode inactive on an approved review`, `tool/result` | - | exit_plan_mode stays in the model-facing schema while planning is inactive so transitions add no tool-catalog churn on top of the plan-policy change. Its execute path rejects calls outside plan mode; in plan mode it presents the plan over the user-questions seam (approve / keep planning with feedback), and approval logs plan mode inactive at the step boundary. |
@@ -80,6 +81,203 @@ Discover configured host-maintenance targets by omitting target, then select one
 Source: [`packages/integration/daedal-handoff/src/tool.ts`](../packages/integration/daedal-handoff/src/tool.ts)
 
 Mounted only by the Daedal and Daedal OpenAI presets. The default service does not publish this tool globally.
+
+<a id="deepseek-aidsh-tool-artifact"></a>
+
+## `@deepseek-ai/dsh-tool-artifact`
+
+### `artifact_list`
+
+List a bounded page of durable artifacts from the current Workspace, including inactive and archived conversations. Reuse the next cursor for the following page.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "after": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "after"
+  ]
+}
+```
+
+Source: [`packages/artifact/tool-artifact/src/index.ts`](../packages/artifact/tool-artifact/src/index.ts)
+
+### `artifact_publish`
+
+Publish a durable artifact in the current Workspace. Supply the complete entry and explicit assets; nothing is discovered from files or URLs. New artifacts use null artifact_id and expected_head. Updates must use the current revision as expected_head and never overwrite history. Document artifacts cannot execute authored code. Interactive-local artifacts have only published assets and transient input: no network, files, credentials, agent, tools, or persistent storage. Execution can be unavailable on an unqualified host. Choose a stable retry_key and repeat the exact key and input after an uncertain result.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "retry_key": {
+      "type": "string"
+    },
+    "artifact_id": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "expected_head": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "title": {
+      "type": "string"
+    },
+    "entry": {
+      "type": "string"
+    },
+    "profile": {
+      "type": "string",
+      "enum": [
+        "document",
+        "interactive-local"
+      ]
+    },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "media_type": {
+            "type": "string"
+          },
+          "encoding": {
+            "type": "string",
+            "enum": [
+              "utf8",
+              "base64"
+            ]
+          },
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "media_type",
+          "encoding",
+          "content"
+        ]
+      }
+    }
+  },
+  "required": [
+    "retry_key",
+    "artifact_id",
+    "expected_head",
+    "title",
+    "entry",
+    "profile",
+    "assets"
+  ]
+}
+```
+
+Source: [`packages/artifact/tool-artifact/src/index.ts`](../packages/artifact/tool-artifact/src/index.ts)
+
+### `artifact_read`
+
+Read an exact immutable artifact revision asset in the current Workspace. Text reads return a bounded range in Unicode characters; base64 reads return the complete original bytes subject to the result cap.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "artifact_id": {
+      "type": "string"
+    },
+    "revision_id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "encoding": {
+      "type": "string",
+      "enum": [
+        "utf8",
+        "base64"
+      ]
+    },
+    "offset": {
+      "type": "integer"
+    },
+    "length": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "artifact_id",
+    "revision_id",
+    "name",
+    "encoding",
+    "offset",
+    "length"
+  ]
+}
+```
+
+Source: [`packages/artifact/tool-artifact/src/index.ts`](../packages/artifact/tool-artifact/src/index.ts)
+
+### `artifact_restore`
+
+Restore an immutable revision by creating a new head, preserving all history. expected_head must be the current revision. Repeat the same retry_key to recover an uncertain result.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "artifact_id": {
+      "type": "string"
+    },
+    "revision_id": {
+      "type": "string"
+    },
+    "expected_head": {
+      "type": "string"
+    },
+    "retry_key": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "artifact_id",
+    "revision_id",
+    "expected_head",
+    "retry_key"
+  ]
+}
+```
+
+Source: [`packages/artifact/tool-artifact/src/index.ts`](../packages/artifact/tool-artifact/src/index.ts)
 
 <a id="deepseek-aidsh-tool-ask-user"></a>
 

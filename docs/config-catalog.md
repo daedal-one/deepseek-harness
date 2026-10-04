@@ -246,6 +246,28 @@ Depends on: [`ToolPresentationMode`](subsystems/tools.md)
 
 Source: [`packages/core/agent-tool-presentation/src/index.ts:38`](../packages/core/agent-tool-presentation/src/index.ts)
 
+<a id="deepseek-aidsh-api-artifacts"></a>
+
+## `@deepseek-ai/dsh-api-artifacts`
+
+Requires: `typert` · `artifacts` · `sessions` · `workspaceRegistry`
+
+```ts config-catalog
+/** Trusted editor and selected-text admission limits. */
+export interface Config {
+  /** Maximum simultaneous catalogue invalidation streams. */
+  maxCatalogueWatchers: number
+  /** Maximum retained viewer bytes, including decoded text and preview pixels. */
+  maxRetainedBytes: number
+  /** Maximum replacement UTF-8 text bytes in a trusted edit. */
+  maxEditBytes: number
+  /** Maximum logged agent edit request bytes, including its envelope. */
+  maxSelectionBytes: number
+}
+```
+
+Source: [`packages/api/artifacts/src/index.ts:27`](../packages/api/artifacts/src/index.ts)
+
 <a id="deepseek-aidsh-api-gateway"></a>
 
 ## `@deepseek-ai/dsh-api-gateway`
@@ -333,6 +355,94 @@ export interface Config {
 ```
 
 Source: [`packages/api/workspace-files/src/index.ts:71`](../packages/api/workspace-files/src/index.ts)
+
+<a id="deepseek-aidsh-artifact-durable"></a>
+
+## `@deepseek-ai/dsh-artifact-durable`
+
+Requires: `storageDomain` · `attachments` · `sessions` · `sessionPersistence` · `workspaceRegistry`
+
+```ts config-catalog
+/** Deployment admission and retention bounds; every value is explicit. */
+export interface Config {
+  /** Maximum accepted mutations, including the active operation. */
+  maxQueuedOperations: number
+  /** Maximum in-flight verified asset reads. */
+  maxConcurrentReads: number
+  /** Verified asset read deadline in milliseconds. */
+  readTimeoutMs: number
+  /** Maximum complete catalogue, revision or asset response bytes. */
+  maxResponseBytes: number
+  /** Maximum new reservations per Workspace rate interval. */
+  maxRevisionsPerInterval: number
+  /** Publication rate interval in milliseconds. */
+  revisionIntervalMs: number
+  /** Maximum decoded bytes per published asset. */
+  maxAssetBytes: number
+  /** Maximum complete input metadata and decoded asset bytes. */
+  maxPublicationBytes: number
+  /** Maximum explicit assets per revision. */
+  maxAssets: number
+  /** Maximum retained receipt bytes, reserved before asset capture. */
+  maxMetadataBytes: number
+  /** Maximum retained blob and receipt reservations per Workspace. */
+  maxWorkspaceBytes: number
+  /** Maximum retained blob and receipt reservations across Workspaces. */
+  maxHostBytes: number
+  /** Maximum retained publication reservations across Workspaces. */
+  maxOperations: number
+  /** Maximum committed revisions retained by one artifact. */
+  maxRevisionsPerArtifact: number
+  /** Maximum catalogue, history or recovery records per page. */
+  pageSize: number
+}
+```
+
+Source: [`packages/artifact/artifact-durable/src/index.ts:28`](../packages/artifact/artifact-durable/src/index.ts)
+
+<a id="deepseek-aidsh-artifact-runtime-podman"></a>
+
+## `@deepseek-ai/dsh-artifact-runtime-podman`
+
+```ts config-catalog
+/** Deployment-specific bounds and pinned trusted image. Security restrictions cannot be configured away. */
+export interface Config {
+  /** Absolute rootless Engine API socket on the Harness host. */
+  socketPath: string
+  /** Trusted renderer image pinned by registry digest. */
+  image: string
+  /** Absolute confined seccomp profile on the Engine host. */
+  seccompProfilePath: string
+  /** Non-root renderer image user. */
+  user: string
+  /** Invocation memory cap; swap is disabled. */
+  memoryBytes: number
+  /** Invocation CPU quota in billionths of one CPU. */
+  nanoCpus: number
+  /** Maximum processes in the invocation cgroup. */
+  pidsLimit: number
+  /** Maximum private temporary filesystem bytes. */
+  tmpfsBytes: number
+  /** Maximum active or allocating browser invocations. */
+  maxConcurrent: number
+  /** Maximum pending input operations per invocation. */
+  maxQueue: number
+  /** Maximum complete initialization or interaction command bytes. */
+  maxInputBytes: number
+  /** Maximum complete presentation response bytes. */
+  maxOutputBytes: number
+  /** Maximum invocation lifetime in milliseconds. */
+  maxLifetimeMs: number
+  /** Engine operation and browser response deadline in milliseconds. */
+  operationTimeoutMs: number
+  /** Fixed preview viewport width in pixels. */
+  width: number
+  /** Fixed preview viewport height in pixels. */
+  height: number
+}
+```
+
+Source: [`packages/artifact/artifact-runtime-podman/src/index.ts:19`](../packages/artifact/artifact-runtime-podman/src/index.ts)
 
 <a id="deepseek-aidsh-attachment-local"></a>
 
@@ -3505,6 +3615,24 @@ export type TokenMeterConfig = Record<string, never>
 
 Source: [`packages/llm/token-meter/src/types.ts:13`](../packages/llm/token-meter/src/types.ts)
 
+<a id="deepseek-aidsh-tool-artifact"></a>
+
+## `@deepseek-ai/dsh-tool-artifact`
+
+Requires: `tools` · `artifacts` · `workspaceRegistry`
+
+```ts config-catalog
+/** Complete model-visible result cap and cooperative operation deadline. */
+export interface Config {
+  /** Maximum complete JSON text emitted as one tool result. */
+  maxResultBytes: number
+  /** Guarded tool execution deadline in milliseconds. */
+  timeoutMs: number
+}
+```
+
+Source: [`packages/artifact/tool-artifact/src/index.ts:13`](../packages/artifact/tool-artifact/src/index.ts)
+
 <a id="deepseek-aidsh-tool-bash"></a>
 
 ## `@deepseek-ai/dsh-tool-bash`
@@ -4484,6 +4612,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-client-resources` ([`packages/client/resources/src/index.ts`](../packages/client/resources/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-agent-preset` ([`packages/client/ui-agent-preset/src/index.ts`](../packages/client/ui-agent-preset/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-approval` ([`packages/client/ui-approval/src/index.ts`](../packages/client/ui-approval/src/index.ts))
+- `@deepseek-ai/dsh-client-ui-artifacts` ([`packages/client/ui-artifacts/src/index.ts`](../packages/client/ui-artifacts/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-attachment` ([`packages/client/ui-attachment/src/index.ts`](../packages/client/ui-attachment/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-brand-official` ([`packages/client/ui-brand-official/src/index.ts`](../packages/client/ui-brand-official/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-chat` ([`packages/client/ui-chat/src/index.ts`](../packages/client/ui-chat/src/index.ts))
@@ -4566,6 +4695,8 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 
 Abstract service classes — a deployment loads a concrete implementation package instead ([capability seams](../.agents/notes/implemented/architecture/2026-06-13-capability-seams.md)).
 
+- `@deepseek-ai/dsh-artifact` — abstract `Artifacts` ([`packages/artifact/artifact/src/index.ts`](../packages/artifact/artifact/src/index.ts))
+- `@deepseek-ai/dsh-artifact-runtime` — abstract `ArtifactRuntime` ([`packages/artifact/artifact-runtime/src/index.ts`](../packages/artifact/artifact-runtime/src/index.ts))
 - `@deepseek-ai/dsh-attachment` — abstract `AttachmentStore` ([`packages/attachment/attachment/src/index.ts`](../packages/attachment/attachment/src/index.ts))
 - `@deepseek-ai/dsh-code-runtime` — abstract `CodeRuntime` ([`packages/code-runtime/code-runtime/src/index.ts`](../packages/code-runtime/code-runtime/src/index.ts))
 - `@deepseek-ai/dsh-compaction` — abstract `CompactionEngine` ([`packages/compaction/compaction/src/index.ts`](../packages/compaction/compaction/src/index.ts))
@@ -4591,6 +4722,7 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 - `@deepseek-ai/dsh-agent-plane` ([`packages/bundle/agent-plane/src/index.ts`](../packages/bundle/agent-plane/src/index.ts))
 - `@deepseek-ai/dsh-anonymous-user-id` ([`packages/identity/anonymous-user-id/src/index.ts`](../packages/identity/anonymous-user-id/src/index.ts))
 - `@deepseek-ai/dsh-app-boot` ([`packages/boot/app-boot/src/index.ts`](../packages/boot/app-boot/src/index.ts))
+- `@deepseek-ai/dsh-artifacts-bundle` ([`packages/bundle/artifacts/src/index.ts`](../packages/bundle/artifacts/src/index.ts))
 - `@deepseek-ai/dsh-atomic-write` ([`packages/util/atomic-write/src/index.ts`](../packages/util/atomic-write/src/index.ts))
 - `@deepseek-ai/dsh-base` ([`packages/bundle/base/src/index.ts`](../packages/bundle/base/src/index.ts))
 - `@deepseek-ai/dsh-brand` ([`packages/util/brand/src/index.ts`](../packages/util/brand/src/index.ts))

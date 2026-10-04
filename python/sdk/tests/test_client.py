@@ -1375,3 +1375,52 @@ for line in sys.stdin:
         "terminal": {key: value for key, value in actual[-1]["data"].items() if key != "runId"},
     }
     assert projection == json.loads(expected_path.read_text())
+
+
+def test_recorded_artifact_revisions_match_the_typescript_sdk(tmp_path: Path) -> None:
+    fixture = Path(__file__).resolve().parents[3] / "snapshots/sdk/artifact-revisions/notifications.expected.jsonl"
+    script = tmp_path / "recorded_artifact_runtime.py"
+    script.write_text(
+        """
+import json
+import sys
+from pathlib import Path
+
+frames = [json.loads(line.replace("{{session:1}}", "main")) for line in Path(sys.argv[1]).read_text().splitlines()]
+for line in sys.stdin:
+    msg = json.loads(line)
+    if msg["method"] == "initialize":
+        result = {"serverInfo": {"name": "recorded-artifact-fixture"}}
+    elif msg["method"] == "session/prompt":
+        for frame in frames:
+            print(json.dumps({"jsonrpc": "2.0", **frame}), flush=True)
+        result = {"messageId": "{{message:1}}"}
+    else:
+        result = {}
+    print(json.dumps({"jsonrpc": "2.0", "id": msg["id"], "result": result}), flush=True)
+    if msg["method"] == "shutdown":
+        break
+""".strip()
+    )
+    with DeepSeekHarness(_launch_args=(sys.executable, str(script), str(fixture)), cwd=str(tmp_path)) as harness:
+        result = harness.run("finish", session_id="main")
+    assert result.finish_reason == "completed"
+    assert result.final_response == "ARTIFACT_COMPOSITION_OK"
+    revisions = [event["data"]["revision"] for event in result.events if event["type"] == "artifact/published"]
+    expected = [
+        frame["params"]["event"]["data"]["revision"]
+        for frame in (json.loads(line.replace("{{session:1}}", "main")) for line in fixture.read_text().splitlines())
+        if frame["method"] == "session.event" and frame["params"]["event"]["type"] == "artifact/published"
+    ]
+    assert revisions == expected
+    assert len(revisions) == 3
+    original, updated, restored = revisions
+    assert original["sessionId"] == "main"
+    assert updated["parent"] == original["revisionId"]
+    assert restored["parent"] == updated["revisionId"]
+    assert restored["restoredFrom"] == original["revisionId"]
+    assert restored["assets"] == original["assets"]
+    assert len({revision["workspaceId"] for revision in revisions}) == 1
+    assert len({revision["artifactId"] for revision in revisions}) == 1
+    assert len({revision["revisionId"] for revision in revisions}) == 3
+    assert all(revision["profile"] == "document" and revision["capabilities"] == ["published-assets"] for revision in revisions)

@@ -2225,6 +2225,101 @@
       "doc": "docs/subsystems/tool-policy.md",
       "symbol": "ToolPolicyProvider",
       "source": "packages/guard/tool-policy/src/index.ts"
+    },
+    {
+      "doc": "docs/subsystems/artifacts.md",
+      "symbol": "ArtifactId",
+      "source": "packages/artifact/artifact/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/artifacts.md",
+      "symbol": "ArtifactRevisionId",
+      "source": "packages/artifact/artifact/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/artifacts.md",
+      "symbol": "ArtifactOperationId",
+      "source": "packages/artifact/artifact/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/artifacts.md",
+      "symbol": "ArtifactProfile",
+      "source": "packages/artifact/artifact/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/artifacts.md",
+      "symbol": "ArtifactAsset",
+      "source": "packages/artifact/artifact/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/artifacts.md",
+      "symbol": "ArtifactRevision",
+      "source": "packages/artifact/artifact/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/artifacts.md",
+      "symbol": "ArtifactAssetInput",
+      "source": "packages/artifact/artifact/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/artifacts.md",
+      "symbol": "ArtifactPublish",
+      "source": "packages/artifact/artifact/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/artifacts.md",
+      "symbol": "ArtifactSummary",
+      "source": "packages/artifact/artifact/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/artifacts.md",
+      "symbol": "ArtifactPage",
+      "source": "packages/artifact/artifact/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/artifacts.md",
+      "symbol": "ArtifactPending",
+      "source": "packages/artifact/artifact/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/artifacts.md",
+      "symbol": "ArtifactContent",
+      "source": "packages/artifact/artifact/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/artifacts.md",
+      "symbol": "ArtifactInvocationId",
+      "source": "packages/artifact/artifact-runtime/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/artifacts.md",
+      "symbol": "ArtifactRuntimeInput",
+      "source": "packages/artifact/artifact-runtime/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/artifacts.md",
+      "symbol": "ArtifactRuntimeInteraction",
+      "source": "packages/artifact/artifact-runtime/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/artifacts.md",
+      "symbol": "ArtifactFrame",
+      "source": "packages/artifact/artifact-runtime/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/artifacts.md",
+      "symbol": "ArtifactInvocation",
+      "source": "packages/artifact/artifact-runtime/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/artifacts.md",
+      "symbol": "ArtifactPolicy",
+      "source": "packages/api/artifacts/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/artifacts.md",
+      "symbol": "ArtifactRuntimeKey",
+      "source": "packages/artifact/artifact-runtime/src/types.ts"
     }
   ]
 }

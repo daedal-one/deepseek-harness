@@ -1,0 +1,84 @@
+/* Trusted Workspace artifact sidebar; authored CSS never reaches this surface. */
+.panel {
+  position: absolute;
+  inset: 0 0 0 auto;
+  z-index: 11;
+  display: flex;
+  flex-direction: column;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  border-left: 1px solid var(--dsw-alias-border-l4);
+  min-width: 0;
+}
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-bottom: 1px solid var(--dsw-alias-border-l4);
+}
+.header span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.body {
+  padding: 12px;
+  overflow: auto;
+  min-height: 0;
+}
+.catalogue {
+  list-style: none;
+  padding: 0;
+}
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-block: 10px;
+}
+.source {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 220px;
+  font-family: monospace;
+  white-space: pre;
+  resize: vertical;
+}
+.preview {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.accessible {
+  white-space: pre-wrap;
+  font-size: 12px;
+}
+.history {
+  padding-block: 8px;
+}
+.panel button,
+.panel input,
+.panel select {
+  font: inherit;
+}
+.catalogue li {
+  margin-block: 12px;
+  padding: 10px;
+  border: 1px solid var(--dsw-alias-border-l4);
+  border-radius: 6px;
+}
+.metadata {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 10px;
+  font-size: 12px;
+  margin-block: 8px 0;
+}
+.metadata dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.metadata dt {
+  opacity: 0.75;
+}

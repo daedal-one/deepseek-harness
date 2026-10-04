@@ -1,7 +1,7 @@
 /**
  * The right Sidebar's extension seats and its copy namespace.
  *
- * Four seats, each with a different reason to exist:
+ * Five seats, each with a different reason to exist:
  * - `sidebar.right.pane.tab` is how a tab type contributes a body. It is keyed by
  *   the type definition's `id`, so adding a type is a registration, never an
  *   edit here. The key domain stays the open string space because a tab type may
@@ -16,7 +16,10 @@
  *   actions that are gestures on the layout itself; this seat is for actions that
  *   mean something about the tab's content.
  *
- * TYPE HOME RATIONALE: this package declares all four at runtime, and anything
+ * - `rightbar.workspace` displays resources owned by an explicit Workspace,
+ *   independently of selected Session content.
+ *
+ * TYPE HOME RATIONALE: this package declares all five at runtime, and anything
  * registering into one already depends on it for the declaration. The types
  * therefore live with their declarer.
  */
@@ -38,6 +41,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 
   interface SlotMap {
+    /** Root-scoped Workspace resources, independent of the selected Session. */
+    'rightbar.workspace': { kind: 'single'; scope: 'root'; owner: RightbarOwnerProps }
     /** Session content selected by the root-scoped right Sidebar controller. */
     'rightbar.session': { kind: 'single'; scope: 'session'; owner: RightbarOwnerProps }
     /**

@@ -4,6 +4,7 @@
  */
 
 import Dockerode from 'dockerode'
+import { request as httpRequest } from 'node:http'
 import type { Duplex } from 'node:stream'
 import type {
   PodmanContainer,
@@ -26,7 +27,10 @@ export class DockerodePodmanEngine implements PodmanEngine {
    * @param socketPath - absolute rootless Podman service socket path.
    * @param timeoutMs - bounded Engine API request timeout.
    */
-  constructor(socketPath: string, timeoutMs: number) {
+  constructor(
+    private readonly socketPath: string,
+    private readonly timeoutMs: number,
+  ) {
     this.docker = new Dockerode({ socketPath, timeout: timeoutMs })
     // Process lifetime is owned by the runtime; an idle HTTP timeout must not end its wait.
     const waitOptions = { socketPath, timeout: 0, connectionTimeout: timeoutMs }
@@ -67,30 +71,44 @@ export class DockerodePodmanEngine implements PodmanEngine {
       throw new Error('Podman image inspection returned a non-object Volumes field')
     }
     return {
-      ...id === undefined ? {} : { Id: id },
+      ...(id === undefined ? {} : { Id: id }),
       Config: volumes === undefined ? {} : { Volumes: volumes },
     }
   }
 
-  /**
-   * @param request - fixed owner-controlled container creation request.
-   * @returns Engine container lifecycle handle.
-   */
   /**
    * Recover an Engine handle after an ambiguous create response.
    * @param name - owner-generated unique container name.
    * @returns a lifecycle adapter that resolves when used.
    */
   getContainer(name: string): PodmanContainer {
-    return new DockerodePodmanContainer(this.docker.getContainer(name), this.waitDocker.getContainer(name))
+    return new DockerodePodmanContainer(
+      this.docker.getContainer(name),
+      this.waitDocker.getContainer(name),
+      this.socketPath,
+      this.timeoutMs,
+    )
   }
 
   async containersUsing(directory: string): Promise<PodmanContainer[]> {
     const containers = await this.docker.listContainers({ all: true })
-    return containers.filter(container => container.Mounts.some(mount => mount.Source === directory))
-      .map(container => new DockerodePodmanContainer(this.docker.getContainer(container.Id), this.waitDocker.getContainer(container.Id)))
+    return containers
+      .filter(container => container.Mounts.some(mount => mount.Source === directory))
+      .map(
+        container =>
+          new DockerodePodmanContainer(
+            this.docker.getContainer(container.Id),
+            this.waitDocker.getContainer(container.Id),
+            this.socketPath,
+            this.timeoutMs,
+          ),
+      )
   }
 
+  /**
+   * @param request - fixed owner-controlled container creation request.
+   * @returns Engine container lifecycle handle.
+   */
   async createContainer(request: PodmanContainerCreate): Promise<PodmanContainer> {
     const options: Dockerode.ContainerCreateOptions = {
       Image: request.Image,
@@ -101,18 +119,20 @@ export class DockerodePodmanEngine implements PodmanEngine {
       Env: request.Env,
       NetworkDisabled: request.NetworkDisabled,
       HostConfig: request.HostConfig,
-      ...request.AttachStdin === undefined ? {} : { AttachStdin: request.AttachStdin },
-      ...request.AttachStdout === undefined ? {} : { AttachStdout: request.AttachStdout },
-      ...request.AttachStderr === undefined ? {} : { AttachStderr: request.AttachStderr },
-      ...request.OpenStdin === undefined ? {} : { OpenStdin: request.OpenStdin },
-      ...request.StdinOnce === undefined ? {} : { StdinOnce: request.StdinOnce },
-      ...request.Tty === undefined ? {} : { Tty: request.Tty },
+      ...(request.AttachStdin === undefined ? {} : { AttachStdin: request.AttachStdin }),
+      ...(request.AttachStdout === undefined ? {} : { AttachStdout: request.AttachStdout }),
+      ...(request.AttachStderr === undefined ? {} : { AttachStderr: request.AttachStderr }),
+      ...(request.OpenStdin === undefined ? {} : { OpenStdin: request.OpenStdin }),
+      ...(request.StdinOnce === undefined ? {} : { StdinOnce: request.StdinOnce }),
+      ...(request.Tty === undefined ? {} : { Tty: request.Tty }),
       name: request.name,
     }
     const container = await new Promise<Dockerode.Container>((resolve, reject) => {
       this.docker.createContainer(options, (error, created) => {
         if (error !== null && error !== undefined) {
-          reject(error instanceof Error ? error : new Error('dockerode createContainer failed', { cause: error }))
+          reject(
+            error instanceof Error ? error : new Error('dockerode createContainer failed', { cause: error }),
+          )
           return
         }
         if (created === undefined) {
@@ -122,7 +142,12 @@ export class DockerodePodmanEngine implements PodmanEngine {
         resolve(created)
       })
     })
-    return new DockerodePodmanContainer(container, this.waitDocker.getContainer(container.id))
+    return new DockerodePodmanContainer(
+      container,
+      this.waitDocker.getContainer(container.id),
+      this.socketPath,
+      this.timeoutMs,
+    )
   }
 }
 
@@ -154,25 +179,58 @@ class DockerodePodmanContainer implements PodmanContainer {
   /** Engine-assigned id retained by the runtime owner. */
   readonly id: string
 
-  constructor(private readonly container: Dockerode.Container, private readonly waitContainer: Dockerode.Container) {
+  constructor(
+    private readonly container: Dockerode.Container,
+    private readonly waitContainer: Dockerode.Container,
+    private readonly socketPath: string,
+    private readonly timeoutMs: number,
+  ) {
     this.id = container.id
   }
 
   /** @returns Docker-compatible container inspection facts. */
   async inspect(): Promise<PodmanContainerInspect> {
-    return await this.container.inspect() as unknown as PodmanContainerInspect
+    return (await this.container.inspect()) as unknown as PodmanContainerInspect
   }
 
   /** Attach to the configured process streams. */
   async attach(options: { stdin: boolean; stdout: boolean; stderr: boolean }): Promise<Duplex> {
-    return await this.container.attach({
-      stream: true,
-      hijack: true,
-      logs: false,
-      stdin: options.stdin,
-      stdout: options.stdout,
-      stderr: options.stderr,
-    }) as unknown as Duplex
+    return await new Promise<Duplex>((resolve, reject) => {
+      // Podman upgrades an empty POST directly into stdin. Keep HTTP metadata
+      // outside that pipe; Dockerode serializes attach options into the body.
+      const query = new URLSearchParams({
+        stream: 'true',
+        logs: 'false',
+        stdin: String(options.stdin),
+        stdout: String(options.stdout),
+        stderr: String(options.stderr),
+      })
+      const request = httpRequest({
+        socketPath: this.socketPath,
+        method: 'POST',
+        path: '/containers/' + encodeURIComponent(this.id) + '/attach?' + query.toString(),
+        headers: { Connection: 'Upgrade', Upgrade: 'tcp', 'Content-Length': '0' },
+      })
+      request.setTimeout(this.timeoutMs, () => {
+        request.destroy(new Error('Podman attach handshake exceeded its deadline'))
+      })
+      request.once('error', reject)
+      request.once('response', (response) => {
+        response.destroy()
+        reject(new Error('Podman attach did not upgrade its private pipe: ' + String(response.statusCode)))
+      })
+      request.once('upgrade', (response, socket, head) => {
+        if (response.statusCode !== 101) {
+          socket.destroy()
+          reject(new Error('Podman attach refused the private pipe upgrade'))
+          return
+        }
+        socket.setTimeout(0)
+        if (head.length > 0) socket.unshift(head)
+        resolve(socket)
+      })
+      request.end()
+    })
   }
 
   /** Start the configured runtime process. */
@@ -182,15 +240,20 @@ class DockerodePodmanContainer implements PodmanContainer {
 
   /** Wait for the configured process to stop. */
   async wait(signal?: AbortSignal): Promise<{ statusCode: number; error?: string }> {
-    const options = signal === undefined ? { condition: 'not-running' as const } : { condition: 'not-running' as const, abortSignal: signal }
-    const value = await this.waitContainer.wait(options) as unknown
+    const options =
+      signal === undefined
+        ? { condition: 'not-running' as const }
+        : { condition: 'not-running' as const, abortSignal: signal }
+    const value = (await this.waitContainer.wait(options)) as unknown
     if (!isRecord(value) || typeof value.StatusCode !== 'number') {
       throw new Error('local-container-runtime: Engine wait response omitted the process status')
     }
     const errorValue = value.Error
-    const message = isRecord(errorValue) && typeof errorValue.Message === 'string' && errorValue.Message.length > 0
-      ? errorValue.Message : undefined
-    return { statusCode: value.StatusCode, ...message === undefined ? {} : { error: message } }
+    const message =
+      isRecord(errorValue) && typeof errorValue.Message === 'string' && errorValue.Message.length > 0
+        ? errorValue.Message
+        : undefined
+    return { statusCode: value.StatusCode, ...(message === undefined ? {} : { error: message }) }
   }
 
   /** Resize the configured terminal. */
@@ -223,7 +286,10 @@ class DockerodePodmanContainer implements PodmanContainer {
    * @param maxOutputBytes - maximum combined response bytes accepted from the command.
    * @returns the settled exit code and UTF-8 output.
    */
-  async runControl(argv: readonly string[], maxOutputBytes: number): Promise<{ exitCode: number; output: string }> {
+  async runControl(
+    argv: readonly string[],
+    maxOutputBytes: number,
+  ): Promise<{ exitCode: number; output: string }> {
     const exec = await this.container.exec({
       Cmd: [...argv],
       AttachStdout: true,
@@ -259,9 +325,10 @@ class DockerodePodmanContainer implements PodmanContainer {
       AttachStderr: true,
       Tty: false,
     })
-    const startOptions = request.signal === undefined
-      ? { hijack: true, stdin }
-      : { hijack: true, stdin, abortSignal: request.signal }
+    const startOptions =
+      request.signal === undefined
+        ? { hijack: true, stdin }
+        : { hijack: true, stdin, abortSignal: request.signal }
     const stream = await new Promise<Duplex>((resolve, reject) => {
       exec.start(startOptions, (error, started) => {
         if (error !== null && error !== undefined) {
@@ -275,7 +342,9 @@ class DockerodePodmanContainer implements PodmanContainer {
         resolve(started)
       })
     })
-    const onAbort = (): void => { stream.destroy() }
+    const onAbort = (): void => {
+      stream.destroy()
+    }
     request.signal?.addEventListener('abort', onAbort, { once: true })
     const stdout: Array<Buffer> = []
     const stderr: Array<Buffer> = []
@@ -291,7 +360,9 @@ class DockerodePodmanContainer implements PodmanContainer {
           const payloadBytes = buffered.readUInt32BE(4)
           if (payloadBytes > request.maxOutputBytes - bytes) {
             stream.destroy()
-            throw new Error(`local-container-runtime: controller response exceeded ${request.maxOutputBytes} bytes`)
+            throw new Error(
+              `local-container-runtime: controller response exceeded ${request.maxOutputBytes} bytes`,
+            )
           }
           if (buffered.length < payloadBytes + 8) break
           const payload = buffered.subarray(8, payloadBytes + 8)
@@ -302,7 +373,8 @@ class DockerodePodmanContainer implements PodmanContainer {
           buffered = buffered.subarray(payloadBytes + 8)
         }
       }
-      if (buffered.length !== 0) throw new Error('local-container-runtime: controller response ended with a partial frame')
+      if (buffered.length !== 0)
+        throw new Error('local-container-runtime: controller response ended with a partial frame')
       const inspection = await exec.inspect()
       if (typeof inspection.ExitCode !== 'number') {
         throw new Error('local-container-runtime: controller command settled without an exit code')

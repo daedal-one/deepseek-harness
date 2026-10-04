@@ -149,7 +149,8 @@ export function apply(ctx: ClientContext): void {
     const disposeSeat = ctx.slots.inject('rightbar', function* () {
       yield ctx.slots.register({
         name: 'rightbar',
-        children: { 'rightbar.session': { kind: 'single', scope: 'session' } },
+        children: { 'rightbar.session': { kind: 'single', scope: 'session' }, 'rightbar.workspace': { kind: 'single', scope: 'root' } },
+        inject: () => ({ hooks: { workspacePanel: { getSnapshot: () => ctx.slots.entries('rightbar.workspace').length > 0, subscribe: (listener: () => void) => ctx.slots.subscribe('rightbar.workspace', listener) } } }),
       }, RightbarRoot)
       yield ctx.slots.register({
         name: 'rightbar.session',

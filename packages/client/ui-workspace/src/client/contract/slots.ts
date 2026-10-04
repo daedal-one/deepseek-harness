@@ -31,6 +31,7 @@ import type { SessionSearchResultItem } from '@deepseek-ai/dsh-api-session-contr
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
 import type { WorkspaceId, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { WorkspaceMenuContribution } from '../navigation.ts'
 import type { createWorkspaceViewStore } from '../stores.ts'
 
 /**
@@ -96,7 +97,11 @@ export type WorkspaceBrowserInjected = {
      * saw. Select the field the surface needs (`info => info.home`).
      */
     hostInfo: HostObservable<RemoteHostFacts>
+    /** Effect-owned exact-Workspace dropdown actions. */
+    workspaceMenu: HostObservable<readonly WorkspaceMenuContribution[]>
   }
+  /** @param workspaceId - selected durable Workspace. @param id - live menu contribution. */
+  invokeWorkspaceMenu: (workspaceId: WorkspaceId, id: string) => void
   /**
    * Start a New Session in a Workspace: reuse-or-create its blank session and
    * open it; without an explicit workspace, inherit the current Session

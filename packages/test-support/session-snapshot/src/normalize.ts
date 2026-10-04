@@ -322,6 +322,70 @@ export function normalizeStdout(
   return frames.map(f => JSON.stringify(f)).join('\n') + '\n'
 }
 
+/** Scrub only provider-owned artifact clocks, preserving authored source and unrelated tool text. */
+function scrubArtifactClock(record: Record<string, unknown>, tools: Map<string, string>): void {
+  const rawData = record.data
+  if (rawData === null || typeof rawData !== 'object' || Array.isArray(rawData)) return
+  const data = rawData as Record<string, unknown>
+  const clock = (value: unknown): void => {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) return
+    const revision = value as Record<string, unknown>
+    if (
+      typeof revision.artifactId === 'string' &&
+      typeof revision.revisionId === 'string' &&
+      typeof revision.createdAt === 'string'
+    )
+      revision.createdAt = '1970-01-01T00:00:00.000Z'
+  }
+  if (record.type === 'artifact/published') {
+    clock(data.revision)
+    return
+  }
+  if (record.type === 'tool/call' && typeof data.callId === 'string' && typeof data.name === 'string') {
+    tools.set(data.callId, data.name)
+    return
+  }
+  if (record.type !== 'tool/result') return
+  const message = data.message as
+    | {
+      content?: {
+        type?: string
+        toolCallId?: string
+        isError?: boolean
+        content?: { type?: string; text?: string }[]
+      }[]
+    }
+    | undefined
+  for (const result of message?.content ?? []) {
+    const name = result.toolCallId === undefined ? undefined : tools.get(result.toolCallId)
+    if (
+      result.type !== 'tool-result' ||
+      result.isError === true ||
+      name === undefined ||
+      !['artifact_publish', 'artifact_restore', 'artifact_list', 'artifact_read'].includes(name)
+    )
+      continue
+    for (const block of result.content ?? []) {
+      if (block.type !== 'text' || block.text === undefined) continue
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(block.text) as unknown
+      } catch {
+        // A non-JSON diagnostic carries no artifact metadata clock.
+        continue
+      }
+      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) continue
+      const value = parsed as Record<string, unknown>
+      if (name === 'artifact_publish' || name === 'artifact_restore') clock(value)
+      else if (name === 'artifact_read') clock(value.revision)
+      else if (Array.isArray(value.items))
+        for (const item of value.items)
+          if (item !== null && typeof item === 'object') clock((item as Record<string, unknown>).head)
+      block.text = JSON.stringify(value)
+    }
+  }
+}
+
 /**
  * Normalize a session JSONL log into a stable expected output: the header line's
  * volatile fields (`createdAt`, `id`, `cwd`) are zeroed/scrubbed; event,
@@ -346,8 +410,10 @@ export function normalizeSessionLog(
   const cwdPathMode = options.cwdPathMode ?? 'canonical'
   const identityMode = options.identityMode ?? 'legacy'
   const lines = rawLog.split('\n').filter(line => line.trim().length > 0)
+  const artifactTools = new Map<string,string>()
   const records = lines.map((line) => {
     const record = JSON.parse(line) as Record<string, unknown>
+    scrubArtifactClock(record,artifactTools)
     if (record.type === 'session') {
       if ('createdAt' in record) record.createdAt = 0
     } else if (isPackedFixtureRow(record)) {
@@ -533,13 +599,14 @@ export function scrubModelRequestBulk(rawLog: string): string {
 
 /**
  * Project a persisted session log while tokenizing prompt text and schema
- * bulk. Each non-empty line is parsed at most once; the session header stays
+ * bulk and provider-owned artifact metadata clocks. Each non-empty line is parsed at most once; the session header stays
  * byte-identical. Body records omit their persistence-only envelopes.
  *
  * @param rawLog - persisted or already-projected session JSONL.
  * @returns committed snapshot JSONL with prompt text and tool schemas tokenized.
  */
 export function scrubSessionSnapshot(rawLog: string): string {
+  const artifactTools = new Map<string,string>()
   const scrubbed = scrubModelRequestBulk(rawLog)
   let recordIndex = 0
   return scrubbed.split('\n').map((line) => {
@@ -549,6 +616,7 @@ export function scrubSessionSnapshot(rawLog: string): string {
       if (record.type !== 'session') throw new Error('session snapshot must start with a session header')
       return line
     }
+    scrubArtifactClock(record,artifactTools)
     omitFixtureEnvelope(record)
     normalizeFeedbackClocks(record)
     return JSON.stringify(record)

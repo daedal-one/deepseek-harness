@@ -125,6 +125,10 @@ interface SdkAssertions {
 }
 
 const SDK_ASSERTIONS: Readonly<Record<string, SdkAssertions>> = {
+  'artifact-revisions': {
+    patches: [fileURLToPath(new URL('./artifact-revisions/readiness.cordis.yml', import.meta.url))],
+    expectedFinalResponse: 'ARTIFACT_COMPOSITION_OK',
+  },
   'ptc-turn': {
     patches: [fileURLToPath(new URL('./ptc-turn/runtime.cordis.yml', import.meta.url))],
     expectedFinalResponse: 'CODE_ONE+CODE_TWO',
@@ -358,7 +362,7 @@ function normalizeNotifications(notifications: readonly HarnessNotification[], c
     .filter(n => n.method === 'session.event')
     .map(n => n.params.event as Record<string, unknown>)
   const typedFeedback = events.some(event => event.type === 'feedback/message-put')
-  const typedIdentities = typedFeedback || events.some(event => typeof event.type === 'string' && event.type.startsWith('operation/'))
+  const typedIdentities = typedFeedback || events.some(event => event.type === 'artifact/published') || events.some(event => typeof event.type === 'string' && event.type.startsWith('operation/'))
   const eventLog = events.map(event => JSON.stringify(event)).join('\n') + '\n'
   const typedLog = typedIdentities
     ? redactSessionSnapshotIds([JSON.stringify({ type: 'session', id: ctx.sessionIds[0] }) + '\n' + eventLog])[0]!.split('\n').slice(1).join('\n')

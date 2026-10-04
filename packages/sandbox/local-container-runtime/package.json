@@ -46,12 +46,17 @@
     "./vm-previews": {
       "types": "./lib/types/vm-previews.d.ts",
       "default": "./lib/vm-previews.js"
+    },
+    "./engine": {
+      "types": "./lib/types/engine.d.ts",
+      "default": "./lib/engine.js"
     }
   },
   "files": [
     "lib/index.js",
     "lib/startup.js",
     "Containerfile",
+    "lib/engine.js",
     "lib/workspaces.js",
     "lib/tool-request-repo-access.js",
     "lib/vm.js",

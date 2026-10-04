@@ -1,0 +1,3 @@
+# The SDK transport waits for the publication capability before accepting requests.
+- id: sdk-jsonrpc-server
+  inject: [sdkAppStartup, loader, artifacts, workspaceRegistry]

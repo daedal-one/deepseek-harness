@@ -542,6 +542,147 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'artifactRuntime',
+    summary: 'Providers must enforce network denial and resource bounds independently of Session execution.',
+    description: 'Providers must enforce network denial and resource bounds independently of Session execution.',
+    methods: [
+      {
+        signature: 'abstract open(input: ArtifactRuntimeInput, signal: AbortSignal): Promise<ArtifactInvocation>',
+        description: 'Allocate one independently confined runtime lifetime.',
+        parameters: [{ name: 'input', description: 'one complete immutable revision without Session authority.' }, { name: 'signal', description: 'invocation cancellation.' }],
+        returns: 'independently owned sandbox invocation.',
+      },
+    ],
+  },
+  {
+    key: 'artifacts',
+    summary: 'Artifact ownership is checked by the provider on every operation.',
+    description: 'Artifact ownership is checked by the provider on every operation.',
+    methods: [
+      {
+        signature: 'abstract pending(workspaceId: WorkspaceId): Promise<readonly ArtifactPending[]>',
+        description: 'List recoverable publication reservations for the selected Workspace.',
+        parameters: [{ name: 'workspaceId', description: 'selected durable Workspace.' }],
+        returns: 'bounded interrupted operations.',
+      },
+      {
+        signature: 'abstract reconcile( workspaceId: WorkspaceId, revisionId: ArtifactRevisionId, ): Promise<ArtifactRevision | null>',
+        description: 'Resolve an interrupted operation against durable Session evidence.',
+        parameters: [{ name: 'workspaceId', description: 'selected durable Workspace.' }, { name: 'revisionId', description: 'interrupted operation\'s assigned revision.' }],
+        returns: 'committed revision, or null when no publication event exists and the reservation was safely abandoned.',
+      },
+      {
+        signature: 'abstract publish(session: Session, request: ArtifactPublish): Promise<ArtifactRevision>',
+        description: 'Persist and checkpoint one complete immutable revision.',
+        parameters: [{ name: 'session', description: 'exact live creating Session.' }, { name: 'request', description: 'complete revision and retry identity.' }],
+        returns: 'durable committed revision.',
+      },
+      {
+        signature: 'abstract list(workspaceId: WorkspaceId, after: ArtifactId | null): Promise<ArtifactPage>',
+        description: 'Read committed artifact heads without activating creating Sessions.',
+        parameters: [{ name: 'workspaceId', description: 'selected durable Workspace.' }, { name: 'after', description: 'exclusive artifact cursor.' }],
+        returns: 'bounded current-head catalogue.',
+      },
+      {
+        signature: 'abstract history( workspaceId: WorkspaceId, artifactId: ArtifactId, before: ArtifactRevisionId | null, ): Promise<readonly ArtifactRevision[]>',
+        description: 'Read an artifact’s immutable revision history.',
+        parameters: [{ name: 'workspaceId', description: 'selected durable Workspace.' }, { name: 'artifactId', description: 'artifact owned by it.' }, { name: 'before', description: 'exclusive revision cursor.' }],
+        returns: 'bounded newest-first history.',
+      },
+      {
+        signature: 'abstract read( workspaceId: WorkspaceId, artifactId: ArtifactId, revisionId: ArtifactRevisionId, name: string, signal?: AbortSignal, ): Promise<ArtifactContent>',
+        description: 'Verify and return bytes belonging to an exact Workspace revision.',
+        parameters: [{ name: 'workspaceId', description: 'selected durable Workspace.' }, { name: 'artifactId', description: 'owned artifact.' }, { name: 'revisionId', description: 'exact retained revision.' }, { name: 'name', description: 'exact manifest asset name.' }, { name: 'signal', description: 'optional read cancellation.' }],
+        returns: 'verified immutable content.',
+      },
+      {
+        signature: 'abstract restore( session: Session, artifactId: ArtifactId, revisionId: ArtifactRevisionId, expectedHead: ArtifactRevisionId, operationId: ArtifactOperationId, ): Promise<ArtifactRevision>',
+        description: 'Publish a retained revision as a new head with optimistic concurrency.',
+        parameters: [{ name: 'session', description: 'exact live Session in the artifact Workspace.' }, { name: 'artifactId', description: 'owned artifact.' }, { name: 'revisionId', description: 'immutable restore source.' }, { name: 'expectedHead', description: 'head observed by caller.' }, { name: 'operationId', description: 'scoped retry identity.' }],
+        returns: 'a new revision preserving history.',
+      },
+    ],
+  },
+  {
+    key: 'artifactsController',
+    summary: 'Every Remote is behind the authenticated gateway; Workspace ownership is checked in the executor.',
+    description: 'Every Remote is behind the authenticated gateway; Workspace ownership is checked in the executor.',
+    methods: [
+      {
+        signature: '@Remote policy(): ArtifactPolicy',
+        description: 'Read execution availability and trusted editing bounds.',
+        parameters: [],
+        returns: 'capability availability and authoritative trusted-text limits.',
+      },
+      {
+        signature: '@Remote async edit( session: Session, workspaceId: WorkspaceId, artifactId: ArtifactId, expectedHead: ArtifactRevisionId, name: string, content: string, operationId: ArtifactOperationId, ): Promise<ArtifactRevision>',
+        description: 'Publish an exact-head replacement for one retained text asset.',
+        parameters: [{ name: 'session', description: 'authorized live editing Session.' }, { name: 'workspaceId', description: 'selected Workspace.' }, { name: 'artifactId', description: 'owned artifact.' }, { name: 'expectedHead', description: 'exact observed revision.' }, { name: 'name', description: 'retained text asset.' }, { name: 'content', description: 'complete replacement text.' }, { name: 'operationId', description: 'retry identity.' }],
+        returns: 'a new immutable revision or conflict.',
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *watch(workspaceId: WorkspaceId, signal: AbortSignal): AsyncIterable<boolean>',
+        description: 'Stream coalesced invalidations after durable catalogue changes.',
+        parameters: [{ name: 'workspaceId', description: 'explicitly selected Workspace.' }, { name: 'signal', description: 'subscription cancellation.' }],
+        returns: 'bounded invalidations; consumers reread an authorized catalogue page.',
+      },
+      {
+        signature: '@Remote pending(workspaceId: WorkspaceId): Promise<readonly ArtifactPending[]>',
+        description: 'List recoverable publication reservations for the selected Workspace.',
+        parameters: [{ name: 'workspaceId', description: 'selected Workspace.' }],
+        returns: 'bounded interrupted saves.',
+      },
+      {
+        signature: '@Remote reconcile(workspaceId: WorkspaceId, revisionId: ArtifactRevisionId): Promise<ArtifactRevision | null>',
+        description: 'Resolve an interrupted operation against durable Session evidence.',
+        parameters: [{ name: 'workspaceId', description: 'selected Workspace.' }, { name: 'revisionId', description: 'exact interrupted operation.' }],
+        returns: 'recovered revision, or null after safe abandonment.',
+      },
+      {
+        signature: '@Remote list(workspaceId: WorkspaceId, after: ArtifactId | null): Promise<ArtifactPage>',
+        description: 'Read committed artifact heads without activating creating Sessions.',
+        parameters: [{ name: 'workspaceId', description: 'explicitly selected Workspace.' }, { name: 'after', description: 'exclusive cursor or first page.' }],
+        returns: 'bounded committed heads.',
+      },
+      {
+        signature: '@Remote history( workspaceId: WorkspaceId, artifactId: ArtifactId, before: ArtifactRevisionId | null, ): Promise<readonly ArtifactRevision[]>',
+        description: 'Read an artifact’s immutable revision history.',
+        parameters: [{ name: 'workspaceId', description: 'explicitly selected Workspace.' }, { name: 'artifactId', description: 'owned artifact.' }, { name: 'before', description: 'exclusive revision cursor.' }],
+        returns: 'bounded immutable history.',
+      },
+      {
+        signature: '@Remote read( workspaceId: WorkspaceId, artifactId: ArtifactId, revisionId: ArtifactRevisionId, name: string, signal: AbortSignal, ): Promise<ArtifactContent>',
+        description: 'Verify and return bytes belonging to an exact Workspace revision.',
+        parameters: [{ name: 'workspaceId', description: 'explicitly selected Workspace.' }, { name: 'artifactId', description: 'owned artifact.' }, { name: 'revisionId', description: 'exact revision.' }, { name: 'name', description: 'manifest asset name.' }, { name: 'signal', description: 'read cancellation.' }],
+        returns: 'verified complete immutable bytes.',
+      },
+      {
+        signature: '@Remote publish(session: Session, request: ArtifactPublish): Promise<ArtifactRevision>',
+        description: 'Persist and checkpoint one complete immutable revision.',
+        parameters: [{ name: 'session', description: 'authorized live editing Session resolved by the gateway.' }, { name: 'request', description: 'complete immutable replacement.' }],
+        returns: 'durable new revision or conflict.',
+      },
+      {
+        signature: '@Remote restore( session: Session, artifactId: ArtifactId, revisionId: ArtifactRevisionId, expectedHead: ArtifactRevisionId, operationId: ArtifactOperationId, ): Promise<ArtifactRevision>',
+        description: 'Publish a retained revision as a new head with optimistic concurrency.',
+        parameters: [{ name: 'session', description: 'authorized live editing Session resolved by the gateway.' }, { name: 'artifactId', description: 'owned artifact.' }, { name: 'revisionId', description: 'restore source.' }, { name: 'expectedHead', description: 'observed head.' }, { name: 'operationId', description: 'retry identity.' }],
+        returns: 'new immutable revision.',
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *preview( workspaceId: WorkspaceId, artifactId: ArtifactId, revisionId: ArtifactRevisionId, entry: string, signal: AbortSignal, ): AsyncIterable<ArtifactFrame>',
+        description: 'Lease a bounded rendering of one immutable revision.',
+        parameters: [{ name: 'workspaceId', description: 'selected Workspace.' }, { name: 'artifactId', description: 'owned artifact.' }, { name: 'revisionId', description: 'immutable revision.' }, { name: 'entry', description: 'manifest entry asset.' }, { name: 'signal', description: 'preview-stream revocation.' }],
+        returns: 'initial rendered frame followed by lease lifetime; inputs use the exact returned invocation identity.',
+      },
+      {
+        signature: '@Remote async interact( workspaceId: WorkspaceId, artifactId: ArtifactId, revisionId: ArtifactRevisionId, invocationId: ArtifactInvocationId, input: ArtifactRuntimeInteraction, ): Promise<ArtifactFrame>',
+        description: 'Forward a closed transient input to the exact preview lease.',
+        parameters: [{ name: 'workspaceId', description: 'selected Workspace.' }, { name: 'artifactId', description: 'owned artifact.' }, { name: 'revisionId', description: 'pinned revision.' }, { name: 'invocationId', description: 'unpredictable identity returned by the preview stream.' }, { name: 'input', description: 'nonprivileged presentation input.' }],
+        returns: 'the resulting bounded rendered frame.',
+      },
+    ],
+  },
+  {
     key: 'attachments',
     summary: 'Immutable binary attachment service.',
     description: 'Immutable binary attachment service. Implementations validate bytes before publishing a reference.',
@@ -3823,6 +3964,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [{ name: 'req', description: 'pending approval request.' }],
   },
   {
+    name: 'artifact/changed',
+    mode: 'emit',
+    signature: '\'artifact/changed\'(workspaceId: WorkspaceId): void',
+    summary: 'An artifact catalogue changes after its durable head commit.',
+    description: 'An artifact catalogue changes after its durable head commit.',
+    parameters: [{ name: 'workspaceId', description: 'exact Workspace whose catalogue changed.' }],
+  },
+  {
     name: 'authorization/settled',
     mode: 'emit',
     signature: '\'authorization/settled\'(key: CredentialKey, settlement: AuthorizationSettlement): void',
@@ -4341,6 +4490,82 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ApprovalRequestEvent',
     declaration: 'export interface ApprovalRequestEvent {\n    readonly agent: Agent;\n    readonly toolName: string;\n    readonly callId?: ToolCallId;\n    readonly reason?: string;\n    readonly signal?: AbortSignal;\n}',
+  },
+  {
+    name: 'ArtifactAsset',
+    declaration: 'export interface ArtifactAsset {\n    readonly name: string;\n    readonly mediaType: string;\n    readonly sha256: string;\n    readonly file: FileAttachmentRef;\n}',
+  },
+  {
+    name: 'ArtifactAssetInput',
+    declaration: 'export interface ArtifactAssetInput {\n    readonly name: string;\n    readonly mediaType: string;\n    readonly data: string;\n}',
+  },
+  {
+    name: 'ArtifactContent',
+    declaration: 'export interface ArtifactContent {\n    readonly revision: ArtifactRevision;\n    readonly asset: ArtifactAsset;\n    readonly data: string;\n}',
+  },
+  {
+    name: 'ArtifactFrame',
+    declaration: 'export interface ArtifactFrame {\n    readonly invocationId: ArtifactInvocationId;\n    readonly revisionId: ArtifactRevision[\'revisionId\'];\n    readonly png: string;\n    readonly text: string;\n    readonly width: number;\n    readonly height: number;\n}',
+  },
+  {
+    name: 'ArtifactId',
+    declaration: 'export type ArtifactId = Branded<\'ArtifactId\'>;',
+  },
+  {
+    name: 'ArtifactInvocation',
+    declaration: 'export interface ArtifactInvocation {\n    readonly id: ArtifactInvocationId;\n    readonly ended: Promise<void>;\n    interact(input: ArtifactRuntimeInteraction | null): Promise<ArtifactFrame>;\n    close(): Promise<void>;\n}',
+  },
+  {
+    name: 'ArtifactInvocationId',
+    declaration: 'export type ArtifactInvocationId = Branded<\'ArtifactInvocationId\'>;',
+  },
+  {
+    name: 'ArtifactOperationId',
+    declaration: 'export type ArtifactOperationId = Branded<\'ArtifactOperationId\'>;',
+  },
+  {
+    name: 'ArtifactPage',
+    declaration: 'export interface ArtifactPage {\n    readonly items: readonly ArtifactSummary[];\n    readonly next: ArtifactId | null;\n}',
+  },
+  {
+    name: 'ArtifactPending',
+    declaration: 'export interface ArtifactPending {\n    readonly artifactId: ArtifactId;\n    readonly revisionId: ArtifactRevisionId;\n    readonly sessionId: SessionId;\n    readonly operationId: ArtifactOperationId;\n    readonly createdAt: string;\n}',
+  },
+  {
+    name: 'ArtifactPolicy',
+    declaration: 'export interface ArtifactPolicy {\n    readonly previewAvailable: boolean;\n    readonly maxRetainedBytes: number;\n    readonly maxEditBytes: number;\n    readonly maxSelectionBytes: number;\n}',
+  },
+  {
+    name: 'ArtifactProfile',
+    declaration: 'export type ArtifactProfile = \'document\' | \'interactive-local\';',
+  },
+  {
+    name: 'ArtifactPublish',
+    declaration: 'export interface ArtifactPublish {\n    readonly operationId: ArtifactOperationId;\n    readonly artifactId: ArtifactId | null;\n    readonly expectedHead: ArtifactRevisionId | null;\n    readonly title: string;\n    readonly entry: string;\n    readonly profile: ArtifactProfile;\n    readonly assets: readonly ArtifactAssetInput[];\n}',
+  },
+  {
+    name: 'ArtifactRevision',
+    declaration: 'export interface ArtifactRevision {\n    readonly artifactId: ArtifactId;\n    readonly revisionId: ArtifactRevisionId;\n    readonly workspaceId: WorkspaceId;\n    readonly sessionId: SessionId;\n    readonly operationId: ArtifactOperationId;\n    readonly parent: ArtifactRevisionId | null;\n    readonly restoredFrom: ArtifactRevisionId | null;\n    readonly title: string;\n    readonly entry: string;\n    readonly profile: ArtifactProfile;\n    readonly capabilities: readonly [\n        \'published-assets\',\n        \'transient-input\'\n    ] | readonly [\n        \'published-assets\'\n    ];\n    readonly assets: readonly ArtifactAsset[];\n    readonly createdAt: string;\n}',
+  },
+  {
+    name: 'ArtifactRevisionId',
+    declaration: 'export type ArtifactRevisionId = Branded<\'ArtifactRevisionId\'>;',
+  },
+  {
+    name: 'ArtifactRuntimeInput',
+    declaration: 'export interface ArtifactRuntimeInput {\n    readonly revision: ArtifactRevision;\n    readonly assets: readonly ArtifactContent[];\n}',
+  },
+  {
+    name: 'ArtifactRuntimeInteraction',
+    declaration: 'export type ArtifactRuntimeInteraction = {\n    readonly type: \'pointer\';\n    readonly x: number;\n    readonly y: number;\n} | {\n    readonly type: \'key\';\n    readonly key: ArtifactRuntimeKey;\n} | {\n    readonly type: \'text\';\n    readonly text: string;\n};',
+  },
+  {
+    name: 'ArtifactRuntimeKey',
+    declaration: 'export type ArtifactRuntimeKey = \'Tab\' | \'Enter\' | \'Space\' | \'Backspace\' | \'Delete\' | \'Escape\' | \'ArrowLeft\' | \'ArrowRight\' | \'ArrowUp\' | \'ArrowDown\' | \'Home\' | \'End\';',
+  },
+  {
+    name: 'ArtifactSummary',
+    declaration: 'export interface ArtifactSummary {\n    readonly head: ArtifactRevision;\n    readonly revisionCount: number;\n}',
   },
   {
     name: 'AskUserQuestionAnswer',

@@ -18,6 +18,7 @@ import sessionReferencesRemote from '@deepseek-ai/dsh-session-reference/remote'
 import subagentsRemote from '@deepseek-ai/dsh-subagent/remote'
 import sessionRemote from '@deepseek-ai/dsh-api-session-controller/remote'
 import workspaceRemote from '@deepseek-ai/dsh-api-workspace-controller/remote'
+import artifactsRemote from '@deepseek-ai/dsh-api-artifacts/remote'
 import workspaceFilesRemote from '@deepseek-ai/dsh-api-workspace-files/remote'
 import type { TypertRemoteMap } from '@deepseek-ai/dsh-typert-protocol'
 import type { RemoteCapabilityRequirement } from '@deepseek-ai/dsh-api-gateway/client'
@@ -44,6 +45,7 @@ export type {} from '@deepseek-ai/dsh-subagent/remote'
 export type * from '@deepseek-ai/dsh-subagent/client'
 export type {} from '@deepseek-ai/dsh-api-session-controller/remote'
 export type * from '@deepseek-ai/dsh-api-session-controller/types'
+export type {} from '@deepseek-ai/dsh-api-artifacts/remote'
 export type {} from '@deepseek-ai/dsh-api-workspace-controller/remote'
 export type * from '@deepseek-ai/dsh-api-workspace-controller/types'
 export type {} from '@deepseek-ai/dsh-api-workspace-files/remote'
@@ -154,7 +156,7 @@ const contributions = [
   agentModelsRemote, agentPresetsRemote, commandsRemote, settingsControllerRemote, goalsRemote, llmRemote, dynamicRemote,
   pluginInventoryRemote, openrouterSpendRemote, sessionInfoRemote, messageFeedbackRemote, sessionFeedbackRemote,
   fileUploadsRemote, sessionReferencesRemote,
-  subagentsRemote, sessionRemote, workspaceRemote, workspaceFilesRemote,
+  subagentsRemote, sessionRemote, workspaceRemote, workspaceFilesRemote, artifactsRemote,
 ]
 
 /**

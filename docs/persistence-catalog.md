@@ -219,6 +219,19 @@ Source: [`packages/interaction/user-approval/src/types.ts:55`](../packages/inter
 
 Source: [`packages/interaction/user-approval/src/index.ts:33`](../packages/interaction/user-approval/src/index.ts)
 
+### `artifact/*`
+
+<a id="artifactpublished--log-only"></a>
+
+#### `artifact/published` — log-only
+
+```ts persistence-catalog
+/** Complete publication manifest; bytes precede this durable event. */
+'artifact/published': { readonly revision: ArtifactRevision }
+```
+
+Source: [`packages/artifact/artifact/src/types.ts:80`](../packages/artifact/artifact/src/types.ts)
+
 ### `assistant/*`
 
 <a id="assistantattempt--log-only"></a>

@@ -1,0 +1,10 @@
+version: 1
+scenario: artifact-revisions
+profile: sdk
+composition: durable-artifacts
+recording: authored
+header:
+  class: durable-artifacts-sdk
+  pin: true
+replay:
+  override: true

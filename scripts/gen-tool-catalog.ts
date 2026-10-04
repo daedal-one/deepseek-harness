@@ -40,6 +40,7 @@ import SkillRegistry from '@deepseek-ai/dsh-skill'
 import * as SkillFileSystem from '@deepseek-ai/dsh-skill-filesystem'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
 import * as DaedalHandoffTool from '@deepseek-ai/dsh-daedal-handoff/tool'
+import * as ToolArtifact from '@deepseek-ai/dsh-tool-artifact'
 import * as ToolAskUser from '@deepseek-ai/dsh-tool-ask-user'
 import * as ToolBash from '@deepseek-ai/dsh-tool-bash'
 import * as ToolPwsh from '@deepseek-ai/dsh-tool-pwsh'
@@ -212,6 +213,19 @@ const TOOL_PACKAGES: ToolPackage[] = [
       await ctx.plugin(DaedalHandoffTool)
     },
     note: 'Mounted only by the Daedal and Daedal OpenAI presets. The default service does not publish this tool globally.',
+  },
+  {
+    pkg: '@deepseek-ai/dsh-tool-artifact',
+    dir: 'tool-artifact',
+    source: 'packages/artifact/tool-artifact/src/index.ts',
+    requires: ['ctx.tools', 'ctx.artifacts', 'ctx.workspaceRegistry', 'owning agent Session'],
+    writes: ['tool/call', 'artifact/published', 'tool/result'],
+    async mount(ctx) {
+      // Schema harvest never invokes artifact storage or Workspace operations.
+      ctx.provide('artifacts', {} as never)
+      ctx.provide('workspaceRegistry', {} as never)
+      await ctx.plugin(ToolArtifact, { maxResultBytes: 65536, timeoutMs: 60000 })
+    },
   },
   {
     pkg: '@deepseek-ai/dsh-tool-ask-user',

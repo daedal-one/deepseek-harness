@@ -7,6 +7,16 @@ A service can be a core spine service, a swappable capability seam, or a bundle/
 
 ```mermaid
 flowchart LR
+  pkg_artifact["artifact"]
+  svc_artifacts["ctx.artifacts<br/>Durable Workspace artifacts"]
+  pkg_artifact_durable["artifact-durable"]
+  pkg_tool_artifact["tool-artifact"]
+  pkg_api_artifacts["api-artifacts"]
+  pkg_artifact_runtime["artifact-runtime"]
+  svc_artifactRuntime["ctx.artifactRuntime<br/>Independent artifact execution"]
+  pkg_artifact_runtime_podman["artifact-runtime-podman"]
+  svc_artifactsController["ctx.artifactsController<br/>Authenticated artifact API"]
+  pkg_ui_artifacts["ui-artifacts"]
   pkg_local_container_runtime["local-container-runtime"]
   svc_executionRuntime["ctx.executionRuntime<br/>Verified isolated execution world"]
   pkg_fs_local_container["fs-local-container"]
@@ -258,6 +268,7 @@ flowchart LR
   pkg_agent_default_model --> svc_agentModels
   pkg_agent_loop --> svc_agentLoop
   pkg_agent_presets --> svc_agentPresets
+  pkg_api_artifacts --> svc_artifactsController
   pkg_api_gateway --> svc_typertGateway
   pkg_api_session_controller --> svc_sessionController
   pkg_api_session_controller --> svc_sessionFileReferences
@@ -268,6 +279,10 @@ flowchart LR
   pkg_api_workspace_controller --> svc_directoryPickerController
   pkg_api_workspace_controller --> svc_workspaceController
   pkg_api_workspace_files --> svc_workspaceFiles
+  pkg_artifact --> svc_artifacts
+  pkg_artifact_durable --> svc_artifacts
+  pkg_artifact_runtime --> svc_artifactRuntime
+  pkg_artifact_runtime_podman --> svc_artifactRuntime
   pkg_attachment --> svc_attachments
   pkg_attachment_local --> svc_attachments
   pkg_authorization --> svc_authorization
@@ -401,6 +416,10 @@ flowchart LR
   svc_approval --> pkg_acp
   svc_approval --> pkg_tool_bash
   svc_approval --> pkg_tools
+  svc_artifactRuntime --> pkg_api_artifacts
+  svc_artifacts --> pkg_api_artifacts
+  svc_artifacts --> pkg_tool_artifact
+  svc_artifactsController --> pkg_ui_artifacts
   svc_attachments --> pkg_api_session_controller
   svc_attachments --> pkg_llm_deepseek
   svc_attachments --> pkg_llm_pi_ai
@@ -536,6 +555,9 @@ flowchart LR
 
 | ctx key | Role | Owner | Implementations | Direct consumers | Companion plugins | Note |
 | --- | --- | --- | --- | --- | --- | --- |
+| `ctx.artifacts` | `seam` | [`artifact`](../packages/artifact/artifact) | [`artifact-durable`](../packages/artifact/artifact-durable) | [`tool-artifact`](../packages/artifact/tool-artifact), [`api-artifacts`](../packages/api/artifacts) | - | Immutable assets, revision heads, publication evidence and exact Workspace ownership. |
+| `ctx.artifactRuntime` | `seam` | [`artifact-runtime`](../packages/artifact/artifact-runtime) | [`artifact-runtime-podman`](../packages/artifact/artifact-runtime-podman) | [`api-artifacts`](../packages/api/artifacts) | - | Rootless browser execution with private namespaces, fixed capabilities and bounded presentation. |
+| `ctx.artifactsController` | `core` | [`api-artifacts`](../packages/api/artifacts) | - | `ui-artifacts` | - | Exact Workspace discovery, trusted revision actions and invocation leases. |
 | `ctx.executionRuntime` | `core` | [`local-container-runtime`](../packages/sandbox/local-container-runtime) | - | [`fs-local-container`](../packages/fs/fs-local-container), [`subprocess-local-container`](../packages/subprocess/subprocess-local-container) | - | Owns bounded commands in either a disposable container or a retained shared environment VM. |
 | `ctx.daedalHandoff` | `core` | [`daedal-handoff`](../packages/integration/daedal-handoff) | - | [`daedal-handoff`](../packages/integration/daedal-handoff) | - | A Daedal-only tool reviews the task and fixed destination with the human before dispatch to a separate host profile. |
 | `ctx.developmentVms` | `core` | [`local-container-runtime`](../packages/sandbox/local-container-runtime) | - | [`local-container-runtime`](../packages/sandbox/local-container-runtime) | - | Opt-in guest execution, source writer barriers, and durable Docker storage for conversation workspaces. |

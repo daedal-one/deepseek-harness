@@ -1,0 +1,148 @@
+{
+  "patches": [
+    {
+      "at": 3,
+      "entry": {
+        "kind": "chunks",
+        "chunks": [
+          {
+            "type": "block-start",
+            "index": 0,
+            "blockType": "tool-call"
+          },
+          {
+            "type": "tool-call-delta",
+            "index": 0,
+            "id": "artifact-fixture-3",
+            "name": "artifact_publish",
+            "argumentsDelta": "{\"retry_key\":\"durable-update\",\"artifact_id\":\"{{fromRequest:\\\"artifactId\\\":\\\"([^\\\"]+)\\\"}}\",\"expected_head\":\"{{fromRequest:\\\"revisionId\\\":\\\"([^\\\"]+)\\\",\\\"workspaceId\\\":\\\"[^\\\"]+\\\",\\\"sessionId\\\":\\\"[^\\\"]+\\\",\\\"operationId\\\":\\\"[^\\\"]+\\\",\\\"parent\\\":null}}\",\"title\":\"Durable report\",\"entry\":\"index.html\",\"profile\":\"document\",\"assets\":[{\"name\":\"index.html\",\"media_type\":\"text/html\",\"encoding\":\"utf8\",\"content\":\"<h1>Updated durable report</h1>\"}]}"
+          },
+          {
+            "type": "block-end",
+            "index": 0,
+            "block": {
+              "type": "tool-call",
+              "id": "artifact-fixture-3",
+              "name": "artifact_publish",
+              "arguments": "{\"retry_key\":\"durable-update\",\"artifact_id\":\"{{fromRequest:\\\"artifactId\\\":\\\"([^\\\"]+)\\\"}}\",\"expected_head\":\"{{fromRequest:\\\"revisionId\\\":\\\"([^\\\"]+)\\\",\\\"workspaceId\\\":\\\"[^\\\"]+\\\",\\\"sessionId\\\":\\\"[^\\\"]+\\\",\\\"operationId\\\":\\\"[^\\\"]+\\\",\\\"parent\\\":null}}\",\"title\":\"Durable report\",\"entry\":\"index.html\",\"profile\":\"document\",\"assets\":[{\"name\":\"index.html\",\"media_type\":\"text/html\",\"encoding\":\"utf8\",\"content\":\"<h1>Updated durable report</h1>\"}]}"
+            }
+          },
+          {
+            "type": "finish",
+            "reason": {
+              "kind": "tool-calls"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "at": 4,
+      "entry": {
+        "kind": "chunks",
+        "chunks": [
+          {
+            "type": "block-start",
+            "index": 0,
+            "blockType": "tool-call"
+          },
+          {
+            "type": "tool-call-delta",
+            "index": 0,
+            "id": "artifact-fixture-4",
+            "name": "artifact_publish",
+            "argumentsDelta": "{\"retry_key\":\"stale-update\",\"artifact_id\":\"{{fromRequest:\\\"artifactId\\\":\\\"([^\\\"]+)\\\"}}\",\"expected_head\":\"{{fromRequest:\\\"revisionId\\\":\\\"([^\\\"]+)\\\",\\\"workspaceId\\\":\\\"[^\\\"]+\\\",\\\"sessionId\\\":\\\"[^\\\"]+\\\",\\\"operationId\\\":\\\"[^\\\"]+\\\",\\\"parent\\\":null}}\",\"title\":\"Durable report\",\"entry\":\"index.html\",\"profile\":\"document\",\"assets\":[{\"name\":\"index.html\",\"media_type\":\"text/html\",\"encoding\":\"utf8\",\"content\":\"<h1>Stale overwrite</h1>\"}]}"
+          },
+          {
+            "type": "block-end",
+            "index": 0,
+            "block": {
+              "type": "tool-call",
+              "id": "artifact-fixture-4",
+              "name": "artifact_publish",
+              "arguments": "{\"retry_key\":\"stale-update\",\"artifact_id\":\"{{fromRequest:\\\"artifactId\\\":\\\"([^\\\"]+)\\\"}}\",\"expected_head\":\"{{fromRequest:\\\"revisionId\\\":\\\"([^\\\"]+)\\\",\\\"workspaceId\\\":\\\"[^\\\"]+\\\",\\\"sessionId\\\":\\\"[^\\\"]+\\\",\\\"operationId\\\":\\\"[^\\\"]+\\\",\\\"parent\\\":null}}\",\"title\":\"Durable report\",\"entry\":\"index.html\",\"profile\":\"document\",\"assets\":[{\"name\":\"index.html\",\"media_type\":\"text/html\",\"encoding\":\"utf8\",\"content\":\"<h1>Stale overwrite</h1>\"}]}"
+            }
+          },
+          {
+            "type": "finish",
+            "reason": {
+              "kind": "tool-calls"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "at": 5,
+      "entry": {
+        "kind": "chunks",
+        "chunks": [
+          {
+            "type": "block-start",
+            "index": 0,
+            "blockType": "tool-call"
+          },
+          {
+            "type": "tool-call-delta",
+            "index": 0,
+            "id": "artifact-fixture-5",
+            "name": "artifact_restore",
+            "argumentsDelta": "{\"retry_key\":\"durable-restore\",\"artifact_id\":\"{{fromRequest:\\\"artifactId\\\":\\\"([^\\\"]+)\\\"}}\",\"revision_id\":\"{{fromRequest:\\\"revisionId\\\":\\\"([^\\\"]+)\\\",\\\"workspaceId\\\":\\\"[^\\\"]+\\\",\\\"sessionId\\\":\\\"[^\\\"]+\\\",\\\"operationId\\\":\\\"[^\\\"]+\\\",\\\"parent\\\":null}}\",\"expected_head\":\"{{fromRequest:\\\"revisionId\\\":\\\"([^\\\"]+)\\\",\\\"workspaceId\\\":\\\"[^\\\"]+\\\",\\\"sessionId\\\":\\\"[^\\\"]+\\\",\\\"operationId\\\":\\\"[^\\\"]+\\\",\\\"parent\\\":\\\"[^\\\"]+\\\",\\\"restoredFrom\\\":null}}\"}"
+          },
+          {
+            "type": "block-end",
+            "index": 0,
+            "block": {
+              "type": "tool-call",
+              "id": "artifact-fixture-5",
+              "name": "artifact_restore",
+              "arguments": "{\"retry_key\":\"durable-restore\",\"artifact_id\":\"{{fromRequest:\\\"artifactId\\\":\\\"([^\\\"]+)\\\"}}\",\"revision_id\":\"{{fromRequest:\\\"revisionId\\\":\\\"([^\\\"]+)\\\",\\\"workspaceId\\\":\\\"[^\\\"]+\\\",\\\"sessionId\\\":\\\"[^\\\"]+\\\",\\\"operationId\\\":\\\"[^\\\"]+\\\",\\\"parent\\\":null}}\",\"expected_head\":\"{{fromRequest:\\\"revisionId\\\":\\\"([^\\\"]+)\\\",\\\"workspaceId\\\":\\\"[^\\\"]+\\\",\\\"sessionId\\\":\\\"[^\\\"]+\\\",\\\"operationId\\\":\\\"[^\\\"]+\\\",\\\"parent\\\":\\\"[^\\\"]+\\\",\\\"restoredFrom\\\":null}}\"}"
+            }
+          },
+          {
+            "type": "finish",
+            "reason": {
+              "kind": "tool-calls"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "at": 6,
+      "entry": {
+        "kind": "chunks",
+        "chunks": [
+          {
+            "type": "block-start",
+            "index": 0,
+            "blockType": "tool-call"
+          },
+          {
+            "type": "tool-call-delta",
+            "index": 0,
+            "id": "artifact-fixture-6",
+            "name": "artifact_read",
+            "argumentsDelta": "{\"artifact_id\":\"{{fromRequest:\\\"artifactId\\\":\\\"([^\\\"]+)\\\"}}\",\"revision_id\":\"{{fromRequest:\\\"revisionId\\\":\\\"([^\\\"]+)\\\",\\\"workspaceId\\\":\\\"[^\\\"]+\\\",\\\"sessionId\\\":\\\"[^\\\"]+\\\",\\\"operationId\\\":\\\"[^\\\"]+\\\",\\\"parent\\\":null}}\",\"name\":\"index.html\",\"encoding\":\"utf8\",\"offset\":0,\"length\":100}"
+          },
+          {
+            "type": "block-end",
+            "index": 0,
+            "block": {
+              "type": "tool-call",
+              "id": "artifact-fixture-6",
+              "name": "artifact_read",
+              "arguments": "{\"artifact_id\":\"{{fromRequest:\\\"artifactId\\\":\\\"([^\\\"]+)\\\"}}\",\"revision_id\":\"{{fromRequest:\\\"revisionId\\\":\\\"([^\\\"]+)\\\",\\\"workspaceId\\\":\\\"[^\\\"]+\\\",\\\"sessionId\\\":\\\"[^\\\"]+\\\",\\\"operationId\\\":\\\"[^\\\"]+\\\",\\\"parent\\\":null}}\",\"name\":\"index.html\",\"encoding\":\"utf8\",\"offset\":0,\"length\":100}"
+            }
+          },
+          {
+            "type": "finish",
+            "reason": {
+              "kind": "tool-calls"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

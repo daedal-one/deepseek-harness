@@ -131,6 +131,9 @@ None; this package neither assembles nor sends a provider request.
 
 None.
 
+
+The root-scoped `rightbar.workspace` seat hosts an explicitly addressed Workspace resource independently of the selected Session. Its occupant supplies trusted controls and reports geometry through the layout service. While occupied, it takes the right column instead of the Session seat; removal restores Session presentation.
+
 </details>
 
 **Runtime invariant:** No companion is published. The two services (`sidebarRight`, `sidebarRightTabs`) are provided through `ctx.reflect.provide` inside one effect and torn down with it; the seat's binding and the Tab domain's occurrence lifetimes are asserted directly by this package's specs, and no independent observation exists to diverge from them.

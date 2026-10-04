@@ -98,6 +98,9 @@ const GROUP_ORDER = [
 ]
 
 const SERVICE_ROLES: ServiceRole[] = [
+  { key:'artifacts',pkg:'artifact',title:'Durable Workspace artifacts',mode:'seam',implementations:['artifact-durable'],consumers:['tool-artifact','api-artifacts'],note:'Immutable assets, revision heads, publication evidence and exact Workspace ownership.' },
+  { key:'artifactRuntime',pkg:'artifact-runtime',title:'Independent artifact execution',mode:'seam',implementations:['artifact-runtime-podman'],consumers:['api-artifacts'],note:'Rootless browser execution with private namespaces, fixed capabilities and bounded presentation.' },
+  { key:'artifactsController',pkg:'api-artifacts',title:'Authenticated artifact API',mode:'core',consumers:['ui-artifacts'],note:'Exact Workspace discovery, trusted revision actions and invocation leases.' },
   {
     key: 'executionRuntime',
     pkg: 'local-container-runtime',

@@ -1,6 +1,7 @@
 /** Workspace archive and directory UI capability. */
 
 import { requestedWorkspacePath } from './requested-path.ts'
+import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import { Service, type Context } from '@deepseek-ai/cordis'
 import type { ClientRemote, DirectoryListing, RemoteFailure } from '@deepseek-ai/dsh-api-remotes/client'
 import type {
@@ -13,8 +14,30 @@ import type {
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 
+/** Effect-owned Workspace dropdown contribution; labels remain locale-owned by the registrant. */
+export interface WorkspaceMenuContribution {
+  readonly id: string
+  readonly order: number
+  readonly label: () => string
+  readonly run: (workspaceId: WorkspaceId) => void
+}
+
 /** Workspace archive and directory operations consumed by Client UI domains. */
 export interface UiWorkspace {
+  /** Live menu contributions; the renderer supplies the selector hook. */
+  readonly workspaceMenu: HostObservable<readonly WorkspaceMenuContribution[]>
+  /**
+   * Register a localized action for exact Workspace rows.
+   * @param contribution - owned menu action.
+   * @returns its unregister disposer.
+   */
+  registerWorkspaceMenu(contribution: WorkspaceMenuContribution): () => void
+  /**
+   * Invoke a currently registered Workspace menu action.
+   * @param workspaceId - exact selected Workspace.
+   * @param id - live contribution identity.
+   */
+  invokeWorkspaceMenu(workspaceId: WorkspaceId, id: string): void
   /**
    * Select a Session and show its Conversation as one UI navigation action.
    * @param sessionId - listed or retained Session to display.
@@ -89,6 +112,41 @@ export class DirectoryBrowseError extends Error {
 
 /** Implements Workspace archive and directory UI operations. */
 class UiWorkspaceService extends Service implements UiWorkspace {
+  private menuEntries: readonly WorkspaceMenuContribution[] = []
+  private readonly menuListeners = new Set<() => void>()
+  readonly workspaceMenu: HostObservable<readonly WorkspaceMenuContribution[]> = {
+    getSnapshot: () => this.menuEntries,
+    subscribe: (listener) => {
+      this.menuListeners.add(listener)
+      return () => {
+        this.menuListeners.delete(listener)
+      }
+    },
+  }
+  /** @inheritdoc */
+  registerWorkspaceMenu(contribution: WorkspaceMenuContribution): () => void {
+    if (
+      contribution.id === 'rename' ||
+      contribution.id === 'delete' ||
+      this.menuEntries.some(entry => entry.id === contribution.id)
+    )
+      throw new Error('Duplicate or reserved Workspace menu contribution.')
+    const publish = (entries: readonly WorkspaceMenuContribution[]): void => {
+      this.menuEntries = entries
+      for (const listener of this.menuListeners) listener()
+    }
+    publish([...this.menuEntries, contribution].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id)))
+    return () => {
+      if (this.menuEntries.includes(contribution))
+        publish(this.menuEntries.filter(entry => entry !== contribution))
+    }
+  }
+  /** @inheritdoc */
+  invokeWorkspaceMenu(workspaceId: WorkspaceId, id: string): void {
+    if (!this.workspaces.list.getSnapshot().items.some(workspace => workspace.workspaceId === workspaceId))
+      return
+    this.menuEntries.find(entry => entry.id === id)?.run(workspaceId)
+  }
   private readonly connecting = new Map<WorkspaceId, Promise<SessionId>>()
   private readonly lifetime = new AbortController()
 
@@ -109,8 +167,9 @@ class UiWorkspaceService extends Service implements UiWorkspace {
   }
 
   async connectWorkspace(workspaceId: WorkspaceId): Promise<SessionId> {
-    const workspace = this.workspaces.list.getSnapshot().items
-      .find(item => item.workspaceId === workspaceId)
+    const workspace = this.workspaces.list
+      .getSnapshot()
+      .items.find(item => item.workspaceId === workspaceId)
     if (workspace === undefined) {
       throw new Error(`uiWorkspace.connectWorkspace: unknown workspace ${workspaceId}`)
     }
@@ -121,13 +180,19 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     const sessions = this.sessions.list.getSnapshot()
     for (const id of sessions.ids) {
       const summary = sessions.byId[id]
-      if (summary !== undefined && summary.blank && summary.cwd === workspace.path
-        && workspace.sessionIds.includes(summary.id)
-        && !archived.includes(summary.id)) return summary.id
+      if (
+        summary !== undefined &&
+        summary.blank &&
+        summary.cwd === workspace.path &&
+        workspace.sessionIds.includes(summary.id) &&
+        !archived.includes(summary.id)
+      )
+        return summary.id
     }
 
-    const attempt = this.sessions.create({ workspaceId })
-      .finally(() => { this.connecting.delete(workspaceId) })
+    const attempt = this.sessions.create({ workspaceId }).finally(() => {
+      this.connecting.delete(workspaceId)
+    })
     this.connecting.set(workspaceId, attempt)
     return attempt
   }
@@ -156,21 +221,23 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     const workspace = this.workspaces.list.getSnapshot()
     const sessions = this.sessions.list.getSnapshot()
     const current = sessions.current
-    const currentWorkspaceId = current === undefined
-      ? undefined
-      : workspace.items.find(item => item.sessionIds.includes(current))?.workspaceId
-    const recent = workspace.phase === 'ready' && sessions.phase === 'ready'
-      ? recentWorkspace(workspace.items, sessions.byId)
-      : undefined
+    const currentWorkspaceId =
+      current === undefined
+        ? undefined
+        : workspace.items.find(item => item.sessionIds.includes(current))?.workspaceId
+    const recent =
+      workspace.phase === 'ready' && sessions.phase === 'ready'
+        ? recentWorkspace(workspace.items, sessions.byId)
+        : undefined
     const target = workspaceId ?? currentWorkspaceId ?? recent
     if (target === undefined) {
       this.sessions.clear()
       this.ctx.layout.selectPanel(null)
       return
     }
-    void this.openWorkspace(target).catch(
-      (reason: unknown) => { console.warn('new session failed:', reason) },
-    )
+    void this.openWorkspace(target).catch((reason: unknown) => {
+      console.warn('new session failed:', reason)
+    })
   }
 
   async archiveSession(sessionId: SessionId): Promise<void> {
@@ -209,9 +276,10 @@ class UiWorkspaceService extends Service implements UiWorkspace {
         initial = 'done'
         return
       }
-      const target = requestedPath === undefined
-        ? recentWorkspace(workspace.items, sessions.byId)
-        : workspace.items.find(item => item.path === requestedPath)?.workspaceId
+      const target =
+        requestedPath === undefined
+          ? recentWorkspace(workspace.items, sessions.byId)
+          : workspace.items.find(item => item.path === requestedPath)?.workspaceId
       if (requestedPath !== undefined && target === undefined) return
       if (target === undefined) {
         initial = 'done'
@@ -247,12 +315,11 @@ class UiWorkspaceService extends Service implements UiWorkspace {
   /** @returns true when an archived current selection was cleared. */
   private clearArchivedCurrent(): boolean {
     const current = this.sessions.list.getSnapshot().current
-    if (current === undefined
-      || !this.workspaces.list.getSnapshot().archivedSessionIds.includes(current)) return false
+    if (current === undefined || !this.workspaces.list.getSnapshot().archivedSessionIds.includes(current))
+      return false
     this.sessions.clear()
     return true
   }
-
 }
 
 /** Stable tie-breaking follows Host Workspace order. */

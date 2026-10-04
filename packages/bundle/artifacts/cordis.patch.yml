@@ -1,0 +1,55 @@
+# Opt-in over a base-backed Web or Desktop profile. Executable previews stay
+# unavailable until the independently qualified runtime is explicitly enabled.
+- insert:
+    - id: artifact-durable
+      name: '@deepseek-ai/dsh-artifact-durable'
+      config:
+        maxQueuedOperations: 8
+        maxConcurrentReads: 4
+        readTimeoutMs: 30000
+        maxAssetBytes: 2097152
+        maxPublicationBytes: 4194304
+        maxAssets: 32
+        maxMetadataBytes: 32768
+        maxResponseBytes: 8388608
+        maxWorkspaceBytes: 268435456
+        maxHostBytes: 1073741824
+        maxOperations: 4096
+        maxRevisionsPerArtifact: 128
+        maxRevisionsPerInterval: 60
+        revisionIntervalMs: 60000
+        pageSize: 20
+    - id: tool-artifact
+      name: '@deepseek-ai/dsh-tool-artifact'
+      config:
+        maxResultBytes: 65536
+        timeoutMs: 60000
+    - id: api-artifacts
+      name: '@deepseek-ai/dsh-api-artifacts'
+      config:
+        maxCatalogueWatchers: 16
+        maxRetainedBytes: 33554432
+        maxEditBytes: 2097152
+        maxSelectionBytes: 32768
+    - id: ui-artifacts
+      name: '@deepseek-ai/dsh-client-ui-artifacts'
+    - id: artifact-runtime
+      name: '@deepseek-ai/dsh-artifact-runtime-podman'
+      disabled: true
+      config:
+        socketPath: !!js process.env.DSH_ARTIFACT_SOCKET
+        image: !!js process.env.DSH_ARTIFACT_IMAGE
+        seccompProfilePath: !!js process.env.DSH_ARTIFACT_SECCOMP
+        user: pwuser
+        memoryBytes: 805306368
+        nanoCpus: 1000000000
+        pidsLimit: 256
+        tmpfsBytes: 268435456
+        maxConcurrent: 2
+        maxQueue: 2
+        maxInputBytes: 12582912
+        maxOutputBytes: 4194304
+        maxLifetimeMs: 300000
+        operationTimeoutMs: 30000
+        width: 800
+        height: 600

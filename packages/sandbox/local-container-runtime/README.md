@@ -196,6 +196,9 @@ Lifetime expiry and Cordis disposal stop the container, force-remove it when nee
 | [`tests/podman.e2e.ts`](tests/podman.e2e.ts) | Environment-gated real Podman Engine API inspection. |
 | — | No runtime invariant companion is published because the owner has one readiness transaction and no independent mutable relationship to compare. |
 
+
+The published `./engine` adapter supports independent resource owners. Container attach sends an empty HTTP upgrade request and preserves the exact stdin pipe bytes; it never forwards serialized attach options into the container. The caller owns container restrictions, channel lifetime and awaited removal.
+
 </details>
 
 -----

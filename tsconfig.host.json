@@ -145,6 +145,13 @@
     "scripts/client-bundle-purity.spec.ts"
   ],
   "references": [
+    { "path": "packages/bundle/artifacts" },
+    { "path": "./packages/api/artifacts" },
+    { "path": "./packages/artifact/tool-artifact" },
+    { "path": "./packages/artifact/artifact-runtime-podman" },
+    { "path": "./packages/artifact/artifact" },
+    { "path": "./packages/artifact/artifact-durable" },
+    { "path": "./packages/artifact/artifact-runtime" },
     { "path": "./packages/client/ui-sidebar-documentpreview/tsconfig.host.json" },
     { "path": "./packages/client/ui-deliverables/tsconfig.host.json" },
     { "path": "./vendor/cosmokit" },

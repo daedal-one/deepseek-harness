@@ -44,6 +44,12 @@ const NO_MODEL_EXPERIENCE_SECTION: Readonly<Record<string, string>> = {
  * blocks. A package moves on or off this list with its context behavior.
  */
 const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
+  'packages/artifact/artifact': { kind: 'indirect', reason: 'Artifact Consumers own any model-visible projection.' },
+  'packages/artifact/artifact-durable': { kind: 'indirect', reason: 'Artifact Consumers own any model-visible projection.' },
+  'packages/artifact/artifact-runtime': { kind: 'none', reason: 'Artifact Consumers own any model-visible projection.' },
+  'packages/artifact/artifact-runtime-podman': { kind: 'none', reason: 'Artifact Consumers own any model-visible projection.' },
+  'packages/api/artifacts': { kind: 'indirect', reason: 'Artifact Consumers own any model-visible projection.' },
+  'packages/bundle/artifacts': { kind: 'indirect', reason: 'Inserted artifact packages own model-visible effects.' },
   'packages/fs/fs-local-container': { kind: 'indirect', reason: 'Filesystem consumers own rendering of container file results.' },
   'packages/subprocess/subprocess-local-container': { kind: 'indirect', reason: 'Shell, terminal, search, and LSP consumers own rendering of container process results.' },
   'packages/attachment/attachment': { kind: 'indirect', reason: 'The storage seam delegates model request rendering to provider adapters.' },

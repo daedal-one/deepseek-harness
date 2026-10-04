@@ -1,0 +1,9 @@
+FROM mcr.microsoft.com/playwright@sha256:a0f4498920a5dbac63196d9140ed738ef00470f27e2e74029abd8850b7bd5717
+WORKDIR /opt/artifact
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+COPY renderer-package.json /opt/artifact/package.json
+COPY renderer-lock.json /opt/artifact/package-lock.json
+RUN npm ci --ignore-scripts --omit=optional --no-fund
+COPY controller.mjs /opt/artifact/controller.mjs
+USER pwuser
+ENTRYPOINT ["node", "/opt/artifact/controller.mjs"]

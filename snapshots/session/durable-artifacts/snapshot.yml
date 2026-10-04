@@ -1,0 +1,10 @@
+version: 1
+scenario: durable-artifacts
+profile: headless
+composition: durable-artifacts
+recording: authored
+header:
+  class: durable-artifacts
+  pin: true
+replay:
+  override: true

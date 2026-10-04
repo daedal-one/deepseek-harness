@@ -1220,3 +1220,109 @@ describe('scrubToolSchemas', () => {
     expect(scrubToolSchemas(out)).toBe(out)
   })
 })
+
+it('normalizes only provider-owned artifact clocks while preserving authored text', () => {
+  const date = '2026-10-04T17:00:00.000Z'
+  const revision = { artifactId: 'artifact', revisionId: 'revision', createdAt: date, title: date }
+  const result = (callId: string, text: string) => ({
+    type: 'tool/result',
+    data: {
+      message: {
+        content: [
+          { type: 'tool-result', toolCallId: callId, isError: false, content: [{ type: 'text', text }] },
+        ],
+      },
+    },
+  })
+  const records = [
+    { type: 'artifact/published', data: { revision } },
+    { type: 'tool/call', data: { callId: 'artifact-call', name: 'artifact_read' } },
+    result('artifact-call', JSON.stringify({ revision, content: date })),
+    { type: 'tool/call', data: { callId: 'ordinary-call', name: 'bash' } },
+    result('ordinary-call', JSON.stringify({ revision, content: date })),
+    { type: 'user/message', data: { message: { content: [{ type: 'text', text: date }] } } },
+  ]
+  const actual = normalizeSessionLog(records.map(value => JSON.stringify(value)).join('\n'), {
+    sessionIds: [],
+    cwd: '/fixture',
+  })
+  const parsed = actual
+    .trim()
+    .split('\n')
+    .map(
+      line =>
+        JSON.parse(line) as {
+          data: {
+            revision: typeof revision
+            message: { content: { text: string; content: { text: string }[] }[] }
+          }
+        },
+    )
+  expect(parsed[0]!.data.revision).toEqual({ ...revision, createdAt: '1970-01-01T00:00:00.000Z' })
+  expect(JSON.parse(parsed[2]!.data.message.content[0]!.content[0]!.text)).toEqual({
+    revision: { ...revision, createdAt: '1970-01-01T00:00:00.000Z' },
+    content: date,
+  })
+  expect(JSON.parse(parsed[4]!.data.message.content[0]!.content[0]!.text)).toEqual({ revision, content: date })
+  expect(parsed[5]!.data.message.content[0]!.text).toBe(date)
+})
+
+it('preserves malformed and unsuccessful artifact diagnostics while scrubbing only recognized metadata clocks', () => {
+  const date = '2026-10-04T18:00:00.000Z'
+  const revision = { artifactId: 'artifact', revisionId: 'revision', createdAt: date, title: date }
+  const record = (name: string, blocks: unknown[], isError = false) => [
+    { type: 'tool/call', data: { callId: name, name } },
+    {
+      type: 'tool/result',
+      data: { message: { content: [{ type: 'tool-result', toolCallId: name, isError, content: blocks }] } },
+    },
+  ]
+  const cases: [unknown[], boolean][] = [
+    [[{ type: 'artifact/published', data: { revision: null } }], false],
+    [[{ type: 'artifact/published', data: { revision: [] } }], false],
+    [[{ type: 'artifact/published', data: { revision: { createdAt: date } } }], false],
+    [[{ type: 'tool/result', data: { message: { content: [{ type: 'tool-result' }] } } }], false],
+    [
+      [
+        { type: 'tool/call', data: { callId: 'artifact_read', name: 'artifact_read' } },
+        {
+          type: 'tool/result',
+          data: { message: { content: [{ type: 'tool-result', toolCallId: 'artifact_read' }] } },
+        },
+      ],
+      false,
+    ],
+    [record('artifact_read', [{ type: 'image' }, { type: 'text' }]), false],
+    [record('artifact_read', [{ type: 'text', text: 'diagnostic ' + date }]), false],
+    [
+      record('artifact_read', [
+        { type: 'text', text: 'null' },
+        { type: 'text', text: '[]' },
+        { type: 'text', text: '42' },
+      ]),
+      false,
+    ],
+    [record('artifact_publish', [{ type: 'text', text: JSON.stringify(revision) }], true), false],
+    [record('artifact_restore', [{ type: 'text', text: JSON.stringify(revision) }]), true],
+    [
+      record('artifact_list', [
+        { type: 'text', text: JSON.stringify({ items: [null, 42, {}, { head: revision }] }) },
+      ]),
+      true,
+    ],
+    [
+      record('artifact_list', [
+        { type: 'text', text: JSON.stringify({ items: 'not an array', createdAt: date }) },
+      ]),
+      false,
+    ],
+  ]
+  for (const [records, changesClock] of cases) {
+    const raw = records.map(value => JSON.stringify(value)).join('\n') + '\n'
+    const actual = normalizeSessionLog(raw, { sessionIds: [], cwd: '/fixture' })
+    if (changesClock) {
+      expect(actual).toContain('1970-01-01T00:00:00.000Z')
+      expect(actual).toContain(date)
+    } else expect(actual).toBe(raw)
+  }
+})

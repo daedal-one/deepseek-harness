@@ -1,0 +1,50 @@
+{
+  "name": "@deepseek-ai/dsh-artifact-runtime-podman",
+  "description": "Durable Workspace artifacts: artifact-runtime-podman",
+  "version": "0.1.5-alpha.2",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "image/Containerfile",
+    "image/controller.mjs",
+    "image/seccomp.json",
+    "image/renderer-package.json",
+    "image/renderer-lock.json",
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "packages/artifact/artifact-runtime-podman"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-artifact": "workspace:^",
+    "@deepseek-ai/dsh-artifact-runtime": "workspace:^",
+    "@deepseek-ai/dsh-local-container-runtime": "workspace:^"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-artifact": "workspace:^",
+    "@deepseek-ai/dsh-artifact-runtime": "workspace:^",
+    "@deepseek-ai/dsh-local-container-runtime": "workspace:^"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "workspace:^",
+    "zod": "^4.4.3"
+  }
+}

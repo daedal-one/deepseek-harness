@@ -71,6 +71,9 @@ Once the Workspace list baseline is ready, browser-persisted expansion and Sessi
 
 Workspace and Session hover cards copy the value their row clips: activating a Workspace card writes its full directory path, while activating a non-blank Session card writes its full display title. A provisional blank New Session card remains read-only because its localized label is a placeholder rather than session content.
 
+
+Workspace menu contributions register a localized action through `registerWorkspaceMenu`. The observable menu orders actions by configured order and identity, rejects duplicate or reserved identities, and invokes them only for a currently listed Workspace. The registrant retains the disposer in its effect; the row closes its dropdown before invoking the action.
+
 </details>
 
 -----

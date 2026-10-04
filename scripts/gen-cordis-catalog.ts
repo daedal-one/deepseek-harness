@@ -42,6 +42,9 @@ export { REGION_BEGIN, REGION_END }
  * errors, so the partition can never silently drift from the service API.
  */
 export const SERVICE_PAGE: Record<string, string> = {
+  artifacts: 'artifacts.md',
+  artifactRuntime: 'artifacts.md',
+  artifactsController: 'artifacts.md',
   localContainerRuntime: 'sandbox.md',
   executionRuntime: 'sandbox.md',
   conversationWorkspaces: 'sandbox.md',
@@ -192,6 +195,7 @@ export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
  * {@link EVENT_WALK_EXEMPTIONS} names each one with its documentation owner.
  */
 export const EVENT_SCOPE_PAGE: Record<string, string> = {
+  artifact: 'artifacts.md',
   'workspace': 'sandbox.md',
   'agent': 'core.md',
   'agent-loop': 'core.md',
@@ -249,6 +253,26 @@ export const EVENT_WALK_EXEMPTIONS: Record<string, string> = {
  * appear on more than one page.
  */
 export const LINK_MAP: Readonly<Record<string, string>> = {
+  ArtifactId: 'artifacts.md',
+  ArtifactRevisionId: 'artifacts.md',
+  ArtifactOperationId: 'artifacts.md',
+  ArtifactProfile: 'artifacts.md',
+  ArtifactAsset: 'artifacts.md',
+  ArtifactRevision: 'artifacts.md',
+  ArtifactAssetInput: 'artifacts.md',
+  ArtifactPublish: 'artifacts.md',
+  ArtifactSummary: 'artifacts.md',
+  ArtifactPage: 'artifacts.md',
+  ArtifactPending: 'artifacts.md',
+  ArtifactContent: 'artifacts.md',
+  ArtifactInvocationId: 'artifacts.md',
+  ArtifactRuntimeInput: 'artifacts.md',
+  ArtifactRuntimeKey: 'artifacts.md',
+  ArtifactRuntimeInteraction: 'artifacts.md',
+  ArtifactFrame: 'artifacts.md',
+  ArtifactInvocation: 'artifacts.md',
+  ArtifactPolicy: 'artifacts.md',
+
   HandoffResult: 'session.md',
   ToolCallId: 'llm-streaming.md',
   Agent: 'core.md',

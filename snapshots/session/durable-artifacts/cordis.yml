@@ -1,0 +1,41 @@
+# External LLM fixture over the shipped one-shot profile.
+- id: agent-default-model
+  config:
+    provider: artifact-fixture
+    model: artifact-fixture
+- id: llm-deepseek
+  disabled: true
+- id: agent-instructions
+  disabled: true
+- id: session-persistence-jsonl
+  config:
+    root: !!js dshHomePath('sessions')
+    compression: none
+- insert:
+    - id: artifact-durable
+      name: '@deepseek-ai/dsh-artifact-durable'
+      config:
+        maxQueuedOperations: 8
+        maxConcurrentReads: 4
+        readTimeoutMs: 30000
+        maxAssetBytes: 2097152
+        maxPublicationBytes: 4194304
+        maxAssets: 32
+        maxMetadataBytes: 32768
+        maxResponseBytes: 8388608
+        maxWorkspaceBytes: 268435456
+        maxHostBytes: 1073741824
+        maxOperations: 4096
+        maxRevisionsPerArtifact: 128
+        maxRevisionsPerInterval: 60
+        revisionIntervalMs: 60000
+        pageSize: 20
+    - id: tool-artifact
+      name: '@deepseek-ai/dsh-tool-artifact'
+      config:
+        maxResultBytes: 65536
+        timeoutMs: 60000
+    - id: workspace
+      name: '@deepseek-ai/dsh-workspace'
+    - id: artifact-fixture-llm
+      name: ../../../packages/artifact/tool-artifact/tests/fixtures/llm.ts

@@ -153,6 +153,7 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   // Operators build the digest-pinned runtime image from the published recipe.
   '@deepseek-ai/dsh-local-container-runtime': [
     'Containerfile',
+    'lib/engine.js',
     'lib/workspaces.js',
     'lib/tool-request-repo-access.js',
     'lib/vm.js',
@@ -164,6 +165,10 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
     'lib/git-authorization-*.js',
   ],
   '@deepseek-ai/dsh-experimental-operation-clm': ['lib/tokenizer.js', 'lib/local-http.js'],
+  '@deepseek-ai/dsh-artifact-runtime-podman': [
+    'image/Containerfile', 'image/controller.mjs', 'image/seccomp.json',
+    'image/renderer-package.json', 'image/renderer-lock.json',
+  ],
   // Statically linked client libraries keep their stylesheets next to the emitted
   // JavaScript, which imports them by relative path: the compile shell runs
   // them through its own CSS pipeline, so the sheets are published artifacts.

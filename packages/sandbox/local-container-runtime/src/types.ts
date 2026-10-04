@@ -72,6 +72,8 @@ export interface PodmanContainerInspect {
   }
   /** Host-side isolation and resource settings. */
   HostConfig?: {
+    /** Standard-stream logging driver and options. */
+    LogConfig?: { Type: string; Config: Record<string, string> }
     /** Read-only root filesystem. */
     ReadonlyRootfs?: boolean
     /** Network namespace selection. */
@@ -143,6 +145,8 @@ export interface PodmanContainerCreate {
   Tty?: boolean
   /** Host restrictions and mounts. */
   HostConfig: {
+    /** Optional standard-stream logging driver and options. */
+    LogConfig?: { Type: string; Config: Record<string, string> }
     /** Private network mode selected by the deployment. */
     NetworkMode: string
     /** Preserve the invoking rootless user's numeric identity in the container. */

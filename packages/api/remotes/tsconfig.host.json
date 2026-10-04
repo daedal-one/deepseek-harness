@@ -73,6 +73,9 @@
     },
     {
       "path": "../../client/connection/tsconfig.host.json"
+    },
+    {
+      "path": "../artifacts"
     }
   ]
 }
