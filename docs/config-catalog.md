@@ -140,6 +140,8 @@ Requires: `loader` · `sessionProjections`
 ```ts config-catalog
 /** Plugin config: which preset is the default, and where presets live. */
 export interface Config {
+  /** Finite operator-owned Session admissions; omission resolves to an empty list. */
+  sessionAdmissions?: readonly SessionAdmission[]
   /** Preset id mounted when a caller names none. Missing at mount time fails loud. */
   default: string
   /** Scanned roots in precedence order; an earlier root wins a duplicate id. */
@@ -159,6 +161,32 @@ export interface Config {
   includeUserRoot: boolean
 }
 
+/** Exact restored identity and prefix allowed to use an execution-only host wrapper. */
+export interface SessionAdmission {
+  /** Exact Session identity approved by the operator. */
+  readonly sessionId: SessionId
+  /** Original logical preset; the selected projection must still match. */
+  readonly agentPreset: string
+  /** Creation timestamp recorded in the Session header. */
+  readonly createdAt: number
+  /** Literal cwd recorded in the Session header. */
+  readonly cwd: string
+  /** Direct parent Session ID, or null when absent. */
+  readonly parentSession: SessionId | null
+  /** Subagent origin, or null when absent. */
+  readonly origin: 'subagent' | null
+  /** Delegation depth, or null when absent rather than zero. */
+  readonly delegationDepth: number | null
+  /** Whether the Session was created with an inherited seed. */
+  readonly isSeeded: boolean
+  /** Inherited event count stored separately from the header. */
+  readonly inheritedEventCount: SessionLogOffset
+  /** Original immutable logical history approved by digest. */
+  readonly prefix: SessionAdmissionPrefix
+  /** System-trusted execution-only preset installed after validation. */
+  readonly compositionPreset: string
+}
+
 /** One directory scanned for preset subdirectories. */
 export interface PresetRoot {
   /** Directory holding one subdirectory per preset; a leading `~` expands. */
@@ -167,15 +195,32 @@ export interface PresetRoot {
   trust: PresetTrust
 }
 
+/** Immutable logical prefix approved by the operator; later events are not fingerprinted. */
+export interface SessionAdmissionPrefix {
+  /** Canonical logical JSON encoding used for the digest. */
+  readonly encoding: 'logical-json-v1'
+  /** Current Session format of the hashed logical events. */
+  readonly formatVersion: typeof SESSION_FORMAT_VERSION
+  /** Immutable original prefix length; later events remain outside the digest. */
+  readonly eventCount: number
+  /** SHA-256 digest of the domain-separated canonical prefix. */
+  readonly sha256: SessionAdmissionSha256
+}
+
 /**
  * Where a preset's composition came from. A `system` preset ships with the
  * deployment; a `user` preset was authored locally, by a person or by an
  * agent, and therefore carries the same trust as shell access.
  */
 export type PresetTrust = 'system' | 'user'
+
+/** Lowercase SHA-256 digest of a logical Session prefix. */
+export type SessionAdmissionSha256 = Branded<'SessionAdmissionSha256'>
 ```
 
-Source: [`packages/preset/agent-presets/src/preset.ts:54`](../packages/preset/agent-presets/src/preset.ts)
+Depends on: [`Branded`](../packages/util/brand/src/index.ts) · [`SessionId`](subsystems/core.md) · [`SessionLogOffset`](subsystems/session.md)
+
+Source: [`packages/preset/agent-presets/src/preset.ts:56`](../packages/preset/agent-presets/src/preset.ts)
 
 <a id="deepseek-aidsh-agent-tool-presentation"></a>
 
@@ -3758,7 +3803,7 @@ export interface Config {
   readonly rules: readonly CommandRule[]
   /** Literal argument-prefix rules; strictest matches compose with legacy rules. Requires a POSIX mapping. */
   readonly prefixRules?: readonly CommandPrefixRule[]
-  /** Allow mapped commands without review only when a verified non-host execution-world marker matches both providers. */
+  /** Exempt mapped calls only for the agent's verified container file and process providers; host calls retain review. */
   readonly containedExecutionWorld?: boolean
 }
 
@@ -3811,7 +3856,7 @@ export interface CommandPrefixRule {
 
 Depends on: [`ToolPolicyDecision`](../packages/guard/tool-policy/src/index.ts)
 
-Source: [`packages/guard/tool-policy-shell/src/index.ts:73`](../packages/guard/tool-policy-shell/src/index.ts)
+Source: [`packages/guard/tool-policy-shell/src/index.ts:74`](../packages/guard/tool-policy-shell/src/index.ts)
 
 <a id="deepseek-aidsh-tool-present"></a>
 

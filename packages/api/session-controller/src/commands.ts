@@ -269,7 +269,7 @@ export class SessionCommandController {
         {},
       )
     }
-    const composition = await this.agents.composeAgent(this.agents.presetForObservation(source))
+    const composition = await this.agents.composeAgent(this.agents.presetForObservation(source), source)
     try {
       const { provider, model } = this.ctx.agentModels.mainSelection(composition.agentPreset)
       await this.ctx.agents.create({

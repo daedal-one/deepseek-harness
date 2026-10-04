@@ -83,7 +83,7 @@ function abortable(operation: Promise<void> | undefined, signal: AbortSignal | n
       },
       (error: unknown) => {
         signal.removeEventListener('abort', onAbort)
-        reject(error)
+        reject(error instanceof Error ? error : new Error(String(error)))
       },
     )
   })
@@ -139,7 +139,7 @@ async function harness(overrides: HarnessOverrides = {}): Promise<{
   service: OpenRouterSpendService
   keyCalls: () => number
   modelsCalls: () => number
-  fetchSpy: ReturnType<typeof vi.fn>
+  fetchSpy: ReturnType<typeof vi.fn<(input: URL | string, init?: RequestInit) => Promise<Response>>>
 }> {
   const ctx = new Context()
   contexts.push(ctx)

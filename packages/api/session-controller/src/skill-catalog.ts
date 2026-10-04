@@ -1,9 +1,9 @@
 /** Session-addressed, cold-readable skill catalog Remote. */
 
 import type { Context } from '@deepseek-ai/cordis'
-import type {} from '@deepseek-ai/dsh-agent-presets/types'
+import type { SessionCompositionSource } from '@deepseek-ai/dsh-agent-presets'
 import type { SessionId } from '@deepseek-ai/dsh-session'
-import { SessionQueryError } from '@deepseek-ai/dsh-session-query'
+import { SessionQueryError, type SessionObservation } from '@deepseek-ai/dsh-session-query'
 import { isUserInvocable } from '@deepseek-ai/dsh-skill'
 import type { ScopeKey } from '@deepseek-ai/dsh-scope'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
@@ -36,15 +36,9 @@ export class SessionSkillCatalog extends TypertRemoteService {
   async list(request: SkillListRequest, signal: AbortSignal): Promise<SkillListValue> {
     void signal
     const { sessionId } = request
-    let cwd: string | undefined
-    let agentPreset: string | undefined
+    let observed: SessionObservation
     try {
-      using observation = await this.ctx.sessionQuery.observeSession(sessionId)
-      if (observation.projections === undefined) {
-        throw new Error('skill catalog requires a projected Session observation')
-      }
-      cwd = observation.header.cwd
-      agentPreset = observation.projections.values.agentPreset ?? undefined
+      observed = await this.ctx.sessionQuery.observeSession(sessionId)
     } catch (error: unknown) {
       if (error instanceof SessionQueryError
         && error.code === 'SESSION_QUERY_SESSION_NOT_FOUND') {
@@ -56,10 +50,16 @@ export class SessionSkillCatalog extends TypertRemoteService {
         {},
       )
     }
+    using observation = observed
+    if (observation.projections === undefined) {
+      throw new RemoteError('gateway/internal', 'skill catalog requires a projected Session observation', {})
+    }
+    const cwd = observation.header.cwd
     if (cwd === undefined) {
       throw new RemoteError('gateway/internal', `session "${sessionId}" has no project cwd`, {})
     }
 
+    const scope = await this.scopeFor(sessionId, observation)
     const live = this.ctx.agents.get(sessionId)
     const presets = this.ctx.get('agentPresets')
     const scoped = live === undefined ? undefined : presets?.serviceFor(live, 'skills')
@@ -72,7 +72,6 @@ export class SessionSkillCatalog extends TypertRemoteService {
       )
     }
 
-    const scope = await this.scopeFor(sessionId, agentPreset)
     try {
       const skills = (await skillRegistry.list({ cwd, scope })).filter(isUserInvocable)
       return {
@@ -88,19 +87,22 @@ export class SessionSkillCatalog extends TypertRemoteService {
     }
   }
 
-  /** Resolve a live or standing preset scope without creating an Agent. */
+  /** Resolve a live or validated standing scope without creating an Agent. */
   private async scopeFor(
     sessionId: SessionId,
-    agentPreset: string | undefined,
+    source: SessionCompositionSource,
   ): Promise<ScopeKey | undefined> {
     const live = this.ctx.agents.get(sessionId)
     if (live !== undefined) return live
     const presets = this.ctx.get('agentPresets')
     if (presets === undefined) return undefined
     try {
-      return await presets.standingKeyFor(agentPreset)
-    } catch {
-      // An unknown or unusable recorded preset falls back to the global registry.
+      return await presets.standingKeyForSession(source)
+    } catch (error: unknown) {
+      if (presets.requiresSessionAdmission(source)) {
+        throw new RemoteError('gateway/internal', `session "${sessionId}" admission could not be validated: ${String(error)}`, {})
+      }
+      // An unknown or unusable ordinary preset keeps the global registry fallback.
       return undefined
     }
   }

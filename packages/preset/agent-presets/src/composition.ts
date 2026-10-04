@@ -7,13 +7,14 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import type { AgentSetup } from '@deepseek-ai/dsh-agent'
 
 /** One resolved agent composition ready for `ctx.agents.create()` or `resume()`. */
 export interface ResolvedAgentComposition {
   /** Preset id to persist on the Session header, absent without a roster. */
   readonly agentPreset?: string
   /** Pre-publication setup that installs the surface state and selected preset. */
-  readonly setup: (agentCtx: Context) => Promise<void>
+  readonly setup: AgentSetup
 }
 
 /**
@@ -42,9 +43,9 @@ export async function resolveAgentComposition(
   const resolvedId = (await presets.resolve(presetId)).id
   return {
     agentPreset: resolvedId,
-    setup: async (agentCtx) => {
+    setup: async (agentCtx, agent) => {
       await setupSurface(agentCtx)
-      await presets.mount(agentCtx, resolvedId)
+      await presets.mount(agentCtx, resolvedId, agent.session)
     },
   }
 }

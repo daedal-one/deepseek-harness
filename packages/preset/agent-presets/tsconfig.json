@@ -25,6 +25,18 @@
       "path": "../../core/agent"
     },
     {
+      "path": "../../util/brand"
+    },
+    {
+      "path": "../../fs/fs"
+    },
+    {
+      "path": "../../shell/shell"
+    },
+    {
+      "path": "../../subprocess/subprocess"
+    },
+    {
       "path": "../../core/scope"
     },
     {

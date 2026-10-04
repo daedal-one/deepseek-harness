@@ -57,6 +57,10 @@
     "lib/vm.js",
     "lib/shared-vm.js",
     "lib/vm-previews.js",
+    "lib/types-*.js",
+    "lib/vm-engine-*.js",
+    "lib/vm-process-*.js",
+    "lib/git-authorization-*.js",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",

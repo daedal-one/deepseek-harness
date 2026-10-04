@@ -33,7 +33,8 @@ with tempfile.TemporaryDirectory(prefix='dsh-remote-') as directory:
  * @param signal - request cancellation; cancellation terminates the clone process.
  */
 export async function cloneEnvironmentRepository(
-  runtime: WorkspaceExecutionRuntime, repository: EnvironmentRepository, limits: WorkspaceLimits, maxOutputBytes: number, signal: AbortSignal,
+  runtime: WorkspaceExecutionRuntime, repository: EnvironmentRepository, limits: WorkspaceLimits,
+  maxOutputBytes: number, signal: AbortSignal,
 ): Promise<void> {
   validateGitRemote({ ...repository, credentialTimeoutMs: repository.credentialTimeoutMs })
   signal.throwIfAborted()

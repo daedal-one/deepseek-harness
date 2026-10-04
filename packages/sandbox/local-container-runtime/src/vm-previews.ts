@@ -38,7 +38,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       if (!/^[a-zA-Z0-9_-]{1,128}$/u.test(sessionId) || !/^\d+$/u.test(portValue) || port < 1024 || port > 65535) return new Response('Invalid conversation or port', { status: 400 })
       const id = brandString<SessionId>(sessionId)
       const available = await ctx.conversationWorkspaces.runForSession(
-        id, async () => ctx.conversationWorkspaces.capture().connectPreview !== undefined,
+        id, () => Promise.resolve(ctx.conversationWorkspaces.capture().connectPreview !== undefined),
       )
       if (!available) return new Response('This conversation has no development VM', { status: 409 })
       const location = previews.issue(() => ctx.conversationWorkspaces.connectPreviewForSession(id, port))

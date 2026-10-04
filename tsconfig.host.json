@@ -8,6 +8,9 @@
     "rewriteRelativeImportExtensions": false
   },
   "include": [
+    "apps/cli/tests/profiles/web/host-session-admission/harness.ts",
+    "apps/cli/tests/profiles/web/host-session-admission/probe.ts",
+    "snapshots/web/host-session-admission.snapshot.ts",
     "apps/web/tests/daedal-handoff.e2e.ts",
     "apps/web/tests/workspace-outcomes.e2e.ts",
     "apps/web/tests/poor-connection.e2e.ts",

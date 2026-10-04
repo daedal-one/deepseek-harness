@@ -163,6 +163,14 @@ export interface ChildComposition {
   readonly toolFilter?: ToolRestriction | undefined
 }
 
+/** Session identity supplied by the child lifecycle owner before publication. */
+export interface ChildCompositionSource {
+  /** Child whose durable identity must match the inherited composition. */
+  readonly session: Session
+  /** Whether the owning provider creates a child or restores its durable history. */
+  readonly source: 'create' | 'resume'
+}
+
 /**
  * Model-facing delegation-scope statement for every in-process child. A
  * runtime-context contribution rather than a system-prompt section, so the
@@ -195,13 +203,15 @@ export const SUBAGENT_DELEGATION_CONTEXT
  * @param childCtx - the child agent's scoped creation context.
  * @param parent - the delegating parent whose composition the child joins.
  * @param composition - the per-child persona and tool filter to install.
+ * @param child - durable child identity and its owning provider's creation or restore operation.
  */
 export function applyChildComposition(
   childCtx: Context,
   parent: Agent,
   composition: ChildComposition,
+  child: ChildCompositionSource,
 ): void {
-  childCtx.get('agentPresets')?.composeFrom(childCtx, parent.ctx)
+  childCtx.get('agentPresets')?.composeFrom(childCtx, parent, child)
   childCtx.systemPrompt.context({
     name: 'subagent:delegation',
     order: childCtx.systemPrompt.getContextOrder('SUBAGENT_DELEGATION'),

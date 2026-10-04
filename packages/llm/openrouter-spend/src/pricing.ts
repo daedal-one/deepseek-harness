@@ -57,7 +57,12 @@ function isUsableBucket(value: number): boolean {
  */
 function usageFromStream(
   stream: SessionEvent<'assistant/attempt'>['data']['stream'],
-): { readonly inputTokens: number; readonly outputTokens: number; readonly cacheReadTokens?: number; readonly cacheWriteTokens?: number } | undefined {
+): {
+  readonly inputTokens: number
+  readonly outputTokens: number
+  readonly cacheReadTokens?: number
+  readonly cacheWriteTokens?: number
+} | undefined {
   for (let index = stream.length - 1; index >= 0; index--) {
     const record = stream[index]
     if (record?.type === 'chunk' && record.chunk.type === 'usage') return record.chunk.usage
@@ -71,7 +76,12 @@ function usageFromStream(
  * @returns the corresponding cost buckets.
  */
 function bucketsFrom(
-  usage: { readonly inputTokens: number; readonly outputTokens: number; readonly cacheReadTokens?: number; readonly cacheWriteTokens?: number },
+  usage: {
+    readonly inputTokens: number
+    readonly outputTokens: number
+    readonly cacheReadTokens?: number
+    readonly cacheWriteTokens?: number
+  },
 ): OpenRouterTokenBuckets {
   return {
     uncachedInputTokens: usage.inputTokens,
@@ -86,7 +96,9 @@ function bucketsFrom(
  * @param route - candidate durable request route.
  * @returns the route, or undefined when it cannot attribute usage safely.
  */
-function validRoute(route: { readonly provider: string; readonly model: string }): { readonly provider: string; readonly model: string } | undefined {
+function validRoute(
+  route: { readonly provider: string; readonly model: string },
+): { readonly provider: string; readonly model: string } | undefined {
   return route.provider.trim().length > 0 && route.model.trim().length > 0 ? route : undefined
 }
 

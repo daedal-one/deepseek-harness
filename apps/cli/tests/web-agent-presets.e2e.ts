@@ -702,8 +702,8 @@ describe('a delegated child', () => {
     const child = await parent.agent.ctx.agents.create({
       sessionId: SessionId('preset-child'),
       meta: childSessionMeta(parent.agent, 1, false),
-      setup: (agentCtx) => {
-        applyChildComposition(agentCtx, parent.agent, {})
+      setup: (agentCtx, child) => {
+        applyChildComposition(agentCtx, parent.agent, {}, { session: child.session, source: 'create' })
       },
     })
     try {
@@ -728,8 +728,8 @@ describe('a delegated child', () => {
     const child = await parent.agent.ctx.agents.create({
       sessionId: SessionId('preset-child-switch'),
       meta: childSessionMeta(parent.agent, 1, false),
-      setup: (agentCtx) => {
-        applyChildComposition(agentCtx, parent.agent, {})
+      setup: (agentCtx, child) => {
+        applyChildComposition(agentCtx, parent.agent, {}, { session: child.session, source: 'create' })
       },
     })
     try {

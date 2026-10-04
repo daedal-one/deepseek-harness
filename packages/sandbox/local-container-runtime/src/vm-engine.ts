@@ -641,7 +641,7 @@ function parseDescriptor(value: unknown): DevelopmentVmDescriptor {
   if (!exactObject(policy, policyKeys) || policy.version !== 1 || policy.ipv4 !== 'private-rfc1918-nat' || policy.ipv6 !== 'disabled'
     || policy.defaultIngress !== 'reject' || policy.defaultEgress !== 'reject'
     || !Array.isArray(policy.hostAddresses) || policy.hostAddresses.length === 0
-    || policy.hostAddresses.some(address => typeof address !== 'string' || isIP(address) !== 4)
+    || !policy.hostAddresses.every((address: unknown): address is string => typeof address === 'string' && isIP(address) === 4)
     || new Set(policy.hostAddresses).size !== policy.hostAddresses.length
     || !sameValues(policy.hostAddresses, [...policy.hostAddresses].sort())
     || !sameValues(policy.deniedNetworks, VM_DENIED_NETWORKS)
@@ -661,7 +661,7 @@ function canonicalJson(value: unknown): string {
 
 function exactObject(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
-    && sameSet(Object.keys(value as Record<string, unknown>), keys)
+    && sameSet(Object.keys(value), keys)
 }
 
 function object(value: unknown): Record<string, unknown> {

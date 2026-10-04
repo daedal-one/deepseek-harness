@@ -26,7 +26,8 @@ export interface OpenRouterSessionSpend {
   readonly provider: string
   /** Exact model id of the session's latest durable model selection. */
   readonly model: string
-  /** Estimated historical cost in USD; null when route attribution, route eligibility, or a required price is unavailable; never a fabricated 0. */
+  /** Estimated historical cost in USD; null when route attribution, route eligibility,
+   * or a required price is unavailable; never a fabricated 0. */
   readonly costUsd: number | null
 }
 

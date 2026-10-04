@@ -1162,7 +1162,7 @@ describe('the model-facing bash tool builds its request from named args only (no
   it('forwards credentials resolved by the shell environment service', async () => {
     const { ctx, bash } = await setupRecording()
     const agent = registerFakeAgent(ctx, 'credential-session', () => undefined)
-    vi.spyOn(ctx.shellEnv, 'resolveCredentials').mockResolvedValue({ OPENROUTER_API_KEY: 'stored-key' })
+    const resolveCredentials = vi.spyOn(ctx.shellEnv, 'resolveCredentials').mockResolvedValue({ OPENROUTER_API_KEY: 'stored-key' })
 
     await ctx.tools.execute({
       signal: testToolSignal,
@@ -1172,8 +1172,8 @@ describe('the model-facing bash tool builds its request from named args only (no
       agent,
     })
 
-    expect(ctx.shellEnv.resolveCredentials).toHaveBeenCalledOnce()
-    expect(vi.mocked(ctx.shellEnv.resolveCredentials).mock.calls[0]?.[0].agent).toBe(agent)
+    expect(resolveCredentials).toHaveBeenCalledOnce()
+    expect(resolveCredentials.mock.calls[0]?.[0].agent).toBe(agent)
     expect(bash.requests[0]?.env).toEqual({ OPENROUTER_API_KEY: 'stored-key' })
   })
 

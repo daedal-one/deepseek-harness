@@ -197,24 +197,56 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['when no configured root supplies that id.'],
       },
       {
+        signature: 'hasSessionAdmission(sessionId: SessionId): boolean',
+        description: 'Identify histories whose composition reads must fail if admission cannot be validated.',
+        parameters: [{ name: 'sessionId', description: 'exact logical Session identity.' }],
+        returns: 'whether operator configuration declares a placement admission for this Session.',
+      },
+      {
+        signature: 'requiresSessionAdmission(source: SessionCompositionSource): boolean',
+        description: 'Classify a retained Session observation whose ordinary fallback is unsafe. Classification does not grant admission; only an exact validated entry or a live owner join does.',
+        parameters: [{ name: 'source', description: 'retained logical Session observation.' }],
+        returns: 'whether this history requires admission before cold composition.',
+      },
+      {
+        signature: 'hasAgentAdmission(agentCtx: Context): boolean',
+        description: 'Read admission ownership retained for an Agent\'s exact scope identity, including after mount disposal. This metadata does not validate a Session or prove that its execution composition is still live.',
+        parameters: [{ name: 'agentCtx', description: 'the Agent\'s scoped context.' }],
+        returns: 'whether this roster successfully joined the scope to an admitted composition.',
+      },
+      {
         signature: 'permissionPresetFor(agentCtx: Context): string | undefined',
         description: 'Read the access default captured when an agent joined its profile.',
         parameters: [{ name: 'agentCtx', description: 'scoped context of the agent.' }],
         returns: 'the profile\'s default, or undefined for server inheritance.',
       },
       {
-        signature: 'async mount(agentCtx: Context, id?: string): Promise<AgentPreset>',
+        signature: 'async mount(agentCtx: Context, id?: string, session?: Session): Promise<AgentPreset>',
         description: 'Compose one agent from a preset: ensure the preset\'s standing mount, then parent the agent\'s scope key to it so the mount\'s registrations and listeners cover this agent.\n\nCall from the agent factory\'s `setup(agentCtx)`; a rejection there rolls the agent creation back, so a broken preset never yields a half-composed session.',
-        parameters: [{ name: 'agentCtx', description: 'the agent\'s scope context.' }, { name: 'id', description: 'the preset id, or `undefined` for {@link defaultId}.' }],
-        returns: 'the preset that was composed, for the caller to record.',
-        throws: ['when the preset is unknown or its composition is unusable.'],
+        parameters: [{ name: 'agentCtx', description: 'the agent\'s scope context.' }, { name: 'id', description: 'the logical preset id, or `undefined` for the admitted identity or ordinary default.' }, { name: 'session', description: 'prepared Session; omission always selects ordinary composition.' }],
+        returns: 'the logical preset, never the execution-only admission target.',
+        throws: ['when identity, admission, trust, composition, or execution placement is invalid.'],
       },
       {
-        signature: 'composeFrom(agentCtx: Context, parentCtx: Context): string | undefined',
-        description: 'Join one agent to the SAME standing composition another already runs on.\n\nThis is how a child agent inherits its parent\'s capabilities. It is a bind, not a mount: the parent\'s generation is already composed, so the child gets that exact instance — the same plugin objects, the same tool registrations, the same prompt sections. Re-resolving the parent\'s preset by id instead would re-read the roster, and a composition file edited since the parent started would hand the child a DIFFERENT generation than the one its parent\'s history was produced under (and a preset deleted since would fail the child outright while its parent keeps running).\n\nSynchronous, and with no composition failure mode of its own — it reads no roster, mounts nothing, and touches no file — which is what lets a child creation window use it: the two in-process subagent drivers compose their children inside a synchronous `setup`. It still rejects a caller error, as the `@throws` below record.\n\nA parent that joined no preset — a rosterless deployment — yields no join and no error: there, the model-facing rows sit in the host composition and the child already sees them through the global layer.',
-        parameters: [{ name: 'agentCtx', description: 'the joining agent\'s scope context.' }, { name: 'parentCtx', description: 'the scope context of the agent whose composition to join.' }],
-        returns: 'the preset id joined, or undefined when the parent joined none.',
-        throws: ['when `agentCtx` carries no scope, or has already joined a preset.'],
+        signature: 'async composeFromSession(agentCtx: Context, session: Session, source: SessionCompositionSource): Promise<AgentPreset>',
+        description: 'Compose a new independent fork from one exact observed Session cut. A live source retains its standing generation; a cold source resolves its validated composition. Independent workspace admission still applies, and later cold admitted forks need their own manifest.',
+        parameters: [{ name: 'agentCtx', description: 'unpublished fork\'s scope context.' }, { name: 'session', description: 'newly created seeded root whose header and inherited prefix match the source.' }, { name: 'source', description: 'immutable observed source retained by the fork lifecycle owner.' }],
+        returns: 'the fork\'s logical preset without recording a preset selection.',
+        throws: ['on identity, seed, source admission, standing-generation, or execution mismatch.'],
+      },
+      {
+        signature: 'validateParentJoin(parent: Agent, child: { session: Session; source: \'create\' | \'resume\' }): JoinedPresetMount | undefined',
+        description: 'Validate a direct child\'s join without binding or resolving a new generation. A resumed child of an admitted parent needs its own admission for the same target. Every configured child admission is validated, including during fresh creation.',
+        parameters: [{ name: 'parent', description: 'live parent whose exact standing generation the child will join.' }, { name: 'child', description: 'prepared child Session and its creation or reconstruction source.' }],
+        returns: 'the parent\'s standing mount, or undefined for an uncomposed parent.',
+        throws: ['on lineage, cwd, logical identity, admission, or execution-world mismatch.'],
+      },
+      {
+        signature: 'composeFrom(agentCtx: Context, parent: Agent, child: { session: Session; source: \'create\' | \'resume\' }): string | undefined',
+        description: 'Bind a child to its parent\'s exact standing generation and inherit permission defaults. This synchronous join never rereads files, mounts a new generation, or records a selection.',
+        parameters: [{ name: 'agentCtx', description: 'unpublished child\'s scope context.' }, { name: 'parent', description: 'live parent whose composition the child inherits.' }, { name: 'child', description: 'prepared child Session and its creation or reconstruction source.' }],
+        returns: 'the logical preset ID joined, or undefined for an uncomposed parent.',
+        throws: ['when the child fails join validation, is unscoped, or is already bound.'],
       },
       {
         signature: 'composedPreset(agentCtx: Context): string | undefined',
@@ -273,7 +305,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Re-link one agent to a different preset\'s standing composition.\n\nOnly valid while the agent has produced nothing: swapping tools mid conversation would leave logged tool calls the new composition cannot make. The CALLER owns that check — this method does not read session history.\n\nThe swap is a parent re-link, not an unmount: standing mounts are shared and permanent, so the old composition stays for its other agents and the new one is ensured BEFORE the link moves. An unknown or unusable preset therefore throws with the agent exactly as it was — there is no torn-down state to restore. The re-link runs through the binding this roster kept from the agent\'s mount — dsh-scope\'s only re-link authority. An agent that never composed one has nothing to re-link: the switch is then the agent\'s first bind, exactly a mount. A committed re-link emits `tools/change` because changing the parent scope changes the Agent\'s resolved tool set without adding or removing registry entries.',
         parameters: [{ name: 'agentCtx', description: 'the agent\'s scope context.' }, { name: 'id', description: 'the preset to compose the agent from instead.' }],
         returns: 'the preset now installed.',
-        throws: ['when the preset is unknown or its composition is unusable.'],
+        throws: ['when the Agent inherited admission, the preset is unknown, or its composition is unusable.'],
       },
       {
         signature: '@Remote(\'select\') async select(agent: Agent, agentPreset: string): Promise<string>',
@@ -288,6 +320,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'id', description: 'the preset id, or `undefined` for {@link defaultId}.' }],
         returns: 'the standing scope key readers pass as a registry view scope.',
         throws: ['when the preset is unknown or its composition is unusable.'],
+      },
+      {
+        signature: 'async standingKeyForSession(source: SessionCompositionSource): Promise<ScopeKey>',
+        description: 'Resolve a cold Session\'s composition without creating an Agent or appending events. Unlisted Sessions use their ordinary logical preset, never ancestor admission.',
+        parameters: [{ name: 'source', description: 'restored current logical header, inherited count, and events.' }],
+        returns: 'the validated ordinary or admitted standing scope key.',
+        throws: ['when admission, discovery, trust, or actual execution placement is invalid.'],
       },
     ],
   },
@@ -5118,6 +5157,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type JobStatus = \'running\' | \'stopping\' | \'completed\' | \'killed\' | \'failed\';',
   },
   {
+    name: 'JoinedPresetMount',
+    declaration: 'export type JoinedPresetMount = PresetMount & {\n    readonly key: ScopeKey;\n};',
+  },
+  {
     name: 'JsonSchemaNode',
     declaration: 'export interface JsonSchemaNode {\n    type?: JsonSchemaType;\n    oneOf?: JsonSchemaNode[];\n    properties?: Record<string, JsonSchemaNode>;\n    required?: string[];\n    additionalProperties?: boolean;\n    items?: JsonSchemaNode;\n    enum?: JsonSchemaScalar[];\n    const?: JsonSchemaScalar;\n    description?: string;\n    title?: string;\n    default?: JsonValue;\n    examples?: JsonValue;\n}',
   },
@@ -5618,6 +5661,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type PrepareSessionOptions = (CreateSessionOptions & {\n    readonly eventState?: undefined;\n}) | RestoredSessionOptions;',
   },
   {
+    name: 'PresetCompositionIdentity',
+    declaration: 'export interface PresetCompositionIdentity {\n    readonly logicalPresetId: string;\n    readonly compositionPresetId: string;\n    readonly compositionPath: string;\n    readonly variant: \'ordinary\' | \'admitted\';\n}',
+  },
+  {
+    name: 'PresetMount',
+    declaration: 'export interface PresetMount extends PresetCompositionIdentity {\n    readonly presetId: string;\n    readonly fiber: Fiber;\n    readonly tree: EntryTree;\n    readonly key: ScopeKey | undefined;\n}',
+  },
+  {
     name: 'PresetOption',
     declaration: 'export interface PresetOption {\n    value: string;\n    name: string;\n    description?: string;\n}',
   },
@@ -5940,6 +5991,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SessionCancelValue',
     declaration: 'export interface SessionCancelValue {\n    readonly accepted: true;\n}',
+  },
+  {
+    name: 'SessionCompositionSource',
+    declaration: 'export interface SessionCompositionSource {\n    readonly header: SessionHeader;\n    readonly inheritedEventCount: SessionLogOffset;\n    readonly events: readonly SessionEvent[];\n}',
   },
   {
     name: 'SessionControlBaseline',

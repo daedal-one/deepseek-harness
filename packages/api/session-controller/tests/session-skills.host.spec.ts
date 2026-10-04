@@ -1,17 +1,19 @@
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import SessionStore, { SESSION_FORMAT_VERSION, SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import { requiresSessionAdmission, type SessionAdmission, type SessionCompositionSource } from '@deepseek-ai/dsh-agent-presets'
+import SessionStore, { SESSION_FORMAT_VERSION, SessionId, SessionLogOffset, SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session'
+import type {} from '@deepseek-ai/dsh-permission-presets'
 import { SessionQueryError, type SessionObservation } from '@deepseek-ai/dsh-session-query'
 import type {} from '@deepseek-ai/dsh-skill'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SessionSkillCatalog } from '../src/skill-catalog.ts'
 
 function observation(
   sessionId: SessionId,
-  options: { readonly cwd?: string; readonly agentPreset?: string } = {},
+  options: { readonly cwd?: string; readonly agentPreset?: string; readonly events?: readonly SessionEvent[] } = {},
 ): SessionObservation {
-  const events = Object.freeze([])
+  const events = Object.freeze(options.events ?? [])
   const lease = (): SessionObservation => ({
     source: 'live',
     header: {
@@ -20,6 +22,7 @@ function observation(
       createdAt: 1,
       isSeeded: false,
       ...options.cwd === undefined ? {} : { cwd: options.cwd },
+      ...options.agentPreset === undefined ? {} : { agentPreset: options.agentPreset },
     },
     events,
     inheritedEventCount: SessionLogOffset(0),
@@ -36,8 +39,15 @@ function observation(
   return lease()
 }
 
+const contexts: Context[] = []
+afterEach(async () => {
+  await Promise.all(contexts.splice(0).map(ctx => ctx.fiber.dispose()))
+  vi.restoreAllMocks()
+})
+
 async function context(): Promise<Context> {
   const ctx = new Context()
+  contexts.push(ctx)
   await ctx.plugin(SessionStore)
   await ctx.plugin(AgentRegistry)
   return ctx
@@ -125,14 +135,18 @@ describe('SessionSkillCatalog', () => {
         agentPreset: 'minimal',
       })),
     } as never)
-    const standingKeyFor = vi.fn(() => Promise.resolve(scope))
-    ctx.provide('agentPresets', { standingKeyFor } as never)
+    const standingKeyForSession = vi.fn((_source: SessionCompositionSource) => Promise.resolve(scope))
+    ctx.provide('agentPresets', { standingKeyForSession, requiresSessionAdmission: () => false } as never)
     const list = vi.fn(() => Promise.resolve([]))
     ctx.provide('skills', { list } as never)
     const catalog = new SessionSkillCatalog(ctx)
 
     await expect(catalog.list({ sessionId }, new AbortController().signal)).resolves.toEqual({ skills: [] })
-    expect(standingKeyFor).toHaveBeenCalledWith('minimal')
+    expect(standingKeyForSession).toHaveBeenCalledOnce()
+    expect(standingKeyForSession.mock.calls[0]?.[0]).toMatchObject({
+      header: { id: sessionId, cwd: '/cold/project', agentPreset: 'minimal' },
+      inheritedEventCount: SessionLogOffset(0), events: [],
+    })
     expect(list).toHaveBeenCalledWith({ cwd: '/cold/project', scope })
     expect(ctx.agents.list()).toEqual([])
   })
@@ -147,7 +161,8 @@ describe('SessionSkillCatalog', () => {
       })),
     } as never)
     ctx.provide('agentPresets', {
-      standingKeyFor: () => Promise.reject(new Error('unknown preset')),
+      standingKeyForSession: () => Promise.reject(new Error('unknown preset')),
+      requiresSessionAdmission: () => false,
     } as never)
     const list = vi.fn(() => Promise.resolve([]))
     ctx.provide('skills', { list } as never)
@@ -155,6 +170,61 @@ describe('SessionSkillCatalog', () => {
 
     await expect(catalog.list({ sessionId }, new AbortController().signal)).resolves.toEqual({ skills: [] })
     expect(list).toHaveBeenCalledWith({ cwd: '/cold/project', scope: undefined })
+  })
+
+  it('rejects a failed configured admission without listing global skills or creating an Agent', async () => {
+    const ctx = await context()
+    const sessionId = SessionId('invalid-admitted-skills')
+    const observed = observation(sessionId, { cwd: '/host/project', agentPreset: 'standard' })
+    const dispose = vi.spyOn(observed, Symbol.dispose)
+    ctx.provide('sessionQuery', { observeSession: () => Promise.resolve(observed) } as never)
+    const requiresSessionAdmission = vi.fn(() => true)
+    ctx.provide('agentPresets', {
+      standingKeyForSession: () => Promise.reject(new Error('prefix digest mismatch')),
+      requiresSessionAdmission,
+    } as never)
+    const list = vi.fn(() => Promise.resolve([]))
+    ctx.provide('skills', { list } as never)
+    const resume = vi.spyOn(ctx.agents, 'resume')
+    const catalog = new SessionSkillCatalog(ctx)
+
+    const rejected = catalog.list({ sessionId }, new AbortController().signal)
+    await expect(rejected).rejects.toMatchObject({ code: 'gateway/internal' })
+    await expect(rejected).rejects.toThrow('admission could not be validated')
+    expect(requiresSessionAdmission).toHaveBeenCalledWith(observed)
+    expect(list).not.toHaveBeenCalled()
+    expect(resume).not.toHaveBeenCalled()
+    expect(dispose).toHaveBeenCalledOnce()
+    expect(ctx.agents.list()).toEqual([])
+  })
+
+  it('rejects an unlisted recorded host before global registry lookup or skill listing', async () => {
+    const ctx = await context()
+    const sessionId = SessionId('host-descendant-skills')
+    const observed = observation(sessionId, { cwd: '/host/project', agentPreset: 'standard', events: [
+      { type: 'permission/context', seq: SessionSeq(0), time: 1,
+        data: { environment: 'host', defaultPreset: 'original-policy' } },
+    ] })
+    const dispose = vi.spyOn(observed, Symbol.dispose)
+    ctx.provide('sessionQuery', { observeSession: () => Promise.resolve(observed) } as never)
+    const entry = { sessionId: SessionId('ancestor'), agentPreset: 'standard', compositionPreset: 'host-wrapper' } as SessionAdmission
+    const admissions = new Map([[entry.sessionId, entry]])
+    const requires = vi.fn((source: SessionObservation) => requiresSessionAdmission(source, admissions))
+    ctx.provide('agentPresets', {
+      standingKeyForSession: () => Promise.reject(new Error('own session admission required')),
+      requiresSessionAdmission: requires,
+    } as never)
+    const list = vi.fn(() => Promise.resolve([]))
+    const registry = vi.spyOn(ctx, 'get')
+    ctx.provide('skills', { list } as never)
+    const resume = vi.spyOn(ctx.agents, 'resume')
+    await expect(new SessionSkillCatalog(ctx).list({ sessionId }, new AbortController().signal))
+      .rejects.toMatchObject({ code: 'gateway/internal' })
+    expect(requires).toHaveBeenCalledWith(observed)
+    expect(list).not.toHaveBeenCalled()
+    expect(registry).not.toHaveBeenCalledWith('skills')
+    expect(resume).not.toHaveBeenCalled()
+    expect(dispose).toHaveBeenCalledOnce()
   })
 
   it.each([

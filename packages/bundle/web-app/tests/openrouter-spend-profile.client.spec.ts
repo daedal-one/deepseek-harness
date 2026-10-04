@@ -112,9 +112,9 @@ describe('OpenRouter spend Web profile slice', () => {
     const session = createHostSession(host, SessionId('profile-spend'))
     const service = host.get('openrouterSpend') as OpenRouterSpendService
 
-    await expect(service.read({ sessionId: session.id }, new AbortController().signal)).resolves.toEqual({
+    await expect(service.read({ sessionId: session.id }, new AbortController().signal)).resolves.toMatchObject({
       ok: true,
-      value: expect.objectContaining({ key: expect.objectContaining({ label: 'profile fixture key' }), session: null }),
+      value: { key: { label: 'profile fixture key' }, session: null },
     })
     expect(fetchSpy).toHaveBeenCalledOnce()
     expect(JSON.stringify(session.snapshotEvents())).not.toContain('profile-fake-openrouter-key')
@@ -146,8 +146,8 @@ describe('OpenRouter spend Web profile slice', () => {
     declareConversationView(client.get('slots') as SlotRegistry)
     const clientFiber = client.plugin({ inject: [...infoClientInject], apply: applyInfoClient })
     await clientFiber.await()
-    expect((client.get('slots') as SlotRegistry).entries('conversation.view')).toEqual([
-      expect.objectContaining({ options: expect.objectContaining({ id: 'info', order: 20 }) }),
+    expect((client.get('slots') as SlotRegistry).entries('conversation.view')).toMatchObject([
+      { options: { id: 'info', order: 20 } },
     ])
   })
 

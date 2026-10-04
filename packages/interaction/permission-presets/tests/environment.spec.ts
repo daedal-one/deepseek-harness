@@ -13,7 +13,7 @@ it('keeps VM execution when the profile has only auxiliary host file and process
   ctx.provide('fs', { executionWorld: world } as never)
   ctx.provide('subprocess', { executionWorld: world } as never)
   const auxiliary = vi.fn(() => ({ executionWorld: host }))
-  ctx.provide('agentPresets', { serviceFor: auxiliary } as never)
+  ctx.provide('agentPresets', { serviceFor: auxiliary, hasAgentAdmission: () => false } as never)
   expect(executionEnvironment(ctx, { ctx } as Agent)).toBe('external')
   expect(auxiliary).not.toHaveBeenCalled()
 })

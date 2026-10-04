@@ -58,8 +58,7 @@ export class TtlCache<T> {
 
     const generation = this.generation
     const loadPromise = load().then(value => ({ value, fetchedAt: Date.now() }))
-    let inflight!: Promise<CachedValue<T>>
-    inflight = loadPromise.then(
+    const inflight: Promise<CachedValue<T>> = loadPromise.then(
       (entry) => {
         if (this.inflight === inflight) this.inflight = null
         if (this.generation === generation && cacheable(entry.value)) this.slot = entry

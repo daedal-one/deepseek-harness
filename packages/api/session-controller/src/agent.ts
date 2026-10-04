@@ -7,7 +7,7 @@ import type {
   Agent, AgentOptions, AgentSetup, ModelSelection as AgentModelSelection, ModelSelectionRef,
 } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
-import type {} from '@deepseek-ai/dsh-agent-presets'
+import type { SessionCompositionSource } from '@deepseek-ai/dsh-agent-presets'
 import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { Session, SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionInspection } from '@deepseek-ai/dsh-session-persistence'
@@ -370,9 +370,10 @@ export class ApiSessionAgentController {
   /**
    * Resolve the preset id and pre-publication Agent setup for a create or resume.
    * @param presetId - requested preset or the configured default when omitted.
+   * @param forkSource - exact observed source when creating an independent seeded fork.
    * @returns the resolved preset identity and Agent setup callback.
    */
-  async composeAgent(presetId: string | undefined): Promise<{
+  async composeAgent(presetId: string | undefined, forkSource?: SessionCompositionSource): Promise<{
     readonly agentPreset?: string
     readonly setup: AgentSetup
   }> {
@@ -385,7 +386,8 @@ export class ApiSessionAgentController {
       agentPreset: resolvedId,
       setup: async (agentCtx, agent) => {
         this.installSelection(agent)
-        await presets.mount(agentCtx, resolvedId)
+        if (forkSource === undefined) await presets.mount(agentCtx, resolvedId, agent.session)
+        else await presets.composeFromSession(agentCtx, agent.session, forkSource)
       },
     }
   }

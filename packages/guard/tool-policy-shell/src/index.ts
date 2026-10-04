@@ -4,6 +4,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import { executionContextForAgent } from '@deepseek-ai/dsh-agent-presets'
 import z from '@deepseek-ai/schemastery'
 import { BlockAssembler, createUserMessage, ReasoningEffortId, type FinishReason, type GenerateOptions } from '@deepseek-ai/dsh-llm'
 import {
@@ -103,7 +104,7 @@ export interface Config {
   readonly rules: readonly CommandRule[]
   /** Literal argument-prefix rules; strictest matches compose with legacy rules. Requires a POSIX mapping. */
   readonly prefixRules?: readonly CommandPrefixRule[]
-  /** Allow mapped commands without review only when a verified non-host execution-world marker matches both providers. */
+  /** Exempt mapped calls only for the agent's verified container file and process providers; host calls retain review. */
   readonly containedExecutionWorld?: boolean
 }
 
@@ -715,8 +716,10 @@ class ShellPolicyProvider implements ToolPolicyProvider {
       decision: 'deny', risk: 100, categories: ['invalid-input'], reason: 'mapped command argument is missing',
     })
     if (this.config.containedExecutionWorld === true) {
-      verifyContainedWorld(this.ctx)
-      return undefined
+      const execution = executionContextForAgent(this.ctx, request.agent)
+      const check = (): boolean => verifyContainedWorld(execution, true)
+      const agents = this.ctx.get('agents')
+      if (agents === undefined ? check() : agents.withInitiator(request.agent, check)) return undefined
     }
     const fixed = hardSecurityDecision(command, this.config.id) ?? gitEscalationDecision(command, this.config.id)
     if (fixed !== undefined) return fixed
@@ -787,18 +790,28 @@ class ShellPolicyProvider implements ToolPolicyProvider {
   }
 }
 
-function verifyContainedWorld(ctx: Context): void {
+function verifyContainedWorld(ctx: Context, allowHost = false): boolean {
   const workspaces = ctx.get('conversationWorkspaces') as { executionWorld: object } | undefined
   const bootWorld = ctx.get('localContainerExecutionWorld') as object | undefined
   const verified = bootWorld === undefined ? undefined : workspaces?.executionWorld ?? bootWorld
   const fs = ctx.get('fs') as { executionWorld: symbol | object } | undefined
   const subprocess = ctx.get('subprocess') as { executionWorld: symbol | object } | undefined
-  if (verified === undefined || fs?.executionWorld !== verified || subprocess?.executionWorld !== verified) {
+  const filesWorld = fs?.executionWorld
+  const processesWorld = subprocess?.executionWorld
+  if (allowHost && filesWorld === Symbol.for('@deepseek-ai/dsh/host-execution-world') && processesWorld === filesWorld) return false
+  if (verified === undefined || filesWorld !== verified || processesWorld !== verified) {
     throw new Error('tool-policy-shell: containedExecutionWorld requires a verified matching filesystem and subprocess world')
   }
+  return true
 }
 
-/** Register the shell policy provider for the plugin lifetime. */
+/**
+ * Register the shell policy provider for the plugin lifetime.
+ * Contained mode validates the registration context before publication and the requesting agent's primary providers at call time.
+ * @param ctx - plugin context supplying policy registration and boot-time providers.
+ * @param config - shell policy and optional contained-world exemption.
+ * @throws when contained mode lacks a verified matching world at activation.
+ */
 export function apply(ctx: Context, config: Config): void {
   validatePrefixRules(config.prefixRules ?? [])
   if (config.prefixRules?.length && !config.mappings.some(mapping => mapping.commandSyntax === 'posix')) {

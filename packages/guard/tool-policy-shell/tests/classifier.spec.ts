@@ -121,12 +121,13 @@ describe('shell classifier dispatch', () => {
       ctx.provide('subprocess', { executionWorld: world } as never)
       apply(ctx, Object.assign({}, makeConfig(), { containedExecutionWorld: true }))
       const { agent, events } = fakeAgent()
-      await prewarm(ctx, agent)
-      await expect(evaluate(ctx, agent)).resolves.toBeUndefined()
+      const requestingAgent = { ...agent, ctx } as Agent
+      await prewarm(ctx, requestingAgent)
+      await expect(evaluate(ctx, requestingAgent)).resolves.toBeUndefined()
       expect(adapter.seen).toEqual([])
       expect(events.filter(event => String(event.type).startsWith('tool-policy/'))).toEqual([])
       revoke()
-      await expect(evaluate(ctx, agent)).rejects.toThrow(/verified matching/)
+      await expect(evaluate(ctx, requestingAgent)).rejects.toThrow(/verified matching/)
     } finally {
       await ctx.fiber.dispose()
     }

@@ -37,7 +37,7 @@ async function fixture() {
   vi.spyOn(prototype, 'state').mockImplementation(async () => status)
   const freeze = vi.spyOn(prototype, 'freeze').mockImplementation(async () => { events.push('freeze'); status = 'Frozen' })
   vi.spyOn(prototype, 'unfreeze').mockImplementation(async () => { events.push('unfreeze'); status = 'Running' })
-  vi.spyOn(prototype, 'checkpoint').mockImplementation(async () => { events.push('checkpoint') })
+  const checkpoint = vi.spyOn(prototype, 'checkpoint').mockImplementation(async () => { events.push('checkpoint') })
   vi.spyOn(prototype, 'prune').mockResolvedValue()
   const stop = vi.spyOn(prototype, 'stop').mockImplementation(async () => { events.push('stop'); status = 'Stopped' })
   const base: WorkspaceExecutionRuntime = {
@@ -52,7 +52,7 @@ async function fixture() {
   const request = (overrides: Partial<DevelopmentVmOpenRequest> = {}): DevelopmentVmOpenRequest => ({
     id, directory: '/private/source', generation: 1, checkpointHash, retained: false, ...overrides,
   })
-  return { ctx, service: ctx.developmentVms, base, events, exists, create, restore, start, freeze, stop, request }
+  return { ctx, service: ctx.developmentVms, base, events, exists, create, restore, start, freeze, checkpoint, stop, request }
 }
 
 function processHandle(onInput?: () => void): LocalContainerProcessHandle {
@@ -83,7 +83,7 @@ describe('conversation VM lifecycle', () => {
     const guest = await test.service.open(test.base, test.request())
     expect(guest.runtime.executionWorld).toBe(test.base.executionWorld)
     expect(test.events).toEqual(['create', 'start', 'freeze', 'checkpoint', 'unfreeze'])
-    expect(IncusDevelopmentVms.prototype.checkpoint).toHaveBeenCalledWith(id, 1, checkpointHash)
+    expect(test.checkpoint).toHaveBeenCalledWith(id, 1, checkpointHash)
     await guest.dispose(); await guest.dispose()
     expect(test.stop).toHaveBeenCalledTimes(1)
   })

@@ -135,8 +135,8 @@ export async function createWebhookSession(
     signal,
     meta: { cwd: workspace.path, agentPreset: preset.id },
     agentOptions: resolved.agentOptions,
-    setup: async (agentCtx) => {
-      await ctx.agentPresets.mount(agentCtx, preset.id)
+    setup: async (agentCtx, agent) => {
+      await ctx.agentPresets.mount(agentCtx, preset.id, agent.session)
       installInitialModelSelection(agentCtx, resolved.modelSelection)
     },
   })

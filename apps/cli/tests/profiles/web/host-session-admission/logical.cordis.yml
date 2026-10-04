@@ -1,0 +1,8 @@
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    prefix: You preserve the logical host conversation.
+    complete: true
+    includeRuntimeContext: true
+- id: bash
+  name: '@deepseek-ai/dsh-tool-bash'

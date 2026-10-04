@@ -1,11 +1,15 @@
 /** Experimental-package publication and dependency constraints. */
 
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   checkDshFamilyVersion,
   checkExperimentalDependencyIsolation,
   checkExperimentalManifest,
+  checkWorkspaceManifest,
   expectedDshPackageFiles,
+  type PackageManifest,
   type WorkspaceManifest,
 } from './check-workspace-constraints.ts'
 
@@ -153,4 +157,31 @@ it('publishes declared portable runtime and bundled Client declarations', () => 
     name: '@deepseek-ai/dsh-client-probe',
     exports: { './client/portable': { types: './lib/types/client/portable.d.ts', default: './lib/portable.js' } },
   })).toEqual(['lib/index.js', 'lib/portable.js', 'lib/types/**/*.d.ts'])
+})
+
+const packagePayloads = [
+  ['packages/experimental/operation-clm', ['lib/index.js', 'lib/tokenizer.js', 'lib/local-http.js', 'lib/types/**/*.d.ts']],
+  ['packages/experimental/operation-fs', ['lib/index.js', 'lib/types/**/*.d.ts']],
+  ['packages/experimental/operation-kev', ['lib/index.js', 'lib/types/**/*.d.ts']],
+  ['packages/sandbox/local-container-runtime', [
+    'lib/index.js', 'lib/startup.js', 'Containerfile', 'lib/workspaces.js',
+    'lib/tool-request-repo-access.js', 'lib/vm.js', 'lib/shared-vm.js', 'lib/vm-previews.js',
+    'lib/types-*.js', 'lib/vm-engine-*.js', 'lib/vm-process-*.js',
+    'lib/git-authorization-*.js', 'lib/types/**/*.d.ts',
+  ]],
+] as const
+
+it.each(packagePayloads)('accepts the declared %s publication payload, but not broader files', (dir, expected) => {
+  const manifest = JSON.parse(readFileSync(resolve(import.meta.dirname, '..', dir, 'package.json'), 'utf8')) as PackageManifest
+  expect(manifest.files).toEqual(expected)
+  expect(expectedDshPackageFiles(manifest)).toEqual(expected)
+  expect(checkWorkspaceManifest({ dir, manifest })).toEqual([])
+
+  const label = `${dir}/package.json: ${manifest.name}: package.json files must be ${JSON.stringify(expected)}`
+  expect(checkWorkspaceManifest({ dir, manifest: { ...manifest, files: [...expected, 'lib/**/*.js'] } })).toContain(label)
+  const withoutRuntime = expected.filter(file => file !== expected[expected.length - 2])
+  expect(checkWorkspaceManifest({ dir, manifest: { ...manifest, files: withoutRuntime } })).toContain(label)
+  expect(checkWorkspaceManifest({ dir, manifest: { ...manifest, files: [...expected, 'src/**/*'] } })).toContain(
+    `${dir}/package.json: ${manifest.name}: package.json files must not publish "src/**/*"`,
+  )
 })

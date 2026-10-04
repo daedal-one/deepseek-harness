@@ -29,6 +29,7 @@ const snapshotAdapters = [
   'snapshots/acp/acp.snapshot.ts',
   'snapshots/sdk/sdk.snapshot.ts',
   'snapshots/session/headless.snapshot.ts',
+  'snapshots/web/host-session-admission.snapshot.ts',
 ] as const
 
 interface Scenario {

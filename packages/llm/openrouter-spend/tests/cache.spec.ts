@@ -50,10 +50,9 @@ describe('TtlCache', () => {
     const first = cache.read(load)
     const second = cache.read(load)
     release.resolve('shared')
-    await expect(Promise.all([first, second])).resolves.toEqual([
-      { value: 'shared', fetchedAt: expect.any(Number) },
-      { value: 'shared', fetchedAt: expect.any(Number) },
-    ])
+    const entries = await Promise.all([first, second])
+    expect(entries.map(entry => entry.value)).toEqual(['shared', 'shared'])
+    expect(entries.every(entry => typeof entry.fetchedAt === 'number')).toBe(true)
     expect(load).toHaveBeenCalledTimes(1)
   })
 

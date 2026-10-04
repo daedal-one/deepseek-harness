@@ -1912,7 +1912,7 @@ describe('Client Typert API', () => {
       await vi.waitFor(() => { expect(deliverySignal.aborted).toBe(true) })
       expect(observed).toHaveBeenCalledWith(expect.any(Function), expect.any(Function))
       response.reject(new Error('listener rejected after Host cancellation'))
-      await new Promise<void>(resolve => { setImmediate(resolve) })
+      await new Promise<void>((resolve) => { setImmediate(resolve) })
       expect(call).not.toHaveBeenCalled()
       expect(unhandled).not.toHaveBeenCalled()
     } finally {

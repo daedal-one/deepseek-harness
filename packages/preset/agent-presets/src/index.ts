@@ -1,7 +1,7 @@
 /**
  * Agent presets: each session composes its model-facing plugin set from one
- * preset `cordis.yml`, mounted ONCE per preset under a standing scope and
- * joined by every agent that names it.
+ * preset `cordis.yml`, mounted once per ordinary or admitted composition
+ * variant under a standing scope and joined by its validated agents.
  *
  * The standing mount is what makes a preset one composition rather than one
  * per session: its plugin instances, tool registrations, prompt sections, and
@@ -39,7 +39,16 @@ import type { SettingsScope } from '@deepseek-ai/dsh-settings'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import { discoverPresets, SHIPPED_PRESET_ROOT, USER_PRESET_DIR } from './discovery.ts'
 import { copyComposition, deleteComposition, presetExists, readComposition } from './authoring.ts'
-import { livePresetMounts, mountPreset, serviceForAgent, standingMountFor } from './mount.ts'
+import {
+  assertHostComposition, livePresetMounts, mountPreset, ordinaryCompositionIdentity, serviceForAgent, standingMountFor,
+  type JoinedPresetMount, type PresetCompositionIdentity,
+} from './mount.ts'
+import type { Session, SessionId } from '@deepseek-ai/dsh-session'
+import {
+  fingerprintSessionPrefix, logicalPresetForSource, requiresSessionAdmission as classifySessionAdmission,
+  resolveSessionAdmissions, sessionCompositionSource, validateSessionAdmission,
+  type SessionAdmission, type SessionCompositionSource,
+} from './admission.ts'
 import {
   fileComposition, mountedCompositionRows,
   type AgentPresetComposition,
@@ -95,12 +104,16 @@ export {
 } from './metadata.ts'
 export {
   executionContextForAgent, inactiveRows, leakedServices, livePresetMounts, mountPreset, serviceForAgent, standingMountFor,
-  type JoinedPresetMount, type PresetMount,
+  type JoinedPresetMount, type PresetMount, type PresetCompositionIdentity,
 } from './mount.ts'
 export { copyComposition, deleteComposition, readComposition, writableRoot } from './authoring.ts'
 export { agentPresetProjectionDefinition } from './session.ts'
 export { resolveAgentComposition, type ResolvedAgentComposition } from './composition.ts'
 export type { AgentPreset, Config, PresetRoot, PresetTrust } from './preset.ts'
+export {
+  fingerprintSessionPrefix, requiresSessionAdmission, sessionCompositionSource,
+  type SessionAdmission, type SessionAdmissionPrefix, type SessionAdmissionSha256, type SessionCompositionSource,
+} from './admission.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -127,6 +140,7 @@ export class AgentPresets extends TypertRemoteService {
     })).default([]),
     includeShippedRoot: z.boolean().default(true),
     includeUserRoot: z.boolean().default(true),
+    sessionAdmissions: z.array(z.any()).default([]),
   }) as z<Config>
 
   /**
@@ -177,10 +191,12 @@ export class AgentPresets extends TypertRemoteService {
    * off the untraced original (the `jobs-local` selfCtx precedent).
    */
   private readonly selfCtx: Context
+  private readonly sessionAdmissions: ReadonlyMap<SessionId, SessionAdmission>
 
   constructor(ctx: Context, public config: Config) {
     super(ctx, 'agentPresets')
     this.selfCtx = ctx
+    this.sessionAdmissions = resolveSessionAdmissions(config.sessionAdmissions === undefined ? [] : config.sessionAdmissions)
     const { baseUrl } = ctx
     if (baseUrl === undefined) {
       // Self-contained misconfiguration, so it fails at load: without a base
@@ -218,19 +234,14 @@ export class AgentPresets extends TypertRemoteService {
 
     ctx.sessionProjections.register(agentPresetProjectionDefinition)
 
-    // Advisory, not fatal: a synchronous `agent/created` listener that throws
-    // VETOES publication, and this service must not, because composing an agent
-    // outside the roster is legal — `recompose` binds exactly such a bare agent
-    // below, and the ACP, SDK-server, and headless entry points all create one.
-    // The invariant companion is the check that fails loud, at assembly. Why an
-    // unjoined agent matters at all has one home: the [Agent
-    // Note](../../../../.agents/notes/implemented/architecture/2026-08-10-host-plane-ownership-after-presets.md).
-    //
-    // Known false positive: a session created bare and bound later by
-    // `recompose` is warned about once, before its first bind. Shipped Web
-    // sessions mount in `setup`, and children join through `composeFrom`
-    // before publication.
+    ctx.on('agent/prepare', ({ agent }) => {
+      this.assertAgentAdmission(agent, 'preparation')
+    }, { prepend: true })
+
+    // Admission failures veto synchronous publication after asynchronous preparation
+    // and persistence. Ordinary uncomposed ACP, SDK, and headless Agents remain legal.
     ctx.on('agent/created', ({ agent }) => {
+      this.assertAgentAdmission(agent, 'publication')
       if (this.resolvedRoots.length === 0) return
       if (this.composedPreset(agent.ctx) !== undefined) return
       ctx.logger.warn(
@@ -332,7 +343,9 @@ export class AgentPresets extends TypertRemoteService {
       // deleted or corrupted still runs its standing composition. Newest
       // generation last: mount records keep insertion order, and a
       // superseded generation's record precedes its replacement's.
-      const mount = livePresetMounts(rootFiber).findLast(candidate => candidate.presetId === preset.id)
+      const mount = livePresetMounts(rootFiber).findLast(candidate =>
+        candidate.variant === 'ordinary' && candidate.logicalPresetId === preset.id,
+      )
       if (mount !== undefined) {
         found.push({ ...identity, rows: mountedCompositionRows(mount.tree, this.ctx.baseUrl) })
         continue
@@ -381,10 +394,11 @@ export class AgentPresets extends TypertRemoteService {
    * directory, unparsable YAML, rowless list — and spends no mount attempt
    * on a composition discovery already read as unusable.
    * @param id - the preset id, or `undefined` for {@link defaultId}.
+   * @param validateDefaults - whether this is a logical selection whose defaults apply.
    * @returns the resolved, mountable preset.
    * @throws when the preset is unknown or discovery reports it broken.
    */
-  private async resolveMountable(id?: string): Promise<AgentPreset> {
+  private async resolveMountable(id?: string, validateDefaults = true): Promise<AgentPreset> {
     const preset = await this.resolve(id)
     if (preset.broken !== undefined) {
       throw new RemoteError(
@@ -393,12 +407,85 @@ export class AgentPresets extends TypertRemoteService {
         { agentPreset: preset.id, reason: preset.broken },
       )
     }
-    await this.selfCtx.serial('agent-preset/validating', preset)
+    if (validateDefaults) await this.selfCtx.serial('agent-preset/validating', preset)
     return preset
   }
 
   /**
-   * Standing mounts by preset id, single-flight so two agents racing the
+   * Identify histories whose composition reads must fail if admission cannot be validated.
+   * @param sessionId - exact logical Session identity.
+   * @returns whether operator configuration declares a placement admission for this Session.
+   */
+  hasSessionAdmission(sessionId: SessionId): boolean {
+    return this.sessionAdmissions.has(sessionId)
+  }
+
+  /**
+   * Classify a retained Session observation whose ordinary fallback is unsafe.
+   * Classification does not grant admission; only an exact validated entry or a live owner join does.
+   * @param source - retained logical Session observation.
+   * @returns whether this history requires admission before cold composition.
+   */
+  requiresSessionAdmission(source: SessionCompositionSource): boolean {
+    return classifySessionAdmission(source, this.sessionAdmissions)
+  }
+
+  private assertAgentAdmission(agent: Agent, phase: 'preparation' | 'publication'): void {
+    const source = sessionCompositionSource(agent.session)
+    const admission = this.admissionFor(source)
+    const retained = this.hasAgentAdmission(agent.ctx)
+    const standing = standingMountFor(agent.ctx)
+    if (admission !== undefined && (standing?.variant !== 'admitted'
+      || standing.logicalPresetId !== admission.agentPreset
+      || standing.compositionPresetId !== admission.compositionPreset)
+      || retained && (standing?.variant !== 'admitted' || standing.logicalPresetId !== logicalPresetForSource(source))
+      || this.requiresSessionAdmission(source) && admission === undefined && !retained
+        && (phase === 'preparation' || standing === undefined)) {
+      throw new Error(`agent-presets: Session admission requires its admitted composition before ${phase}`)
+    }
+    if (standing?.variant === 'admitted') assertHostComposition(this.selfCtx, standing)
+  }
+
+  private admissionFor(source: SessionCompositionSource): SessionAdmission | undefined {
+    const admission = this.sessionAdmissions.get(source.header.id)
+    if (admission !== undefined) validateSessionAdmission(source, admission)
+    return admission
+  }
+
+  private async resolveComposition(id?: string, source?: SessionCompositionSource): Promise<{
+    logical: AgentPreset
+    actual: AgentPreset
+    identity: PresetCompositionIdentity
+  }> {
+    const admission = source === undefined ? undefined : this.admissionFor(source)
+    if (admission === undefined) {
+      if (source !== undefined && this.requiresSessionAdmission(source)) {
+        throw new Error(`agent-presets: Session "${source.header.id}" requires its own session admission`)
+      }
+      const preset = await this.resolveMountable(id)
+      return { logical: preset, actual: preset, identity: ordinaryCompositionIdentity(preset) }
+    }
+    if (id !== undefined && id !== admission.agentPreset) {
+      throw new Error(`agent-presets: session admission "${admission.sessionId}" mismatches requested logical preset`)
+    }
+    const logical = await this.resolve(admission.agentPreset)
+    await this.selfCtx.serial('agent-preset/validating', logical)
+    const actual = await this.resolveMountable(admission.compositionPreset, false)
+    if (actual.trust !== 'system') throw new Error('agent-presets: admitted composition must have system trust')
+    return {
+      logical,
+      actual,
+      identity: {
+        logicalPresetId: logical.id,
+        compositionPresetId: actual.id,
+        compositionPath: actual.path,
+        variant: 'admitted',
+      },
+    }
+  }
+
+  /**
+   * Standing mounts by logical identity, variant, target id, and path, single-flight so two agents racing the
    * first use of one preset share one composition. A settled failure is
    * removed so a later session retries a preset whose file has been fixed; a
    * settled success serves until the composition FILE visibly changes — each
@@ -418,6 +505,18 @@ export class AgentPresets extends TypertRemoteService {
    */
   private readonly bindings = new WeakMap<ScopeKey, ScopeParentBinding>()
   private readonly permissionDefaults = new WeakMap<ScopeKey, string>()
+  private readonly admittedAgents = new WeakSet<ScopeKey>()
+
+  /**
+   * Read admission ownership retained for an Agent's exact scope identity, including after mount disposal.
+   * This metadata does not validate a Session or prove that its execution composition is still live.
+   * @param agentCtx - the Agent's scoped context.
+   * @returns whether this roster successfully joined the scope to an admitted composition.
+   */
+  hasAgentAdmission(agentCtx: Context): boolean {
+    const key = scopeOf(agentCtx)
+    return key !== undefined && this.admittedAgents.has(key)
+  }
 
   /**
    * Read the access default captured when an agent joined its profile.
@@ -438,63 +537,157 @@ export class AgentPresets extends TypertRemoteService {
    * the agent creation back, so a broken preset never yields a half-composed
    * session.
    * @param agentCtx - the agent's scope context.
-   * @param id - the preset id, or `undefined` for {@link defaultId}.
-   * @returns the preset that was composed, for the caller to record.
-   * @throws when the preset is unknown or its composition is unusable.
+   * @param id - the logical preset id, or `undefined` for the admitted identity or ordinary default.
+   * @param session - prepared Session; omission always selects ordinary composition.
+   * @returns the logical preset, never the execution-only admission target.
+   * @throws when identity, admission, trust, composition, or execution placement is invalid.
    */
-  async mount(agentCtx: Context, id?: string): Promise<AgentPreset> {
+  async mount(agentCtx: Context, id?: string, session?: Session): Promise<AgentPreset> {
     const agentKey = scopeOf(agentCtx)
     if (agentKey === undefined) {
       throw new Error('agent-presets: refusing to compose an unscoped context; the scope key is what joins an agent to its preset')
     }
-    const preset = await this.resolveMountable(id)
-    const standing = await this.ensureStanding(preset)
+    const { logical: preset, actual, identity } = await this.resolveComposition(
+      id, session === undefined ? undefined : sessionCompositionSource(session),
+    )
+    const standing = await this.ensureStanding(actual, identity)
     // The one bind of this agent's ancestry. The binding is the only re-link
     // authority, held privately so nothing outside this roster can move a
     // composed agent to another preset; a later recompose layer re-links
     // through it under the caller-owned blank-session contract.
     this.bindings.set(agentKey, bindScopeParent(agentKey, standing.key))
+    if (standing.variant === 'admitted') this.admittedAgents.add(agentKey)
     if (preset.permissionPreset !== undefined) this.permissionDefaults.set(agentKey, preset.permissionPreset)
     return preset
   }
 
   /**
-   * Join one agent to the SAME standing composition another already runs on.
-   *
-   * This is how a child agent inherits its parent's capabilities. It is a bind,
-   * not a mount: the parent's generation is already composed, so the child gets
-   * that exact instance — the same plugin objects, the same tool registrations,
-   * the same prompt sections. Re-resolving the parent's preset by id instead
-   * would re-read the roster, and a composition file edited since the parent
-   * started would hand the child a DIFFERENT generation than the one its
-   * parent's history was produced under (and a preset deleted since would fail
-   * the child outright while its parent keeps running).
-   *
-   * Synchronous, and with no composition failure mode of its own — it reads no
-   * roster, mounts nothing, and touches no file — which is what lets a child
-   * creation window use it: the two in-process subagent drivers compose their
-   * children inside a synchronous `setup`. It still rejects a caller error, as
-   * the `@throws` below record.
-   *
-   * A parent that joined no preset — a rosterless deployment — yields no join
-   * and no error: there, the model-facing rows sit in the host composition and
-   * the child already sees them through the global layer.
-   * @param agentCtx - the joining agent's scope context.
-   * @param parentCtx - the scope context of the agent whose composition to join.
-   * @returns the preset id joined, or undefined when the parent joined none.
-   * @throws when `agentCtx` carries no scope, or has already joined a preset.
+   * Compose a new independent fork from one exact observed Session cut.
+   * A live source retains its standing generation; a cold source resolves its validated composition.
+   * Independent workspace admission still applies, and later cold admitted forks need their own manifest.
+   * @param agentCtx - unpublished fork's scope context.
+   * @param session - newly created seeded root whose header and inherited prefix match the source.
+   * @param source - immutable observed source retained by the fork lifecycle owner.
+   * @returns the fork's logical preset without recording a preset selection.
+   * @throws on identity, seed, source admission, standing-generation, or execution mismatch.
    */
-  composeFrom(agentCtx: Context, parentCtx: Context): string | undefined {
+  async composeFromSession(agentCtx: Context, session: Session, source: SessionCompositionSource): Promise<AgentPreset> {
+    const agentKey = scopeOf(agentCtx)
+    if (agentKey === undefined) throw new Error('agent-presets: refusing to compose an unscoped fork')
+    const fork = sessionCompositionSource(session)
+    const sourceAdmission = this.admissionFor(source)
+    const observedLogical = logicalPresetForSource(source)
+    const live = this.selfCtx.get('agents')?.get(source.header.id)
+    const capturedAgentKey = live === undefined ? undefined : scopeOf(live.ctx)
+    const inherited = live === undefined ? undefined : standingMountFor(live.ctx)
+    const capturedPermission = live === undefined ? undefined : this.permissionPresetFor(live.ctx)
+    if (live !== undefined && (inherited === undefined || observedLogical !== inherited.logicalPresetId
+      || (this.hasAgentAdmission(live.ctx) || this.requiresSessionAdmission(source)) && inherited.variant !== 'admitted'
+      || sourceAdmission !== undefined && (inherited.variant !== 'admitted'
+        || inherited.compositionPresetId !== sourceAdmission.compositionPreset)
+      || live.session.header.id !== source.header.id || live.session.header.cwd !== source.header.cwd
+      || logicalPresetForSource(sessionCompositionSource(live.session)) !== observedLogical
+      || inherited.variant === 'admitted' && (capturedAgentKey === undefined || !this.admittedAgents.has(capturedAgentKey)))) {
+      throw new Error('agent-presets: live fork source differs from the observed composition')
+    }
+    const resolved = inherited === undefined
+      ? await this.resolveComposition(fork.header.agentPreset, source)
+      : { logical: await this.resolve(inherited.logicalPresetId), actual: undefined, identity: inherited }
+    const { logical, actual, identity } = resolved
+    if (fork.header.id === source.header.id || fork.header.parentSession !== source.header.id
+      || fork.header.cwd !== source.header.cwd || !fork.header.isSeeded || fork.header.origin !== undefined
+      || fork.header.agentPreset !== logical.id || logicalPresetForSource(fork) !== logical.id) {
+      throw new Error('agent-presets: fork join mismatches source identity, cwd, seed, or logical preset')
+    }
+    const cut = fork.inheritedEventCount
+    if (fingerprintSessionPrefix(fork, cut).sha256 !== fingerprintSessionPrefix(source, cut).sha256) {
+      throw new Error('agent-presets: fork inherited prefix differs from the observed source')
+    }
+    const ownAdmission = this.admissionFor(fork)
+    if (ownAdmission !== undefined && (identity.variant !== 'admitted'
+      || ownAdmission.compositionPreset !== identity.compositionPresetId)) {
+      throw new Error('agent-presets: fork admission conflicts with its source composition')
+    }
+    let standing = inherited
+    if (standing === undefined) {
+      if (actual === undefined) throw new Error('agent-presets: cold fork has no resolved composition')
+      standing = await this.ensureStanding(actual, identity)
+    }
+    if (live !== undefined && (this.selfCtx.get('agents')?.get(source.header.id) !== live
+      || scopeOf(live.ctx) !== capturedAgentKey || standingMountFor(live.ctx) !== inherited
+      || live.session.header.id !== source.header.id || live.session.header.cwd !== source.header.cwd
+      || logicalPresetForSource(sessionCompositionSource(live.session)) !== observedLogical
+      || this.permissionPresetFor(live.ctx) !== capturedPermission)) {
+      throw new Error('agent-presets: live fork source lost its standing composition')
+    }
+    if (standing.variant === 'admitted') assertHostComposition(this.selfCtx, standing)
+    this.bindings.set(agentKey, bindScopeParent(agentKey, standing.key))
+    if (standing.variant === 'admitted') this.admittedAgents.add(agentKey)
+    const permissionPreset = live === undefined ? logical.permissionPreset : capturedPermission
+    if (permissionPreset !== undefined) this.permissionDefaults.set(agentKey, permissionPreset)
+    return logical
+  }
+
+  /**
+   * Validate a direct child's join without binding or resolving a new generation.
+   * A resumed child of an admitted parent needs its own admission for the same target.
+   * Every configured child admission is validated, including during fresh creation.
+   * @param parent - live parent whose exact standing generation the child will join.
+   * @param child - prepared child Session and its creation or reconstruction source.
+   * @returns the parent's standing mount, or undefined for an uncomposed parent.
+   * @throws on lineage, cwd, logical identity, admission, or execution-world mismatch.
+   */
+  validateParentJoin(parent: Agent, child: { session: Session; source: 'create' | 'resume' }): JoinedPresetMount | undefined {
+    const source = sessionCompositionSource(child.session)
+    const admission = this.admissionFor(source)
+    const standing = standingMountFor(parent.ctx)
+    if (standing === undefined) {
+      if (this.requiresSessionAdmission(source) || this.hasAgentAdmission(parent.ctx)) {
+        throw new Error('agent-presets: admitted child requires a matching live parent composition')
+      }
+      return undefined
+    }
+    if (source.header.parentSession !== parent.id || source.header.cwd !== parent.session.header.cwd
+      || source.header.agentPreset !== standing.logicalPresetId || logicalPresetForSource(source) !== standing.logicalPresetId
+      || standing.variant === 'admitted'
+        && logicalPresetForSource(sessionCompositionSource(parent.session)) !== standing.logicalPresetId) {
+      throw new Error('agent-presets: child join mismatches direct parent, cwd, or logical preset')
+    }
+    if (standing.variant === 'admitted' && child.source === 'resume' && admission === undefined) {
+      throw new Error('agent-presets: resumed child of an admitted parent requires its own session admission')
+    }
+    if (admission !== undefined && (standing.variant !== 'admitted'
+      || admission.compositionPreset !== standing.compositionPresetId)) {
+      throw new Error('agent-presets: child admission conflicts with the parent composition variant')
+    }
+    if (standing.variant !== 'admitted' && (this.hasAgentAdmission(parent.ctx) || this.requiresSessionAdmission(source))) {
+      throw new Error('agent-presets: host child requires its admitted parent composition')
+    }
+    if (standing.variant === 'admitted') assertHostComposition(this.selfCtx, standing)
+    return standing
+  }
+
+  /**
+   * Bind a child to its parent's exact standing generation and inherit permission defaults.
+   * This synchronous join never rereads files, mounts a new generation, or records a selection.
+   * @param agentCtx - unpublished child's scope context.
+   * @param parent - live parent whose composition the child inherits.
+   * @param child - prepared child Session and its creation or reconstruction source.
+   * @returns the logical preset ID joined, or undefined for an uncomposed parent.
+   * @throws when the child fails join validation, is unscoped, or is already bound.
+   */
+  composeFrom(agentCtx: Context, parent: Agent, child: { session: Session; source: 'create' | 'resume' }): string | undefined {
     const agentKey = scopeOf(agentCtx)
     if (agentKey === undefined) {
       throw new Error('agent-presets: refusing to compose an unscoped context; the scope key is what joins an agent to its preset')
     }
-    const standing = standingMountFor(parentCtx)
+    const standing = this.validateParentJoin(parent, child)
     if (standing === undefined) return undefined
     this.bindings.set(agentKey, bindScopeParent(agentKey, standing.key))
-    const permissionPreset = this.permissionPresetFor(parentCtx)
+    if (standing.variant === 'admitted') this.admittedAgents.add(agentKey)
+    const permissionPreset = this.permissionPresetFor(parent.ctx)
     if (permissionPreset !== undefined) this.permissionDefaults.set(agentKey, permissionPreset)
-    return standing.presetId
+    return standing.logicalPresetId
   }
 
   /**
@@ -507,7 +700,7 @@ export class AgentPresets extends TypertRemoteService {
    * @returns the preset id, or undefined when the agent joined none.
    */
   composedPreset(agentCtx: Context): string | undefined {
-    return standingMountFor(agentCtx)?.presetId
+    return standingMountFor(agentCtx)?.logicalPresetId
   }
 
   /**
@@ -583,7 +776,7 @@ export class AgentPresets extends TypertRemoteService {
     // A settled mount under this id can only be stale (its preset was deleted
     // from disk outside `remove`); the new preset must not inherit it. Every
     // session already joined keeps the generation it runs on regardless.
-    this.standing.delete(id)
+    this.standing.delete(standingCacheKey(ordinaryCompositionIdentity(await this.resolve(id))))
   }
 
   /**
@@ -609,10 +802,11 @@ export class AgentPresets extends TypertRemoteService {
    * @throws when the preset is unknown or ships with the deployment.
    */
   async remove(id: string): Promise<void> {
-    await deleteComposition(this.resolvedRoots, await this.resolve(id))
+    const preset = await this.resolve(id)
+    await deleteComposition(this.resolvedRoots, preset)
     // Sessions on the deleted preset keep their standing mount; only new
     // sessions see the roster without it.
-    this.standing.delete(id)
+    this.standing.delete(standingCacheKey(ordinaryCompositionIdentity(preset)))
     // Storing a default that does not exist YET is deliberate — the roster is a
     // live directory, so a name absent now may exist by the time a session asks
     // for it, and `resolve` reports it then. A default this call just deleted is
@@ -679,15 +873,17 @@ export class AgentPresets extends TypertRemoteService {
    * @param agentCtx - the agent's scope context.
    * @param id - the preset to compose the agent from instead.
    * @returns the preset now installed.
-   * @throws when the preset is unknown or its composition is unusable.
+   * @throws when the Agent inherited admission, the preset is unknown, or its composition is unusable.
    */
   async recompose(agentCtx: Context, id: string): Promise<AgentPreset> {
     const agentKey = scopeOf(agentCtx)
     if (agentKey === undefined) {
       throw new Error('agent-presets: refusing to recompose an unscoped context')
     }
+    this.assertRecomposable(agentKey)
     const preset = await this.resolveMountable(id)
     const standing = await this.ensureStanding(preset)
+    this.assertRecomposable(agentKey)
     const binding = this.bindings.get(agentKey)
     if (binding === undefined) {
       this.bindings.set(agentKey, bindScopeParent(agentKey, standing.key))
@@ -705,6 +901,10 @@ export class AgentPresets extends TypertRemoteService {
       this.ctx.logger.warn(`agent-presets: tools/change listener failed after recomposing an Agent: ${String(error)}`)
     }
     return preset
+  }
+
+  private assertRecomposable(key: ScopeKey): void {
+    if (this.admittedAgents.has(key)) throw new Error('agent-presets: an admitted composition cannot be recomposed')
   }
 
   /**
@@ -780,9 +980,25 @@ export class AgentPresets extends TypertRemoteService {
     return (await this.ensureStanding(preset)).key
   }
 
-  /** Resolve (or create, single-flight) the standing mount of one preset. */
-  private async ensureStanding(preset: AgentPreset): Promise<StandingMount> {
-    const pending = this.standing.get(preset.id)
+  /**
+   * Resolve a cold Session's composition without creating an Agent or appending events.
+   * Unlisted Sessions use their ordinary logical preset, never ancestor admission.
+   * @param source - restored current logical header, inherited count, and events.
+   * @returns the validated ordinary or admitted standing scope key.
+   * @throws when admission, discovery, trust, or actual execution placement is invalid.
+   */
+  async standingKeyForSession(source: SessionCompositionSource): Promise<ScopeKey> {
+    const { actual, identity } = await this.resolveComposition(logicalPresetForSource(source), source)
+    return (await this.ensureStanding(actual, identity)).key
+  }
+
+  /** Resolve (or create, single-flight) the standing mount of one composition variant. */
+  private async ensureStanding(
+    preset: AgentPreset,
+    identity: PresetCompositionIdentity = ordinaryCompositionIdentity(preset),
+  ): Promise<StandingMount> {
+    const cacheKey = standingCacheKey(identity)
+    const pending = this.standing.get(cacheKey)
     if (pending !== undefined) {
       const mounted = await pending
       // Files are the only composition editor (authoring is copy/delete), so
@@ -791,7 +1007,10 @@ export class AgentPresets extends TypertRemoteService {
       // serves the current generation — a mount must survive its file
       // disappearing, and failing the session over a stat would not.
       const current = await compositionStamp(preset.path)
-      if (current === undefined || sameStamp(mounted.stamp, current)) return mounted
+      if (mounted.fiber.uid !== null && (current === undefined || sameStamp(mounted.stamp, current))) {
+        if (identity.variant === 'admitted') assertHostComposition(this.selfCtx, mounted)
+        return mounted
+      }
       // TODO: reclaim the superseded generation once the last agent joined to
       // it is gone. The subtree is not inert — `dsh-skill-filesystem` watches its
       // roots — and the settings-page authoring flow turns "a composition
@@ -800,11 +1019,11 @@ export class AgentPresets extends TypertRemoteService {
       // decremented when the agent's scope key dies.
       // Guarded delete: a caller that raced this one may have already started
       // the next generation, and dropping THAT pointer would fork a third.
-      if (this.standing.get(preset.id) === pending) this.standing.delete(preset.id)
-      return this.ensureStanding(preset)
+      if (this.standing.get(cacheKey) === pending) this.standing.delete(cacheKey)
+      return this.ensureStanding(preset, identity)
     }
-    const created = (async (): Promise<StandingMount> => {
-      const key: ScopeKey = { agentPreset: preset.id }
+    const created: Promise<StandingMount> = Promise.resolve().then(async () => {
+      const key: ScopeKey = { agentPreset: identity.logicalPresetId }
       const scope = createScope(this.selfCtx, key)
       try {
         // Stamped before the file is read: an edit racing the mount makes the
@@ -819,15 +1038,15 @@ export class AgentPresets extends TypertRemoteService {
             { agentPreset: preset.id, reason },
           )
         }
-        await mountPreset(scope.ctx, preset)
-        return { key, scope, stamp }
+        const mount = await mountPreset(scope.ctx, preset, identity)
+        return { ...mount, scope, stamp }
       } catch (error) {
-        this.standing.delete(preset.id)
+        if (this.standing.get(cacheKey) === created) this.standing.delete(cacheKey)
         await scope.dispose()
         throw error
       }
-    })()
-    this.standing.set(preset.id, created)
+    })
+    this.standing.set(cacheKey, created)
     return created
   }
 }
@@ -857,10 +1076,12 @@ function sameStamp(a: CompositionStamp, b: CompositionStamp): boolean {
   return a.mtimeMs === b.mtimeMs && a.size === b.size
 }
 
-/** One preset's standing composition. */
-interface StandingMount {
-  /** Scope key agents are parented to; also the mount's registration scope. */
-  readonly key: ScopeKey
+function standingCacheKey(identity: PresetCompositionIdentity): string {
+  return JSON.stringify([identity.logicalPresetId, identity.variant, identity.compositionPresetId, identity.compositionPath])
+}
+
+/** One audited generation of a logical preset's ordinary or admitted composition. */
+export interface StandingMount extends JoinedPresetMount {
   /** Disposal boundary; held for whole-tree teardown, never per-session. */
   readonly scope: Scope
   /** Stamp of the composition file this generation was mounted from. */

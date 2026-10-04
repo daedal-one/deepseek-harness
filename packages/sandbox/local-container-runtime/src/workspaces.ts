@@ -289,7 +289,7 @@ export class ConversationWorkspaces extends Service {
         },
       }), 'workspace changes command')
     })
-    ctx.on('agent/prepare', async ({ agent, origin: { parentAgent }, signal }) => {
+    ctx.on('agent/prepare', ({ agent, origin: { parentAgent }, signal }) => {
       signal.throwIfAborted()
       if (this.shutdown !== undefined) throw new Error('workspace supervisor is shutting down')
       if (this.admitHostAgent(agent, parentAgent)) return
@@ -463,9 +463,9 @@ export class ConversationWorkspaces extends Service {
     const release = await this.acquireUse(agent, cancellation)
     try {
       const socket = await this.ctx.agents.withInitiator(agent, async () => {
-        const connect = this.capture().connectPreview
-        if (connect === undefined) throw new Error('this conversation has no development VM')
-        return await connect(port)
+        const runtime = this.capture()
+        if (runtime.connectPreview === undefined) throw new Error('this conversation has no development VM')
+        return await runtime.connectPreview(port)
       })
       const releaseOnClose = (): void => { void release().catch((error: unknown) => { this.ctx.logger.error(error) }) }
       if (socket.closed) releaseOnClose()
@@ -589,7 +589,7 @@ export class ConversationWorkspaces extends Service {
           const workspace = this.forAgent(owner)
           return workspace
         } catch (error) {
-          pending.releaseSlot?.()
+          pending.releaseSlot()
           delete pending.releaseSlot
           throw error
         }
@@ -976,7 +976,7 @@ export class ConversationWorkspaces extends Service {
           generation: record.checkpoint, checkpointHash: record.checkpointHash, retained,
           ...record.developmentVm === undefined ? {} : { reference: record.developmentVm },
           ...authorize === undefined ? {} : { authorize } })
-        owned = { runtime: guest.runtime, dispose: async () => { await disposePair(guest.dispose, base.dispose.bind(base)) } }
+        owned = { runtime: guest.runtime, dispose: async () => { await disposePair(() => guest.dispose(), () => base.dispose()) } }
         if (record.developmentVm === undefined) {
           const reference = vms.identity
           await this.publish(join(directory, 'state.json'), { ...record, developmentVm: reference })

@@ -598,7 +598,7 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
     expect(ports).toEqual([8080])
     expect(JSON.parse(await readFile(join(f.storageFor(f.handle.agent), 'owner.json'), 'utf8'))).toMatchObject({ clean: false })
     socket.destroy()
-    await expect.poll(async () => JSON.parse(await readFile(join(f.storageFor(f.handle.agent), 'owner.json'), 'utf8'))).toMatchObject({ clean: true })
+    await expect.poll(async () => JSON.parse(await readFile(join(f.storageFor(f.handle.agent), 'owner.json'), 'utf8')) as unknown).toMatchObject({ clean: true })
   })
 
   it('releases capacity after failed idle cleanup while retaining uncheckpointed files', async () => {
@@ -1166,7 +1166,7 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
     const ready = f.handle.agent.session.snapshotEvents().findLast(event => event.type === 'workspace/state')
     if (ready?.type !== 'workspace/state') throw new Error('missing prepared workspace')
     const directory = join(f.recovery, ready.data.workspaceId)
-    const runtime = f.ctx.agents.withInitiator(f.handle.agent, () => f.ctx.conversationWorkspaces.capture()) as WorkspaceExecutionRuntime
+    const runtime = f.ctx.agents.withInitiator(f.handle.agent, () => f.ctx.conversationWorkspaces.capture())
     const events: string[] = []
     runtime.checkpoint = async (generation) => { events.push(`guest:${generation}`) }
     runtime.discardCheckpoint = async (generation) => { events.push(`guest-discard:${generation}`) }
@@ -1180,8 +1180,8 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
       const artifact = /checkpoint-(\d+)\.json$/u.exec(path)
       if (artifact !== null) events.push(`artifact:${artifact[1]}`)
       await publish(path, value, maxBytes)
-      const generation = path.endsWith('/state.json') && typeof (value as { checkpoint?: unknown }).checkpoint === 'number'
-        ? Number((value as { checkpoint: number }).checkpoint) : undefined
+      const checkpoint = (value as { checkpoint?: unknown }).checkpoint
+      const generation = path.endsWith('/state.json') && typeof checkpoint === 'number' ? checkpoint : undefined
       if (generation !== undefined && generation > 1 && !promoted.has(generation)) {
         promoted.add(generation); events.push(`promote:${generation}`)
       }
@@ -1201,7 +1201,7 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
   it.each(['artifact', 'guest', 'promotion', 'prune'].flatMap(phase => ['before', 'after'].map(edge => ({ phase, edge }))))(
     'recovers a failure $edge paired checkpoint $phase without conflicting retained identities', async ({ phase, edge }) => {
       const f = await fixture({ developmentVmProfile: 'vm-a' })
-      const runtime = f.ctx.agents.withInitiator(f.handle.agent, () => f.ctx.conversationWorkspaces.capture()) as WorkspaceExecutionRuntime
+      const runtime = f.ctx.agents.withInitiator(f.handle.agent, () => f.ctx.conversationWorkspaces.capture())
       const retained = new Map<number, string>()
       const pruned = new Set<number>()
       let interrupted = false
@@ -1226,8 +1226,8 @@ describe.skipIf(process.platform === 'win32')('conversation workspace transactio
       }
       const publish = broker.publishWorkspaceJson
       vi.spyOn(broker, 'publishWorkspaceJson').mockImplementation(async (path, value, maxBytes) => {
-        const checkpoint = typeof (value as { checkpoint?: unknown }).checkpoint === 'number'
-          ? Number((value as { checkpoint: number }).checkpoint) : undefined
+        const valueCheckpoint = (value as { checkpoint?: unknown }).checkpoint
+        const checkpoint = typeof valueCheckpoint === 'number' ? valueCheckpoint : undefined
         const matches = !interrupted && (phase === 'artifact'
           ? path.endsWith('/checkpoint-2.json')
           : phase === 'promotion' && path.endsWith('/state.json') && checkpoint === 2)

@@ -1,5 +1,7 @@
 /** Agent-preset vocabulary shared by discovery, mounting, and consumers. */
 
+import type { SessionAdmission } from './admission-types.ts'
+
 /**
  * Where a preset's composition came from. A `system` preset ships with the
  * deployment; a `user` preset was authored locally, by a person or by an
@@ -52,6 +54,8 @@ export interface PresetRoot {
 
 /** Plugin config: which preset is the default, and where presets live. */
 export interface Config {
+  /** Finite operator-owned Session admissions; omission resolves to an empty list. */
+  sessionAdmissions?: readonly SessionAdmission[]
   /** Preset id mounted when a caller names none. Missing at mount time fails loud. */
   default: string
   /** Scanned roots in precedence order; an earlier root wins a duplicate id. */

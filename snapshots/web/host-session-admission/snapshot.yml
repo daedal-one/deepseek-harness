@@ -1,0 +1,9 @@
+version: 1
+scenario: host-session-admission
+profile: web
+composition: host-session-admission
+recording: authored
+platform: posix
+header:
+  class: host-session-admission
+  pin: true

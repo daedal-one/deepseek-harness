@@ -27,8 +27,9 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "lib/*.js",
-    "lib/types/**/*.js",
+    "lib/index.js",
+    "lib/tokenizer.js",
+    "lib/local-http.js",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",

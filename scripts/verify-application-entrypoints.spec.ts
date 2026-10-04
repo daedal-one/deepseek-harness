@@ -38,6 +38,17 @@ describe('application entrypoints', () => {
     ])
   })
 
+  it('classifies only the tool-bash loader subprocess driver, not other executable fixtures', () => {
+    const root = fixture()
+    write(root, 'packages/shell/tool-bash/tests/fixtures/loader/driver.ts', '#!/usr/bin/env node\n')
+    expect(applicationEntrypointViolations(root)).toEqual([])
+
+    write(root, 'packages/shell/tool-bash/tests/fixtures/loader/other.ts', '#!/usr/bin/env node\n')
+    expect(applicationEntrypointViolations(root)).toEqual([
+      'packages/shell/tool-bash/tests/fixtures/loader/other.ts: executable source has no application/build/test classification',
+    ])
+  })
+
   it('rejects an unclassified executable source', () => {
     const root = fixture()
     write(root, 'packages/example/app/src/bin.ts', '#!/usr/bin/env node\n')

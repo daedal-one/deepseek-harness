@@ -585,7 +585,10 @@ export class ContinuableActivationRegistry {
         appendDelegatedPolicyOverrides(child.session, create.delegatedPolicies)
       }
       const principalSetup = inputs.principalSetup?.(childCtx, child)
-      applyChildComposition(childCtx, parent, inputs.composition)
+      applyChildComposition(childCtx, parent, inputs.composition, {
+        session: child.session,
+        source: create === undefined ? 'resume' : 'create',
+      })
       return principalSetup
     }
     const observer = this.observeActivation(provider, childId, parent)

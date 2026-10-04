@@ -18,9 +18,14 @@ import { pathToFileURL } from 'node:url'
 import { Context, type Fiber } from '@deepseek-ai/cordis'
 import { Include } from '@deepseek-ai/cordis-plugin-include'
 import type { EntryTree } from '@deepseek-ai/cordis-plugin-loader'
+import type {} from '@deepseek-ai/dsh-fs'
+import type {} from '@deepseek-ai/dsh-shell'
+import type {} from '@deepseek-ai/dsh-subprocess'
 import { scopeOf, scopeParentOf, type ScopeKey } from '@deepseek-ai/dsh-scope'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import type { AgentPreset } from './preset.ts'
+import type { Session } from '@deepseek-ai/dsh-session'
+import { sessionCompositionSource } from './admission.ts'
 import { classifyRowSpecifier } from './specifier.ts'
 
 /** What one mounted subtree publishes about itself for the audit to read. */
@@ -123,9 +128,26 @@ class PresetTree extends Include {
   }
 }
 
-/** One preset composition currently installed under some agent. */
-export interface PresetMount {
-  /** The preset the subtree was composed from. */
+/** Logical identity and independently selected execution composition of one standing variant. */
+export interface PresetCompositionIdentity {
+  readonly logicalPresetId: string
+  readonly compositionPresetId: string
+  readonly compositionPath: string
+  readonly variant: 'ordinary' | 'admitted'
+}
+
+/**
+ * Describe an ordinary composition whose logical and mounted identities coincide.
+ * @param preset - resolved ordinary preset.
+ * @returns its complete standing-cache identity.
+ */
+export function ordinaryCompositionIdentity(preset: AgentPreset): PresetCompositionIdentity {
+  return { logicalPresetId: preset.id, compositionPresetId: preset.id, compositionPath: preset.path, variant: 'ordinary' }
+}
+
+/** One preset composition currently installed under a standing scope. */
+export interface PresetMount extends PresetCompositionIdentity {
+  /** The actual preset the subtree was composed from. */
   readonly presetId: string
   /** The mounted subtree's fiber. */
   readonly fiber: Fiber
@@ -294,19 +316,72 @@ export function serviceForAgent<K extends string & keyof Context>(
 
 /**
  * Resolve the context supplying an agent's command executor and its file/process dependencies.
- * Auxiliary providers in other isolated groups do not select the execution environment.
+ * Active shell-consuming rows determine the executor; auxiliary providers do not.
  * @param ctx - inherited execution context when the preset supplies no shell.
- * @param agent - agent joined to a standing preset.
- * @returns the preset shell provider's context, or the inherited context.
+ * @param agent - scoped agent; a supplied Session also classifies admission before a join.
+ * @returns the consuming rows' shell provider context, or the inherited context for ordinary agents.
+ * @throws when retained admission lacks a live admitted composition, an admission-required source has no
+ * standing mount, admitted execution is not host-backed, consumers have unresolved or conflicting shells,
+ * or unused providers are ambiguous.
  */
-export function executionContextForAgent(ctx: Context, agent: { ctx: Context }): Context {
+export function executionContextForAgent(ctx: Context, agent: { ctx: Context; session?: Session }): Context {
   const mount = standingMountFor(agent.ctx)
-  if (mount === undefined) return ctx
+  const presets: Context['agentPresets'] | undefined = ctx.get('agentPresets')
+  if (presets !== undefined && (presets.hasAgentAdmission(agent.ctx) && mount?.variant !== 'admitted'
+    || mount === undefined && agent.session !== undefined
+      && presets.requiresSessionAdmission(sessionCompositionSource(agent.session)))) {
+    throw new Error('agent-presets: execution requires a live admitted composition')
+  }
+  if (mount?.variant === 'admitted') assertHostComposition(ctx, mount)
+  return mount === undefined ? ctx : executionContextForMount(ctx, mount)?.ctx ?? ctx
+}
+
+function executionContextForMount(ctx: Context, mount: Pick<PresetMount, 'fiber' | 'tree'>): Fiber | undefined {
+  let provider: Fiber | undefined
+  let hasConsumer = false
+  for (const entry of mount.tree.entries()) {
+    const fiber = entry.fiber
+    if (entry.disabled || fiber?.store === undefined || !('shell' in fiber.inject)) continue
+    hasConsumer = true
+    const shell = fiber.store.shell
+    if (shell === undefined || shell.name !== 'shell') {
+      throw new Error(`agent-presets: shell consumer "${entry.id}" has no resolved shell provider`)
+    }
+    if (provider !== undefined && provider !== shell.fiber) {
+      throw new Error('agent-presets: shell consumers resolve different shell providers')
+    }
+    provider = shell.fiber
+  }
+  if (hasConsumer) return provider
   for (const key of Object.getOwnPropertySymbols(ctx.reflect.store)) {
     const impl = ctx.reflect.store[key]
-    if (impl?.name === 'shell' && withinFiber(impl.fiber, mount.fiber)) return impl.fiber.ctx
+    if (impl?.name !== 'shell' || !withinFiber(impl.fiber, mount.fiber)) continue
+    if (provider !== undefined && provider !== impl.fiber) {
+      throw new Error('agent-presets: composition has ambiguous shell providers without a shell consumer')
+    }
+    provider = impl.fiber
   }
-  return ctx
+  return provider
+}
+
+/**
+ * Require the shell bound to active consumers to belong to the admitted subtree and use host file/process providers.
+ * @param ctx - context carrying this runtime's service store.
+ * @param mount - admitted composition subtree and its active Loader entries at preparation, publication, or execution.
+ * @throws when the executor is missing, external, ambiguous, or its effective world is non-host.
+ */
+export function assertHostComposition(ctx: Context, mount: Pick<PresetMount, 'fiber' | 'tree'>): void {
+  const provider = executionContextForMount(ctx, mount)
+  const host = Symbol.for('@deepseek-ai/dsh/host-execution-world')
+  if (provider === undefined || !withinFiber(provider, mount.fiber)
+    || provider.ctx.get('fs')?.executionWorld !== host
+    || provider.ctx.get('subprocess')?.executionWorld !== host) {
+    throw new Error('agent-presets: admitted composition requires a primary shell with host fs and subprocess providers')
+  }
+  const shellWorld = provider.ctx.get('shell')?.executionWorld
+  if (shellWorld !== undefined && shellWorld !== host) {
+    throw new Error('agent-presets: admitted composition shell execution world is not host')
+  }
 }
 
 /**
@@ -388,11 +463,16 @@ function mountDetail(error: unknown): string {
  * The subtree is owned by `agentCtx`'s fiber, so it unwinds with the agent and
  * the caller receives no disposer. A rejection leaves nothing mounted.
  * @param agentCtx - the agent's scope context, from the agent factory's `setup`.
- * @param preset - the resolved preset to compose the agent from.
- * @throws when `agentCtx` carries no scope, a row is unusable, or a row
- * published a service into the root realm.
+ * @param preset - the actual resolved preset to mount.
+ * @param identity - logical identity and execution variant; omission selects ordinary composition.
+ * @returns the audited standing mount, after validating admitted execution placement.
+ * @throws when scope, row health, service isolation, or admitted host placement is invalid.
  */
-export async function mountPreset(agentCtx: Context, preset: AgentPreset): Promise<void> {
+export async function mountPreset(
+  agentCtx: Context,
+  preset: AgentPreset,
+  identity: PresetCompositionIdentity = ordinaryCompositionIdentity(preset),
+): Promise<JoinedPresetMount> {
   const scope = scopeOf(agentCtx)
   if (scope === undefined) {
     throw new Error(
@@ -428,7 +508,10 @@ export async function mountPreset(agentCtx: Context, preset: AgentPreset): Promi
         + 'a preset service must sit behind an `isolate` realm or move to the host composition',
       )
     }
-    mounts.add({ presetId: preset.id, fiber, tree, key: scopeOf(agentCtx) })
+    if (identity.variant === 'admitted') assertHostComposition(agentCtx, { fiber, tree })
+    const mount = Object.freeze({ ...identity, presetId: preset.id, fiber, tree, key: scope })
+    mounts.add(mount)
+    return mount
   } catch (error) {
     try {
       await handle.dispose()

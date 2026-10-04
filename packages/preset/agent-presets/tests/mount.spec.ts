@@ -63,6 +63,7 @@ async function harness(roster: Config = { default: 'standard', roots: ROOTS, inc
 async function agentOn(ctx: Context, id: string, presetId?: string): Promise<Agent> {
   const handle = await ctx.agents.create({
     sessionId: SessionId(id),
+    meta: { agentPreset: presetId ?? ctx.agentPresets.defaultId },
     setup: async (agentCtx: Context) => void await ctx.agentPresets.mount(agentCtx, presetId),
   })
   return handle.agent
@@ -192,9 +193,16 @@ describe('composing an agent from a preset', () => {
 describe('composing a child agent from its parent', () => {
   /** Create one agent joined to `parent`'s composition, as a child creation window does. */
   async function childOf(ctx: Context, id: string, parent: Agent): Promise<Agent> {
+    const cwd = parent.session.header.cwd
+    const agentPreset = ctx.agentPresets.composedPreset(parent.ctx)
     const handle = await ctx.agents.create({
       sessionId: SessionId(id),
-      setup: (childCtx: Context) => void ctx.agentPresets.composeFrom(childCtx, parent.ctx),
+      meta: {
+        parentSession: parent.id,
+        ...cwd === undefined ? {} : { cwd },
+        ...agentPreset === undefined ? {} : { agentPreset },
+      },
+      setup: (childCtx, child) => void ctx.agentPresets.composeFrom(childCtx, parent, { session: child.session, source: 'create' }),
     })
     return handle.agent
   }
@@ -223,6 +231,7 @@ describe('composing a child agent from its parent', () => {
   it('keeps the child composed after its parent is disposed', async () => {
     const parentHandle = await ctx.agents.create({
       sessionId: SessionId('sess-dying-parent'),
+      meta: { agentPreset: 'standard' },
       setup: async (agentCtx: Context) => void await ctx.agentPresets.mount(agentCtx, 'standard'),
     })
     const child = await childOf(ctx, 'sess-orphan', parentHandle.agent)
@@ -251,14 +260,14 @@ describe('composing a child agent from its parent', () => {
     const child = await childOf(ctx, 'sess-bare-child', bare)
 
     expect(ctx.agentPresets.composedPreset(bare.ctx)).toBeUndefined()
-    expect(ctx.agentPresets.composeFrom(child.ctx, bare.ctx)).toBeUndefined()
+    expect(ctx.agentPresets.composeFrom(child.ctx, bare, { session: child.session, source: 'create' })).toBeUndefined()
     expect(toolNames(ctx, child)).toEqual([])
   })
 
   it('refuses to compose an unscoped context', async () => {
     const parent = await agentOn(ctx, 'sess-unscoped-parent', 'standard')
 
-    expect(() => ctx.agentPresets.composeFrom(ctx, parent.ctx)).toThrow(/unscoped context/)
+    expect(() => ctx.agentPresets.composeFrom(ctx, parent, { session: parent.session, source: 'create' })).toThrow(/unscoped context/)
   })
 })
 
@@ -763,7 +772,8 @@ describe('editing a composition file', () => {
       }>>
       ensureStanding(current: typeof preset): Promise<unknown>
     }
-    const stalePromise = service.standing.get(preset.id)!
+    const cacheKey = JSON.stringify([preset.id, 'ordinary', preset.id, preset.path])
+    const stalePromise = service.standing.get(cacheKey)!
     const stale = await stalePromise
     await writeFile(path, rowFor('afterwards'))
     const { mtimeMs, size } = await stat(path)
@@ -773,10 +783,10 @@ describe('editing a composition file', () => {
     // `await pending` yields before the guarded delete, letting the winning
     // refresher replace the pointer deterministically instead of by timing.
     const refresh = service.ensureStanding(preset)
-    service.standing.set(preset.id, newerPromise)
+    service.standing.set(cacheKey, newerPromise)
 
     expect(await refresh).toBe(newer)
-    expect(service.standing.get(preset.id)).toBe(newerPromise)
+    expect(service.standing.get(cacheKey)).toBe(newerPromise)
   })
 
   it('hands a host reader the standing key without starting an agent', async () => {

@@ -586,6 +586,29 @@ async compositionInventory(): Promise<AgentPresetComposition[]>
 async resolve(id?: string): Promise<AgentPreset>
 
 /**
+ * Identify histories whose composition reads must fail if admission cannot be validated.
+ * @param sessionId - exact logical Session identity.
+ * @returns whether operator configuration declares a placement admission for this Session.
+ */
+hasSessionAdmission(sessionId: SessionId): boolean
+
+/**
+ * Classify a retained Session observation whose ordinary fallback is unsafe.
+ * Classification does not grant admission; only an exact validated entry or a live owner join does.
+ * @param source - retained logical Session observation.
+ * @returns whether this history requires admission before cold composition.
+ */
+requiresSessionAdmission(source: SessionCompositionSource): boolean
+
+/**
+ * Read admission ownership retained for an Agent's exact scope identity, including after mount disposal.
+ * This metadata does not validate a Session or prove that its execution composition is still live.
+ * @param agentCtx - the Agent's scoped context.
+ * @returns whether this roster successfully joined the scope to an admitted composition.
+ */
+hasAgentAdmission(agentCtx: Context): boolean
+
+/**
  * Read the access default captured when an agent joined its profile.
  * @param agentCtx - scoped context of the agent.
  * @returns the profile's default, or undefined for server inheritance.
@@ -601,39 +624,46 @@ permissionPresetFor(agentCtx: Context): string | undefined
  * the agent creation back, so a broken preset never yields a half-composed
  * session.
  * @param agentCtx - the agent's scope context.
- * @param id - the preset id, or `undefined` for {@link defaultId}.
- * @returns the preset that was composed, for the caller to record.
- * @throws when the preset is unknown or its composition is unusable.
+ * @param id - the logical preset id, or `undefined` for the admitted identity or ordinary default.
+ * @param session - prepared Session; omission always selects ordinary composition.
+ * @returns the logical preset, never the execution-only admission target.
+ * @throws when identity, admission, trust, composition, or execution placement is invalid.
  */
-async mount(agentCtx: Context, id?: string): Promise<AgentPreset>
+async mount(agentCtx: Context, id?: string, session?: Session): Promise<AgentPreset>
 
 /**
- * Join one agent to the SAME standing composition another already runs on.
- *
- * This is how a child agent inherits its parent's capabilities. It is a bind,
- * not a mount: the parent's generation is already composed, so the child gets
- * that exact instance — the same plugin objects, the same tool registrations,
- * the same prompt sections. Re-resolving the parent's preset by id instead
- * would re-read the roster, and a composition file edited since the parent
- * started would hand the child a DIFFERENT generation than the one its
- * parent's history was produced under (and a preset deleted since would fail
- * the child outright while its parent keeps running).
- *
- * Synchronous, and with no composition failure mode of its own — it reads no
- * roster, mounts nothing, and touches no file — which is what lets a child
- * creation window use it: the two in-process subagent drivers compose their
- * children inside a synchronous `setup`. It still rejects a caller error, as
- * the `@throws` below record.
- *
- * A parent that joined no preset — a rosterless deployment — yields no join
- * and no error: there, the model-facing rows sit in the host composition and
- * the child already sees them through the global layer.
- * @param agentCtx - the joining agent's scope context.
- * @param parentCtx - the scope context of the agent whose composition to join.
- * @returns the preset id joined, or undefined when the parent joined none.
- * @throws when `agentCtx` carries no scope, or has already joined a preset.
+ * Compose a new independent fork from one exact observed Session cut.
+ * A live source retains its standing generation; a cold source resolves its validated composition.
+ * Independent workspace admission still applies, and later cold admitted forks need their own manifest.
+ * @param agentCtx - unpublished fork's scope context.
+ * @param session - newly created seeded root whose header and inherited prefix match the source.
+ * @param source - immutable observed source retained by the fork lifecycle owner.
+ * @returns the fork's logical preset without recording a preset selection.
+ * @throws on identity, seed, source admission, standing-generation, or execution mismatch.
  */
-composeFrom(agentCtx: Context, parentCtx: Context): string | undefined
+async composeFromSession(agentCtx: Context, session: Session, source: SessionCompositionSource): Promise<AgentPreset>
+
+/**
+ * Validate a direct child's join without binding or resolving a new generation.
+ * A resumed child of an admitted parent needs its own admission for the same target.
+ * Every configured child admission is validated, including during fresh creation.
+ * @param parent - live parent whose exact standing generation the child will join.
+ * @param child - prepared child Session and its creation or reconstruction source.
+ * @returns the parent's standing mount, or undefined for an uncomposed parent.
+ * @throws on lineage, cwd, logical identity, admission, or execution-world mismatch.
+ */
+validateParentJoin(parent: Agent, child: { session: Session; source: 'create' | 'resume' }): JoinedPresetMount | undefined
+
+/**
+ * Bind a child to its parent's exact standing generation and inherit permission defaults.
+ * This synchronous join never rereads files, mounts a new generation, or records a selection.
+ * @param agentCtx - unpublished child's scope context.
+ * @param parent - live parent whose composition the child inherits.
+ * @param child - prepared child Session and its creation or reconstruction source.
+ * @returns the logical preset ID joined, or undefined for an uncomposed parent.
+ * @throws when the child fails join validation, is unscoped, or is already bound.
+ */
+composeFrom(agentCtx: Context, parent: Agent, child: { session: Session; source: 'create' | 'resume' }): string | undefined
 
 /**
  * The preset one live agent runs on.
@@ -746,7 +776,7 @@ serviceFor<K extends string & keyof Context>(agent: { ctx: Context }, name: K): 
  * @param agentCtx - the agent's scope context.
  * @param id - the preset to compose the agent from instead.
  * @returns the preset now installed.
- * @throws when the preset is unknown or its composition is unusable.
+ * @throws when the Agent inherited admission, the preset is unknown, or its composition is unusable.
  */
 async recompose(agentCtx: Context, id: string): Promise<AgentPreset>
 
@@ -772,9 +802,18 @@ async recompose(agentCtx: Context, id: string): Promise<AgentPreset>
  * @throws when the preset is unknown or its composition is unusable.
  */
 async standingKeyFor(id?: string): Promise<ScopeKey>
+
+/**
+ * Resolve a cold Session's composition without creating an Agent or appending events.
+ * Unlisted Sessions use their ordinary logical preset, never ancestor admission.
+ * @param source - restored current logical header, inherited count, and events.
+ * @returns the validated ordinary or admitted standing scope key.
+ * @throws when admission, discovery, trust, or actual execution placement is invalid.
+ */
+async standingKeyForSession(source: SessionCompositionSource): Promise<ScopeKey>
 ```
 
-Types: [ScopeKey](scope.md)
+Types: [ScopeKey](scope.md) · [Session](session.md)
 
 Source: [`packages/preset/agent-presets/src/index.ts`](../../packages/preset/agent-presets/src/index.ts)
 

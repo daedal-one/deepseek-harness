@@ -125,7 +125,7 @@ export async function startInProcessRun(
     applyChildComposition(childCtx, parent, {
       persona: request.persona,
       toolFilter: request.toolFilter,
-    })
+    }, { session: child.session, source: 'create' })
     if (request.outputSchema !== undefined) {
       structured = attachStructuredRuntime(childCtx, request.outputSchema)
     }

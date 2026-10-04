@@ -152,7 +152,8 @@ declare module '@deepseek-ai/cordis' {
 
 const contributions = [
   agentModelsRemote, agentPresetsRemote, commandsRemote, settingsControllerRemote, goalsRemote, llmRemote, dynamicRemote,
-  pluginInventoryRemote, openrouterSpendRemote, sessionInfoRemote, messageFeedbackRemote, sessionFeedbackRemote, fileUploadsRemote, sessionReferencesRemote,
+  pluginInventoryRemote, openrouterSpendRemote, sessionInfoRemote, messageFeedbackRemote, sessionFeedbackRemote,
+  fileUploadsRemote, sessionReferencesRemote,
   subagentsRemote, sessionRemote, workspaceRemote, workspaceFilesRemote,
 ]
 
