@@ -81,7 +81,7 @@ describe('Chat apply wiring', () => {
   it('releases shared business registration when the Chat plugin leaves the browser service', async () => {
     const b = await bench()
     try {
-      expect(b.runtime.ctx.uiConversation.events.entries()).toHaveLength(13)
+      expect(b.runtime.ctx.uiConversation.events.entries()).toHaveLength(17)
       expect(b.runtime.ctx.uiConversation.events.fallbackEntry()?.kind).toBe('unknown-surface')
       await b.chat.dispose()
       expect(b.runtime.ctx.uiConversation.events.entries()).toEqual([])

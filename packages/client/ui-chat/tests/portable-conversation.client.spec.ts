@@ -56,7 +56,8 @@ describe('portable Chat business composition', () => {
     const value = composition()
     try {
       expect(value.events.entries().map(definition => definition.kind)).toEqual([
-        'inbox-next-step', 'input-message', 'system-message', 'request-prompt', 'assistant-step', 'turn-process',
+        'inbox-next-step', 'input-message', 'system-message', 'request-prompt', 'assistant-step',
+        'activity-summary-request', 'activity-summary', 'turn-process',
         'tool-call', 'command', 'compaction', 'model-retry', 'turn-error', 'turn-max-tokens', 'turn-tail', 'workspace-state',
         'workspace-admission',
       ])
