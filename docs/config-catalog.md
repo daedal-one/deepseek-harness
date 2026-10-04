@@ -2181,7 +2181,7 @@ export interface LocalContainerRuntimeConfig {
 }
 ```
 
-Source: [`packages/sandbox/local-container-runtime/src/types.ts:294`](../packages/sandbox/local-container-runtime/src/types.ts)
+Source: [`packages/sandbox/local-container-runtime/src/types.ts:298`](../packages/sandbox/local-container-runtime/src/types.ts)
 
 <a id="deepseek-aidsh-lsp-stdio"></a>
 
