@@ -6516,7 +6516,7 @@ importers:
         specifier: link:../../../vendor/schemastery
         version: link:../../../vendor/schemastery
       koffi:
-        specifier: ^3.1.0
+        specifier: 3.1.1
         version: 3.1.1
     devDependencies:
       '@deepseek-ai/cordis':
@@ -7332,7 +7332,7 @@ importers:
         specifier: workspace:^
         version: link:../../util/native-command
       koffi:
-        specifier: ^3.1.0
+        specifier: 3.1.1
         version: 3.1.1
     devDependencies:
       '@deepseek-ai/cordis':
@@ -8714,7 +8714,7 @@ importers:
         specifier: workspace:^
         version: link:../../subprocess/win32-process
       koffi:
-        specifier: ^3.1.0
+        specifier: 3.1.1
         version: 3.1.1
     devDependencies:
       '@deepseek-ai/cordis':
@@ -9293,7 +9293,7 @@ importers:
         specifier: link:../../../vendor/schemastery
         version: link:../../../vendor/schemastery
       koffi:
-        specifier: ^3.1.0
+        specifier: 3.1.1
         version: 3.1.1
     devDependencies:
       '@deepseek-ai/cordis':
@@ -10982,7 +10982,7 @@ importers:
         specifier: workspace:^
         version: link:../win32-process
       koffi:
-        specifier: ^3.1.0
+        specifier: 3.1.1
         version: 3.1.1
       node-pty:
         specifier: 1.2.0-beta.15
@@ -11032,7 +11032,7 @@ importers:
   packages/subprocess/win32-process:
     dependencies:
       koffi:
-        specifier: ^3.1.0
+        specifier: 3.1.1
         version: 3.1.1
     devDependencies:
       '@deepseek-ai/cordis':
