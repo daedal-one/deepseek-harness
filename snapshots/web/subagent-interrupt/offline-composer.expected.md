@@ -12,6 +12,7 @@
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
+    - tab "Terminal"
 - button "System prompt":
   - img
   - img

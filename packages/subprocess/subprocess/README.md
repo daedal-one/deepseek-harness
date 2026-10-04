@@ -122,6 +122,10 @@ Read these pages when the package-level contract is not enough. They move from t
 -----
 
 <a id="model-experience"></a>
+## Terminal resizing
+
+The terminal handle supports viewport resizing through the same provider that allocates its PTY. Rows and columns reach the provider without changing the terminal process or its ownership.
+
 ## Model Experience
 
 Indirectly, through consumer seams such as the bash executor family, which own all model-facing rendering of process output and lifecycle.

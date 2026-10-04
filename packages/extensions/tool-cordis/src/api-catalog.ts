@@ -2001,6 +2001,24 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['after partial publication; existing identities are never adopted or overwritten.'],
       },
       {
+        signature: '@Remote({ mode: \'stream\' }) async *terminal(request: SessionTerminalSize, signal: AbortSignal): AsyncIterable<SessionTerminalFrame>',
+        description: 'Start a direct user terminal in the selected Session execution world.',
+        parameters: [{ name: 'request', description: 'Session identity, browser terminal id and viewport.' }, { name: 'signal', description: 'stream lifetime; loss terminates the owned PTY.' }],
+        returns: 'raw output and exit frames, excluded from model history.',
+      },
+      {
+        signature: '@Remote terminalInput(request: SessionTerminalInput, signal: AbortSignal): Promise<void>',
+        description: 'Send raw keyboard input to a live user terminal.',
+        parameters: [{ name: 'request', description: 'exact Session/terminal owner and bounded UTF-8 input.' }, { name: 'signal', description: 'caller cancellation before input delivery.' }],
+        returns: 'completion of the provider write.',
+      },
+      {
+        signature: '@Remote terminalResize(request: SessionTerminalSize, signal: AbortSignal): Promise<void>',
+        description: 'Resize a live user terminal.',
+        parameters: [{ name: 'request', description: 'exact Session/terminal owner and validated dimensions.' }, { name: 'signal', description: 'caller cancellation before resize delivery.' }],
+        returns: 'completion of the provider resize.',
+      },
+      {
         signature: '@Remote(\'prompt\') prompt(request: SessionPromptRequest, signal: AbortSignal): Promise<SessionPromptValue>',
         description: 'Admit one prompt after explicitly resuming its Session.',
         parameters: [{ name: 'request', description: 'Session identity, prompt content, source metadata, and delivery mode.' }, { name: 'signal', description: 'caller cancellation before prompt admission begins.' }],
@@ -6393,6 +6411,26 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type SessionTelemetrySharingStatus = \'full\' | \'feedback-only\' | \'disabled\';',
   },
   {
+    name: 'SessionTerminalFrame',
+    declaration: 'export type SessionTerminalFrame = {\n    readonly kind: \'ready\';\n    readonly cwd: string;\n    readonly maxInputBytes: number;\n} | {\n    readonly kind: \'output\';\n    readonly data: string;\n} | {\n    readonly kind: \'exit\';\n    readonly exitCode: number | null;\n    readonly signal: string | null;\n};',
+  },
+  {
+    name: 'SessionTerminalId',
+    declaration: 'export type SessionTerminalId = Branded<\'SessionTerminalId\'>;',
+  },
+  {
+    name: 'SessionTerminalInput',
+    declaration: 'export interface SessionTerminalInput extends SessionTerminalTarget {\n    readonly data: string;\n}',
+  },
+  {
+    name: 'SessionTerminalSize',
+    declaration: 'export interface SessionTerminalSize extends SessionTerminalTarget {\n    readonly rows: number;\n    readonly cols: number;\n}',
+  },
+  {
+    name: 'SessionTerminalTarget',
+    declaration: 'export interface SessionTerminalTarget {\n    readonly sessionId: SessionId;\n    readonly terminalId: SessionTerminalId;\n}',
+  },
+  {
     name: 'SessionTitleAutomaticMode',
     declaration: 'export type SessionTitleAutomaticMode = \'first-prompt\' | \'all-prompts\';',
   },
@@ -6790,7 +6828,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SubprocessTerminalHandle',
-    declaration: 'export interface SubprocessTerminalHandle {\n    readonly pid: number;\n    readonly output: Readable;\n    readonly done: Promise<SubprocessOutcome>;\n    write(data: string): Promise<void>;\n    inspectForeground(): Promise<SubprocessTerminalForeground | undefined>;\n    signalForeground(signal: SubprocessTerminalSignal): Promise<number>;\n    terminate(): Promise<void>;\n}',
+    declaration: 'export interface SubprocessTerminalHandle {\n    readonly pid: number;\n    readonly output: Readable;\n    readonly done: Promise<SubprocessOutcome>;\n    write(data: string): Promise<void>;\n    inspectForeground(): Promise<SubprocessTerminalForeground | undefined>;\n    resize(rows: number, cols: number): Promise<void>;\n    signalForeground(signal: SubprocessTerminalSignal): Promise<number>;\n    terminate(): Promise<void>;\n}',
   },
   {
     name: 'SubprocessTerminalSignal',

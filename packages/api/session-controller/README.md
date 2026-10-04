@@ -12,6 +12,7 @@ kind: "package-reference"
 
 - [Use this package](#use-this-package)
 - [Session media references](#session-media-references)
+- [User terminals](#user-terminals)
 - [Configuration](#configuration)
 - [Model Experience](#model-experience)
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
@@ -58,6 +59,12 @@ A Client `PromptAdmission` observer watches one Session binding for the original
 -----
 
 <a id="configuration"></a>
+## User terminals
+
+The `session.terminal` stream allocates a direct user shell in the selected Session's live subprocess environment. Initiating-Agent attribution covers executable lookup, workspace-path translation and PTY allocation. `terminalInput` and `terminalResize` require the exact Session and terminal ids; a missing or mismatched owner rejects. Stream cancellation, connection loss and controller disposal terminate the PTY and await cleanup. The [Terminal view](../../client/ui-terminal/README.md) retains the stream across tab switches. Commands are authenticated user operations, outside model tool approval, and raw terminal output is excluded from model history.
+
+`terminalArgv` selects the execution-world shell (default `bash -i` on POSIX, `pwsh -NoLogo` on Windows). `terminalGraceMs` defaults to 1,000 milliseconds, `terminalMaxInputBytes` to 65,536 UTF-8 bytes per request and `terminalMaxCount` to 32 concurrent streams. Empty shell commands fail at load; missing executables fail on allocation. Viewport dimensions are protocol-bounded to 1–1,000 rows and 2–1,000 columns.
+
 ## Configuration
 
 | Field | Default | Meaning |

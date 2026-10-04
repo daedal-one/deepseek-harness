@@ -10,6 +10,7 @@
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
+    - tab "Terminal"
 - navigation "Turn navigation":
   - button "Jump to turn 1"
   - button "Jump to turn 2"

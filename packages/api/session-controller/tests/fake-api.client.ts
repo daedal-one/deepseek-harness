@@ -213,6 +213,9 @@ export class FakeApiClient {
         execute: () => Promise.resolve({ ok: true, value: undefined }),
       },
       session: {
+        terminal: async function* () { yield { kind: 'exit' as const, exitCode: 0, signal: null } },
+        terminalInput: async () => ({ ok: true as const, value: undefined }),
+        terminalResize: async () => ({ ok: true as const, value: undefined }),
         canOpenWorkspacePath: () => Promise.resolve(ok(true)),
         list: async (payload) => {
           const result = await this.record('session.list', payload, this.onList(payload))

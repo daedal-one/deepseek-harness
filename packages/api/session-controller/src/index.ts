@@ -18,6 +18,7 @@ import {
 import { SessionCommandController } from './commands.ts'
 import { SessionControlController } from './control.ts'
 import { SessionHistoryController } from './history.ts'
+import { SessionTerminals } from './terminal.ts'
 import { SessionFileReferences } from './file-references.ts'
 import { ApiSessionList } from './list.ts'
 import { buildModelCatalog } from './catalog.ts'
@@ -25,6 +26,9 @@ import { installModelSelectionProjection } from './model-selection-projection.ts
 import { SessionSkillCatalog } from './skill-catalog.ts'
 import { SessionMediaReferences } from './media-references.ts'
 import type {
+  SessionTerminalSize,
+  SessionTerminalInput,
+  SessionTerminalFrame,
   ModelCatalog,
   SessionAttachmentRequest,
   SessionAttachmentValue,
@@ -75,6 +79,14 @@ declare module '@deepseek-ai/cordis' {
 export interface Config {
   /** Override platform desktop-opener detection. */
   readonly nativeOpen?: boolean
+  /** Shell executable and arguments resolved in each Session execution world. */
+  readonly terminalArgv?: string[]
+  /** Whole terminal-session cleanup grace in milliseconds. */
+  readonly terminalGraceMs?: number
+  /** Maximum UTF-8 bytes in one keyboard or paste request. */
+  readonly terminalMaxInputBytes?: number
+  /** Maximum concurrent browser terminals on this Host. */
+  readonly terminalMaxCount?: number
   /** Maximum serialized history page or opening snapshot, except one indivisible message group. */
   readonly historyPageMaxBytes?: number
   /** Maximum ordinary Session rows per list page. */
@@ -108,6 +120,10 @@ export class SessionController extends TypertRemoteService {
 
   static Config: z<Config> = z.object({
     nativeOpen: z.boolean(),
+    terminalArgv: z.array(z.string()).default(process.platform === 'win32' ? ['pwsh', '-NoLogo'] : ['bash', '-i']),
+    terminalGraceMs: z.number().step(1).min(1).default(1000),
+    terminalMaxInputBytes: z.number().step(1).min(4).default(64 * 1024),
+    terminalMaxCount: z.number().step(1).min(1).default(32),
     historyPageMaxBytes: z.number().step(1).min(1).default(512 * 1024),
     sessionListPageSize: z.number().step(1).min(1).default(50),
   })
@@ -121,6 +137,7 @@ export class SessionController extends TypertRemoteService {
   private readonly openPath: (path: string, signal: AbortSignal) => Promise<void>
   private readonly revealPath: (path: string, signal: AbortSignal) => Promise<void>
   private readonly canOpenPath: () => boolean
+  private readonly terminals: SessionTerminals
   private readonly promotions = new Set<Promise<void>>()
 
   /**
@@ -130,6 +147,15 @@ export class SessionController extends TypertRemoteService {
    */
   constructor(ctx: Context, config: Config, internals: SessionControllerInternals = {}) {
     super(ctx, 'sessionController', { namespace: 'session' })
+    const terminalArgv = config.terminalArgv ?? (process.platform === 'win32' ? ['pwsh', '-NoLogo'] : ['bash', '-i'])
+    if (terminalArgv.length === 0 || terminalArgv.some(value => value.length === 0 || value.includes('\0'))) {
+      throw new Error('terminalArgv must contain an executable and nonempty arguments without NUL')
+    }
+    this.terminals = new SessionTerminals({
+      argv: terminalArgv as [string, ...string[]], graceMs: config.terminalGraceMs ?? 1000,
+      maxInputBytes: config.terminalMaxInputBytes ?? 64 * 1024, maxTerminals: config.terminalMaxCount ?? 32,
+    })
+    ctx.effect(() => () => this.terminals.dispose(), 'session-controller: user terminals')
     this.sessionListPageSize = config.sessionListPageSize ?? 50
     installModelSelectionProjection(ctx)
     this.agents = new ApiSessionAgentController(ctx)
@@ -387,6 +413,43 @@ export class SessionController extends TypertRemoteService {
   @Remote('forkTo')
   forkTo(request: SessionForkToRequest): Promise<SessionForkValue> {
     return this.commands.forkTo(request)
+  }
+
+  /**
+   * Start a direct user terminal in the selected Session execution world.
+   * @param request - Session identity, browser terminal id and viewport.
+   * @param signal - stream lifetime; loss terminates the owned PTY.
+   * @returns raw output and exit frames, excluded from model history.
+   */
+  @Remote({ mode: 'stream' })
+  async *terminal(request: SessionTerminalSize, signal: AbortSignal): AsyncIterable<SessionTerminalFrame> {
+    const result = await this.agents.resolveAgent(request.sessionId)
+    if ('error' in result) throw result.error
+    yield* this.terminals.open(result.agent, request, signal)
+  }
+
+  /**
+   * Send raw keyboard input to a live user terminal.
+   * @param request - exact Session/terminal owner and bounded UTF-8 input.
+   * @param signal - caller cancellation before input delivery.
+   * @returns completion of the provider write.
+   */
+  @Remote
+  terminalInput(request: SessionTerminalInput, signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted()
+    return this.terminals.input(request)
+  }
+
+  /**
+   * Resize a live user terminal.
+   * @param request - exact Session/terminal owner and validated dimensions.
+   * @param signal - caller cancellation before resize delivery.
+   * @returns completion of the provider resize.
+   */
+  @Remote
+  terminalResize(request: SessionTerminalSize, signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted()
+    return this.terminals.resize(request)
   }
 
   /**

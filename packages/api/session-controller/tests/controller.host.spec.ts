@@ -8,6 +8,7 @@ import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { describe, expect, it, vi } from 'vitest'
 import SessionController from '../src/index.ts'
 import type { ApiSessionAgentController } from '../src/agent.ts'
+import type { SessionTerminalId } from '../src/types.ts'
 import { createSessionTestController, testSessionPersistence } from './test-remote.ts'
 
 const defaults = {
@@ -16,6 +17,34 @@ const defaults = {
 }
 
 describe('SessionController facade', () => {
+  it('refuses an invalid terminal executable at composition load', async () => {
+    for (const terminalArgv of [[], [''], ['bash', 'bad\0argument']]) {
+      const ctx = new Context()
+      try { expect(() => new SessionController(ctx, { terminalArgv })).toThrow('terminalArgv') }
+      finally { await ctx.fiber.dispose() }
+    }
+  })
+
+  it('reports Session activation failure and refuses cancelled terminal input or resize', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(AgentRegistry)
+    try {
+      const controller = createSessionTestController(ctx, defaults)
+      const request = { sessionId: SessionId('missing-terminal'), terminalId: 'pty' as SessionTerminalId, rows: 24, cols: 80 }
+      const error = new RemoteError('session/not-found', 'terminal session missing', { sessionId: request.sessionId })
+      vi.spyOn((controller as unknown as { agents: ApiSessionAgentController }).agents, 'resolveAgent')
+        .mockResolvedValue({ error })
+      await expect(controller.terminal(request, new AbortController().signal)[Symbol.asyncIterator]().next()).rejects.toBe(error)
+      const abort = new AbortController()
+      abort.abort(error)
+      expect(() => controller.terminalInput({ ...request, data: 'pwd' }, abort.signal)).toThrow(error)
+      expect(() => controller.terminalResize(request, abort.signal)).toThrow(error)
+      await expect(controller.terminalInput({ ...request, data: 'pwd' }, new AbortController().signal)).rejects.toThrow('not open')
+      await expect(controller.terminalResize(request, new AbortController().signal)).rejects.toThrow('not open')
+    } finally { await ctx.fiber.dispose() }
+  })
+
   it('does not require the Tools service', () => {
     expect(SessionController.inject).not.toContain('tools')
   })

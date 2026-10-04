@@ -8,3 +8,4 @@
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
+    - tab "Terminal"

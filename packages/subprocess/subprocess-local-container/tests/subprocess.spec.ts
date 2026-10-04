@@ -207,6 +207,14 @@ describe('LocalContainerSubprocessRuntime', () => {
     }
   })
 
+  it('forwards terminal viewport dimensions to its owned container', async () => {
+    const { ctx, runtime } = await setup()
+    const terminal = await ctx.subprocess.spawnTerminal({ argv: ['/bin/bash'], cwd: '/host/workspace', rows: 24, cols: 80, graceMs: 1000 })
+    await terminal.resize(40, 120)
+    expect(runtime.processes[0]!.resize).toHaveBeenCalledWith(40, 120)
+    await terminal.terminate()
+  })
+
   it('fails synchronously for an unknown host cwd', async () => {
     const { ctx, runtime } = await setup()
     expect(() => ctx.subprocess.spawn(spec({ cwd: '/other' }))).toThrow(/configured workspace path/)
