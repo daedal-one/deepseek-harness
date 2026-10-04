@@ -42,4 +42,4 @@ Durable MVP+ includes workspace discovery, immutable revisions, provenance, sour
 
 ## Decision rationale
 
-The [artifact proposal](../../.agents/notes/proposed/feature/2026-10-04-durable-workspace-artifacts.md) records runtime qualification, storage reuse and integration trade-offs. The existing document viewer is a reuse candidate for trusted layout and inert presentation, not an artifact sandbox.
+The [artifact decision](../../.agents/notes/implemented/feature/2026-10-04-durable-workspace-artifacts.md) records runtime qualification, storage reuse and integration trade-offs. The existing document viewer is a reuse candidate for trusted layout and inert presentation, not an artifact sandbox.

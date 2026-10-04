@@ -23,7 +23,22 @@ Render local interactive HTML and inert documents without giving content the cre
 <a id="use-this-package"></a>
 ## Use this package
 
-Configure an absolute rootless Podman socket, digest-pinned image, non-root user, engine-host seccomp profile path and complete resource bounds. Build [the locked image](image/Containerfile) and provision [the confined seccomp profile](image/seccomp.json) on the engine host. The [runtime qualification guide](../../../docs/user/artifacts.md#qualify-executable-previews) owns the procedure.
+Configure an absolute rootless Podman socket, digest-pinned image, non-root user, engine-host seccomp profile path and complete resource bounds. Build [the locked image](image/Containerfile) and provision [the confined seccomp profile](image/seccomp.json) on the engine host. The [user guide](../../../docs/user/artifacts.md#qualify-executable-previews) explains when previews are available.
+### Qualify the configured engine
+
+Build from this package's locked recipe and provision its seccomp profile on the Engine host. With the Harness provider pointed at the Engine API socket, run the real qualification suite from the repository root:
+
+```sh
+export DSH_ARTIFACT_TEST_SOCKET="$DSH_ARTIFACT_SOCKET"
+export DSH_ARTIFACT_TEST_IMAGE="$DSH_ARTIFACT_IMAGE"
+export DSH_ARTIFACT_TEST_SECCOMP="$DSH_ARTIFACT_SECCOMP"
+pnpm exec vitest run packages/artifact/artifact-runtime-podman/tests/qualification.spec.ts
+```
+
+All three values must be present, the image must name a digest, and the seccomp path must be readable inside the Engine host. An absent value skips this suite and does not qualify the deployment. Require all 15 cases to pass, then verify document and interactive-local artifacts through the actual Web or Desktop profile before enabling its runtime row. Repeat qualification when changing the image, engine, architecture, seccomp policy or resource limits. The suite allocates and removes independent test invocations and requires the normal Podman client for its Engine inspection and networking controls.
+
+The qualified development combination is a macOS ARM64 Harness Host and Linux ARM64 rootless Podman 5.8.3 engine. Both Web and Desktop viewers pass document script denial and interactive-local input/denial checks on this combination. The locked image uses Playwright 1.63.0; image identity and effective enforcement remain deployment checks. Other architectures and engines are unqualified.
+
 ### Configuration
 
 All listed fields are required deployment choices; the validated [Config declaration](src/index.ts) defines accepted ranges.
