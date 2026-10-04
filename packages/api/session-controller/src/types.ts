@@ -634,3 +634,29 @@ declare module '@deepseek-ai/cordis' {
 
 /** JSON-compatible projection value accepted by list consumers. */
 export type SessionProjectionValue = JsonValue
+
+/** Opaque browser-owned identity of one live terminal stream. */
+export type SessionTerminalId = Branded<'SessionTerminalId'>
+
+/** Session and terminal identity shared by terminal operations. */
+export interface SessionTerminalTarget {
+  readonly sessionId: SessionId
+  readonly terminalId: SessionTerminalId
+}
+
+/** Initial or subsequent terminal viewport. */
+export interface SessionTerminalSize extends SessionTerminalTarget {
+  readonly rows: number
+  readonly cols: number
+}
+
+/** Raw UTF-8 keyboard or paste input. */
+export interface SessionTerminalInput extends SessionTerminalTarget {
+  readonly data: string
+}
+
+/** Frames from an authenticated user terminal; never appended to model history. */
+export type SessionTerminalFrame =
+  | { readonly kind: 'ready'; readonly cwd: string; readonly maxInputBytes: number }
+  | { readonly kind: 'output'; readonly data: string }
+  | { readonly kind: 'exit'; readonly exitCode: number | null; readonly signal: string | null }

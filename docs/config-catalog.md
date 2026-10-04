@@ -273,6 +273,14 @@ Requires: `agentModels` · `agents` · `attachments` · `fileUploads` · `llm` �
 export interface Config {
   /** Override platform desktop-opener detection. */
   readonly nativeOpen?: boolean
+  /** Shell executable and arguments resolved in each Session execution world. */
+  readonly terminalArgv?: string[]
+  /** Whole terminal-session cleanup grace in milliseconds. */
+  readonly terminalGraceMs?: number
+  /** Maximum UTF-8 bytes in one keyboard or paste request. */
+  readonly terminalMaxInputBytes?: number
+  /** Maximum concurrent browser terminals on this Host. */
+  readonly terminalMaxCount?: number
   /** Maximum serialized history page or opening snapshot, except one indivisible message group. */
   readonly historyPageMaxBytes?: number
   /** Maximum ordinary Session rows per list page. */
@@ -280,7 +288,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/api/session-controller/src/index.ts:75`](../packages/api/session-controller/src/index.ts)
+Source: [`packages/api/session-controller/src/index.ts:79`](../packages/api/session-controller/src/index.ts)
 
 <a id="deepseek-aidsh-api-settings-controller"></a>
 
@@ -4511,6 +4519,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-client-ui-sidebar-right` ([`packages/client/ui-sidebar-right/src/index.ts`](../packages/client/ui-sidebar-right/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-skill` ([`packages/client/ui-skill/src/index.ts`](../packages/client/ui-skill/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-subagent` ([`packages/client/ui-subagent/src/index.ts`](../packages/client/ui-subagent/src/index.ts))
+- `@deepseek-ai/dsh-client-ui-terminal` ([`packages/client/ui-terminal/src/index.ts`](../packages/client/ui-terminal/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-theme` ([`packages/client/ui-theme/src/index.ts`](../packages/client/ui-theme/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-tool` ([`packages/client/ui-tool/src/index.ts`](../packages/client/ui-tool/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-trajectory` ([`packages/client/ui-trajectory/src/index.ts`](../packages/client/ui-trajectory/src/index.ts))

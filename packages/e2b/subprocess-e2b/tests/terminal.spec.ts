@@ -125,6 +125,7 @@ class FakeTerminalSandbox {
     this.releaseCreateGate?.()
   }
 
+  readonly resize = vi.fn(async (..._args: Parameters<Sandbox['pty']['resize']>) => {})
   readonly sandbox = {
     files: {
       makeDir: async (path: string, options?: CommandOptions): Promise<boolean> => {
@@ -196,6 +197,7 @@ class FakeTerminalSandbox {
       },
     },
     pty: {
+      resize: this.resize,
       create: async (options: Parameters<Sandbox['pty']['create']>[0]): Promise<CommandHandle> => {
         this.createOptions = options
         if (this.createError !== undefined) throw this.createError
@@ -270,6 +272,17 @@ function testSpawn(
 }
 
 describe('E2B terminal allocation', () => {
+  it('resizes the existing remote terminal and rejects after exit', async () => {
+    const fake = new FakeTerminalSandbox()
+    const terminal = await testSpawn(runtime(fake), spec(), '/runtime/resize-terminal')
+    await terminal.resize(40, 120)
+    expect(fake.resize.mock.calls).toEqual([
+      [terminal.pid, { rows: 40, cols: 120 }, { signal: expect.any(AbortSignal) as AbortSignal }],
+    ])
+    await terminal.terminate()
+    await expect(terminal.resize(24, 80)).rejects.toThrow()
+  })
+
   it('hides bootstrap-shell bytes and preserves requested-shell bytes across the output boundary', async () => {
     const fake = new FakeTerminalSandbox()
     const terminal = await testSpawn(runtime(fake), spec(), '/runtime/terminal-one')

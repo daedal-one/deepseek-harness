@@ -1,0 +1,2 @@
+- text: {{cwd}}
+- button "Restart terminal"

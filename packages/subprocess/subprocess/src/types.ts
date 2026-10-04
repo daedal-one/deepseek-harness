@@ -248,6 +248,13 @@ export interface SubprocessTerminalHandle {
    */
   inspectForeground(): Promise<SubprocessTerminalForeground | undefined>
   /**
+   * Resize the terminal viewport.
+   * @param rows - positive integer row count.
+   * @param cols - positive integer column count.
+   * @returns completion of the provider resize.
+   */
+  resize(rows: number, cols: number): Promise<void>
+  /**
    * Deliver a signal to the current foreground process group.
    * @param signal - permitted terminal signal.
    * @returns the exact group id that received it.

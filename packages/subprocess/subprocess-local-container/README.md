@@ -52,6 +52,10 @@ Natural process exit and explicit termination both end at force-capable containe
 Terminal foreground inspection runs a fixed bounded helper inside the process container. Signals target the reported foreground process group; group 1 uses the Engine's container signal operation because Linux does not expose PID 1 as a signalable negative process group inside the namespace.
 
 <a id="model-experience"></a>
+## Terminal resizing
+
+The terminal handle supports viewport resizing through the same provider that allocates its PTY. Rows and columns reach the provider without changing the terminal process or its ownership.
+
 ## Model Experience
 
 Indirectly, through shell, terminal, search, and LSP consumers that render container paths and process results.
@@ -66,7 +70,6 @@ No direct invalidation: this provider registers no request prefix; its consumers
 - Writable `/workspace` is mounted `noexec`; interpreters can run source files, while directly executing newly built native binaries is intentionally unavailable in this first profile.
 - Process-container limits are per sibling rather than one shared cgroup. `maxLiveProcesses` provides the aggregate bound.
 - Terminal input-wait detection currently reports the Engine terminal's foreground group as waiting; a trusted image helper can provide syscall-level wait evidence if a future consumer needs that distinction.
-- Dynamic terminal resize is supported by the runtime primitive but is absent from the current shared `SubprocessTerminalHandle` contract.
 
 **Runtime invariant:** No companion is published. The startup validator owns the only cross-provider identity relation, and process lifecycle facts are enforced at the runtime service seam.
 

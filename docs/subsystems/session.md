@@ -684,6 +684,10 @@ The backends that consume this contract are on [persistence.md](persistence.md).
 
 The [Daedal handoff integration](../../packages/integration/daedal-handoff/README.md) transfers an explicitly confirmed task into a separately launched host profile. Its `HandoffResult` reports `unavailable`, `declined`, `started`, or `unknown`, a human-readable message, and optional destination name, origin, and branded Session id. `unknown` preserves the deterministic destination id when acknowledgement fails so the user can inspect possible acceptance before another attempt. Only the Daedal presets expose the action; the source retains its execution environment.
 
+## User terminal types
+
+The browser-safe [Session Controller types](../../packages/api/session-controller/src/types.ts) address a live user terminal with `SessionTerminalTarget`: a `SessionId` plus a branded `SessionTerminalId` owned by its opening browser stream. `SessionTerminalSize` adds integer `rows` and `cols`; `SessionTerminalInput` adds raw UTF-8 `data`. `SessionTerminalFrame` is a closed union: `ready` carries the execution-world `cwd` and advertised `maxInputBytes`, `output` carries raw terminal `data`, and `exit` carries nullable `exitCode` and `signal`. These are transient authenticated Remote messages, not Session log events. The [Session Controller README](../../packages/api/session-controller/README.md#user-terminals) owns terminal operation and cleanup semantics.
+
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
 <a id="cordis-surface"></a>
@@ -814,6 +818,30 @@ workspaceDesktop(): { name: string; available: boolean; fileManager: 'finder' | 
  * @throws after partial publication; existing identities are never adopted or overwritten.
  */
 @Remote('forkTo') forkTo(request: SessionForkToRequest): Promise<SessionForkValue>
+
+/**
+ * Start a direct user terminal in the selected Session execution world.
+ * @param request - Session identity, browser terminal id and viewport.
+ * @param signal - stream lifetime; loss terminates the owned PTY.
+ * @returns raw output and exit frames, excluded from model history.
+ */
+@Remote({ mode: 'stream' }) async *terminal(request: SessionTerminalSize, signal: AbortSignal): AsyncIterable<SessionTerminalFrame>
+
+/**
+ * Send raw keyboard input to a live user terminal.
+ * @param request - exact Session/terminal owner and bounded UTF-8 input.
+ * @param signal - caller cancellation before input delivery.
+ * @returns completion of the provider write.
+ */
+@Remote terminalInput(request: SessionTerminalInput, signal: AbortSignal): Promise<void>
+
+/**
+ * Resize a live user terminal.
+ * @param request - exact Session/terminal owner and validated dimensions.
+ * @param signal - caller cancellation before resize delivery.
+ * @returns completion of the provider resize.
+ */
+@Remote terminalResize(request: SessionTerminalSize, signal: AbortSignal): Promise<void>
 
 /**
  * Admit one prompt after explicitly resuming its Session.

@@ -257,6 +257,10 @@ class ContainerTerminalHandle implements SubprocessTerminalHandle {
     if (!this.process.stream.write(data)) await once(this.process.stream, 'drain')
   }
 
+  async resize(rows: number, cols: number): Promise<void> {
+    await this.process.resize(rows, cols)
+  }
+
   async inspectForeground(): Promise<SubprocessTerminalForeground | undefined> {
     if (this.process.inspectTerminalForeground !== undefined) return await this.process.inspectTerminalForeground()
     const result = await this.process.inspect([

@@ -47,6 +47,7 @@ class FakeInspector implements ProcessInspector {
 }
 
 class FakeTerminal implements SubprocessTerminalHandle {
+  readonly resize = async (): Promise<void> => {}
   pid = 123
   readonly output = new PassThrough()
   readonly writes: string[] = []
