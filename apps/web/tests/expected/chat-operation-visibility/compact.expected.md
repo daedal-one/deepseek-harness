@@ -1,0 +1,35 @@
+- button "System prompt":
+  - img
+  - img
+  - text: System prompt
+- text: "Use the read tool twice in one assistant message: read a.txt and b.txt. Then reply with the single word DONE and stop. {{clock}}"
+- button "Copy":
+  - img
+- button "2 tool calls":
+  - text: 2 tool calls
+  - img
+- button "Load full result"
+- img
+- text: Read
+- button "b.txt"
+- button "Think Both files have been read. a.txt contains \"alpha\" and b.txt contains \"beta\". I'll now reply with DONE as instructed.":
+  - img
+  - img
+  - text: Think Both files have been read. a.txt contains "alpha" and b.txt contains "beta". I'll now reply with DONE as instructed.
+- paragraph: DONE
+- button "Copy":
+  - img
+- button "Good response":
+  - img
+- button "Bad response":
+  - img
+- button "Branch into a new conversation" [disabled]:
+  - img
+- text: Available only on the last message of a completed turn
+- button "Ran for {{duration}}":
+  - img
+  - text: Ran for {{duration}}
+- text: {{clock}}
+- status "Agent activity summary":
+  - img
+  - text: Read both files. Prepared the final response.

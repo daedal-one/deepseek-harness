@@ -5,11 +5,6 @@ import type { ChatViewSlotProps } from '../contract/slots.ts'
 import a11yCss from './accessibility.module.css'
 import css from './ReasoningRow.module.css'
 
-function firstLine(text: string): string {
-  const newline = text.indexOf('\n')
-  return newline === -1 ? text : text.slice(0, newline)
-}
-
 function latestLine(text: string): string {
   const visible = text.trimEnd()
   const newline = visible.lastIndexOf('\n')
@@ -18,8 +13,8 @@ function latestLine(text: string): string {
 
 /**
  * Render one assistant reasoning block as the Think disclosure row. The
- * collapsed summary omits double-asterisk markers; expanded content preserves
- * the complete text.
+ * collapsed summary shows the latest nonempty line without double-asterisk
+ * markers; expanded content preserves the complete text.
  * @param props.text - complete or streaming reasoning text.
  * @param props.running - whether this block is the streaming tail.
  * @param props.t - conversation locale seat for the running status.
@@ -27,7 +22,7 @@ function latestLine(text: string): string {
  */
 export function ReasoningRow({ text, running, t }: { text: string; running: boolean; t: ChatViewSlotProps['t'] }) {
   const [expanded, setExpanded] = useState(false)
-  const summary = (running ? latestLine(text) : firstLine(text)).replaceAll('**', '')
+  const summary = latestLine(text).replaceAll('**', '')
 
   return (
     <div

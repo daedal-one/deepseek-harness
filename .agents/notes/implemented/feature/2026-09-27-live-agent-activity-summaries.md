@@ -16,7 +16,7 @@ The summary request treats operation records as untrusted data. Tool arguments a
 
 One Session owns at most one in-flight summary request. Later operations queue for the next revision. Session and plugin disposal abort and join owned work. A timeout, cancellation, malformed response, excessive output, tool request, stale completion, or other first failure publishes no update and disables further summaries for that Turn, leaving the detailed rows visible.
 
-Chat adds request-consuming and latest-wins update Definitions under the [business-node assembly decision](../architecture/2026-08-09-client-conversation-node-assembly.md). Compact presentation hides only successfully covered Tool, Retry, and reasoning-only Assistant rows. Visible Assistant commentary remains present. The underlying Nodes and durable events are not deleted, and Trajectory continues to expose the complete trace.
+Chat adds request-consuming and latest-wins update Definitions under the [business-node assembly decision](../architecture/2026-08-09-client-conversation-node-assembly.md). Compact presentation folds successfully covered earlier Tool, Retry, and reasoning-only Assistant rows behind an interactive process disclosure. Running Tools, the latest Tool and reasoning disclosures, and visible Assistant commentary remain present; [operation visibility](../bug-fix/2026-10-04-visible-chat-operations.md) owns their retention and expansion. The underlying Nodes and durable events are not deleted, and Trajectory continues to expose the complete trace.
 
 ## Alternatives considered
 

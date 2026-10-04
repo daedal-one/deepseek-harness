@@ -1,8 +1,8 @@
-import type { ChatNode } from '../contract/chat-nodes.ts'
+import { isRunningTool, type ChatNode } from '../contract/chat-nodes.ts'
 import type {
   ChatLocationNodeIndex, ChatNodeStore, ChatTurnProcessPresentation,
 } from '../contract/snapshot.ts'
-import { TURN_PROCESS_INDEPENDENT_KINDS } from '../contract/turn-process.ts'
+import { isSummaryCoveredProcess, TURN_PROCESS_INDEPENDENT_KINDS } from '../contract/turn-process.ts'
 
 function nodeTurn(node: ChatNode | undefined): number | undefined {
   const location = node?.location
@@ -17,7 +17,9 @@ function samePresentation(
     && left.spec === right.spec
     && left.turn === right.turn
     && left.turnClosed === right.turnClosed
-    && left.hasExternalProcess === right.hasExternalProcess
+    && left.hasFoldableProcess === right.hasFoldableProcess
+    && left.latestToolKey === right.latestToolKey
+    && left.latestReasoningKey === right.latestReasoningKey
     && left.compactAnswer === right.compactAnswer)
 }
 
@@ -35,6 +37,7 @@ function derivePresentation(
   const spec = control.data
   const location = control.location
   if (location.kind !== 'turn' && location.kind !== 'step') return undefined
+  const turnClosed = location.turn.status === 'closed'
   let openingHumanAnchor: number | undefined
   for (const key of keys) {
     const node = nodes.get(key) as ChatNode | undefined
@@ -44,7 +47,19 @@ function derivePresentation(
     }
   }
 
-  let hasExternalProcess = false
+  let latestToolKey: string | null = null
+  let latestReasoningKey: string | null = null
+  for (const key of keys) {
+    const node = nodes.get(key) as ChatNode | undefined
+    if (node === undefined || node.anchorSeq < spec.processStartSeq) continue
+    if (node.kind === 'tool-call') latestToolKey = key
+    if (node.kind === 'assistant-step'
+      && node.data.blocks.some(block => block.kind === 'reasoning' && block.text.trim() !== '')) {
+      latestReasoningKey = key
+    }
+  }
+
+  let hasFoldableProcess = false
   let compactAnswer = true
   for (const key of keys) {
     const node = nodes.get(key) as ChatNode | undefined
@@ -56,16 +71,19 @@ function derivePresentation(
     }
     if (TURN_PROCESS_INDEPENDENT_KINDS.has(node.kind)
       || node.anchorSeq < spec.processStartSeq
-      || (spec.answerAnchorSeq !== null && node.anchorSeq >= spec.answerAnchorSeq)) continue
-    if (node.kind !== 'assistant-step' || spec.answerStep === null || node.data.step !== spec.answerStep) {
-      hasExternalProcess = true
-    }
+      || (turnClosed && (spec.answerAnchorSeq === null || node.anchorSeq >= spec.answerAnchorSeq))) continue
+    if (!turnClosed && (!isSummaryCoveredProcess(node, spec)
+      || (node.kind === 'tool-call' && isRunningTool(node.data.root))
+      || (node.kind === 'assistant-step' && node.data.status === 'running'))) continue
+    if (key !== latestToolKey && key !== latestReasoningKey) hasFoldableProcess = true
   }
   return {
     turn,
     spec,
-    turnClosed: location.turn.status === 'closed',
-    hasExternalProcess,
+    turnClosed,
+    hasFoldableProcess,
+    latestToolKey,
+    latestReasoningKey,
     compactAnswer,
   }
 }
