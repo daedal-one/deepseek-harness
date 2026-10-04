@@ -1463,7 +1463,6 @@ export async function captureExpandedTurnProcessAria(
 ): Promise<string> {
   const controls = page.locator('[data-turn-process]')
   const count = await controls.count()
-  expect(count).toBeGreaterThan(0)
   const opened: number[] = []
   for (let index = 0; index < count; index++) {
     const control = controls.nth(index)

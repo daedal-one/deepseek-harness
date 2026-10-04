@@ -101,6 +101,8 @@ export interface ChatNodeOwnerProps {
 export interface TurnProcessOwnerProps {
   readonly spec: TurnProcessSpec
   readonly foldable: boolean
+  /** This Node owns the Turn's latest nonempty reasoning disclosure. */
+  readonly keepReasoningVisible: boolean
   readonly open: boolean
   setOpen(open: boolean): void
 }

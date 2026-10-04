@@ -181,6 +181,26 @@ const toolResult = (seq: number, callId: string, name = 'bash'): ToolResultNode 
 const runningCall = (callId: string, name = 'bash'): RunningToolCall => ({
   callId, name, argsRaw: `{"command":"cmd-${callId}"}`, turn: 2, step: 1, time: 1_000, subCalls: [],
 })
+
+function summarizedChat(source: ChatSnapshot, throughSeq: number,
+  builder = new ChatSnapshotBuilder()): ChatSnapshot {
+  const process = source.nodes.values()
+    .find((candidate): candidate is ChatNode<'turn-process'> => candidate.kind === 'turn-process')
+  if (process === undefined || (process.location.kind !== 'turn' && process.location.kind !== 'step')) {
+    throw new Error('fixture lacks a Turn process')
+  }
+  const turnData = process.location.turn.data as typeof process.location.turn.data & {
+    set(key: 'turn-process', value: TurnProcessSpec): void
+    publish(): void
+  }
+  const summarized = { ...process.data, summarizedThroughSeq: throughSeq }
+  turnData.set('turn-process', summarized)
+  turnData.publish()
+  return builder.replace({
+    nodes: source.nodes.values().map(node => node.key === process.key ? { ...process, data: summarized } : node),
+    timeline: source.timeline,
+  })
+}
 const command = (over: Partial<CommandNode> = {}): CommandNode => ({
   kind: 'command', seq: 5, time: 5_000, commandId: 'cmd-1' as CommandNode['commandId'],
   name: 'plan', args: '', outcome: { kind: 'success', text: '已进入 plan mode' },
@@ -1327,7 +1347,7 @@ describe('ChatView', () => {
     expect(branchButtons.map(button => button.getAttribute('aria-disabled'))).toEqual([null, null])
   })
 
-  it('folds Think and Tool rows before the final answer without unmounting them', () => {
+  it('keeps the latest Think and Tool tree visible while earlier process rows expand in place', () => {
     const first = {
       ...assistant(2, 'earlier reply', 1, 1),
       blocks: [
@@ -1356,7 +1376,7 @@ describe('ChatView', () => {
     const members = [...view.container.querySelectorAll<HTMLElement>('[data-turn-process-member]')]
     expect(members).toHaveLength(3)
     expect(members.map(member => member.getAttribute('hidden')))
-      .toEqual(['until-found', 'until-found', 'until-found'])
+      .toEqual([null, 'until-found', null])
     expect(members[0]?.textContent).toContain('inspect the repository')
     expect(members[1]?.textContent).toContain('bash:a')
     expect(members[2]?.textContent).toContain('subagent:b')
@@ -1368,13 +1388,13 @@ describe('ChatView', () => {
 
     fireEvent.click(toggle)
     expect(members.map(member => member.getAttribute('hidden')))
-      .toEqual(['until-found', 'until-found', 'until-found'])
+      .toEqual([null, 'until-found', null])
     fireEvent(members[1]!, new Event('beforematch'))
     expect(toggle.getAttribute('aria-expanded')).toBe('true')
     expect(members.map(member => member.getAttribute('hidden'))).toEqual([null, null, null])
 
     act(() => { h.set({ nodes: [user(1, 'question'), first] }) })
-    expect(view.getByRole('button', { name: 'Thought for a while' }).getAttribute('aria-expanded')).toBe('false')
+    expect(turnProcessControl(view.container)).toBeNull()
     expect(members[0]?.getAttribute('hidden')).toBeNull()
     act(() => { h.set({
       nodes: [user(1, 'question'), first, toolResult(3, 'a'), toolResult(4, 'b', 'subagent'), second],
@@ -1382,6 +1402,73 @@ describe('ChatView', () => {
     const renewedToggle = view.getByRole('button', { name: '1 tool call · 1 message · 1 subagent' })
     expect(renewedToggle.getAttribute('aria-expanded')).toBe('true')
     expect(members[0]?.getAttribute('hidden')).toBeNull()
+  })
+
+  it('keeps only the latest operations visible without an empty process control', () => {
+    const h = makeHarness({
+      nodes: [user(1, 'question'), reasoningAssistant(2, 'Prepare the call', 1, 1),
+        toolResult(3, 'latest'), assistant(5, 'answer', 1, 2)],
+      turnEnds: new Map([[1, 6]]),
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    expect(turnProcessControl(view.container)).toBeNull()
+    expect(view.getByTestId('tool-seat-latest').closest('[hidden]')).toBeNull()
+  })
+
+  it('keeps every parallel running Tool visible rather than only the latest call', () => {
+    const h = makeHarness({ running: true, runningCalls: [runningCall('older'), runningCall('latest')] })
+    const view = render(<h.ChatView {...h.props} />)
+    expect(view.getByTestId('tool-seat-older').closest('[hidden]')).toBeNull()
+    expect(view.getByTestId('tool-seat-latest').closest('[hidden]')).toBeNull()
+    expect(turnProcessControl(view.container)).toBeNull()
+  })
+
+  it('keeps the latest Tool and final reasoning visible while earlier operations expand', () => {
+    const final = {
+      ...assistant(6, 'answer', 1, 2),
+      blocks: [
+        { kind: 'reasoning' as const, text: 'Check the result\nVerification complete' },
+        { kind: 'text' as const, text: 'answer' },
+      ],
+    }
+    const h = makeHarness({
+      nodes: [user(1, 'question'), reasoningAssistant(2, 'Earlier thought', 1, 1),
+        toolResult(3, 'older'), toolResult(4, 'latest'), final],
+      turnEnds: new Map([[1, 7]]),
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    const toggle = turnProcessControl(view.container)!
+    const older = view.getByTestId('tool-seat-older')
+    const latest = view.getByTestId('tool-seat-latest')
+    expect(older.closest('[hidden]')).not.toBeNull()
+    expect(view.getByText('Earlier thought').closest('[hidden]')).not.toBeNull()
+    expect(latest.closest('[hidden]')).toBeNull()
+    const reasoning = view.getByRole('button', { name: /^Think\s*Verification complete$/ })
+    fireEvent.keyDown(reasoning, { key: 'Enter' })
+    expect(reasoning.getAttribute('aria-expanded')).toBe('true')
+    expect(view.getByText(/Check the result/).closest('[hidden]')).toBeNull()
+    fireEvent.click(toggle)
+    expect(older.closest('[hidden]')).toBeNull()
+    fireEvent.click(toggle)
+    expect(older.closest('[hidden]')).not.toBeNull()
+    expect(latest.closest('[hidden]')).toBeNull()
+    expect(reasoning.getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('retains the latest Tool row when pagination adds earlier operations', () => {
+    const thinking = reasoningAssistant(4, 'Latest thought', 1, 2)
+    const latest = toolResult(5, 'latest')
+    const final = assistant(8, 'answer', 1, 3)
+    const h = makeHarness({ nodes: [thinking, latest, final], turnEnds: new Map([[1, 9]]), hasMore: true })
+    const view = render(<h.ChatView {...h.props} />)
+    const row = view.getByTestId('tool-seat-latest')
+    act(() => { h.set({ nodes: [user(1, 'question'), reasoningAssistant(2, 'Earlier thought', 1, 1),
+      toolResult(3, 'older'), thinking, latest, final], hasMore: false }) })
+    expect(view.getByTestId('tool-seat-latest')).toBe(row)
+    expect(row.closest('[hidden]')).toBeNull()
+    expect(view.getByTestId('tool-seat-older').closest('[hidden]')).not.toBeNull()
+    fireEvent.click(turnProcessControl(view.container)!)
+    expect(view.getByTestId('tool-seat-older').closest('[hidden]')).toBeNull()
   })
 
   it('folds injected Context in place with the rest of the Turn process', () => {
@@ -1461,7 +1548,7 @@ describe('ChatView', () => {
     expect(promptRow.getAttribute('hidden')).toBeNull()
     expect(promptRow.hasAttribute('data-turn-process-member')).toBe(false)
     expect(members.map(member => member.dataset.chatFlowKind)).toEqual(['context', 'assistant-step'])
-    expect(members.map(member => member.getAttribute('hidden'))).toEqual(['until-found', 'until-found'])
+    expect(members.map(member => member.getAttribute('hidden'))).toEqual(['until-found', null])
 
     fireEvent.click(toggle)
     expect(renderedFlowKinds(view.container)).toEqual([
@@ -1568,7 +1655,7 @@ describe('ChatView', () => {
     expect(processRow.getAttribute('hidden')).toBe('until-found')
   })
 
-  it('folds final-step reasoning under the fallback title when every summary count is zero', () => {
+  it('keeps final-step reasoning directly expandable without an empty process summary', () => {
     const final = {
       ...assistant(3, 'final answer', 1, 1),
       blocks: [
@@ -1578,13 +1665,13 @@ describe('ChatView', () => {
     }
     const h = makeHarness({ nodes: [user(1, 'question'), final], turnEnds: new Map([[1, 4]]) })
     const view = render(<h.ChatView {...h.props} />)
-    const toggle = view.getByRole('button', { name: 'Thought for a while' })
-    const reasoning = view.container.querySelector<HTMLElement>('[data-turn-process-inline]')
-    expect(toggle.getAttribute('aria-expanded')).toBe('false')
-    expect(reasoning?.getAttribute('hidden')).toBe('until-found')
+    expect(turnProcessControl(view.container)).toBeNull()
+    const reasoning = view.getByText('private analysis').closest('[data-variant="think"]')
+    expect(reasoning?.closest('[hidden]')).toBeNull()
     expect(view.getByText('final answer')).toBeTruthy()
-    fireEvent.click(toggle)
+    fireEvent.click(view.getByText('Think'))
     expect(view.getByText('private analysis')).toBeTruthy()
+    expect(reasoning?.querySelector('[aria-expanded="true"]')).not.toBeNull()
   })
 
   it('folds a completed Turn even while the reader is away from the tail', () => {
@@ -1773,7 +1860,7 @@ describe('ChatView', () => {
     expect(turnProcessControl(view.container)?.getAttribute('aria-expanded')).toBe('false')
   })
 
-  it('replaces summarized non-text actions while keeping visible agent commentary', () => {
+  it('keeps summarized latest operations and visible agent commentary without an empty disclosure', () => {
     const source = chatSnapshotFixture({
       nodes: [
         user(1, 'question'),
@@ -1782,26 +1869,7 @@ describe('ChatView', () => {
         reasoningAssistant(4, 'private reasoning', 1, 2),
       ],
     })
-    const process = source.nodes.values()
-      .find((candidate): candidate is ChatNode<'turn-process'> => candidate.kind === 'turn-process')
-    if (process === undefined
-      || (process.location.kind !== 'turn' && process.location.kind !== 'step')) {
-      throw new Error('fixture lacks a running Turn process')
-    }
-    const turnData = process.location.turn.data as typeof process.location.turn.data & {
-      set(key: 'turn-process', value: TurnProcessSpec): void
-      publish(): void
-    }
-    const summarized = { ...process.data, summarizedThroughSeq: 4 }
-    turnData.set('turn-process', summarized)
-    turnData.publish()
-    const builder = new ChatSnapshotBuilder()
-    const chat = builder.replace({
-      nodes: source.nodes.values().map(node => node.key === process.key
-        ? { ...process, data: summarized }
-        : node),
-      timeline: source.timeline,
-    })
+    const chat = summarizedChat(source, 4)
     const h = makeHarness({ chat }, { running: true })
     const view = render(<h.ChatView {...h.props} />)
     const commentary = view.getByText('I am checking the repository.').closest<HTMLElement>('[data-chat-flow-kind]')
@@ -1809,8 +1877,109 @@ describe('ChatView', () => {
     const reasoning = view.getByText('private reasoning').closest<HTMLElement>('[data-chat-flow-kind]')
 
     expect(commentary?.getAttribute('hidden')).toBeNull()
-    expect(tool?.getAttribute('hidden')).toBe('until-found')
-    expect(reasoning?.getAttribute('hidden')).toBe('until-found')
+    expect(tool?.getAttribute('hidden')).toBeNull()
+    expect(reasoning?.getAttribute('hidden')).toBeNull()
+    expect(turnProcessControl(view.container)).toBeNull()
+  })
+
+  it('expands covered live operations while keeping an older running Tool visible', () => {
+    const source = chatSnapshotFixture({ nodes: [user(1, 'question'),
+      reasoningAssistant(2, 'Earlier thought', 1, 1), toolResult(3, 'pending'),
+      toolResult(4, 'older'), toolResult(5, 'latest'), reasoningAssistant(7, 'Latest thought', 1, 2)] })
+    const pendingRoot = source.nodes.values().filter((node): node is ChatNode<'tool-call'> => node.kind === 'tool-call')
+      .find(node => node.data.root.callId === 'pending')!
+    const pending = new ChatSnapshotBuilder().replace({
+      nodes: source.nodes.values().map(node => node === pendingRoot
+        ? { ...node, data: { root: { ...runningCall('pending'), turn: 1 } } }
+        : node),
+      timeline: source.timeline,
+    })
+    const builder = new ChatSnapshotBuilder()
+    const h = makeHarness({ chat: summarizedChat(pending, 5, builder) }, { running: true })
+    const view = render(<h.ChatView {...h.props} />)
+    const toggle = turnProcessControl(view.container)!
+    const older = view.getByTestId('tool-seat-older')
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(older.closest('[hidden]')).not.toBeNull()
+    expect(view.getByTestId('tool-seat-pending').closest('[hidden]')).toBeNull()
+    expect(view.getByTestId('tool-seat-latest').closest('[hidden]')).toBeNull()
+    expect(view.getByText('Latest thought').closest('[hidden]')).toBeNull()
+    fireEvent.click(toggle)
+    expect(older.closest('[hidden]')).toBeNull()
+    act(() => { h.set({ chat: summarizedChat(pending, 7, builder) }) })
+    expect(turnProcessControl(view.container)?.getAttribute('aria-expanded')).toBe('true')
+    expect(view.getByTestId('tool-seat-older')).toBe(older)
+    expect(older.closest('[hidden]')).toBeNull()
+    fireEvent.click(turnProcessControl(view.container)!)
+    expect(older.closest('[hidden]')).not.toBeNull()
+    fireEvent(older.closest('[data-chat-flow-kind]')!, new Event('beforematch'))
+    expect(turnProcessControl(view.container)?.getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('allows covered operations to expand again after a live summary settles', () => {
+    const nodes = [user(1, 'question'), reasoningAssistant(2, 'Earlier thought', 1, 1),
+      toolResult(3, 'older'), toolResult(4, 'latest'), reasoningAssistant(5, 'Latest thought', 1, 2)]
+    const builder = new ChatSnapshotBuilder()
+    const h = makeHarness({ chat: summarizedChat(chatSnapshotFixture({ nodes }), 5, builder) }, { running: true })
+    const view = render(<h.ChatView {...h.props} />)
+    fireEvent.click(turnProcessControl(view.container)!)
+    expect(view.getByTestId('tool-seat-older').closest('[hidden]')).toBeNull()
+    act(() => { h.set({ chat: summarizedChat(chatSnapshotFixture({
+      nodes: [...nodes, assistant(7, 'answer', 1, 3)], turnEnds: new Map([[1, 8]]),
+    }), 5, builder) }) })
+    const toggle = turnProcessControl(view.container)!
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(view.getByTestId('tool-seat-latest').closest('[hidden]')).toBeNull()
+    expect(view.getByText('Latest thought').closest('[hidden]')).toBeNull()
+    fireEvent.click(toggle)
+    expect(view.getByTestId('tool-seat-older').closest('[hidden]')).toBeNull()
+    expect(view.getByText('Earlier thought').closest('[hidden]')).toBeNull()
+  })
+
+  it('folds an older covered Tool when it settles without losing its disclosure', () => {
+    const source = chatSnapshotFixture({ nodes: [user(1, 'question'),
+      reasoningAssistant(2, 'Latest thought', 1, 1), toolResult(3, 'pending'), toolResult(4, 'latest')] })
+    const settled = source.nodes.values().filter((node): node is ChatNode<'tool-call'> => node.kind === 'tool-call')
+      .find(node => node.data.root.callId === 'pending')!
+    const pending = new ChatSnapshotBuilder().replace({
+      nodes: source.nodes.values().map(node => node === settled
+        ? { ...node, data: { root: { ...runningCall('pending'), turn: 1 } } }
+        : node),
+      timeline: source.timeline,
+    })
+    const builder = new ChatSnapshotBuilder()
+    const h = makeHarness({ chat: summarizedChat(pending, 4, builder) }, { running: true })
+    const view = render(<h.ChatView {...h.props} />)
+    expect(turnProcessControl(view.container)).toBeNull()
+    const row = view.getByTestId('tool-seat-pending')
+    expect(row.closest('[hidden]')).toBeNull()
+    act(() => { h.set({ chat: builder.apply({ upserts: [settled], timeline: source.timeline }) }) })
+    expect(view.getByTestId('tool-seat-pending')).toBe(row)
+    expect(row.closest('[hidden]')).not.toBeNull()
+    fireEvent.click(turnProcessControl(view.container)!)
+    expect(row.closest('[hidden]')).toBeNull()
+  })
+
+  it('retains the first nonempty streamed reasoning while folding the previous covered thought', () => {
+    const source = chatSnapshotFixture({ nodes: [user(1, 'question'),
+      reasoningAssistant(2, 'Earlier thought', 1, 1), toolResult(3, 'older'), toolResult(4, 'latest')],
+    partial: { turn: 1, step: 2, blocks: [{ kind: 'reasoning', text: '' }] } })
+    const partial = source.nodes.values().filter((node): node is ChatNode<'assistant-step'> => node.kind === 'assistant-step')
+      .find(node => node.data.step === 2)!
+    const current = { ...partial, anchorSeq: 5 }
+    const anchored = new ChatSnapshotBuilder().replace({
+      nodes: source.nodes.values().map(node => node === partial ? current : node), timeline: source.timeline,
+    })
+    const builder = new ChatSnapshotBuilder()
+    const h = makeHarness({ chat: summarizedChat(anchored, 5, builder) }, { running: true })
+    const view = render(<h.ChatView {...h.props} />)
+    expect(view.getByText('Earlier thought').closest('[hidden]')).toBeNull()
+    expect(view.getByText('Running').closest('[hidden]')).toBeNull()
+    act(() => { h.set({ chat: builder.apply({ upserts: [{ ...current, data: {
+      ...current.data, status: 'running', blocks: [{ kind: 'reasoning', text: 'Latest thought' }],
+    } }], timeline: source.timeline }) }) })
+    expect(view.getByText('Earlier thought').closest('[hidden]')).not.toBeNull()
+    expect(view.getByText('Latest thought').closest('[hidden]')).toBeNull()
   })
 
   it('keeps a manual expansion when the reader returns from another view', () => {

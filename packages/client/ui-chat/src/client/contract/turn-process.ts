@@ -1,4 +1,5 @@
 import type { ChatNode } from './chat-nodes.ts'
+import { hasAssistantReplyContent } from './assistant-content.ts'
 
 /** Current process range and finalized answer boundary derived from one Turn. */
 export interface TurnProcessSpec {
@@ -34,6 +35,20 @@ const TURN_PROCESS_INDEPENDENT_KIND_LIST = [
 export const TURN_PROCESS_INDEPENDENT_KINDS: ReadonlySet<string> = new Set(
   TURN_PROCESS_INDEPENDENT_KIND_LIST,
 )
+
+/**
+ * Identify process-only evidence covered by an accepted activity summary.
+ * @param node - current Chat Node.
+ * @param spec - owning Turn's process range and summary watermark.
+ * @returns whether the summary can fold this Node behind the process disclosure.
+ */
+export function isSummaryCoveredProcess(node: ChatNode, spec: TurnProcessSpec): boolean {
+  if (spec.summarizedThroughSeq === null
+    || node.anchorSeq < spec.processStartSeq
+    || node.anchorSeq > spec.summarizedThroughSeq) return false
+  if (node.kind === 'tool-call' || node.kind === 'model-retry') return true
+  return node.kind === 'assistant-step' && !hasAssistantReplyContent(node.data.blocks)
+}
 
 /**
  * Compare immutable Turn-process specifications by their published fields.

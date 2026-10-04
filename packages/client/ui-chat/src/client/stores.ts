@@ -6,13 +6,13 @@ type ChatActions = {
   setTurnProcessOpen: (
     draft: ChatStoreState,
     turn: number,
-    answerStep: number,
+    answerStep: number | null,
     open: boolean,
   ) => void
 }
 
 /**
- * Resolve the manually expanded answer for one Turn.
+ * Resolve the manually expanded process generation for one Turn.
  * @param state - Chat store snapshot.
  * @param turn - owning Turn.
  * @returns the Turn's stored entry, when present.

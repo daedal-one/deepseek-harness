@@ -28,14 +28,14 @@ export async function newEnglishPage(browser: Browser, height = 1000): Promise<P
 }
 
 /**
- * Expand every currently eligible Turn-process group so a Tool-focused
+ * Expand every currently eligible Turn-process group in a settled Chat so a Tool-focused
  * scenario can exercise the original row contract beneath product-default
  * compact Chat presentation.
  * @param page - page containing the Chat view.
  */
 export async function expandTurnProcesses(page: Page): Promise<void> {
+  await page.locator('[data-chat-flow-kind="turn-tail"]').last().waitFor({ state: 'visible', timeout: 10_000 })
   const controls = page.locator('[data-turn-process]')
-  await controls.first().waitFor({ state: 'visible', timeout: 10_000 })
   const count = await controls.count()
   for (let index = 0; index < count; index++) {
     const control = controls.nth(index)

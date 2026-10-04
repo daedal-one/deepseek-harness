@@ -226,7 +226,10 @@ describe('web e2e: assistant IconActions wait for the turn to end', () => {
       element.closest<HTMLElement>('[data-chat-flow-kind="turn-process"]')?.getBoundingClientRect().bottom)
     const answerTop = await page.getByText('DONE', { exact: true }).evaluate(element =>
       element.closest<HTMLElement>('[data-chat-flow-kind="assistant-step"]')?.getBoundingClientRect().top)
-    expect(answerTop).toBe((processBottom ?? 0) + 8)
+    const toolTop = await page.locator('[data-chat-flow-kind="tool-call"]').last()
+      .evaluate(element => element.getBoundingClientRect().top)
+    expect(toolTop).toBeGreaterThan(processBottom ?? 0)
+    expect(answerTop).toBeGreaterThan(toolTop)
     await process.focus()
     const completed = await captureStableAria(page, '[class*="centerCol"]', scaffold!.workspaceCwd)
     await compareOrRefreshGolden(COMPLETED_EXPECTED, completed, MODE)
@@ -241,9 +244,13 @@ describe('web e2e: assistant IconActions wait for the turn to end', () => {
     await settled
     const process = page.locator('[data-turn-process]')
     const tool = page.getByRole('button', { name: 'Bash Print alpha to stdout' })
+    const narration = page.getByText(NARRATION, { exact: true })
+    const context = page.getByRole('button', { name: 'Context injection @deepseek-ai/dsh-system-prompt', exact: true })
     await process.waitFor({ timeout: 10_000 })
     expect(await process.getAttribute('aria-expanded')).toBe('false')
-    expect(await tool.isVisible()).toBe(false)
+    expect(await tool.isVisible()).toBe(true)
+    expect(await narration.isVisible()).toBe(true)
+    expect(await context.isVisible()).toBe(false)
 
     await page.getByRole('button', { name: 'Settings', exact: true }).click()
     const dialog = page.getByRole('dialog', { name: 'Settings' })
@@ -253,6 +260,8 @@ describe('web e2e: assistant IconActions wait for the turn to end', () => {
 
     await expect.poll(() => process.count(), { timeout: 10_000 }).toBe(0)
     await tool.waitFor({ state: 'visible', timeout: 10_000 })
+    expect(await narration.isVisible()).toBe(true)
+    expect(await context.isVisible()).toBe(true)
     await expect.poll(async () => readFile(join(scaffold!.harnessHome, 'settings.yaml'), 'utf8'), { timeout: 5_000 })
       .toMatch(/ui-chat:\n\s+transcriptView: normal/)
 
@@ -263,12 +272,14 @@ describe('web e2e: assistant IconActions wait for the turn to end', () => {
     await page.keyboard.press('Escape')
     await process.waitFor({ timeout: 10_000 })
     expect(await process.getAttribute('aria-expanded')).toBe('false')
-    expect(await tool.isVisible()).toBe(false)
+    expect(await tool.isVisible()).toBe(true)
+    expect(await narration.isVisible()).toBe(true)
+    expect(await context.isVisible()).toBe(false)
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
   }, 60_000)
 
-  it.skipIf(MODE === 'record')('keeps a focused process member open when the completed reply arrives', async () => {
+  it.skipIf(MODE === 'record')('keeps the focused latest Tool visible when earlier process rows fold', async () => {
     await launch(undefined, 200)
     onTestFailed(() => saveFailureShot(page, 'web-e2e-turn-tail-actions-focused'))
     const { settled } = await sendPrompt()
@@ -280,7 +291,8 @@ describe('web e2e: assistant IconActions wait for the turn to end', () => {
     await expect.poll(() => page.getByText('DONE', { exact: true }).count(), { timeout: 10_000 }).toBe(1)
     const process = page.locator('[data-turn-process]')
     await expect.poll(() => process.count(), { timeout: 10_000 }).toBe(1)
-    expect(await process.getAttribute('aria-expanded')).toBe('true')
+    expect(await process.getAttribute('aria-expanded')).toBe('false')
+    expect(await tool.isVisible()).toBe(true)
     expect(await tool.evaluate(element => element.ownerDocument.activeElement === element)).toBe(true)
     const focused = await captureStableAria(page, '[class*="centerCol"]', scaffold!.workspaceCwd)
     await compareOrRefreshGolden(FOCUSED_EXPECTED, focused, MODE)

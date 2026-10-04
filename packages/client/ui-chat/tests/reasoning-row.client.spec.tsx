@@ -14,7 +14,7 @@ const t = makeTranslate(copy, commonCopy)
 const renderMessageImages: AssistantMarkdownProps['renderMessageImages'] = () => null
 
 describe('ReasoningRow', () => {
-  it('follows the latest streaming line, then restores the settled first line', () => {
+  it('keeps the latest reasoning line visible across streaming settlement', () => {
     const view = render(
       <AssistantMarkdown
         t={t}
@@ -46,7 +46,7 @@ describe('ReasoningRow', () => {
         renderMessageImages={renderMessageImages}
       />,
     )
-    const settledSummary = view.getByText('Inspect the session')
+    const settledSummary = view.getByText('Newest reasoning tokens keep arriving')
     expect(view.queryByText('Running')).toBeNull()
     expect(settledSummary.parentElement?.hasAttribute('data-follow-end')).toBe(false)
   })
@@ -62,7 +62,7 @@ describe('ReasoningRow', () => {
     )
     const row = view.getByRole('button')
 
-    fireEvent.click(view.getByText('Inspect the session'))
+    fireEvent.click(view.getByText('Check persistence'))
     expect(row.getAttribute('aria-expanded')).toBe('true')
     expect(view.getByText(/Check persistence/)).toBeTruthy()
 
@@ -73,7 +73,7 @@ describe('ReasoningRow', () => {
   it.each([
     {
       label: 'settled',
-      text: '**Comparing checkout and merge bases**\nKeep **reviewing**',
+      text: 'Inspect the session\n**Comparing checkout and merge bases**',
       streaming: false,
     },
     {

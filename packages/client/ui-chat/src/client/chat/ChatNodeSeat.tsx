@@ -2,9 +2,8 @@ import { memo, useCallback, useMemo } from 'react'
 import { JsonBlock } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ConversationLocationDataStore, ConversationTurnDataMap } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { ChatNodeOwnerProps, ChatViewSlotProps } from '../contract/slots.ts'
-import type { ChatNode } from '../contract/chat-nodes.ts'
-import { hasAssistantReplyContent } from '../contract/assistant-content.ts'
-import { TURN_PROCESS_INDEPENDENT_KINDS } from '../contract/turn-process.ts'
+import { isRunningTool, type ChatNode } from '../contract/chat-nodes.ts'
+import { isSummaryCoveredProcess, TURN_PROCESS_INDEPENDENT_KINDS } from '../contract/turn-process.ts'
 import { storedTurnProcessEntry } from '../stores.ts'
 import { useSearchableHidden } from './searchable-hidden.ts'
 import css from './ChatView.module.css'
@@ -35,11 +34,6 @@ function turnOf(node: ChatNode | undefined): number | undefined {
   return location?.kind === 'turn' || location?.kind === 'step' ? location.turn.turn : undefined
 }
 
-function isSummaryReplaceable(node: ChatNode): boolean {
-  if (node.kind === 'tool-call' || node.kind === 'model-retry') return true
-  return node.kind === 'assistant-step' && !hasAssistantReplyContent(node.data.blocks)
-}
-
 /** Subscribe, apply Turn-process visibility, and dispatch one stable Context key. */
 export const ChatNodeSeat = memo(function ChatNodeSeat({
   nodeKey, useChatNode, useChatNodeProcess, historyIncomplete, compactTranscript,
@@ -51,56 +45,62 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
   const turn = turnOf(routedNode)
   const processPresentation = useChatNodeProcess(nodeKey)
   const processSpec = processPresentation?.spec
+  const expansionStep = processPresentation?.turnClosed === true && processSpec !== undefined
+    ? processSpec.answerStep
+    : null
   const storedEntry = useStore(state => processSpec === undefined
     ? undefined
     : storedTurnProcessEntry(state, processSpec.turn))
   const processEntry = processSpec !== undefined
-    && processSpec.answerStep !== null
-    && storedEntry?.answerStep === processSpec.answerStep
+    && storedEntry?.answerStep === expansionStep
     ? storedEntry
     : undefined
   const processOpen = processEntry !== undefined
   const setOpen = useCallback((open: boolean) => {
-    if (processSpec !== undefined && processSpec.answerStep !== null) {
-      actions.setTurnProcessOpen(processSpec.turn, processSpec.answerStep, open)
+    if (processSpec !== undefined) {
+      actions.setTurnProcessOpen(processSpec.turn, expansionStep, open)
     }
-  }, [actions, processSpec])
+  }, [actions, expansionStep, processSpec])
   const processWindowReady = processSpec !== undefined
     && processPresentation !== undefined
     && compactTranscript
-    && processSpec.answerAnchorSeq !== null
     && processPresentation.turn === processSpec.turn
-    && processPresentation.turnClosed
+    && (processPresentation.turnClosed
+      ? processSpec.answerAnchorSeq !== null
+      : processSpec.summarizedThroughSeq !== null)
     && !historyIncomplete
   const processMember = routedNode !== undefined
     && processWindowReady
     && !TURN_PROCESS_INDEPENDENT_KINDS.has(routedNode.kind)
     && routedNode.anchorSeq >= processSpec.processStartSeq
-    && routedNode.anchorSeq < processSpec.answerAnchorSeq
+    && (processPresentation.turnClosed
+      ? processSpec.answerAnchorSeq !== null && routedNode.anchorSeq < processSpec.answerAnchorSeq
+      : isSummaryCoveredProcess(routedNode, processSpec))
   const processAnswer = routedNode !== undefined
     && processWindowReady
+    && processPresentation.turnClosed
     && routedNode.kind === 'assistant-step'
     && routedNode.data.step === processSpec.answerStep
   const ownsDisclosure = routedNode?.kind === 'turn-process' || processAnswer
-  const summaryCovered = routedNode !== undefined
-    && compactTranscript
-    && processSpec !== undefined
-    && processSpec.summarizedThroughSeq !== null
-    && isSummaryReplaceable(routedNode)
-    && routedNode.anchorSeq >= processSpec.processStartSeq
-    && routedNode.anchorSeq <= processSpec.summarizedThroughSeq
+  const keepReasoningVisible = nodeKey === processPresentation?.latestReasoningKey
+  const latestOperation = nodeKey === processPresentation?.latestToolKey || keepReasoningVisible
+    || (processPresentation?.turnClosed === false && routedNode?.kind === 'tool-call'
+      && isRunningTool(routedNode.data.root))
+    || (processPresentation?.turnClosed === false && routedNode?.kind === 'assistant-step'
+      && routedNode.data.status === 'running')
   const foldable = processWindowReady
     && (processMember || (ownsDisclosure
-      && (processPresentation.hasExternalProcess || processSpec.inlineReasoning)))
+      && processPresentation.hasFoldableProcess))
   const turnProcess = useMemo(() => processSpec === undefined
     ? undefined
     : {
       spec: processSpec,
       foldable,
+      keepReasoningVisible,
       open: processOpen,
       setOpen,
     }, [
-    foldable, processOpen, processSpec, setOpen,
+    foldable, keepReasoningVisible, processOpen, processSpec, setOpen,
   ])
   const controllerInactive = routedNode?.kind === 'turn-process'
     && !foldable
@@ -108,7 +108,7 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
     && foldable
     && processPresentation.compactAnswer
     && !processOpen
-  const processHidden = controllerInactive || summaryCovered || (foldable && processMember && !processOpen)
+  const processHidden = controllerInactive || (foldable && processMember && !processOpen && !latestOperation)
   const revealProcess = useCallback(() => {
     if (processMember) setOpen(true)
   }, [processMember, setOpen])

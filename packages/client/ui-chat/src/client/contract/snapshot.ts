@@ -75,7 +75,10 @@ export interface ChatTurnProcessPresentation {
   readonly turn: number
   readonly spec: TurnProcessSpec
   readonly turnClosed: boolean
-  readonly hasExternalProcess: boolean
+  /** Process material remaining after the latest Tool and reasoning rows stay visible. */
+  readonly hasFoldableProcess: boolean
+  readonly latestToolKey: string | null
+  readonly latestReasoningKey: string | null
   readonly compactAnswer: boolean
 }
 

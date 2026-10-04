@@ -22,6 +22,14 @@
 - button "2 tool calls":
   - text: 2 tool calls
   - img
+- button "Load full result"
+- img
+- text: Read
+- button "b.txt"
+- button "Think Both files have been read. a.txt contains \"alpha\" and b.txt contains \"beta\". I'll now reply with DONE as instructed.":
+  - img
+  - img
+  - text: Think Both files have been read. a.txt contains "alpha" and b.txt contains "beta". I'll now reply with DONE as instructed.
 - paragraph: DONE
 - button "Copy":
   - img

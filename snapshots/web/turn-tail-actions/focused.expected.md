@@ -18,13 +18,9 @@
 - text: Begin your reply with the plain sentence "Reading the workspace now." as text, and in that same message call the bash tool with the command "echo alpha". After the tool result, reply with the single word DONE and stop. {{clock}}
 - button "Copy":
   - img
-- button "1 tool call · 1 message" [expanded]:
+- button "1 tool call · 1 message":
   - text: 1 tool call · 1 message
   - img
-- button "Context injection @deepseek-ai/dsh-system-prompt":
-  - img
-  - img
-  - text: Context injection @deepseek-ai/dsh-system-prompt
 - button "Think The user wants me to begin with \"Reading the workspace now.\" and call bash with \"echo alpha\" in the same message. Then after the tool result, reply with the single word DONE and stop.":
   - img
   - img

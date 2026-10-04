@@ -309,9 +309,15 @@ function processPresentationInputChanged(
   if (previous.kind === 'turn-process' && next.kind === 'turn-process') {
     return previous.data !== next.data
   }
+  if (previous.kind === 'tool-call' && next.kind === 'tool-call') {
+    return isRunningTool(previous.data.root) !== isRunningTool(next.data.root)
+  }
   return previous.kind === 'assistant-step'
     && next.kind === 'assistant-step'
-    && previous.data.step !== next.data.step
+    && (previous.data.step !== next.data.step
+      || previous.data.status !== next.data.status
+      || previous.data.blocks.some(block => block.kind === 'reasoning' && block.text.trim() !== '')
+        !== next.data.blocks.some(block => block.kind === 'reasoning' && block.text.trim() !== ''))
 }
 
 interface TurnProcessPresentation {
