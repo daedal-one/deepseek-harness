@@ -591,7 +591,7 @@ Tool registry and execution pipeline. Scoped registrations shadow globals; one v
  * declaration covers every agent joined under it.
  *
  * Scoped only, and one declaration per scope: this is how an agent preset
- * composes PTC mode agents beside native ones in the same process, and a
+ * composes entrypoint-only agents beside native ones in the same process, and a
  * process-global override would be the `mode` config field instead.
  * @param mode - the presentation the covered agents' models see.
  * @returns the exact disposer that restores the deployment default.

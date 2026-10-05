@@ -1174,7 +1174,7 @@ for line in sys.stdin:
         assert provenance[0]["createdCommits"] == ["d" * 40]
 
 
-@pytest.mark.parametrize("scenario", ["clm-operations", "kev-operations"])
+@pytest.mark.parametrize("scenario", ["clm-operations", "kev-operations", "operation-only"])
 def test_recorded_operation_records_match_the_typescript_sdk(tmp_path: Path, scenario: str) -> None:
     fixture = Path(__file__).resolve().parents[3] / f"snapshots/sdk/{scenario}/notifications.expected.jsonl"
     expected_path = Path(__file__).parent / f"expected/{scenario}.json"
@@ -1327,7 +1327,7 @@ for line in sys.stdin:
             assert selected["kind"] == "complete"
             assert draft["state"]["completionEvidence"] == [outcomes[-1]["value"]]
 
-    if scenario == "kev-operations":
+    if scenario in ("kev-operations", "operation-only"):
         for request, response in zip(requests, responses):
             wire = request["wire"]
             preparation = wire["preparation"]

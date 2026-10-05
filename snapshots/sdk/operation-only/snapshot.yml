@@ -1,0 +1,8 @@
+version: 1
+scenario: operation-only
+profile: sdk
+composition: sdk-operation-only
+recording: authored
+header:
+  class: sdk-operation-only
+  pin: true

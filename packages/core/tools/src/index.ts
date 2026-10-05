@@ -670,7 +670,7 @@ function errorInfo(error: unknown): ToolErrorInfo | undefined {
 }
 
 /** How the registry presents its tools to the model (see {@link Config.mode}). */
-export type ToolPresentationMode = 'native' | 'ptc' | 'both'
+export type ToolPresentationMode = 'native' | 'ptc' | 'both' | 'operation'
 
 /** Plugin config: how the registered tools are presented to the model. */
 export interface Config {
@@ -684,7 +684,9 @@ export interface Config {
    * sends both forms. PTC mode requires a `ctx.codeRuntime` whose `language`
    * has a registered SDK renderer (TypeScript or Python) and fail prompt
    * assembly when it is absent or has no renderer. Under `ptc`, native names
-   * in `toolOrder` are invalid.
+   * in `toolOrder` are invalid. `operation` exposes only the registered
+   * `run_operation` entrypoint and denies other model-direct calls before policy;
+   * nested calls retain their normal scoped visibility and authorization.
    */
   mode?: ToolPresentationMode
   /**
@@ -824,7 +826,7 @@ export class ToolRuntime extends Service {
       maxQueryBytes: z.natural().min(1).required(),
       maxResultBytes: z.natural().min(1).required(),
     })]),
-    mode: z.union(['native', 'ptc', 'both'] as const).default('native'),
+    mode: z.union(['native', 'ptc', 'both', 'operation'] as const).default('native'),
     maxParallelSubCalls: z.natural().min(1).default(10),
   }) as z<Config>
 
@@ -880,28 +882,19 @@ export class ToolRuntime extends Service {
     }
   }
 
-  /**
-   * The prompt statement of the `ptc` executor collapse, registered wherever
-   * {@link sdkSection} is and rendering empty outside an effective `ptc`.
-   *
-   * Every tool contributes its own guidance section naming its tool, none of
-   * them qualify how that tool is reached, and they all render before the SDK.
-   * Without this the model reads a catalog of tools it is told to use and no
-   * statement that only `run_code` may be called, so it emits a native call,
-   * receives `UNKNOWN_TOOL` for a tool the prompt just declared, and concludes
-   * the deployment is inconsistent. Its order places the rule before that
-   * guidance rather than after it.
-   *
-   * `both` renders empty: native calls do execute there, so the rule is false.
-   * @returns the section registration.
-   */
+  /** Declare the scoped entrypoint before ordinary tool guidance. */
   private collapseSection(): { name: string; order: number; text: (context: { scope?: ScopeKey }) => string } {
     return {
       name: 'tools:ptc-only',
       order: this.ctx.systemPrompt.getSectionOrder('PTC_ONLY'),
       // The SAME predicate the executor denies by, so the prompt cannot state
       // a rule the registry does not enforce (see `collapses`).
-      text: context => this.modeFor(context.scope) === 'ptc' ? PTC_ONLY_INSTRUCTION : '',
+      text: (context) => {
+        const mode = this.modeFor(context.scope)
+        if (mode === 'ptc') return PTC_ONLY_INSTRUCTION
+        if (mode === 'operation') return 'Use run_operation for every tool interaction. Analyze the task, submit a finite plan, and let the operation runner execute it. Direct calls to other tools are rejected. Return to planning when the runner requests replanning; never bypass it with another tool.'
+        return ''
+      },
     }
   }
 
@@ -922,7 +915,7 @@ export class ToolRuntime extends Service {
       // Regenerate from the calling scope's visible tools in stable order.
       text: (context) => {
         const mode = this.modeFor(context.scope)
-        if (mode === 'native') return ''
+        if (mode === 'native' || mode === 'operation') return ''
         const runtime = this.requireCodeRuntime(mode)
         // Own-property read: a language like `toString`/`constructor` would
         // otherwise resolve an inherited Object.prototype member as a renderer.
@@ -982,7 +975,7 @@ export class ToolRuntime extends Service {
    * declaration covers every agent joined under it.
    *
    * Scoped only, and one declaration per scope: this is how an agent preset
-   * composes PTC mode agents beside native ones in the same process, and a
+   * composes entrypoint-only agents beside native ones in the same process, and a
    * process-global override would be the `mode` config field instead.
    * @param mode - the presentation the covered agents' models see.
    * @returns the exact disposer that restores the deployment default.
@@ -1027,6 +1020,11 @@ export class ToolRuntime extends Service {
     if (mode === 'native') {
       const schemas = this.modelDefinitions(scope, session).map(definition => this.schemaOf(definition, false))
       return { schemas, knownNames: [...view.knownNames] }
+    }
+    if (mode === 'operation') {
+      const entrypoint = this.modelDefinitions(scope, session).find(definition => definition.name === 'run_operation')
+      if (entrypoint === undefined) throw new Error('dsh-tools: operation mode requires a visible, admitted run_operation tool')
+      return { schemas: [this.schemaOf(entrypoint, false)], knownNames: ['run_operation'] }
     }
     // Validate the runtime language BEFORE projecting schemas: schemaOf reads
     // run_code's language-aware description/parameters getters, whose own
@@ -1231,7 +1229,8 @@ export class ToolRuntime extends Service {
     // an invariant assertion as well as protection against future layer
     // changes. Per scope: a native agent must not find `run_code` in its
     // dispatch table because some other agent in the process presents it.
-    if (this.modeFor(scope) !== 'native') {
+    const mode = this.modeFor(scope)
+    if (mode === 'ptc' || mode === 'both') {
       visible.set(RUN_CODE_NAME, this.requireCodeTransport())
     }
     return { visible, knownNames, restrictableNames }
@@ -1373,23 +1372,19 @@ export class ToolRuntime extends Service {
   }
 
   /**
-   * Whether the `ptc` mode collapse denies a model-direct call: only the
-   * reserved `run_code` transport may be named. Nested sub-dispatches (a
-   * `parent` token set) bypass the collapse. One home for the
-   * security-relevant predicate, shared by {@link resolveExecution} and
-   * {@link createExecution} so the two can never drift apart.
-   *
-   * Resolved through {@link modeFor}, NOT `defaultMode`: an agent given `ptc`
-   * by an agent preset under a native deployment is the composition
-   * `dsh-agent-tool-presentation` exists for, and reading the deployment default would
-   * leave exactly that agent uncollapsed — announcing one surface while
-   * executing another, which is the bypass this collapse closes.
+   * Reject model-direct calls outside the effective scoped entrypoint:
+   * `run_code` in PTC mode, `run_operation` in operation mode. Trusted parent
+   * execution tokens permit nested dispatch through ordinary admission.
+   * Shared by execution resolution and preparation before policy evaluation.
    * @param name - the tool name as registered.
    * @param scope - the viewing scope whose effective presentation mode applies.
-   * @param nested - whether the call is a transport sub-dispatch, not a model-direct call.
+   * @param nested - whether a trusted parent token owns this sub-dispatch.
    */
   private collapses(name: string, scope: ScopeKey | undefined, nested: boolean): boolean {
-    return !nested && this.modeFor(scope) === 'ptc' && name !== RUN_CODE_NAME
+    if (nested) return false
+    const mode = this.modeFor(scope)
+    return (mode === 'ptc' && name !== RUN_CODE_NAME)
+      || (mode === 'operation' && name !== 'run_operation')
   }
 
   /**

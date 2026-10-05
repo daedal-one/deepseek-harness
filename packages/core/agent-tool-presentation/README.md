@@ -7,7 +7,7 @@ kind: "package-reference"
 
 ## Summary
 
-Use `dsh-agent-tool-presentation` in an [agent preset](../../preset/agent-presets/README.md) to fix whether models see every native tool schema, only `run_code` with a generated SDK, or both forms. Each preset can choose independently, so native and PTC agents can share one process without sharing tool catalogs. Selecting `ptc` or `both` requires a compatible code runtime; a deployment without one rejects the preset at mount time before its first prompt. The `mode` field is required when this package is present, while omitting the package keeps the deployment default.
+Use `dsh-agent-tool-presentation` in an [agent preset](../../preset/agent-presets/README.md) to fix whether models see every native tool schema, only `run_code` with a generated SDK, both forms, or only `run_operation`. Each preset can choose independently, so native and PTC agents can share one process without sharing tool catalogs. Selecting `ptc` or `both` requires a compatible code runtime; a deployment without one rejects the preset at mount time before its first prompt. The `mode` field is required when this package is present, while omitting the package keeps the deployment default.
 
 ## Table of Contents
 
@@ -23,7 +23,7 @@ Use `dsh-agent-tool-presentation` in an [agent preset](../../preset/agent-preset
 <a id="use-this-package"></a>
 ## Use this package
 
-Add this row to an agent preset to fix how every agent joined to that preset sees its tools. `native` presents each visible tool schema as a function definition; `ptc` presents only the `run_code` transport plus a generated SDK and the rule that only `run_code` may be called directly; `both` presents both forms. Agents that declare nothing get the deployment-wide `mode` on the [`dsh-tools`](../tools/README.md) row.
+Add this row to an agent preset to fix how every agent joined to that preset sees its tools. `native` presents each visible tool schema as a function definition; `ptc` presents only the `run_code` transport plus a generated SDK and the rule that only `run_code` may be called directly; `both` presents both forms; `operation` presents only an admitted `run_operation` and rejects direct calls to underlying tools. Operation mode requires no code runtime. The operation composition supplies its action catalog and plan guidance. Agents that declare nothing get the deployment-wide `mode` on the [`dsh-tools`](../tools/README.md) row.
 
 ### Add the row to a preset
 
@@ -35,7 +35,7 @@ Add this row to an agent preset to fix how every agent joined to that preset see
 
 | Field | Default | Meaning |
 |---|---|---|
-| `mode` | required | `native` — every schema; `ptc` — `run_code` plus generated SDK; `both` — both forms |
+| `mode` | required | `native` — every schema; `ptc` — `run_code` plus generated SDK; `both` — both forms; `operation` — only `run_operation` |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-agent-tool-presentation) is the exhaustive source for every accepted field. `mode` is required rather than defaulted because a preset without this row inherits the deployment default.
 

@@ -47,6 +47,7 @@ export class OperationService extends Service {
 
    */
   static Config: z<OperationConfig> = z.object({
+    returnObservations: z.boolean().default(false),
     maxPlanBytes: z.natural().min(1).default(65_536),
     maxSteps: z.natural().min(1).default(12),
     maxWallMs: z.natural().min(1).default(120_000),
@@ -92,7 +93,7 @@ export class OperationService extends Service {
     this.runner = new OperationRunner(ctx, this.judgments, this.toolPolicies, config)
     ctx.effect(() => ctx.tools.register(defineTool({
       name: 'run_operation',
-      description: 'Execute one short, finite operation plan through existing tools. Only independently reviewed, explicitly eligible read-only tools are accepted. Make this the only tool call in the assistant response. Supply version-one JSON with fixed tool names, explicit JSON-pointer observations, required deterministic assertions, and completion checks. The runner executes steps sequentially, records every checkpoint, and may return needs-replan or stopped instead of inventing values. Do not use this tool for workflows, delegation, background jobs, retries, dynamic shell commands, or recursive operation plans.',
+      description: 'Execute one short, finite operation plan through existing tools. Only tools explicitly admitted by the composing profile are accepted; ordinary permissions still apply. Make this the only tool call in the assistant response. Supply version-one JSON with fixed tool names, explicit JSON-pointer observations, required deterministic assertions, and completion checks. The runner executes steps sequentially, records every checkpoint, and may return needs-replan or stopped instead of inventing values. Use foreground actions and literal small edits. Do not use this tool for background jobs, automatic retries, output-derived shell or edit arguments, or recursive operation plans.',
       parameters: {
         plan: { type: 'json', required: true, description: 'Version-one JSON operation plan with inputs, fixed steps, observations, assertions, and completion checks.' },
       },
@@ -101,6 +102,17 @@ export class OperationService extends Service {
           type: 'object',
           additionalProperties: false,
           properties: {
+            observations: {
+              type: 'array',
+              items: {
+                type: 'object', additionalProperties: false,
+                properties: {
+                  step: { type: 'string', required: true },
+                  pointer: { type: 'string', required: true },
+                  value: { type: 'json', required: true },
+                },
+              },
+            },
             runId: { type: 'string', required: true },
             status: { type: 'string', required: true, enum: ['completed', 'needs-replan', 'stopped', 'failed', 'cancelled'] },
             reason: { type: 'string', required: true },
@@ -195,6 +207,7 @@ export class OperationService extends Service {
       attemptedSteps: [...summary.attemptedSteps],
       completedSteps: [...summary.completedSteps],
       verification: summary.verification.map(result => ({ index: result.index, passed: result.passed, reason: result.reason })),
+      ...(summary.observations === undefined ? {} : { observations: summary.observations.map(observation => ({ ...observation })) }),
     }
   }
 }

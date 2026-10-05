@@ -7,7 +7,7 @@ kind: "package-reference"
 
 ## Summary
 
-Use `dsh-tools` to expose typed capabilities to models, validate calls, enforce allow/deny/ask policy, and return finalized results without ending a turn on ordinary tool failures. Choose native function calling, [PTC mode](#ptc-mode), or both with `mode`; an agent can override the default through `presentAs`. Tool authors use `defineTool` to declare typed parameters and outputs, cooperative timeouts, parallel-safety, and optional UI presentation. Models see each permitted tool's declared name, description, and parameter schema; per-agent restrictions can narrow that visible set.
+Use `dsh-tools` to expose typed capabilities to models, validate calls, enforce allow/deny/ask policy, and return finalized results without ending a turn on ordinary tool failures. Choose native function calling, [PTC mode](#ptc-mode), both, or [operation-only planning](../../../docs/user/operation-only.md) with `mode`; an agent can override the default through `presentAs`. Tool authors use `defineTool` to declare typed parameters and outputs, cooperative timeouts, parallel-safety, and optional UI presentation. Models see each permitted tool's declared name, description, and parameter schema; per-agent restrictions can narrow that visible set.
 
 ## Table of Contents
 
@@ -59,7 +59,7 @@ The unified schema DSL supports `string`, `number`, `integer`, `boolean`, `null`
 
 ### Configure the presentation mode
 
-The `mode` config decides what the model sees: `native` (every visible schema), `ptc` (only `run_code` plus a generated SDK), or `both`.
+The `mode` config decides what the model sees: `native` (every visible schema), `ptc` (only `run_code` plus a generated SDK), `both`, or `operation` (only an admitted `run_operation`).
 
 ```yaml
 - name: '@deepseek-ai/dsh-tools'
@@ -69,10 +69,10 @@ The `mode` config decides what the model sees: `native` (every visible schema), 
 
 | Field | Default | Meaning |
 |---|---|---|
-| `mode` | `native` | How visible tools are presented to the model: `native`, `ptc`, or `both` |
+| `mode` | `native` | How visible tools are presented to the model: `native`, `ptc`, `both`, or `operation` |
 | `maxParallelSubCalls` | `10` | Concurrency cap for a `run_code` program's overlapping sub-calls; `1` restores strictly serial dispatch |
 
-The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-tools) is the exhaustive source for every accepted field. Non-native modes require a composed `ctx.codeRuntime` whose language has a registered SDK renderer; an agent preset selects its own presentation with [`dsh-agent-tool-presentation`](../agent-tool-presentation/README.md), and one agent can shadow the default with `presentAs(mode)`.
+The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-tools) is the exhaustive source for every accepted field. PTC modes require a composed `ctx.codeRuntime` whose language has a registered SDK renderer; an agent preset selects its own presentation with [`dsh-agent-tool-presentation`](../agent-tool-presentation/README.md), and one agent can shadow the default with `presentAs(mode)`.
 
 ### Restrict tools per agent
 

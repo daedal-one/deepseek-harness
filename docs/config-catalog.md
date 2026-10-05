@@ -233,7 +233,8 @@ Requires: `tools`
 export interface Config {
   /**
    * The form this agent's model sees. `native` sends every visible schema,
-   * `ptc` sends only `run_code` plus a generated SDK, `both` sends both.
+   * `ptc` sends only `run_code` plus a generated SDK, `both` sends both,
+   * and `operation` permits model-direct calls only to `run_operation`.
    * Required rather than defaulted: the deployment default is what a preset
    * without this row already gets, so an omitted value would mean the row was
    * composed for nothing.
@@ -1019,6 +1020,8 @@ Requires: `tools` · `sessions`
 
  */
 export interface OperationConfig extends Partial<OperationLimits> {
+  /** Return the last complete declared observation to the planner in the ordinary tool result. */
+  returnObservations?: boolean
   /**
    * Additional fixed tool names that operation plans may never dispatch.
    */
@@ -4314,7 +4317,9 @@ export interface Config {
    * sends both forms. PTC mode requires a `ctx.codeRuntime` whose `language`
    * has a registered SDK renderer (TypeScript or Python) and fail prompt
    * assembly when it is absent or has no renderer. Under `ptc`, native names
-   * in `toolOrder` are invalid.
+   * in `toolOrder` are invalid. `operation` exposes only the registered
+   * `run_operation` entrypoint and denies other model-direct calls before policy;
+   * nested calls retain their normal scoped visibility and authorization.
    */
   mode?: ToolPresentationMode
   /**
@@ -4342,7 +4347,7 @@ export interface ToolDiscoveryConfig {
 }
 
 /** How the registry presents its tools to the model (see {@link Config.mode}). */
-export type ToolPresentationMode = 'native' | 'ptc' | 'both'
+export type ToolPresentationMode = 'native' | 'ptc' | 'both' | 'operation'
 ```
 
 Source: [`packages/core/tools/src/index.ts:676`](../packages/core/tools/src/index.ts)

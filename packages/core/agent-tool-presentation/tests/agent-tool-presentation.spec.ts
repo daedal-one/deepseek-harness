@@ -57,6 +57,20 @@ async function mount(ctx: Context, config: Config, id = 'agent') {
 }
 
 describe('the tool-presentation row', () => {
+  it('selects operation mode without a code runtime and restores presentation on unload', async () => {
+    const ctx = await host({ runtime: false })
+    try {
+      ctx.tools.register(defineTool({ name: 'run_operation', description: 'Operation entrypoint.', parameters: {},
+        output: { schema: { type: 'string' }, render: () => [] }, execute: () => Promise.resolve('settled') }))
+      const { agent, row } = await mount(ctx, { mode: 'operation' })
+      expect((await ctx.systemPrompt.assemble({ scope: agent })).tools.map(tool => tool.name)).toEqual(['run_operation'])
+      expect((await ctx.systemPrompt.assemble({})).tools.map(tool => tool.name)).toEqual(['echo', 'run_operation'])
+      await row.dispose()
+      expect((await ctx.systemPrompt.assemble({ scope: agent })).tools.map(tool => tool.name)).toEqual(['echo', 'run_operation'])
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
   it('declares the services it uses without holding a code runtime hostage', () => {
     // A `native` row must mount where no runtime is composed, so the wait is
     // conditional inside apply rather than static metadata.

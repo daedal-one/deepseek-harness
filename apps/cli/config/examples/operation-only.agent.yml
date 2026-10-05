@@ -1,0 +1,28 @@
+# Append these rows to a copy of a coding preset. Resolve these relative module
+# names to installed absolute paths before copying the fragment elsewhere.
+- id: operations
+  name: cordis:group
+  group: true
+  isolate:
+    operations: true
+    operationJudgments: true
+  config:
+    - id: operation-runner
+      name: ../../../../packages/experimental/operation/lib/index.js
+      config:
+        returnObservations: true
+        maxWallMs: 300000
+        maxToolDeadlineMs: 30000
+        maxJudgmentDeadlineMs: 130000
+        maxJudgmentInputTokens: 2048
+        maxObservationBytes: 8192
+        requireCalibration: false
+    - id: operation-kev
+      name: ../../../../packages/experimental/operation-kev/lib/index.js
+      config: !!js JSON.parse(process.env.DSH_OPERATION_DECISION_CONFIG)
+    - id: operation-agent
+      name: ../../../../packages/experimental/operation/lib/agent.js
+      config:
+        tools: all
+        maxMutationBytes: 4096
+        maxCatalogBytes: 262144

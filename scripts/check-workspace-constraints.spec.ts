@@ -161,10 +161,11 @@ it('publishes declared portable runtime and bundled Client declarations', () => 
 
 const packagePayloads = [
   ['packages/experimental/operation-clm', ['lib/index.js', 'lib/tokenizer.js', 'lib/local-http.js', 'lib/types/**/*.d.ts']],
+  ['packages/experimental/operation', ['lib/index.js', 'lib/agent.js', 'lib/policy-*.js', 'lib/types/**/*.js', 'lib/types/**/*.d.ts']],
   ['packages/experimental/operation-fs', ['lib/index.js', 'lib/types/**/*.d.ts']],
   ['packages/experimental/operation-kev', ['lib/index.js', 'lib/types/**/*.d.ts']],
   ['packages/sandbox/local-container-runtime', [
-    'lib/index.js', 'lib/startup.js', 'Containerfile', 'lib/workspaces.js',
+    'lib/index.js', 'lib/startup.js', 'Containerfile', 'lib/engine.js', 'lib/workspaces.js',
     'lib/tool-request-repo-access.js', 'lib/vm.js', 'lib/shared-vm.js', 'lib/vm-previews.js',
     'lib/types-*.js', 'lib/vm-engine-*.js', 'lib/vm-process-*.js',
     'lib/git-authorization-*.js', 'lib/types/**/*.d.ts',

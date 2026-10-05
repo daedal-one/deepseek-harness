@@ -8,7 +8,7 @@ The [CLM operation adapter](2026-09-28-clm-system-one-operation-adapter.md) supp
 
 ## Decision
 
-The [Kev provider](../../../../packages/experimental/operation-kev/README.md) uses a private two-phase protocol with the [Python decision service](../../../../python/decision-service/README.md). Preparation returns the exact official encoding evidence without inference; the runner persists the complete decision envelope before ranking. The service re-encodes that request rather than accepting caller tensors. One exact-byte serving-manifest digest binds both the deployment and its verification declaration. Calibration remains a separate declaration, and serving readiness does not qualify a model.
+The [Kev provider](../../../../packages/experimental/operation-kev/README.md) uses a private two-phase protocol with the [Python decision service](https://github.com/daedal-one/decision-engine). Preparation returns the exact official encoding evidence without inference; the runner persists the complete decision envelope before ranking. The service re-encodes that request rather than accepting caller tensors. One exact-byte serving-manifest digest binds both the deployment and its verification declaration. Calibration remains a separate declaration, and serving readiness does not qualify a model.
 
 The initial runtime uses the pinned official Kev implementation, explicit local base/adapter/head/tokenizer artifacts, unmerged adapters, CPU eager execution, and float32. The service verifies local inventories and dependency versions, prohibits floating revisions and downloads, authenticates loopback requests, and supervises one bounded worker. Cancellation and execution timeout terminate and join active work; worker failure requires operator restoration, never an automatic retry. The provider owns its HTTP requests, not the separately operated daemon.
 
@@ -28,6 +28,6 @@ Canonical read results expose byte and line clipping. Search captures bounded ra
 
 ## Consequences
 
-The feature remains opt-in, with deployment and calibration gates intact and no shipped-profile activation. Artifact provisioning, actual real-weight CPU loading/inference, resource measurements, and model-choice qualification remain unperformed. The Python implementation and synthetic HTTP/SDK fixtures verify protocol and ownership behavior, not model quality.
+The feature remains opt-in, with deployment and calibration gates intact and no shipped-profile activation. The separate engine owns artifact provisioning and real-weight deployment evidence; model-choice qualification remains independent. The [operation-only planning note](2026-10-05-operation-only-planning.md) owns broad coding admission and planner feedback. The Python implementation and synthetic HTTP/SDK fixtures verify protocol and ownership behavior, not model quality.
 
 The credential service has no cancellation parameter: a pending credential lookup remains owned and can delay provider disposal, but cannot start late HTTP. Browser verification is explicitly skipped at the user's request; the separate Web snapshot owner remains unchanged. Forge-spec is unavailable in the implementation environment, so the [accepted task](../../../../.specs/tasks/local-decision-service.spec.md) records that validation gap rather than substituting another validator.

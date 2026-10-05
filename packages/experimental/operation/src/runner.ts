@@ -49,6 +49,8 @@ import { OperationJudgmentRequestId, OperationRunId as toOperationRunId } from '
 
  */
 export interface OperationConfig extends Partial<OperationLimits> {
+  /** Return the last complete declared observation to the planner in the ordinary tool result. */
+  returnObservations?: boolean
   /**
    * Additional fixed tool names that operation plans may never dispatch.
    */
@@ -136,6 +138,8 @@ interface OperationSelection {
 }
 
 interface RunnerState {
+  readonly returnObservations: boolean
+  observations: readonly OperationObservation[]
   readonly runId: OperationRunId
   readonly plan: OperationPlan
   readonly limits: OperationLimits
@@ -200,6 +204,8 @@ export class OperationRunner {
     const runId = toOperationRunId(randomUUID())
     const recorder = new OperationRecorder(this.ctx, exec.agent.session)
     const state: RunnerState = {
+      returnObservations: this.config.returnObservations === true,
+      observations: [],
       runId,
       plan,
       limits,
@@ -299,6 +305,7 @@ export class OperationRunner {
         let observations
         try {
           observations = observeCanonicalResult(step, outcome.result.value, limits.maxObservationBytes)
+          state.observations = observations
         } catch (error: unknown) {
           return await this.finish(state, 'needs-replan', message(error), assertions)
         }
@@ -1004,7 +1011,11 @@ function summary(
   reason: string,
   verification: readonly OperationAssertionResult[],
 ): OperationSummary {
-  return { runId: state.runId, status, reason, attemptedSteps: state.attempted, completedSteps: state.completed, verification }
+  return {
+    runId: state.runId, status, reason, attemptedSteps: state.attempted,
+    completedSteps: state.completed, verification,
+    ...(state.returnObservations ? { observations: state.observations } : {}),
+  }
 }
 
 function message(error: unknown): string {

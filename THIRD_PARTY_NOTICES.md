@@ -228,13 +228,9 @@ Direct dependencies of the `pyproject.toml` manifests, plus `uv` as the developm
 
 | Package | License | Role |
 | --- | --- | --- |
-| [`fastapi`](https://github.com/fastapi/fastapi) | MIT | HTTP runtime of `dsh-local-decision-service` |
 | [`hatchling`](https://github.com/pypa/hatch) | MIT | build backend |
-| [`httpx`](https://github.com/encode/httpx) | BSD-3-Clause | HTTP client for decision-service tests |
 | [`pydantic`](https://github.com/pydantic/pydantic) | MIT | runtime dependency of `deepseek-harness-sdk` |
 | [`pytest`](https://github.com/pytest-dev/pytest) | MIT | test-only |
-| [`setuptools`](https://github.com/pypa/setuptools) | MIT | decision-service build backend |
-| [`uvicorn`](https://github.com/Kludex/uvicorn) | BSD-3-Clause | ASGI runtime of `dsh-local-decision-service` |
 | [`uv`](https://github.com/astral-sh/uv) | MIT / Apache-2.0 | development workflow tool |
 
 ## First-party native packages

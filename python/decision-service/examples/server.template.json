@@ -1,7 +1,0 @@
-{
-  "host": "127.0.0.1",
-  "port": 8765,
-  "bearer_env": "DSH_DECISION_KEY",
-  "manifest": "/srv/dsh-decision/manifest.json",
-  "manifest_sha256": "RECORD_SHA256_OF_EXACT_MANIFEST_BYTES"
-}

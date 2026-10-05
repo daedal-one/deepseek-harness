@@ -353,7 +353,7 @@
     },
     {
       "name": "run_operation",
-      "description": "Execute one short, finite operation plan through existing tools. Only independently reviewed, explicitly eligible read-only tools are accepted. Make this the only tool call in the assistant response. Supply version-one JSON with fixed tool names, explicit JSON-pointer observations, required deterministic assertions, and completion checks. The runner executes steps sequentially, records every checkpoint, and may return needs-replan or stopped instead of inventing values. Do not use this tool for workflows, delegation, background jobs, retries, dynamic shell commands, or recursive operation plans.",
+      "description": "Execute one short, finite operation plan through existing tools. Only tools explicitly admitted by the composing profile are accepted; ordinary permissions still apply. Make this the only tool call in the assistant response. Supply version-one JSON with fixed tool names, explicit JSON-pointer observations, required deterministic assertions, and completion checks. The runner executes steps sequentially, records every checkpoint, and may return needs-replan or stopped instead of inventing values. Use foreground actions and literal small edits. Do not use this tool for background jobs, automatic retries, output-derived shell or edit arguments, or recursive operation plans.",
       "parameters": {
         "type": "object",
         "properties": {

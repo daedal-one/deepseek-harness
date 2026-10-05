@@ -1,0 +1,23 @@
+# Operation-only planner with synthetic Kev protocol replies; no model inference.
+- id: skill-filesystem
+  name: '@deepseek-ai/dsh-skill-filesystem'
+  config:
+    includeDefaultRoots: false
+
+- id: session-persistence-jsonl
+  name: '@deepseek-ai/dsh-session-persistence-jsonl'
+  config:
+    root: !!js dshHomePath('sessions')
+    compression: none
+
+- insert:
+    - id: operations
+      name: '../../../packages/experimental/operation/lib/index.js'
+      config:
+        returnObservations: true
+    - id: operation-kev-sdk-fixture
+      name: '../../../packages/experimental/operation/tests/fixtures/kev-profile.ts'
+
+- id: tools
+  config:
+    mode: operation

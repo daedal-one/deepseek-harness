@@ -125,6 +125,7 @@ interface SdkAssertions {
 }
 
 const SDK_ASSERTIONS: Readonly<Record<string, SdkAssertions>> = {
+  'operation-only': { expectedTools: { run_operation: ['plan'] }, expectedFinalResponse: 'Verified beta in east from one complete canonical record.' },
   'artifact-revisions': {
     patches: [fileURLToPath(new URL('./artifact-revisions/readiness.cordis.yml', import.meta.url))],
     expectedFinalResponse: 'ARTIFACT_COMPOSITION_OK',
@@ -902,7 +903,7 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         expect(normalizedResult).toBe(await readFile(resultExpectedPath, 'utf8'))
       }
 
-      if (scenario.name === 'clm-operations' || scenario.name === 'kev-operations') {
+      if (['clm-operations', 'kev-operations', 'operation-only'].includes(scenario.name)) {
         if (finalResult === undefined) throw new Error('operation SDK scenario has no run result')
         const operationEvents = finalResult.events.filter(event => event.type.startsWith('operation/'))
         const notifiedOperations = notifications.flatMap(notification => {
@@ -950,7 +951,7 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
             },
           })
         }
-        if (scenario.name === 'kev-operations') {
+        if (['kev-operations', 'operation-only'].includes(scenario.name)) {
           for (const event of requests) {
             const prepared = event.data.request as JsonObject
             const wire = prepared.wire as JsonObject

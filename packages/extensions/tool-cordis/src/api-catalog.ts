@@ -3329,7 +3329,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: 'presentAs(mode: ToolPresentationMode): () => void',
-        description: 'Present the calling scope\'s tools in `mode` instead of the deployment default. Nearest scope on the chain wins, so a preset\'s standing declaration covers every agent joined under it.\n\nScoped only, and one declaration per scope: this is how an agent preset composes PTC mode agents beside native ones in the same process, and a process-global override would be the `mode` config field instead.',
+        description: 'Present the calling scope\'s tools in `mode` instead of the deployment default. Nearest scope on the chain wins, so a preset\'s standing declaration covers every agent joined under it.\n\nScoped only, and one declaration per scope: this is how an agent preset composes entrypoint-only agents beside native ones in the same process, and a process-global override would be the `mode` config field instead.',
         parameters: [{ name: 'mode', description: 'the presentation the covered agents\' models see.' }],
         returns: 'the exact disposer that restores the deployment default.',
       },
@@ -5833,7 +5833,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'OperationSummary',
-    declaration: 'export interface OperationSummary {\n    readonly runId: OperationRunId;\n    readonly status: OperationStatus;\n    readonly attemptedSteps: readonly string[];\n    readonly completedSteps: readonly string[];\n    readonly reason: string;\n    readonly verification: readonly OperationAssertionResult[];\n}',
+    declaration: 'export interface OperationSummary {\n    readonly observations?: readonly OperationObservation[];\n    readonly runId: OperationRunId;\n    readonly status: OperationStatus;\n    readonly attemptedSteps: readonly string[];\n    readonly completedSteps: readonly string[];\n    readonly reason: string;\n    readonly verification: readonly OperationAssertionResult[];\n}',
   },
   {
     name: 'OperationTokenizer',
@@ -7341,7 +7341,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ToolPresentationMode',
-    declaration: 'export type ToolPresentationMode = \'native\' | \'ptc\' | \'both\';',
+    declaration: 'export type ToolPresentationMode = \'native\' | \'ptc\' | \'both\' | \'operation\';',
   },
   {
     name: 'ToolProviderResult',

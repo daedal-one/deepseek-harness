@@ -165,6 +165,7 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
     'lib/git-authorization-*.js',
   ],
   '@deepseek-ai/dsh-experimental-operation-clm': ['lib/tokenizer.js', 'lib/local-http.js'],
+  '@deepseek-ai/dsh-experimental-operation': ['lib/agent.js', 'lib/policy-*.js'],
   '@deepseek-ai/dsh-artifact-runtime-podman': [
     'image/Containerfile', 'image/controller.mjs', 'image/seccomp.json',
     'image/renderer-package.json', 'image/renderer-lock.json',

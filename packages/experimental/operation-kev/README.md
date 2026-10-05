@@ -7,7 +7,7 @@ kind: "package-reference"
 
 ## Summary
 
-This private, experimental provider connects the generic [operation runner](../operation/README.md) to the separately supervised local Python decision service. It prepares a complete official System One request without inference, then ranks only the runner's supplied candidates after the runner records and flushes that preparation. It has no chat-generation, tool, argument-construction, approval, retry, or fallback authority. The [private protocol](protocol.md) owns wire fields and service obligations.
+This private, experimental provider connects the generic [operation runner](../operation/README.md) to the separately supervised local Python [Decision Engine](https://github.com/daedal-one/decision-engine). It prepares a complete official System One request without inference, then ranks only the runner's supplied candidates after the runner records and flushes that preparation. It has no chat-generation, tool, argument-construction, approval, retry, or fallback authority. The [private protocol](protocol.md) owns wire fields and service obligations.
 
 ## Table of Contents
 

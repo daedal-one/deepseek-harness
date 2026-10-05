@@ -38,7 +38,8 @@ export const inject = ['tools']
 export interface Config {
   /**
    * The form this agent's model sees. `native` sends every visible schema,
-   * `ptc` sends only `run_code` plus a generated SDK, `both` sends both.
+   * `ptc` sends only `run_code` plus a generated SDK, `both` sends both,
+   * and `operation` permits model-direct calls only to `run_operation`.
    * Required rather than defaulted: the deployment default is what a preset
    * without this row already gets, so an omitted value would mean the row was
    * composed for nothing.
@@ -48,7 +49,7 @@ export interface Config {
 
 /** Runtime schema. */
 export const Config: z<Config> = z.object({
-  mode: z.union(['native', 'ptc', 'both'] as const).required(),
+  mode: z.union(['native', 'ptc', 'both', 'operation'] as const).required(),
 })
 
 /**
@@ -60,8 +61,8 @@ export function apply(ctx: Context, config: Config): void {
   // `presentAs` is itself the effect — it registers through the calling
   // context and hands back that exact disposer — so the declaration unwinds
   // with this row without a second wrapper owning it.
-  if (config.mode === 'native') {
-    ctx.tools.presentAs('native')
+  if (config.mode === 'native' || config.mode === 'operation') {
+    ctx.tools.presentAs(config.mode)
     return
   }
   // The wait is the loud failure: an entry still pending on `codeRuntime` is

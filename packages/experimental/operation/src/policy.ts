@@ -104,8 +104,8 @@ export interface ForegroundProcessPolicyOptions {
 
 /**
  * Build lifecycle checks for the canonical foreground result shared by bash and pwsh.
- * These checks do not prove commands are read-only. A composition must separately
- * restrict the registered definition or its argument validator to reviewed read-only invocations.
+ * These checks do not authorize commands or prove they are read-only. The ordinary
+ * tool permission policy remains authoritative; read-only compositions additionally restrict invocations.
  * @param options Independently reviewed nonzero outcomes accepted by this registration.
  * @returns Argument admission and canonical process-result checks.
  */

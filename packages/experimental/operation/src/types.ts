@@ -537,6 +537,8 @@ export type OperationStatus = 'completed' | 'needs-replan' | 'stopped' | 'failed
 
  */
 export interface OperationSummary {
+  /** Last complete declared canonical observations, when the deployment enables planner feedback. */
+  readonly observations?: readonly OperationObservation[]
   /**
    * Operation run identity.
    */
