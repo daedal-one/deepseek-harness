@@ -4,7 +4,7 @@ type: task
 status: accepted
 summary: Enforce operation-only planning and serve its local decision engine from a separate repository.
 owners: [carlo]
-progress: in-progress
+progress: complete
 addresses: ["REQ:tools/operations#c-composition", "REQ:tools/operations#c-policy", "REQ:tools/operations#c-hard-stops", "REQ:tools/operations#c-provider", "REQ:tools/operations#c-verification", "REQ:tools/operations#c-entrypoint"]
 labels: [tools, operations, profiles, decision-engine]
 groups: []
