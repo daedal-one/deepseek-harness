@@ -954,3 +954,38 @@ describe('Trajectory conversation Definitions', () => {
     ])
   })
 })
+
+it.each([false, true])('retains deferred root results with an in-window call: %s', (withCall) => {
+  const full = at(4, 'tool/result', {
+    turn: 1, step: 1,
+    message: {
+      id: 'operation-result', role: 'user', source: { kind: 'tool', callId: 'operation' },
+      content: [{ type: 'tool-result', toolCallId: 'operation', content: [{ type: 'text', text: '{"status":"completed"}' }] }],
+    },
+  })
+  if (full.event.type !== 'tool/result') throw new Error('expected Tool result fixture')
+  const compact: SessionLiveEventEntry = {
+    ...at(4, 'tool/result', {
+      ...full.event.data,
+      message: { ...full.event.data.message, content: [{ ...full.event.data.message.content[0], content: [] }] },
+    }),
+    detail: { kind: 'tool-result', bytes: 500 },
+  }
+  const prefix = withCall ? [
+    at(1, 'turn/start', { turn: 1 }),
+    at(2, 'step/start', { turn: 1, step: 1 }),
+    at(3, 'tool/call', { turn: 1, step: 1, callId: 'operation', name: 'run_operation', arguments: '{}' }),
+  ] : []
+  const value = assembler([...prefix, compact])
+  expect(snapshot(value).eventNodes).toMatchObject([{
+    kind: 'tool-result', callId: 'operation', deferred: true, content: [], isError: false,
+  }])
+  value.replaceWindow([...prefix, full], false)
+  value.flush()
+  const loaded = snapshot(value).eventNodes[0]
+  expect(loaded).toMatchObject({ kind: 'tool-result', content: [{ type: 'text', text: '{"status":"completed"}' }] })
+  expect(loaded).not.toHaveProperty('deferred')
+  value.replaceWindow([...prefix, compact], false)
+  value.flush()
+  expect(snapshot(value).eventNodes[0]).toHaveProperty('deferred', true)
+})

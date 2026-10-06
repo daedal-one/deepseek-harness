@@ -464,6 +464,7 @@ export function deriveTrajectoryLayout(
               : resultAsText(resultPreview)),
             ...(node.call !== null ? { inputDetail: node.call.argsRaw } : {}),
             outputDetail: detailResult(node, t),
+            ...node.deferred === true ? { deferredResultSeq: node.seq } : {},
             outputBlocks: node.content.map(block => sourceBlock(block)),
             ...resultPreview,
             callId: node.callId,
@@ -782,6 +783,7 @@ function expandAssistant(
         ...(result !== undefined
           ? {
             outputDetail: detailResult(result, t),
+            ...result.deferred === true ? { deferredResultSeq: result.seq } : {},
             outputBlocks: result.content.map(block => sourceBlock(block)),
             ...resultPreview,
             isError: result.isError,
@@ -1037,6 +1039,7 @@ function expandSubCalls(
         ...(settled
           ? {
             outputDetail: detailResult(sub, t),
+            ...sub.deferred === true ? { deferredResultSeq: sub.seq } : {},
             outputBlocks: sub.content.map(block => sourceBlock(block)),
             ...resultPreview,
             isError: sub.isError,
@@ -1083,7 +1086,7 @@ function summarizeResult(
   }
   const images = imageBlockCount(node.content)
   if (images > 0) return { result: t('layout.imageOnly', { count: images }) }
-  return { result: t('record.noOutput') }
+  return { result: t(node.deferred === true ? 'record.resultNotLoaded' : 'record.noOutput') }
 }
 
 function resultAsText(
@@ -1098,6 +1101,7 @@ function resultAsText(
 }
 
 function detailResult(node: ToolResultNode, t: TrajectoryTranslate): string {
+  if (node.deferred === true) return t('record.resultNotLoaded')
   if (node.isError) {
     return node.error === undefined
       ? 'error'

@@ -140,6 +140,37 @@ describe('minimal agent preset', () => {
       .toEqual(scaffold.ctx.tools.schemas(agentHandle.agent).toSorted((left, right) => left.name.localeCompare(right.name)))
   })
 
+  it.skipIf(MODE === 'record')('loads a saved Tool result from the Trajectory inspector', async () => {
+    const trajectoryBrowser = await chromium.launch()
+    try {
+      const trajectoryPage = await newEnglishPage(trajectoryBrowser)
+      const console = watchConsole(trajectoryPage)
+      await trajectoryPage.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+      await trajectoryPage.locator('[role="treeitem"]').first().click()
+      await trajectoryPage.locator('[role="treeitem"]').nth(1).click()
+      await trajectoryPage.getByText('MINIMAL_PRESET_REQUEST_OK', { exact: true }).waitFor()
+      await trajectoryPage.getByRole('tab', { name: 'Trajectory', exact: true }).click()
+      await trajectoryPage.getByRole('row', { name: /TOOL, bash/ }).click()
+      const inspector = trajectoryPage.getByRole('complementary', { name: 'Event details' })
+      await inspector.getByRole('button', { name: 'Load full result', exact: true }).waitFor()
+      await inspector.getByText('Completed', { exact: true }).waitFor()
+      await inspector.getByRole('tab', { name: 'Result', exact: true }).click()
+      await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'trajectory-deferred.expected.md'),
+        await captureStableAria(trajectoryPage, '[aria-label="Event details"]', scaffold.workspaceCwd), MODE)
+      const before = agentHandle.agent.session.snapshotEvents().length
+      await inspector.getByRole('button', { name: 'Load full result', exact: true }).click()
+      await inspector.getByText('MINIMAL_BASH_CARD_OK\n[Command finished with exit code 0]', { exact: true }).waitFor()
+      await expect.poll(() => inspector.getByRole('button', { name: 'Load full result', exact: true }).count()).toBe(0)
+      expect(agentHandle.agent.session.snapshotEvents()).toHaveLength(before)
+      await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'trajectory-result.expected.md'),
+        await captureStableAria(trajectoryPage, '[aria-label="Event details"]', scaffold.workspaceCwd), MODE)
+      expect(console.pageErrors).toEqual([])
+      expect(console.warnings).toEqual([])
+    } finally {
+      await trajectoryBrowser.close()
+    }
+  })
+
   it.skipIf(MODE === 'record')('expands the completed persistent Bash call in the Web conversation', async () => {
     onTestFailed(() => { if (page !== undefined) void saveFailureShot(page, 'web-minimal-persistent-bash-card') })
     browser = await chromium.launch()
@@ -155,12 +186,6 @@ describe('minimal agent preset', () => {
     await sessionRow.waitFor({ timeout: 10_000 })
     await sessionRow.click()
     await page.getByText('MINIMAL_PRESET_REQUEST_OK', { exact: true }).waitFor({ timeout: 15_000 })
-
-    const process = page.locator('[data-turn-process]')
-    await process.waitFor({ timeout: 15_000 })
-    await expect.poll(() => process.getAttribute('aria-expanded')).toBe('false')
-    await process.click()
-    await expect.poll(() => process.getAttribute('aria-expanded')).toBe('true')
 
     const row = page.locator('[data-sample="bash"]').first()
     await row.waitFor({ timeout: 15_000 })
@@ -187,6 +212,8 @@ describe('minimal agent preset', () => {
       'system-prompt.expected.md',
       'tool-schemas.expected.json',
       'ui.expected.md',
+      'trajectory-deferred.expected.md',
+      'trajectory-result.expected.md',
     ])
   })
 })

@@ -149,7 +149,7 @@ function standaloneHistory(
   snapshot: TrajectorySnapshot,
 ): Pick<
   ComponentProps<typeof TrajectoryView>,
-  'useSession' | 'useTrajectory' | 'loadOlder'
+  'useSession' | 'useTrajectory' | 'loadOlder' | 'loadToolResult'
 > {
   const session = createSnapshotStore(sessionSnapshot(snapshot.eventNodes))
   const trajectory = createSnapshotStore(snapshot)
@@ -157,6 +157,7 @@ function standaloneHistory(
     useSession: bindSnapshotSelector(session),
     useTrajectory: bindSnapshotSelector(trajectory),
     loadOlder: () => Promise.resolve(false),
+    loadToolResult: () => Promise.reject(new Error('unused detail load')),
   }
 }
 
@@ -203,7 +204,7 @@ const useProjection: UseProjection = emptyProjection
 
 type StandaloneBaseProps = Omit<
   ComponentProps<typeof TrajectoryView>,
-  'useSession' | 'useTrajectory' | 'useDuration' | 'loadOlder' | 'setActualDuration'
+  'useSession' | 'useTrajectory' | 'useDuration' | 'loadOlder' | 'loadToolResult' | 'setActualDuration'
 >
 
 /** Standalone view props: the session-scope standard kit the outlet would bake. */
@@ -376,6 +377,7 @@ function mount(fixture: Awaited<ReturnType<typeof bench>>) {
         const trajectory = injected as TrajectoryViewInjected
         return {
           loadOlder: trajectory.loadOlder,
+          loadToolResult: trajectory.loadToolResult,
           setActualDuration: trajectory.setActualDuration,
           useDuration: bindSnapshotSelector(trajectory.hooks.duration),
           t: tCopy,
@@ -1291,6 +1293,7 @@ describe('TrajectoryView state', () => {
         {...standaloneDuration()}
         useTrajectory={bindSnapshotSelector(trajectory)}
         loadOlder={loadOlder}
+        loadToolResult={() => Promise.reject(new Error('unused detail load'))}
       />,
     )
 
@@ -1499,6 +1502,7 @@ describe('TrajectoryView state', () => {
         {...standaloneDuration()}
         useTrajectory={bindSnapshotSelector(store)}
         loadOlder={vi.fn(() => Promise.resolve(false))}
+        loadToolResult={() => Promise.reject(new Error('unused detail load'))}
       />,
     )
     fireEvent.click(screen.getByRole('row', { name: /selected current response/ }))

@@ -10,6 +10,7 @@
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
+    - tab "Info"
     - tab "Terminal"
 - button "System prompt":
   - img
@@ -17,9 +18,6 @@
   - text: System prompt
 - text: "Use the bash tool to run exactly: printf 'MINIMAL_BASH_CARD_OK\\n'. Then reply exactly MINIMAL_PRESET_REQUEST_OK and stop. {{clock}}"
 - button "Copy":
-  - img
-- button "1 tool call" [expanded]:
-  - text: 1 tool call
   - img
 - button "Bash printf 'MINIMAL_BASH_CARD_OK\\n'" [expanded]:
   - img
@@ -44,7 +42,7 @@
   - img
 - button "Add attachment":
   - img
-- 'button "Access mode, current: Workspace Write"': Workspace Write
+- 'button "Access mode, current: Host · Workspace Write"': Workspace Write
 - button "Select model, current DeepSeek-V4.1-Flash":
   - text: DeepSeek-V4.1-Flash
   - img

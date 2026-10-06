@@ -1,0 +1,11 @@
+- complementary "Event details":
+  - separator "Resize event details"
+  - text: TOOL Turn 1 · Step 1
+  - button "Close details"
+  - tablist "Event details":
+    - tab "Summary"
+    - tab "Payload"
+    - tab "Result" [selected]
+    - tab "Schema"
+    - tab "Timing"
+  - tabpanel "Result": MINIMAL_BASH_CARD_OK [Command finished with exit code 0]

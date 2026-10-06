@@ -79,6 +79,8 @@ export interface TrajectoryViewInjected {
   }
   loadOlder: () => Promise<boolean>
   loadImage: MessageImageLoader
+  /** Hydrate one deferred result through the authorized Session reader. */
+  loadToolResult: (seq: number) => Promise<void>
   setActualDuration: (actualDuration: boolean) => void
 }
 
@@ -127,7 +129,7 @@ function addUsage(
 }
 
 export function TrajectoryView({
-  useSession, useTrajectory, useDuration, loadOlder, loadImage, setActualDuration,
+  useSession, useTrajectory, useDuration, loadOlder, loadImage, loadToolResult, setActualDuration,
   viewRequest, completeViewRequest, renderSlot, t,
 }: ConvViewProps
   & PropsRenderSlots<'conversation.trajectory.images'>
@@ -542,6 +544,7 @@ export function TrajectoryView({
         <TrajectoryTable
           t={t}
           renderImages={renderImages}
+          loadToolResult={loadToolResult}
           requestNumbers={requestNumbers}
           turns={timelineTurns}
           streamingCells={streamingCells}

@@ -30,6 +30,7 @@ import type { TrajectoryTurnModel } from './layout.ts'
 import { trajectoryPreviewText } from './trajectory-preview.ts'
 import type { TrajectoryKey, TrajectoryTranslate } from './locales.ts'
 import { COMPACTION_INTERRUPTED_ERROR } from './copy-codes.ts'
+import { DeferredToolResult } from './DeferredToolResult.tsx'
 import css from './TrajectoryTable.module.css'
 
 const BOTTOM_FOLLOW_THRESHOLD_PX = 2
@@ -380,6 +381,8 @@ export interface TrajectoryTableProps {
   t: TrajectoryTranslate
   /** Slot-backed durable image renderer shared with the Chat gallery. */
   renderImages: RenderMessageImages
+  /** Hydrate one deferred result through the authorized Session reader. */
+  loadToolResult: (seq: number) => Promise<void>
   /** Session-global request numbers for the request groups visible in this context. */
   requestNumbers?: readonly TrajectoryRequestNumber[]
   /** Grouped records in display order. */
@@ -1803,6 +1806,7 @@ function OverviewSection({
 export function TrajectoryTable({
   t,
   renderImages,
+  loadToolResult,
   requestNumbers: sessionRequestNumbers,
   turns,
   streamingCells = [],
@@ -3137,7 +3141,14 @@ export function TrajectoryTable({
                         )}
                         {selected.cell.outputDetail && (
                           <OverviewSection label={t('tab.result')} onOpen={() => { activateTab('output') }}>
-                            <RecordPayload record={selected} direction="output" preview renderImages={renderImages} t={t} />
+                            {selected.cell.deferredResultSeq === undefined
+                              ? (<RecordPayload record={selected} direction="output" preview renderImages={renderImages} t={t} />)
+                              : (<DeferredToolResult
+                                key={selected.cell.deferredResultSeq}
+                                seq={selected.cell.deferredResultSeq}
+                                loadToolResult={loadToolResult}
+                                t={t}
+                              />)}
                           </OverviewSection>
                         )}
                         <OverviewSection label={t('tab.schema')} onOpen={() => { activateTab('schema') }}>
@@ -3192,7 +3203,14 @@ export function TrajectoryTable({
               <RecordPayload record={selected} direction="input" renderImages={renderImages} t={t} />
             )}
             {!promptSelected && selected !== undefined && activeTab === 'output' && (
-              <RecordPayload record={selected} direction="output" renderImages={renderImages} t={t} />
+              selected.cell.deferredResultSeq === undefined
+                ? <RecordPayload record={selected} direction="output" renderImages={renderImages} t={t} />
+                : <DeferredToolResult
+                  key={selected.cell.deferredResultSeq}
+                  seq={selected.cell.deferredResultSeq}
+                  loadToolResult={loadToolResult}
+                  t={t}
+                />
             )}
             {!promptSelected && selected !== undefined && activeTab === 'schema' && (
               <RecordSchema record={selected} t={t} />

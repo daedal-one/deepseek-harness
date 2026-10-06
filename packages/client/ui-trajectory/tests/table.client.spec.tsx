@@ -22,8 +22,8 @@ const renderImagesStub: RenderMessageImages = ({ images }) => (
 )
 
 function TrajectoryTable(
-  props: Omit<ComponentProps<typeof LocalizedTrajectoryTable>, 't' | 'renderImages'>
-    & { renderImages?: RenderMessageImages },
+  props: Omit<ComponentProps<typeof LocalizedTrajectoryTable>, 't' | 'renderImages' | 'loadToolResult'>
+    & { renderImages?: RenderMessageImages; loadToolResult?: (seq: number) => Promise<void> },
 ) {
   const inferred: Array<NonNullable<typeof props.requestNumbers>[number] & { firstIndex: number }> = []
   for (const turn of props.turns) {
@@ -58,6 +58,7 @@ function TrajectoryTable(
   return (
     <LocalizedTrajectoryTable
       renderImages={renderImagesStub}
+      loadToolResult={() => Promise.reject(new Error('unused detail load'))}
       {...props}
       requestNumbers={requestNumbers}
       t={t}
@@ -166,6 +167,7 @@ describe('TrajectoryTable', () => {
       <LocalizedTrajectoryTable
         t={tCopy}
         renderImages={renderImagesStub}
+        loadToolResult={() => Promise.reject(new Error('unused detail load'))}
         turns={TURNS}
         collapsedTurns={new Set<number>()}
         onToggleTurn={() => {}}
@@ -1148,4 +1150,32 @@ describe('TrajectoryTable', () => {
     expect(screen.getByRole('row', { name: /TOOL/ }).getAttribute('aria-selected')).toBe('false')
     expect(onInspectApplied).not.toHaveBeenCalled()
   })
+})
+
+it('loads a completed operation result from Summary or Result without calling the operation again', async () => {
+  const result = {
+    kind: 'tool-result' as const, seq: 17, time: 2000, callTime: 1000,
+    callId: 'operation', call: { name: 'run_operation', argsRaw: '{}' },
+    content: [{ type: 'text' as const, text: '{"status":"completed","evidence":"ready"}' }],
+    isError: false, subCalls: [],
+  }
+  const layout = (deferred: boolean) => deriveTrajectoryLayout({
+    nodes: [{ ...result, ...(deferred ? { deferred: true as const, content: [] } : {}) }],
+    partial: null, runningCalls: [],
+  }, t)
+  const load = vi.fn(() => Promise.resolve())
+  const view = render(<TrajectoryTable turns={layout(true)} loadToolResult={load} {...FOLD_PROPS} />)
+  expect(load).not.toHaveBeenCalled()
+  expect(screen.queryByText('No output')).toBeNull()
+  fireEvent.click(screen.getByRole('row', { name: /TOOL/ }))
+  expect(screen.getByText('Completed')).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: 'Load full result' }))
+  await waitFor(() =>{  expect(load).toHaveBeenCalledExactlyOnceWith(17) })
+  fireEvent.click(screen.getByRole('tab', { name: 'Result' }))
+  await waitFor(() =>{  expect(screen.getByRole('button', { name: 'Load full result' })).toBeTruthy() })
+  view.rerender(<TrajectoryTable turns={layout(false)} loadToolResult={load} {...FOLD_PROPS} />)
+  expect(screen.queryByRole('button', { name: 'Load full result' })).toBeNull()
+  expect(screen.getByRole('tree', { name: 'Result JSON' })).toBeTruthy()
+  expect(screen.getByText('"ready"')).toBeTruthy()
+  expect(load).toHaveBeenCalledTimes(1)
 })

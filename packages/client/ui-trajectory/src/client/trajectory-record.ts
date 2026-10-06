@@ -64,6 +64,8 @@ export interface TrajectoryCellProps extends HTMLAttributes<HTMLDivElement> {
   previousPromptDetail?: ConversationPromptSnapshot
   /** Full assistant/tool result content for the details panel. */
   outputDetail?: string
+  /** Deferred root result sequence accepted by the Session detail reader. */
+  deferredResultSeq?: number
   /** Full assistant reasoning content for the details panel. */
   thinkingDetail?: string
   /** Original message blocks in source order for the details panel. */

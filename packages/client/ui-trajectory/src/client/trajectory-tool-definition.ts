@@ -60,6 +60,7 @@ function rootResult(
     ...(match.event.data.error === undefined ? {} : { error: match.event.data.error }),
     meta: match.event.data.meta,
     subCalls: [],
+    ...match.detail?.kind === 'tool-result' ? { deferred: true as const } : {},
   }
 }
 
