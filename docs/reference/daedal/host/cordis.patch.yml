@@ -49,6 +49,9 @@
               low: low
               high: high
               max: max
+          z-ai/glm-5.3-flash:nitro:
+            catalogModel: z-ai/glm-5.3-flash
+            name: GLM 5.3 Flash (Nitro)
       openai-codex:
         displayName: OpenAI Codex
         modelAliases:
