@@ -1,7 +1,7 @@
 ---
 description: Reviews and curates durable memory. Accepts or rejects pending revisions, supersedes active facts, and deletes exact stale revisions under a trusted principal.
 mode: subagent
-model: openrouter/z-ai/glm-5.2-nitro
+model: openrouter/z-ai/glm-5.3-flash-nitro
 permission:
   edit: deny
   bash: ask

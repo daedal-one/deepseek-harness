@@ -67,7 +67,7 @@
       - provider: openrouter
         model: moonshotai/kimi-k3:nitro
       - provider: openrouter
-        model: z-ai/glm-5.2:nitro
+        model: z-ai/glm-5.3-flash:nitro
     translator:
       provider: openrouter
       model: moonshotai/kimi-k2.7-code
@@ -535,7 +535,7 @@
         backgroundMode: one-shot
         agentOptions:
           provider: openrouter
-          model: z-ai/glm-5.2:nitro
+          model: z-ai/glm-5.3-flash:nitro
           maxTokens: 65536
         persona: !!js "((text) => text.slice(text.indexOf('\\n---\\n', 4) + 5).trim())(process.getBuiltinModule('node:fs').readFileSync(new URL('roles/memory-reviewer.md', baseUrl), 'utf8'))"
         toolFilter:
