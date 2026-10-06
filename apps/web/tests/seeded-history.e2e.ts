@@ -17,7 +17,7 @@ import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, Message } from '@deepseek-ai/dsh-llm'
-import { deriveEventMessage, SessionId } from '@deepseek-ai/dsh-session'
+import { deriveEventMessage, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { TokenMeter } from '@deepseek-ai/dsh-token-meter'
 import { join } from 'node:path'
@@ -547,13 +547,65 @@ describe('web e2e: seeded history renders through cold resume', () => {
     expect(await body.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(false)
   })
 
+  it.skipIf(MODE === 'record')('pages a recorded conversation with a long log-only tail', async () => {
+    const id = SessionId('seeded-history-log-tail')
+    const raw = withCompaction(realizeSeedFixture(scaffold, await readFile(SEED, 'utf8'), String(id)), scaffold.ctx.tokenMeter)
+    const decoded = parseSeedFixture(raw)
+    const events = [...decoded.events]
+    const closing = events.pop()
+    const title = events.findLast(event => event.type === 'session/title')
+    if (closing?.type !== 'turn/end' || title?.type !== 'session/title') {
+      throw new Error('Log-tail recording requires a title and closed final turn')
+    }
+    for (let index = 0; index < 7000; index++) {
+      events.push({ ...title, seq: SessionSeq(events.length), time: closing.time + index })
+    }
+    events.push({ ...closing, seq: SessionSeq(events.length), time: closing.time + 7000 })
+    await seedSession(scaffold, renderSeedFixture(decoded.headerLine, events), String(id))
+    using source = await scaffold.ctx.sessionQuery.observeSession(id, { projectionMode: 'none' })
+    const abort = new AbortController()
+    const address = { kind: 'session' as const, sessionId: id }
+    const stream = scaffold.ctx.sessionController.follow({ address }, abort.signal)[Symbol.asyncIterator]()
+    try {
+      const opened = await stream.next()
+      if (opened.done || opened.value.type !== 'snapshot') throw new Error('Missing opening snapshot')
+      expect(opened.value.cursor).toBe(source.cursor)
+      expect(opened.value.hasMore).toBe(true)
+      expect(opened.value.records.every(record => record.event.surfaceOp === undefined)).toBe(true)
+      let current = opened.value as import('@deepseek-ai/dsh-api-session-controller/types').SessionPage
+      const restored = current.records.map(record => record.event)
+      let pages = 1
+      while (true) {
+        expect(Buffer.byteLength(JSON.stringify(current), 'utf8')).toBeLessThanOrEqual(512 * 1024)
+        expect(current.oversized).toBeUndefined()
+        if (!current.hasMore) break
+        const beforeSeq = (current.records[0] as typeof current.records[number]).event.seq
+        current = await scaffold.ctx.sessionController.page({ address, beforeSeq, throughSeq: source.cursor }, abort.signal)
+        expect((current.records.at(-1) as typeof current.records[number]).event.seq).toBe(beforeSeq - 1)
+        restored.unshift(...current.records.map(record => record.event))
+        pages++
+      }
+      expect(restored.map(event => event.seq)).toEqual(source.events.map(event => event.seq))
+      expect(restored.filter(event => event.type !== 'tool/result')).toEqual(source.events.filter(event => event.type !== 'tool/result'))
+      await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'log-tail.expected.json'), JSON.stringify({
+        pages,
+        events: restored.length,
+        surfaceEvents: restored.filter(event => event.surfaceOp !== undefined).map(event => event.type),
+        logEvents: restored.filter(event => event.surfaceOp === undefined).length,
+      }, null, 2), MODE)
+    } finally {
+      abort.abort()
+      await stream.return?.()
+    }
+  })
+
   it.skipIf(MODE === 'record')('issued zero model calls and stayed clean', async () => {
     // No replay fixture was installed and the llm seam is open — any stray
     // stream would have failed the turn loudly. Cleanliness pins the wire.
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
     await assertFixtureInventory(SNAPSHOT_DIR, [
-      'command-row.expected.md', 'feedback-row.expected.md', 'file-preview.expected.md',
+      'command-row.expected.md', 'feedback-row.expected.md', 'file-preview.expected.md', 'log-tail.expected.json',
       'session.v3.jsonl', 'ui.expected.md', 'ui-expanded.expected.md',
     ])
   })

@@ -87,7 +87,7 @@ export interface Config {
   readonly terminalMaxInputBytes?: number
   /** Maximum concurrent browser terminals on this Host. */
   readonly terminalMaxCount?: number
-  /** Maximum serialized history page or opening snapshot, except one indivisible message group. */
+  /** Maximum serialized history page or opening snapshot, except one indivisible surface message group or log event. */
   readonly historyPageMaxBytes?: number
   /** Maximum ordinary Session rows per list page. */
   readonly sessionListPageSize?: number
@@ -506,7 +506,7 @@ export class SessionController extends TypertRemoteService {
   }
 
   /**
-   * Read one cold-safe, message-aligned Session history page.
+   * Read one cold-safe Session history page preserving surface message groups.
    * @param request - durable address, backward cursor, and page budget.
    * @param signal - cancellation for persistence reads.
    * @returns one chronological page.

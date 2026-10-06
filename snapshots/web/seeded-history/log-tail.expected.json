@@ -1,0 +1,14 @@
+{
+  "pages": 3,
+  "events": 7024,
+  "surfaceEvents": [
+    "system/message",
+    "user/message",
+    "assistant/message",
+    "tool/result",
+    "tool/result",
+    "assistant/message",
+    "user/message"
+  ],
+  "logEvents": 7017
+}

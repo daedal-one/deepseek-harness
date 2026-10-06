@@ -5,6 +5,7 @@ import { Deque } from '@deepseek-ai/dsh-deque'
 import type { AssistantStreamFrame } from '@deepseek-ai/dsh-agent'
 import {
   isAppendSurfaceEvent,
+  isSurfaceEvent,
   SessionLogOffset,
   SessionSeq,
 } from '@deepseek-ai/dsh-session'
@@ -71,7 +72,7 @@ export class SessionHistoryController {
   }
 
   /**
-   * Read one message-aligned history page without activating an Agent.
+   * Read one bounded history page preserving surface message groups without activating an Agent.
    * @param request - durable address and backwards-page cursor.
    * @param signal - caller cancellation for persistence reads.
    * @returns a contiguous event page.
@@ -393,7 +394,7 @@ function paginate(
   events: readonly SessionEvent[],
   beforeSeq: SessionLogOffsetType | undefined,
   maxMessages: number,
-  throughSeq: SessionSeqCursor = events.at(-1)?.seq ?? -1,
+  throughSeq: SessionSeqCursor,
 ): { readonly events: SessionEvent[]; readonly hasMore: boolean } {
   const end = SessionLogOffset(Math.min(throughSeq + 1, beforeSeq ?? throughSeq + 1))
   let count = 0
@@ -431,7 +432,7 @@ function entryFor(event: SessionEvent): SessionEventEntry {
 }
 
 
-/** Select a complete message group before reporting an unavoidable oversized payload. */
+/** Select bounded log tails or complete surface message groups with explicit oversized units. */
 function boundedPage<T extends SessionPage>(
   events: readonly SessionEvent[],
   beforeSeq: SessionLogOffsetType | undefined,
@@ -440,6 +441,11 @@ function boundedPage<T extends SessionPage>(
   maxBytes: number,
   decorate: (page: SessionPage) => T,
 ): T {
+  const end = Math.min(throughSeq + 1, beforeSeq ?? throughSeq + 1)
+  let tailStart = end
+  while (tailStart > 0 && !isSurfaceEvent(events[tailStart - 1] as SessionEvent)) tailStart--
+  const tail = tailStart < end ? boundedLogTail(events, tailStart, end, maxBytes, decorate) : undefined
+  if (tail !== undefined && (tail.records[0] as SessionHistoryRecord).event.seq > tailStart) return tail
   const available = events.filter(event => MESSAGE_TYPES.has(event.type) && isAppendSurfaceEvent(event)).length
   for (let messages = Math.max(1, Math.min(maxMessages, available + 1)); messages >= 1; messages--) {
     const selected = paginate(events, beforeSeq, messages, throughSeq)
@@ -465,14 +471,47 @@ function boundedPage<T extends SessionPage>(
     const bytes = Buffer.byteLength(JSON.stringify(response), 'utf8')
     if (bytes <= maxBytes || messages === 1 || records.length === 0) {
       if (bytes <= maxBytes) return response
-      let reported = bytes
-      while (true) {
-        const oversized = decorate({ ...page, oversized: { bytes: reported } })
-        const actual = Buffer.byteLength(JSON.stringify(oversized), 'utf8')
-        if (actual === reported) return oversized
-        reported = actual
-      }
+      return tail ?? oversizedPage(page, bytes, decorate)
     }
   }
   throw new Error('History pagination produced no page')
+}
+
+/** Page trailing log-only events without separating any surface node from its sources. */
+function boundedLogTail<T extends SessionPage>(
+  events: readonly SessionEvent[],
+  start: number,
+  end: number,
+  maxBytes: number,
+  decorate: (page: SessionPage) => T,
+): T {
+  const records: SessionHistoryRecord[] = []
+  let bytes = Buffer.byteLength(JSON.stringify(decorate({ records: [], hasMore: true })), 'utf8')
+  for (let index = end - 1; index >= start; index--) {
+    const record = entryFor(events[index] as SessionEvent)
+    const nextBytes = bytes + Buffer.byteLength(JSON.stringify(record), 'utf8') + (records.length === 0 ? 0 : 1) + (index === 0 ? 1 : 0)
+    if (nextBytes > maxBytes && records.length > 0) break
+    records.push(record)
+    bytes = nextBytes
+  }
+  records.reverse()
+  const page = { records, hasMore: (records[0] as SessionHistoryRecord).event.seq > 0 }
+  const response = decorate(page)
+  const actualBytes = Buffer.byteLength(JSON.stringify(response), 'utf8')
+  return actualBytes <= maxBytes ? response : oversizedPage(page, actualBytes, decorate)
+}
+
+/** Include the oversize marker itself in the reported complete response size. */
+function oversizedPage<T extends SessionPage>(
+  page: SessionPage,
+  bytes: number,
+  decorate: (page: SessionPage) => T,
+): T {
+  let reported = bytes
+  while (true) {
+    const response = decorate({ ...page, oversized: { bytes: reported } })
+    const actual = Buffer.byteLength(JSON.stringify(response), 'utf8')
+    if (actual === reported) return response
+    reported = actual
+  }
 }
