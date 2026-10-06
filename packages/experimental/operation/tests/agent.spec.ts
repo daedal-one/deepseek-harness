@@ -28,7 +28,7 @@ import { scopeOf } from '@deepseek-ai/dsh-scope'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import OperationService, { type OperationJudgmentProvider } from '../src/index.ts'
 import * as operationAgent from '../src/agent.ts'
-import { parseOperationPlan } from '../src/plan.ts'
+import { resolveOperationPlan } from '../src/plan.ts'
 
 const execFile = promisify(execFileCallback)
 
@@ -111,11 +111,8 @@ async function setup(maxCatalogBytes = 65_536, lateTool = false, inventory: 'all
 }
 
 function plan(tool: string, args: unknown, pointer: string) {
-  const result = { kind: 'result', step: 'action', pointer }
-  return { version: 1, name: 'inspect-or-edit', goal: 'Perform the declared action and inspect its result', inputs: {}, steps: [{
-    id: 'action', tool, purpose: 'Perform action', arguments: { kind: 'literal', value: args },
-    assertions: [{ kind: 'present', value: result }], observation: { paths: [pointer] }, question: 'Is the action settled?',
-  }], completion: { assertions: [{ kind: 'present', value: result }], evidence: [result], question: 'Is the declared action complete?' } }
+  return { goal: 'Perform the declared action and inspect its result',
+    steps: [{ tool, arguments: args, observe: [pointer] }] }
 }
 async function execute(ctx: Context, agent: Agent, name: string, args: unknown) {
   return ctx.agents.withInitiator(agent, () => ctx.tools.execute({ name, arguments: args, agent,
@@ -141,21 +138,21 @@ describe('operation-only coding preset through the real Loader', () => {
     const example = text.split('\n').find(line => line.startsWith('{"plan":'))!
     expect(example).toBeDefined()
     const args = JSON.parse(example) as { plan: unknown }
-    expect(parseOperationPlan(args.plan).steps).toHaveLength(1)
+    expect(resolveOperationPlan(args.plan).steps).toHaveLength(1)
     const seen: string[] = []
     ctx.on('tools/pre-execute', async (exec, next) => { seen.push(exec.name); return next() })
     const result = await execute(ctx, agent, 'run_operation', args)
-    expect(result, JSON.stringify(result)).toMatchObject({ isError: false, value: { status: 'completed', completedSteps: ['status'] } })
-    const observed = (result.value as { observations: { value: string }[] }).observations[0]!.value
+    expect(result, JSON.stringify(result)).toMatchObject({ isError: false, value: { status: 'completed', completedSteps: ['step-1'] } })
+    const observed = (result.value as { observations: { value: { stdout: { text: string } } }[] }).observations[0]!.value.stdout.text
     expect(observed).toContain('## fixture')
     expect(observed).toContain(' M source.txt')
     expect(observed).toContain('Fixture initial commit')
     expect(seen).toEqual(['run_operation', 'bash'])
     expect(agent.session.snapshotEvents().filter(event => event.type === 'operation/judgment-request')).toHaveLength(1)
   })
-  it.each(['version', 'arguments'])('rejects malformed %s at schema admission before operation or action effects', async (field) => {
+  it.each(['version', 'arguments'])('rejects malformed detailed %s before operation or action effects', async (field) => {
     const { ctx, agent } = await setup()
-    const raw = plan('write', { file_path: 'new.txt', content: 'small' }, '')
+    const raw = resolveOperationPlan(plan('write', { file_path: 'new.txt', content: 'small' }, ''))
     const malformed: Record<string, unknown> = { ...raw }
     if (field === 'version') delete malformed.version
     else malformed.steps = [{ ...raw.steps[0], arguments: { file_path: 'new.txt', content: 'small' } }]
@@ -163,7 +160,7 @@ describe('operation-only coding preset through the real Loader', () => {
     ctx.on('tools/pre-execute', async (exec, next) => { seen.push(exec.name); return next() })
     const result = await execute(ctx, agent, 'run_operation', { plan: malformed })
     expect(result).toMatchObject({ isError: true })
-    expect(JSON.stringify(result)).toContain('invalid arguments:')
+    expect(JSON.stringify(result)).toContain(field === 'version' ? 'invalid arguments:' : 'kind must be a non-empty string')
     expect(seen).toEqual(['run_operation'])
     expect(agent.session.snapshotEvents().filter(event => event.type.startsWith('operation/'))).toEqual([])
   })
@@ -226,6 +223,26 @@ describe('operation-only coding preset through the real Loader', () => {
     expect(result, JSON.stringify(result))
       .toMatchObject({ isError: false, value: { status: 'completed' } })
   })
+  it.each([
+    { exitCode: 7 }, { timedOut: true }, { aborted: true }, { signal: 'SIGTERM' },
+    { sandbox: { mode: 'workspace-write', denied: true } },
+    { stdout: { text: 'partial', truncated: true } },
+  ])('stops a concise plan before inference or the next action on mandatory process facts %j', async (override) => {
+    const { ctx, agent } = await setup(65_536, false, 'all', [action('bash', {
+      kind: 'foreground', exitCode: 0, signal: null, timedOut: false, aborted: false,
+      stdout: { text: 'settled', truncated: false }, stderr: { text: '', truncated: false }, ...override,
+    })])
+    const seen: string[] = []
+    ctx.on('tools/pre-execute', async (exec, next) => { seen.push(exec.name); return next() })
+    const result = await execute(ctx, agent, 'run_operation', { plan: {
+      goal: 'Inspect two settled actions', steps: [{ tool: 'bash', arguments: {} }, { tool: 'bash', arguments: {} }],
+    } })
+    expect(result).toMatchObject('stdout' in override
+      ? { isError: false, value: { status: 'needs-replan' } } : { isError: true })
+    expect(seen).toEqual(['run_operation', 'bash'])
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'operation/judgment-request')).toEqual([])
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'operation/step-start')).toHaveLength(1)
+  })
   it.each([{ run_in_background: true }, { background: true }, null, 'invalid', []].map(args => ({ args })))('rejects nonforeground or nonobject action arguments $args', async ({ args }) => {
     const { ctx, agent } = await setup(65_536, false, 'all', [action('probe', { settled: true })])
     expect(await execute(ctx, agent, 'run_operation', { plan: plan('probe', args, '') }))
@@ -270,7 +287,7 @@ describe('operation-only coding preset through the real Loader', () => {
     const result = await execute(ctx, agent, 'run_operation', { plan: plan('read', { file_path: 'source.txt', offset: 2, limit: 1 }, '/lines') })
     expect(result.isError, JSON.stringify(result)).toBe(false)
     expect(result).toMatchObject({ isError: false, value: { status: 'completed', observations: [
-      { step: 'action', pointer: '/lines', value: [{ number: 2, text: 'beta' }] },
+      { step: 'step-1', pointer: '/lines', value: [{ number: 2, text: 'beta' }] },
     ] } })
   })
   it('performs literal small writes through ordinary policy and verifies the actual file', async () => {

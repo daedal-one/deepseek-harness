@@ -125,6 +125,7 @@ interface SdkAssertions {
 }
 
 const SDK_ASSERTIONS: Readonly<Record<string, SdkAssertions>> = {
+  'operation-simple-plan': { expectedTools: { run_operation: ['plan'] }, expectedFinalResponse: 'The fixture marker is ready.' },
   'operation-first-plan': { expectedTools: { run_operation: ['plan'] }, expectedFinalResponse: 'The fixture marker is ready.' },
   'operation-only': { expectedTools: { run_operation: ['plan'] }, expectedFinalResponse: 'Verified beta in east from one complete canonical record.' },
   'artifact-revisions': {
@@ -904,13 +905,20 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         expect(normalizedResult).toBe(await readFile(resultExpectedPath, 'utf8'))
       }
 
-      if (scenario.name === 'operation-first-plan') {
+      if (['operation-first-plan', 'operation-simple-plan'].includes(scenario.name)) {
         expect(finalResult?.events.filter(event => event.type === 'tool/call')).toHaveLength(1)
         expect(finalResult?.events.filter(event => event.type === 'operation/step-start')).toHaveLength(1)
         expect(finalResult?.events.filter(event => event.type === 'operation/judgment-request')).toHaveLength(1)
         const assembly = await readFile(join(scenario.dir, 'system-prompt.expected.md'), 'utf8')
         expect(assembly).toContain('Start with the smallest useful plan')
         expect(assembly).toContain('Example run_operation arguments')
+        if (scenario.name === 'operation-simple-plan') {
+          const admitted = finalResult?.events.find(event => event.type === 'operation/run-start')?.data as JsonObject
+          expect(admitted.plan).toMatchObject({ version: 1, steps: [{ id: 'step-1' }] })
+          const result = finalResult?.events.find(event => event.type === 'operation/step-result')?.data as JsonObject
+          const checkpoint = finalResult?.events.find(event => event.type === 'operation/judgment-request')?.data as JsonObject
+          expect(checkpoint).toMatchObject({ request: { draft: { state: { observations: [{ pointer: '', value: result.value }] } } } })
+        }
       }
       if (['clm-operations', 'kev-operations', 'operation-only'].includes(scenario.name)) {
         if (finalResult === undefined) throw new Error('operation SDK scenario has no run result')

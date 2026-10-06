@@ -1174,7 +1174,7 @@ for line in sys.stdin:
         assert provenance[0]["createdCommits"] == ["d" * 40]
 
 
-@pytest.mark.parametrize("scenario", ["clm-operations", "kev-operations", "operation-only"])
+@pytest.mark.parametrize("scenario", ["clm-operations", "kev-operations", "operation-only", "operation-simple-plan"])
 def test_recorded_operation_records_match_the_typescript_sdk(tmp_path: Path, scenario: str) -> None:
     fixture = Path(__file__).resolve().parents[3] / f"snapshots/sdk/{scenario}/notifications.expected.jsonl"
     expected_path = Path(__file__).parent / f"expected/{scenario}.json"
@@ -1230,10 +1230,9 @@ for line in sys.stdin:
     assert all("ignorable" not in event for event in actual)
 
     def fixture_digest(value: object) -> str:
-        # This fixture uses ASCII and numbers with identical Python/JS JSON spellings.
+        # Fixture numbers have identical Python/JS JSON spellings; schemas retain UTF-8 text.
         encoded = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
-        assert encoded.isascii()
-        return hashlib.sha256(encoded.encode("ascii")).hexdigest()
+        return hashlib.sha256(encoded.encode("utf8")).hexdigest()
 
     admission = actual[0]["data"]
     run_id = admission["runId"]
@@ -1248,7 +1247,14 @@ for line in sys.stdin:
         "callId": outer_call["callId"],
     }
     assert admission["rootCallId"] == outer_call["callId"]
-    assert admission["plan"] == json.loads(outer_call["arguments"])["plan"]
+    supplied = json.loads(outer_call["arguments"])["plan"]
+    if scenario == "operation-simple-plan":
+        assert set(supplied) == {"goal", "steps"}
+        assert admission["plan"]["goal"] == supplied["goal"]
+        assert admission["plan"]["version"] == 1
+        assert admission["plan"]["steps"][0]["arguments"]["value"] == supplied["steps"][0]["arguments"]
+    else:
+        assert admission["plan"] == supplied
     assert admission["planDigest"] == fixture_digest(admission["plan"])
     assert admission["configurationDigest"] == fixture_digest({
         "limits": admission["limits"],
@@ -1259,8 +1265,9 @@ for line in sys.stdin:
     starts = [event["data"] for event in actual if event["type"] == "operation/step-start"]
     outcomes = [event["data"] for event in actual if event["type"] == "operation/step-result"]
     identities = {identity["name"]: identity for identity in admission["toolIdentities"]}
-    assert len(identities) == len(starts) == len(outcomes) == 2
-    assert len({start["callId"] for start in starts}) == 2
+    step_count = 1 if scenario == "operation-simple-plan" else 2
+    assert len(identities) == len(starts) == len(outcomes) == step_count
+    assert len({start["callId"] for start in starts}) == step_count
     assert outer_call["callId"] not in {start["callId"] for start in starts}
     starts_by_step = {start["stepId"]: start for start in starts}
     outcomes_by_step = {outcome["stepId"]: outcome for outcome in outcomes}
@@ -1279,8 +1286,8 @@ for line in sys.stdin:
     requests = [record["request"] for record in request_records]
     responses = [event["data"] for event in actual if event["type"] == "operation/judgment-result"]
     transitions = [event["data"] for event in actual if event["type"] == "operation/transition"]
-    assert len(requests) == len(responses) == len(transitions) == 2
-    assert len({request["draft"]["id"] for request in requests}) == 2
+    assert len(requests) == len(responses) == len(transitions) == step_count
+    assert len({request["draft"]["id"] for request in requests}) == step_count
     assert [request["draft"]["id"] for request in requests] == [response["requestId"] for response in responses]
     assert [request["draft"]["id"] for request in requests] == [transition["requestId"] for transition in transitions]
     for record, response, transition in zip(request_records, responses, transitions):

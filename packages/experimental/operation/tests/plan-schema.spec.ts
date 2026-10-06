@@ -53,17 +53,17 @@ describe('model-facing operation plan schema', () => {
   })
   it.each([
     { ...plan(), version: 2 }, { ...plan(), version: undefined }, { ...plan(), unexpected: true },
-    { ...plan(), steps: [{ ...plan().steps[0], arguments: {} }] },
-    { ...plan(), steps: [{ ...plan().steps[0], observation: { paths: [0] } }] },
-    { ...plan(), completion: { ...plan().completion, assertions: [{ kind: 'equals', left: {}, right: {} }] } },
-    { ...plan(), requestedLimits: { maxSteps: 1.5 } },
   ])('rejects invalid field structure before parsing %j', (value) => {
     expect(validateArgs(operationPlanParameters, { plan: value }).length).toBeGreaterThan(0)
   })
   it.each([
     { ...plan(), steps: [] }, { ...plan(), requestedLimits: { maxSteps: 0 } },
     { ...plan(), completion: { ...plan().completion, assertions: [{ kind: 'number', value: result }] } },
-  ])('retains parser-owned nonempty and numeric constraints', (value) => {
+    { ...plan(), steps: [{ ...plan().steps[0], arguments: {} }] },
+    { ...plan(), steps: [{ ...plan().steps[0], observation: { paths: [0] } }] },
+    { ...plan(), completion: { ...plan().completion, assertions: [{ kind: 'equals', left: {}, right: {} }] } },
+    { ...plan(), requestedLimits: { maxSteps: 1.5 } },
+  ])('retains parser-owned detailed syntax, nonempty and numeric constraints', (value) => {
     expect(validateArgs(operationPlanParameters, { plan: value })).toEqual([])
     expect(() => parseOperationPlan(value)).toThrow()
   })

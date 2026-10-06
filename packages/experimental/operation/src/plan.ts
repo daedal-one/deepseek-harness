@@ -1,5 +1,5 @@
 /**
- * Version-one operation-plan parser and static reference validation.
+ * Concise request resolution, version-one parsing and static reference validation.
  * @module @deepseek-ai/dsh-experimental-operation/plan
  */
 
@@ -51,6 +51,45 @@ export function parseOperationPlan(raw: unknown): OperationPlan {
   }
   validateReferences(plan)
   return deepFreeze(plan)
+}
+
+/**
+ * Resolve a concise request or detailed program into an immutable version-one plan.
+ * @param raw Untrusted tool argument value; concise arguments are literal JSON objects.
+ * @returns Validated program with explicit checks, observations and completion evidence.
+ */
+export function resolveOperationPlan(raw: unknown): OperationPlan {
+  const record = object(raw, 'plan')
+  if (['version', 'name', 'inputs', 'completion'].some(key => Object.hasOwn(record, key))) {
+    return parseOperationPlan(raw)
+  }
+  exact(record, ['goal', 'steps', 'requestedLimits'], 'plan')
+  const goal = string(record.goal, 'plan.goal')
+  const steps = array(record.steps, 'plan.steps').map((rawStep, index): OperationStep => {
+    const path = `plan.steps[${index}]`
+    const step = object(rawStep, path)
+    exact(step, ['tool', 'arguments', 'observe'], path)
+    const id = `step-${index + 1}`
+    return {
+      id,
+      purpose: goal,
+      tool: string(step.tool, `${path}.tool`),
+      arguments: { kind: 'literal', value: objectJson(step.arguments, `${path}.arguments`) },
+      assertions: [{ kind: 'present', value: { kind: 'result', step: id, pointer: '' } }],
+      observation: { paths: step.observe === undefined ? ['']
+        : array(step.observe, `${path}.observe`).map((value, pointerIndex) => pointer(value, `${path}.observe[${pointerIndex}]`)) },
+      question: goal,
+    }
+  })
+  return parseOperationPlan({
+    version: 1, name: goal, goal, inputs: {}, steps,
+    completion: {
+      assertions: steps.flatMap(step => step.assertions),
+      evidence: steps.flatMap(step => step.observation.paths.map(pointer => ({ kind: 'result', step: step.id, pointer }))),
+      question: goal,
+    },
+    ...(record.requestedLimits === undefined ? {} : { requestedLimits: record.requestedLimits }),
+  })
 }
 
 /**

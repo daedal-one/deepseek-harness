@@ -17,7 +17,7 @@ export * from './types.ts'
 export { OperationRunId, OperationJudgmentRequestId, OperationCandidateId } from './ids.ts'
 export { OperationJudgmentError, OperationJudgmentRegistry } from './judgment.ts'
 export { OperationJsonError, canonicalJson, digestJson, equalJson, jsonBytes, parseJsonPointer, resolveJsonPointer } from './json.ts'
-export { OperationPlanError, parseOperationPlan } from './plan.ts'
+export { OperationPlanError, parseOperationPlan, resolveOperationPlan } from './plan.ts'
 export {
   createForegroundProcessOperationPolicy,
   inspectForegroundProcessResult,
@@ -94,7 +94,7 @@ export class OperationService extends Service {
     this.runner = new OperationRunner(ctx, this.judgments, this.toolPolicies, config)
     ctx.effect(() => ctx.tools.register(defineTool({
       name: 'run_operation',
-      description: 'Execute one short, finite operation plan through existing tools. Only tools explicitly admitted by the composing profile are accepted; ordinary permissions still apply. Make this the only tool call in the assistant response. Supply version-one JSON with fixed tool names, explicit JSON-pointer observations, required deterministic assertions, and completion checks. The runner executes steps sequentially, records every checkpoint, and may return needs-replan or stopped instead of inventing values. Use foreground actions and literal small edits. Do not use this tool for background jobs, automatic retries, output-derived shell or edit arguments, or recursive operation plans.',
+      description: 'Execute one short, finite operation plan through existing tools. Only tools explicitly admitted by the composing profile are accepted; ordinary permissions still apply. Make this the only tool call in the assistant response. Supply plan:{goal,steps:[{tool,arguments}]} with ordinary tool arguments. The harness supplies execution bookkeeping and checks; optional step.observe selects complete evidence. Detailed version-one programs remain available for explicit references and assertions. The runner executes steps sequentially, records every checkpoint, and may return needs-replan or stopped instead of inventing values. Use foreground actions and literal small edits. Do not use this tool for background jobs, automatic retries, output-derived shell or edit arguments, or recursive operation plans.',
       parameters: operationPlanParameters,
       output: {
         schema: {

@@ -1,0 +1,8 @@
+version: 1
+scenario: operation-simple-plan
+profile: sdk
+composition: sdk-operation-simple-plan
+recording: authored
+header:
+  class: sdk-operation-simple-plan
+  pin: true

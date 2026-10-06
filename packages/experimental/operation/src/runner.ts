@@ -13,7 +13,7 @@ import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
 import { digestJson, equalJson, jsonBytes, requireJson } from './json.ts'
 import { OperationJudgmentRegistry } from './judgment.ts'
 import { buildContinuationCandidates, completionControls, observeCanonicalResult, withIntermediateControls } from './observation.ts'
-import { parseOperationPlan, OperationPlanError } from './plan.ts'
+import { resolveOperationPlan, OperationPlanError } from './plan.ts'
 import type { OperationToolCallerContext, OperationToolPolicy } from './policy.ts'
 import { OperationToolPolicyRegistry } from './policy.ts'
 import { preflightOperationPlan } from './preflight.ts'
@@ -194,7 +194,7 @@ export class OperationRunner {
   async run(exec: ToolRunContext, rawPlan: unknown): Promise<OperationSummary> {
     if (exec.agent === undefined) throw new OperationRunError('run_operation requires a calling agent', 'NO_AGENT')
     if (exec.signal.aborted) throw new OperationRunError('operation was cancelled before admission', 'CANCELLED')
-    const plan = parseOperationPlan(rawPlan)
+    const plan = resolveOperationPlan(rawPlan)
     const limits = resolveOperationLimits(this.config, plan.requestedLimits)
     if (jsonBytes(plan as unknown as JsonValue) > limits.maxPlanBytes) throw new OperationRunError(`operation plan exceeds ${limits.maxPlanBytes} bytes`, 'PLAN_LIMIT')
     const provider = this.judgments.requireProvider()
