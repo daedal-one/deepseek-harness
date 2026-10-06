@@ -105,8 +105,8 @@ function closeBlock(block: OpenBlock): ContentBlock {
  * Malformed JSON payloads abort the stream with `MALFORMED_RESPONSE`.
  * @param payloads - SSE data payloads from {@link parseSse}, `[DONE]`-terminated.
  * @returns deltas as they arrive; `block-end`s, `usage`, and `finish` are all deferred to the `[DONE]` sentinel.
- *   A `stop` (or absent) finish with no opened blocks is a degenerate provider completion and maps to an
- *   `EMPTY_RESPONSE` error finish instead of a successful empty message.
+ *   A `stop` (or absent) finish without nonblank text or a tool call maps to `EMPTY_RESPONSE`.
+ *   Reasoning, whitespace and reported usage remain in the stream before that error finish.
  */
 export async function* translate(payloads: AsyncIterable<string>): AsyncGenerator<StreamChunk> {
   let nextIndex = 0
@@ -132,10 +132,12 @@ export async function* translate(payloads: AsyncIterable<string>): AsyncGenerato
       const reason = pendingFinish ?? { kind: 'stop' as const }
       yield {
         type: 'finish',
-        reason: reason.kind === 'stop' && order.length === 0
+        reason: reason.kind === 'stop' && !order.some(block => block.kind === 'tool-call'
+          || block.kind === 'text' && block.text.trim().length > 0)
           ? {
             kind: 'error',
-            failure: { message: 'model returned a completed response with no content', code: EMPTY_RESPONSE_CODE },
+            failure: { message: `model returned a completed response ${order.length === 0
+              ? 'with no content' : 'without text or tool calls'}`, code: EMPTY_RESPONSE_CODE },
           }
           : reason,
       }

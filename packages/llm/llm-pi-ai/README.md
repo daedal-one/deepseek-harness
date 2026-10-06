@@ -157,6 +157,8 @@ The plugin declares every installed catalog provider it can authenticate in the 
 
 Successful assistant responses store a versioned, lossless-JSON replay state beside the provider and model that produced them — response-level facts plus one per-block entry per streamed block. At request time, `LlmRuntime` passes replay state only when the same adapter instance owns both routes; the adapter validates it and restores native response ids, provider signatures, and optional `providerThinkingLevel` effort metadata, keeping absent effort metadata absent. Replay validates the requested model identity against the assistant source and separately restores an Anthropic response model when the provider resolved an alias or fallback. An unusable state degrades to provider-neutral content instead of failing the request. pi-ai tool-call arguments are parsed objects, so the adapter parses input and re-stringifies output to the harness raw-JSON convention; pi-ai in-stream error events map to terminal `finish` chunks.
 
+A terminal `stop` requires nonblank text or a tool call. Reasoning alone, empty text and whitespace become `EMPTY_RESPONSE`; streamed content and usage remain in the failed attempt outside model history. The configured request retry policy owns recovery. Planning text cannot initiate an operation without a tool call.
+
 </details>
 
 -----

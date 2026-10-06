@@ -97,6 +97,35 @@ async function loadComposition(): Promise<{ ctx: Context; settingsPath: string }
 }
 
 describe('llm-pi-ai real dormant composition', () => {
+  it('retains a reasoning-only operation planner response as an empty-response failure', async () => {
+    vi.stubEnv('PI_COMPOSITION_KEY', '')
+    const server = await mockServer([{ events: [
+      '{"choices":[{"delta":{"role":"assistant","reasoning_content":"synthetic planning"},"index":0,"finish_reason":null}]}',
+      '{"choices":[{"delta":{"content":"\\n\\n"},"index":0,"finish_reason":null}]}',
+      '{"choices":[{"delta":{},"index":0,"finish_reason":"stop"}],"usage":{"prompt_tokens":11,"completion_tokens":7}}',
+      '[DONE]',
+    ] }])
+    const { ctx, settingsPath } = await loadComposition()
+    await writeFile(settingsPath, [
+      'llm-pi-ai:', '  providers:', '    deepseek:', '      apiKeyEnv: PI_COMPOSITION_KEY',
+      `      baseURL: ${server.url}`, '',
+    ].join('\n'))
+    await vi.waitFor(() => { expect(ctx.llm.listProviders().map(provider => provider.id)).toEqual(['deepseek']) }, { timeout: 5000 })
+    const result = await assemble(ctx, {
+      provider: 'deepseek', model: 'deepseek-v4-flash', messages: [],
+      tools: [{ name: 'run_operation', description: 'Run the explicit operation plan', parameters: { type: 'object', properties: {} } }],
+    })
+    expect(server.requests).toHaveLength(1)
+    expect(server.requests[0]).toMatchObject({ tools: [{ function: { name: 'run_operation' } }] })
+    expect(result.message.content).toEqual([
+      { type: 'reasoning', text: 'synthetic planning' }, { type: 'text', text: '\n\n' },
+    ])
+    expect(result.usage).toEqual({ inputTokens: 11, outputTokens: 7, totalTokens: 18 })
+    expect(result.finish).toEqual({ kind: 'error', failure: {
+      message: 'model "deepseek-v4-flash" returned a completed response without text or tool calls', code: 'EMPTY_RESPONSE',
+    } })
+  })
+
   it('boots with zero routes and registers one the moment settings supply a profile', async () => {
     vi.stubEnv('PI_COMPOSITION_KEY', '')
     const server = await mockServer([{ events: textEvents }])

@@ -230,10 +230,35 @@ describe('translate: finish and usage handling', () => {
     ])
   })
 
-  it('keeps a reasoning-only stream a successful stop (any opened block counts)', async () => {
+  it.each([
+    { name: 'reasoning only', delta: { reasoning_content: 'synthetic planning' } },
+    { name: 'whitespace only', delta: { content: ' \t\n' } },
+    { name: 'reasoning followed by newlines', delta: { reasoning_content: 'synthetic planning', content: '\n\n' } },
+  ])('classifies a completed stop with $name as EMPTY_RESPONSE', async ({ delta }) => {
     const chunks = await collect(translate(feed(
       firstChunk,
-      { choices: [{ delta: { content: null, reasoning_content: 'mull' } }] },
+      { choices: [{ delta }] },
+      { choices: [{ delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 11, completion_tokens: 7 } },
+      DONE,
+    )))
+    expect(chunks.at(-2)).toEqual({ type: 'usage', usage: { inputTokens: 11, outputTokens: 7, totalTokens: 18 } })
+    expect(chunks.at(-1)).toEqual({ type: 'finish', reason: {
+      kind: 'error',
+      failure: { message: 'model returned a completed response without text or tool calls', code: EMPTY_RESPONSE_CODE },
+    } })
+    const assembler = new BlockAssembler()
+    for (const chunk of chunks) assembler.push(chunk)
+    if ('reasoning_content' in delta) {
+      expect(assembler.blocks()).toContainEqual({ type: 'reasoning', text: delta.reasoning_content })
+    }
+  })
+
+  it('accepts a tool call even when the provider reports stop', async () => {
+    const chunks = await collect(translate(feed(
+      firstChunk,
+      { choices: [{ delta: { tool_calls: [{ index: 0, id: 'call-fixture', type: 'function', function: {
+        name: 'run_operation', arguments: '{"plan":{}}',
+      } }] } }] },
       { choices: [{ delta: {}, finish_reason: 'stop' }] },
       DONE,
     )))

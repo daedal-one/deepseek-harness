@@ -27,6 +27,8 @@ Ask for work normally. The planner submits a finite plan containing exact action
 
 Permissions still apply to each underlying action. Read/search and small edits run autonomously when your Session policy permits them. A shell action that needs approval still asks for it. A failed process, interrupted action, clipped observation, missing evidence, or uncertain decision stops progression. The planner can inspect the outcome and propose another plan; interrupted mutations are never automatically repeated.
 
+The decision model starts only after the planner submits an actual `run_operation` call and an action produces evidence. Reasoning by the main model does not start it. A main-model response containing only reasoning or whitespace is an `EMPTY_RESPONSE` failure handled by the configured request retry policy. If it persists, choose another main model and continue the same Session; the profile and execution environment remain the same.
+
 ## Configure a deployment
 
 The private [Decision Engine repository](https://github.com/daedal-one/decision-engine) owns Python inference, immutable model provisioning, and independent supervision. The [Kev adapter](../../packages/experimental/operation-kev/README.md) owns the required DSH configuration and credential reference. Prepare these before creating the profile.
