@@ -125,6 +125,7 @@ interface SdkAssertions {
 }
 
 const SDK_ASSERTIONS: Readonly<Record<string, SdkAssertions>> = {
+  'operation-first-plan': { expectedTools: { run_operation: ['plan'] }, expectedFinalResponse: 'The fixture marker is ready.' },
   'operation-only': { expectedTools: { run_operation: ['plan'] }, expectedFinalResponse: 'Verified beta in east from one complete canonical record.' },
   'artifact-revisions': {
     patches: [fileURLToPath(new URL('./artifact-revisions/readiness.cordis.yml', import.meta.url))],
@@ -903,6 +904,14 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         expect(normalizedResult).toBe(await readFile(resultExpectedPath, 'utf8'))
       }
 
+      if (scenario.name === 'operation-first-plan') {
+        expect(finalResult?.events.filter(event => event.type === 'tool/call')).toHaveLength(1)
+        expect(finalResult?.events.filter(event => event.type === 'operation/step-start')).toHaveLength(1)
+        expect(finalResult?.events.filter(event => event.type === 'operation/judgment-request')).toHaveLength(1)
+        const assembly = await readFile(join(scenario.dir, 'system-prompt.expected.md'), 'utf8')
+        expect(assembly).toContain('Start with the smallest useful plan')
+        expect(assembly).toContain('Example run_operation arguments')
+      }
       if (['clm-operations', 'kev-operations', 'operation-only'].includes(scenario.name)) {
         if (finalResult === undefined) throw new Error('operation SDK scenario has no run result')
         const operationEvents = finalResult.events.filter(event => event.type.startsWith('operation/'))

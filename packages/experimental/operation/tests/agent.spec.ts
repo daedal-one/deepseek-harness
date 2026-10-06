@@ -3,6 +3,8 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { execFile as execFileCallback } from 'node:child_process'
+import { promisify } from 'node:util'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
@@ -16,11 +18,19 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import JsonlPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import * as toolFs from '@deepseek-ai/dsh-tool-fs'
-import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
+import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
+import { LocalBashExecutor } from '@deepseek-ai/dsh-bash-local'
+import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
+import * as ToolBash from '@deepseek-ai/dsh-tool-bash'
+import * as ShellEnv from '@deepseek-ai/dsh-shell-env'
+import { defineTool, type ToolDefinition, type ValueSchemaSpec } from '@deepseek-ai/dsh-tools'
 import { scopeOf } from '@deepseek-ai/dsh-scope'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import OperationService, { type OperationJudgmentProvider } from '../src/index.ts'
 import * as operationAgent from '../src/agent.ts'
+import { parseOperationPlan } from '../src/plan.ts'
+
+const execFile = promisify(execFileCallback)
 
 const contexts: Context[] = []
 const roots: string[] = []
@@ -41,7 +51,7 @@ const provider: OperationJudgmentProvider = {
 }
 
 async function setup(maxCatalogBytes = 65_536, lateTool = false, inventory: 'all' | string[] = 'all',
-  definitions: ToolDefinition[] = [], conflictingPolicy = false) {
+  definitions: ToolDefinition[] = [], conflictingPolicy = false, realBash = false) {
   const root = await mkdtemp(join(tmpdir(), 'dsh-operation-agent-'))
   roots.push(root)
   const preset = join(root, 'presets', 'operation')
@@ -86,6 +96,13 @@ async function setup(maxCatalogBytes = 65_536, lateTool = false, inventory: 'all
   await ctx.plugin(JsonlPersistence, { root: join(root, 'sessions'), compression: 'none' })
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(LocalFileSystem, { cwd: root })
+  if (realBash) {
+    await ctx.plugin(LocalJobRegistry)
+    await ctx.plugin(LocalSubprocessRuntime)
+    await ctx.plugin(ShellEnv, { dshHome: join(root, 'home') })
+    await ctx.plugin(LocalBashExecutor, { timeoutMs: 10_000 })
+    await ctx.plugin(ToolBash, { enableRunInBackground: false })
+  }
   await ctx.plugin(AgentPresets, { default: 'operation', roots: [{ path: join(root, 'presets'), trust: 'system' }],
     includeShippedRoot: false, includeUserRoot: false })
   const handle = await ctx.agents.create({ sessionId: SessionId('operation-profile'), meta: { cwd: root, agentPreset: 'operation' },
@@ -111,6 +128,71 @@ function action(name: string, value: JsonValue) {
 }
 
 describe('operation-only coding preset through the real Loader', () => {
+  it('executes the emitted one-step example through the real foreground bash tool', async () => {
+    const { ctx, agent, root } = await setup(65_536, false, ['bash'], [], false, true)
+    const env = { ...process.env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' }
+    await execFile('git', ['init', '-b', 'fixture'], { cwd: root, env })
+    await execFile('git', ['add', 'source.txt'], { cwd: root, env })
+    await execFile('git', ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+      '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null', 'commit', '-m', 'Fixture initial commit'], { cwd: root, env })
+    await writeFile(join(root, 'source.txt'), 'changed\n')
+    const assembly = await ctx.systemPrompt.assemble(assembleContextFor(agent))
+    const text = assembly.sections.find(section => section.name === 'operation:plan')!.text
+    const example = text.split('\n').find(line => line.startsWith('{"plan":'))!
+    expect(example).toBeDefined()
+    const args = JSON.parse(example) as { plan: unknown }
+    expect(parseOperationPlan(args.plan).steps).toHaveLength(1)
+    const seen: string[] = []
+    ctx.on('tools/pre-execute', async (exec, next) => { seen.push(exec.name); return next() })
+    const result = await execute(ctx, agent, 'run_operation', args)
+    expect(result, JSON.stringify(result)).toMatchObject({ isError: false, value: { status: 'completed', completedSteps: ['status'] } })
+    const observed = (result.value as { observations: { value: string }[] }).observations[0]!.value
+    expect(observed).toContain('## fixture')
+    expect(observed).toContain(' M source.txt')
+    expect(observed).toContain('Fixture initial commit')
+    expect(seen).toEqual(['run_operation', 'bash'])
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'operation/judgment-request')).toHaveLength(1)
+  })
+  it.each(['version', 'arguments'])('rejects malformed %s at schema admission before operation or action effects', async (field) => {
+    const { ctx, agent } = await setup()
+    const raw = plan('write', { file_path: 'new.txt', content: 'small' }, '')
+    const malformed: Record<string, unknown> = { ...raw }
+    if (field === 'version') delete malformed.version
+    else malformed.steps = [{ ...raw.steps[0], arguments: { file_path: 'new.txt', content: 'small' } }]
+    const seen: string[] = []
+    ctx.on('tools/pre-execute', async (exec, next) => { seen.push(exec.name); return next() })
+    const result = await execute(ctx, agent, 'run_operation', { plan: malformed })
+    expect(result).toMatchObject({ isError: true })
+    expect(JSON.stringify(result)).toContain('invalid arguments:')
+    expect(seen).toEqual(['run_operation'])
+    expect(agent.session.snapshotEvents().filter(event => event.type.startsWith('operation/'))).toEqual([])
+  })
+  it('omits the shell example when an admitted bash requires incompatible arguments', async () => {
+    const incompatible = defineTool({ name: 'bash', description: 'Incompatible fixture action',
+      parameters: { script: { type: 'string', required: true } },
+      output: { schema: { type: 'json' }, render: () => [] }, async execute() { return null } })
+    const { ctx, agent } = await setup(65_536, false, ['bash'], [incompatible])
+    const assembly = await ctx.systemPrompt.assemble(assembleContextFor(agent))
+    expect(assembly.sections.find(section => section.name === 'operation:plan')!.text)
+      .not.toContain('Example run_operation arguments')
+  })
+  it.each<ValueSchemaSpec>([
+    { type: 'json' }, { type: 'object', additionalProperties: false, properties: {} },
+    { type: 'object', additionalProperties: false, properties: { kind: { type: 'string', const: 'foreground' } } },
+    { type: 'object', additionalProperties: false, properties: { kind: { type: 'string', const: 'foreground' },
+      exitCode: { type: 'integer' }, stdout: { type: 'object', additionalProperties: false, properties: {} } } },
+    { type: 'object', additionalProperties: false, properties: { kind: { type: 'string', const: 'foreground' },
+      exitCode: { type: 'integer' }, stdout: { type: 'object', additionalProperties: false,
+        properties: { text: { type: 'boolean' } } } } },
+  ])('omits the shell example when the output does not declare its observed fields %j', async (schema) => {
+    const incompatible = defineTool({ name: 'bash', description: 'Incompatible fixture output',
+      parameters: { command: { type: 'string', required: true }, description: { type: 'string', required: true } },
+      output: { schema, render: () => [] }, async execute() { throw new Error('schema-only fixture must not execute') } })
+    const { ctx, agent } = await setup(65_536, false, ['bash'], [incompatible])
+    const assembly = await ctx.systemPrompt.assemble(assembleContextFor(agent))
+    expect(assembly.sections.find(section => section.name === 'operation:plan')!.text)
+      .not.toContain('Example run_operation arguments')
+  })
   it('requires an agent-scoped selector', () => {
     const ctx = new Context()
     contexts.push(ctx)
@@ -127,6 +209,7 @@ describe('operation-only coding preset through the real Loader', () => {
     const catalog = assembly.sections.find(section => section.name === 'operation:plan')!.text
     expect(catalog).toContain('"name":"read"')
     expect(catalog).not.toContain('"name":"write"')
+    expect(catalog).not.toContain('Example run_operation arguments')
   })
   it('rolls back partial policy binding on a duplicate registration', async () => {
     const { ctx, agent, operations } = await setup(65_536, false, ['read', 'write'], [], true)

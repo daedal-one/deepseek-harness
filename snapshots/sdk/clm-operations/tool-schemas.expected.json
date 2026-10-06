@@ -358,7 +358,2128 @@
         "type": "object",
         "properties": {
           "plan": {
-            "description": "Version-one JSON operation plan with inputs, fixed steps, observations, assertions, and completion checks."
+            "type": "object",
+            "description": "A short finite plan. Use version:1, inputs:{} when unnecessary, and the fewest steps needed for the requested facts. All collections marked nonempty require at least one item.",
+            "additionalProperties": false,
+            "properties": {
+              "version": {
+                "type": "integer",
+                "const": 1
+              },
+              "name": {
+                "type": "string",
+                "description": "Nonempty short plan name."
+              },
+              "goal": {
+                "type": "string",
+                "description": "The specific evidence or effect this bounded plan must establish."
+              },
+              "inputs": {
+                "type": "object",
+                "description": "Named literal JSON inputs; use {} for fixed arguments.",
+                "additionalProperties": true
+              },
+              "steps": {
+                "type": "array",
+                "description": "Nonempty fixed sequential actions. References in arguments point backward only.",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "description": "Nonempty unique step id."
+                    },
+                    "purpose": {
+                      "type": "string"
+                    },
+                    "tool": {
+                      "type": "string",
+                      "description": "Exact admitted action name from the catalog."
+                    },
+                    "arguments": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "literal"
+                            },
+                            "value": {}
+                          },
+                          "required": [
+                            "kind",
+                            "value"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "input"
+                            },
+                            "input": {
+                              "type": "string"
+                            },
+                            "pointer": {
+                              "type": "string",
+                              "description": "JSON Pointer; use \"\" for the whole value."
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "input",
+                            "pointer"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "result"
+                            },
+                            "step": {
+                              "type": "string"
+                            },
+                            "pointer": {
+                              "type": "string",
+                              "description": "JSON Pointer; use \"\" for the whole value."
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "step",
+                            "pointer"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "selected"
+                            },
+                            "step": {
+                              "type": "string"
+                            },
+                            "pointer": {
+                              "type": "string",
+                              "description": "JSON Pointer; use \"\" for the whole value."
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "step",
+                            "pointer"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "object"
+                            },
+                            "properties": {
+                              "type": "object",
+                              "description": "Named expressions, recursively using these same six kinds; each value must be an expression.",
+                              "additionalProperties": true
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "properties"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "array"
+                            },
+                            "items": {
+                              "type": "array",
+                              "items": {
+                                "description": "An expression, recursively using these same six kinds."
+                              }
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "items"
+                          ]
+                        }
+                      ],
+                      "description": "A tagged expression. Wrap fixed tool arguments as {kind:\"literal\",value:{...}}; raw argument objects are invalid."
+                    },
+                    "assertions": {
+                      "type": "array",
+                      "description": "Nonempty checks; result expressions may refer to this step.",
+                      "items": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "const": "present"
+                              },
+                              "value": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "literal"
+                                      },
+                                      "value": {}
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "value"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "input"
+                                      },
+                                      "input": {
+                                        "type": "string"
+                                      },
+                                      "pointer": {
+                                        "type": "string",
+                                        "description": "JSON Pointer; use \"\" for the whole value."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "input",
+                                      "pointer"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "result"
+                                      },
+                                      "step": {
+                                        "type": "string"
+                                      },
+                                      "pointer": {
+                                        "type": "string",
+                                        "description": "JSON Pointer; use \"\" for the whole value."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "step",
+                                      "pointer"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "selected"
+                                      },
+                                      "step": {
+                                        "type": "string"
+                                      },
+                                      "pointer": {
+                                        "type": "string",
+                                        "description": "JSON Pointer; use \"\" for the whole value."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "step",
+                                      "pointer"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "object"
+                                      },
+                                      "properties": {
+                                        "type": "object",
+                                        "description": "Named expressions, recursively using these same six kinds; each value must be an expression.",
+                                        "additionalProperties": true
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "properties"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "array"
+                                      },
+                                      "items": {
+                                        "type": "array",
+                                        "items": {
+                                          "description": "An expression, recursively using these same six kinds."
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "items"
+                                    ]
+                                  }
+                                ],
+                                "description": "A tagged expression. Wrap fixed tool arguments as {kind:\"literal\",value:{...}}; raw argument objects are invalid."
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "value"
+                            ]
+                          },
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "const": "type"
+                              },
+                              "value": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "literal"
+                                      },
+                                      "value": {}
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "value"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "input"
+                                      },
+                                      "input": {
+                                        "type": "string"
+                                      },
+                                      "pointer": {
+                                        "type": "string",
+                                        "description": "JSON Pointer; use \"\" for the whole value."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "input",
+                                      "pointer"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "result"
+                                      },
+                                      "step": {
+                                        "type": "string"
+                                      },
+                                      "pointer": {
+                                        "type": "string",
+                                        "description": "JSON Pointer; use \"\" for the whole value."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "step",
+                                      "pointer"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "selected"
+                                      },
+                                      "step": {
+                                        "type": "string"
+                                      },
+                                      "pointer": {
+                                        "type": "string",
+                                        "description": "JSON Pointer; use \"\" for the whole value."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "step",
+                                      "pointer"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "object"
+                                      },
+                                      "properties": {
+                                        "type": "object",
+                                        "description": "Named expressions, recursively using these same six kinds; each value must be an expression.",
+                                        "additionalProperties": true
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "properties"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "array"
+                                      },
+                                      "items": {
+                                        "type": "array",
+                                        "items": {
+                                          "description": "An expression, recursively using these same six kinds."
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "items"
+                                    ]
+                                  }
+                                ],
+                                "description": "A tagged expression. Wrap fixed tool arguments as {kind:\"literal\",value:{...}}; raw argument objects are invalid."
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "null",
+                                  "boolean",
+                                  "number",
+                                  "string",
+                                  "array",
+                                  "object"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "value",
+                              "type"
+                            ]
+                          },
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "const": "equals"
+                              },
+                              "left": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "literal"
+                                      },
+                                      "value": {}
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "value"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "input"
+                                      },
+                                      "input": {
+                                        "type": "string"
+                                      },
+                                      "pointer": {
+                                        "type": "string",
+                                        "description": "JSON Pointer; use \"\" for the whole value."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "input",
+                                      "pointer"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "result"
+                                      },
+                                      "step": {
+                                        "type": "string"
+                                      },
+                                      "pointer": {
+                                        "type": "string",
+                                        "description": "JSON Pointer; use \"\" for the whole value."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "step",
+                                      "pointer"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "selected"
+                                      },
+                                      "step": {
+                                        "type": "string"
+                                      },
+                                      "pointer": {
+                                        "type": "string",
+                                        "description": "JSON Pointer; use \"\" for the whole value."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "step",
+                                      "pointer"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "object"
+                                      },
+                                      "properties": {
+                                        "type": "object",
+                                        "description": "Named expressions, recursively using these same six kinds; each value must be an expression.",
+                                        "additionalProperties": true
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "properties"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "array"
+                                      },
+                                      "items": {
+                                        "type": "array",
+                                        "items": {
+                                          "description": "An expression, recursively using these same six kinds."
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "items"
+                                    ]
+                                  }
+                                ],
+                                "description": "A tagged expression. Wrap fixed tool arguments as {kind:\"literal\",value:{...}}; raw argument objects are invalid."
+                              },
+                              "right": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "literal"
+                                      },
+                                      "value": {}
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "value"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "input"
+                                      },
+                                      "input": {
+                                        "type": "string"
+                                      },
+                                      "pointer": {
+                                        "type": "string",
+                                        "description": "JSON Pointer; use \"\" for the whole value."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "input",
+                                      "pointer"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "result"
+                                      },
+                                      "step": {
+                                        "type": "string"
+                                      },
+                                      "pointer": {
+                                        "type": "string",
+                                        "description": "JSON Pointer; use \"\" for the whole value."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "step",
+                                      "pointer"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "selected"
+                                      },
+                                      "step": {
+                                        "type": "string"
+                                      },
+                                      "pointer": {
+                                        "type": "string",
+                                        "description": "JSON Pointer; use \"\" for the whole value."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "step",
+                                      "pointer"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "object"
+                                      },
+                                      "properties": {
+                                        "type": "object",
+                                        "description": "Named expressions, recursively using these same six kinds; each value must be an expression.",
+                                        "additionalProperties": true
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "properties"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "array"
+                                      },
+                                      "items": {
+                                        "type": "array",
+                                        "items": {
+                                          "description": "An expression, recursively using these same six kinds."
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "items"
+                                    ]
+                                  }
+                                ],
+                                "description": "A tagged expression. Wrap fixed tool arguments as {kind:\"literal\",value:{...}}; raw argument objects are invalid."
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "left",
+                              "right"
+                            ]
+                          },
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "const": "oneOf"
+                              },
+                              "value": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "literal"
+                                      },
+                                      "value": {}
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "value"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "input"
+                                      },
+                                      "input": {
+                                        "type": "string"
+                                      },
+                                      "pointer": {
+                                        "type": "string",
+                                        "description": "JSON Pointer; use \"\" for the whole value."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "input",
+                                      "pointer"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "result"
+                                      },
+                                      "step": {
+                                        "type": "string"
+                                      },
+                                      "pointer": {
+                                        "type": "string",
+                                        "description": "JSON Pointer; use \"\" for the whole value."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "step",
+                                      "pointer"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "selected"
+                                      },
+                                      "step": {
+                                        "type": "string"
+                                      },
+                                      "pointer": {
+                                        "type": "string",
+                                        "description": "JSON Pointer; use \"\" for the whole value."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "step",
+                                      "pointer"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "object"
+                                      },
+                                      "properties": {
+                                        "type": "object",
+                                        "description": "Named expressions, recursively using these same six kinds; each value must be an expression.",
+                                        "additionalProperties": true
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "properties"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "array"
+                                      },
+                                      "items": {
+                                        "type": "array",
+                                        "items": {
+                                          "description": "An expression, recursively using these same six kinds."
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "items"
+                                    ]
+                                  }
+                                ],
+                                "description": "A tagged expression. Wrap fixed tool arguments as {kind:\"literal\",value:{...}}; raw argument objects are invalid."
+                              },
+                              "values": {
+                                "type": "array",
+                                "description": "Nonempty allowed literal JSON values.",
+                                "items": {}
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "value",
+                              "values"
+                            ]
+                          },
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "number",
+                                  "size"
+                                ]
+                              },
+                              "value": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "literal"
+                                      },
+                                      "value": {}
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "value"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "input"
+                                      },
+                                      "input": {
+                                        "type": "string"
+                                      },
+                                      "pointer": {
+                                        "type": "string",
+                                        "description": "JSON Pointer; use \"\" for the whole value."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "input",
+                                      "pointer"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "result"
+                                      },
+                                      "step": {
+                                        "type": "string"
+                                      },
+                                      "pointer": {
+                                        "type": "string",
+                                        "description": "JSON Pointer; use \"\" for the whole value."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "step",
+                                      "pointer"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "selected"
+                                      },
+                                      "step": {
+                                        "type": "string"
+                                      },
+                                      "pointer": {
+                                        "type": "string",
+                                        "description": "JSON Pointer; use \"\" for the whole value."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "step",
+                                      "pointer"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "object"
+                                      },
+                                      "properties": {
+                                        "type": "object",
+                                        "description": "Named expressions, recursively using these same six kinds; each value must be an expression.",
+                                        "additionalProperties": true
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "properties"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "array"
+                                      },
+                                      "items": {
+                                        "type": "array",
+                                        "items": {
+                                          "description": "An expression, recursively using these same six kinds."
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "items"
+                                    ]
+                                  }
+                                ],
+                                "description": "A tagged expression. Wrap fixed tool arguments as {kind:\"literal\",value:{...}}; raw argument objects are invalid."
+                              },
+                              "min": {
+                                "type": "number"
+                              },
+                              "max": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "value"
+                            ]
+                          }
+                        ],
+                        "description": "A mandatory deterministic check. number/size require min or max; min must not exceed max."
+                      }
+                    },
+                    "observation": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "paths": {
+                          "type": "array",
+                          "description": "Nonempty unique JSON Pointers into the canonical result. Select only necessary complete evidence.",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "candidates": {
+                          "type": "string",
+                          "description": "Optional JSON Pointer to complete candidate records for the next action."
+                        }
+                      },
+                      "required": [
+                        "paths"
+                      ]
+                    },
+                    "question": {
+                      "type": "string",
+                      "description": "Can the observed facts support this specific step or next action?"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "purpose",
+                    "tool",
+                    "arguments",
+                    "assertions",
+                    "observation",
+                    "question"
+                  ]
+                }
+              },
+              "completion": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "assertions": {
+                    "type": "array",
+                    "description": "Nonempty deterministic checks of the plan outcome.",
+                    "items": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "present"
+                            },
+                            "value": {
+                              "oneOf": [
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "literal"
+                                    },
+                                    "value": {}
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "value"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "input"
+                                    },
+                                    "input": {
+                                      "type": "string"
+                                    },
+                                    "pointer": {
+                                      "type": "string",
+                                      "description": "JSON Pointer; use \"\" for the whole value."
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "input",
+                                    "pointer"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "result"
+                                    },
+                                    "step": {
+                                      "type": "string"
+                                    },
+                                    "pointer": {
+                                      "type": "string",
+                                      "description": "JSON Pointer; use \"\" for the whole value."
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "step",
+                                    "pointer"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "selected"
+                                    },
+                                    "step": {
+                                      "type": "string"
+                                    },
+                                    "pointer": {
+                                      "type": "string",
+                                      "description": "JSON Pointer; use \"\" for the whole value."
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "step",
+                                    "pointer"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "object"
+                                    },
+                                    "properties": {
+                                      "type": "object",
+                                      "description": "Named expressions, recursively using these same six kinds; each value must be an expression.",
+                                      "additionalProperties": true
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "properties"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "array"
+                                    },
+                                    "items": {
+                                      "type": "array",
+                                      "items": {
+                                        "description": "An expression, recursively using these same six kinds."
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "items"
+                                  ]
+                                }
+                              ],
+                              "description": "A tagged expression. Wrap fixed tool arguments as {kind:\"literal\",value:{...}}; raw argument objects are invalid."
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "value"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "type"
+                            },
+                            "value": {
+                              "oneOf": [
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "literal"
+                                    },
+                                    "value": {}
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "value"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "input"
+                                    },
+                                    "input": {
+                                      "type": "string"
+                                    },
+                                    "pointer": {
+                                      "type": "string",
+                                      "description": "JSON Pointer; use \"\" for the whole value."
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "input",
+                                    "pointer"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "result"
+                                    },
+                                    "step": {
+                                      "type": "string"
+                                    },
+                                    "pointer": {
+                                      "type": "string",
+                                      "description": "JSON Pointer; use \"\" for the whole value."
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "step",
+                                    "pointer"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "selected"
+                                    },
+                                    "step": {
+                                      "type": "string"
+                                    },
+                                    "pointer": {
+                                      "type": "string",
+                                      "description": "JSON Pointer; use \"\" for the whole value."
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "step",
+                                    "pointer"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "object"
+                                    },
+                                    "properties": {
+                                      "type": "object",
+                                      "description": "Named expressions, recursively using these same six kinds; each value must be an expression.",
+                                      "additionalProperties": true
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "properties"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "array"
+                                    },
+                                    "items": {
+                                      "type": "array",
+                                      "items": {
+                                        "description": "An expression, recursively using these same six kinds."
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "items"
+                                  ]
+                                }
+                              ],
+                              "description": "A tagged expression. Wrap fixed tool arguments as {kind:\"literal\",value:{...}}; raw argument objects are invalid."
+                            },
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "null",
+                                "boolean",
+                                "number",
+                                "string",
+                                "array",
+                                "object"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "value",
+                            "type"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "equals"
+                            },
+                            "left": {
+                              "oneOf": [
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "literal"
+                                    },
+                                    "value": {}
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "value"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "input"
+                                    },
+                                    "input": {
+                                      "type": "string"
+                                    },
+                                    "pointer": {
+                                      "type": "string",
+                                      "description": "JSON Pointer; use \"\" for the whole value."
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "input",
+                                    "pointer"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "result"
+                                    },
+                                    "step": {
+                                      "type": "string"
+                                    },
+                                    "pointer": {
+                                      "type": "string",
+                                      "description": "JSON Pointer; use \"\" for the whole value."
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "step",
+                                    "pointer"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "selected"
+                                    },
+                                    "step": {
+                                      "type": "string"
+                                    },
+                                    "pointer": {
+                                      "type": "string",
+                                      "description": "JSON Pointer; use \"\" for the whole value."
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "step",
+                                    "pointer"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "object"
+                                    },
+                                    "properties": {
+                                      "type": "object",
+                                      "description": "Named expressions, recursively using these same six kinds; each value must be an expression.",
+                                      "additionalProperties": true
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "properties"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "array"
+                                    },
+                                    "items": {
+                                      "type": "array",
+                                      "items": {
+                                        "description": "An expression, recursively using these same six kinds."
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "items"
+                                  ]
+                                }
+                              ],
+                              "description": "A tagged expression. Wrap fixed tool arguments as {kind:\"literal\",value:{...}}; raw argument objects are invalid."
+                            },
+                            "right": {
+                              "oneOf": [
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "literal"
+                                    },
+                                    "value": {}
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "value"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "input"
+                                    },
+                                    "input": {
+                                      "type": "string"
+                                    },
+                                    "pointer": {
+                                      "type": "string",
+                                      "description": "JSON Pointer; use \"\" for the whole value."
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "input",
+                                    "pointer"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "result"
+                                    },
+                                    "step": {
+                                      "type": "string"
+                                    },
+                                    "pointer": {
+                                      "type": "string",
+                                      "description": "JSON Pointer; use \"\" for the whole value."
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "step",
+                                    "pointer"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "selected"
+                                    },
+                                    "step": {
+                                      "type": "string"
+                                    },
+                                    "pointer": {
+                                      "type": "string",
+                                      "description": "JSON Pointer; use \"\" for the whole value."
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "step",
+                                    "pointer"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "object"
+                                    },
+                                    "properties": {
+                                      "type": "object",
+                                      "description": "Named expressions, recursively using these same six kinds; each value must be an expression.",
+                                      "additionalProperties": true
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "properties"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "array"
+                                    },
+                                    "items": {
+                                      "type": "array",
+                                      "items": {
+                                        "description": "An expression, recursively using these same six kinds."
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "items"
+                                  ]
+                                }
+                              ],
+                              "description": "A tagged expression. Wrap fixed tool arguments as {kind:\"literal\",value:{...}}; raw argument objects are invalid."
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "left",
+                            "right"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "oneOf"
+                            },
+                            "value": {
+                              "oneOf": [
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "literal"
+                                    },
+                                    "value": {}
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "value"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "input"
+                                    },
+                                    "input": {
+                                      "type": "string"
+                                    },
+                                    "pointer": {
+                                      "type": "string",
+                                      "description": "JSON Pointer; use \"\" for the whole value."
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "input",
+                                    "pointer"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "result"
+                                    },
+                                    "step": {
+                                      "type": "string"
+                                    },
+                                    "pointer": {
+                                      "type": "string",
+                                      "description": "JSON Pointer; use \"\" for the whole value."
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "step",
+                                    "pointer"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "selected"
+                                    },
+                                    "step": {
+                                      "type": "string"
+                                    },
+                                    "pointer": {
+                                      "type": "string",
+                                      "description": "JSON Pointer; use \"\" for the whole value."
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "step",
+                                    "pointer"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "object"
+                                    },
+                                    "properties": {
+                                      "type": "object",
+                                      "description": "Named expressions, recursively using these same six kinds; each value must be an expression.",
+                                      "additionalProperties": true
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "properties"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "array"
+                                    },
+                                    "items": {
+                                      "type": "array",
+                                      "items": {
+                                        "description": "An expression, recursively using these same six kinds."
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "items"
+                                  ]
+                                }
+                              ],
+                              "description": "A tagged expression. Wrap fixed tool arguments as {kind:\"literal\",value:{...}}; raw argument objects are invalid."
+                            },
+                            "values": {
+                              "type": "array",
+                              "description": "Nonempty allowed literal JSON values.",
+                              "items": {}
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "value",
+                            "values"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "number",
+                                "size"
+                              ]
+                            },
+                            "value": {
+                              "oneOf": [
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "literal"
+                                    },
+                                    "value": {}
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "value"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "input"
+                                    },
+                                    "input": {
+                                      "type": "string"
+                                    },
+                                    "pointer": {
+                                      "type": "string",
+                                      "description": "JSON Pointer; use \"\" for the whole value."
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "input",
+                                    "pointer"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "result"
+                                    },
+                                    "step": {
+                                      "type": "string"
+                                    },
+                                    "pointer": {
+                                      "type": "string",
+                                      "description": "JSON Pointer; use \"\" for the whole value."
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "step",
+                                    "pointer"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "selected"
+                                    },
+                                    "step": {
+                                      "type": "string"
+                                    },
+                                    "pointer": {
+                                      "type": "string",
+                                      "description": "JSON Pointer; use \"\" for the whole value."
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "step",
+                                    "pointer"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "object"
+                                    },
+                                    "properties": {
+                                      "type": "object",
+                                      "description": "Named expressions, recursively using these same six kinds; each value must be an expression.",
+                                      "additionalProperties": true
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "properties"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "array"
+                                    },
+                                    "items": {
+                                      "type": "array",
+                                      "items": {
+                                        "description": "An expression, recursively using these same six kinds."
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "items"
+                                  ]
+                                }
+                              ],
+                              "description": "A tagged expression. Wrap fixed tool arguments as {kind:\"literal\",value:{...}}; raw argument objects are invalid."
+                            },
+                            "min": {
+                              "type": "number"
+                            },
+                            "max": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "value"
+                          ]
+                        }
+                      ],
+                      "description": "A mandatory deterministic check. number/size require min or max; min must not exceed max."
+                    }
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "description": "Nonempty complete evidence expressions for this bounded goal.",
+                    "items": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "literal"
+                            },
+                            "value": {}
+                          },
+                          "required": [
+                            "kind",
+                            "value"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "input"
+                            },
+                            "input": {
+                              "type": "string"
+                            },
+                            "pointer": {
+                              "type": "string",
+                              "description": "JSON Pointer; use \"\" for the whole value."
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "input",
+                            "pointer"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "result"
+                            },
+                            "step": {
+                              "type": "string"
+                            },
+                            "pointer": {
+                              "type": "string",
+                              "description": "JSON Pointer; use \"\" for the whole value."
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "step",
+                            "pointer"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "selected"
+                            },
+                            "step": {
+                              "type": "string"
+                            },
+                            "pointer": {
+                              "type": "string",
+                              "description": "JSON Pointer; use \"\" for the whole value."
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "step",
+                            "pointer"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "object"
+                            },
+                            "properties": {
+                              "type": "object",
+                              "description": "Named expressions, recursively using these same six kinds; each value must be an expression.",
+                              "additionalProperties": true
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "properties"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "array"
+                            },
+                            "items": {
+                              "type": "array",
+                              "items": {
+                                "description": "An expression, recursively using these same six kinds."
+                              }
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "items"
+                          ]
+                        }
+                      ],
+                      "description": "A tagged expression. Wrap fixed tool arguments as {kind:\"literal\",value:{...}}; raw argument objects are invalid."
+                    }
+                  },
+                  "question": {
+                    "type": "string",
+                    "description": "Do these facts establish the bounded plan goal?"
+                  }
+                },
+                "required": [
+                  "assertions",
+                  "evidence",
+                  "question"
+                ]
+              },
+              "requestedLimits": {
+                "type": "object",
+                "description": "Optional tighter deployment limits. Maxima are positive safe integers; probabilities are within [0,1]. Cannot increase budgets or relax acceptance.",
+                "additionalProperties": false,
+                "properties": {
+                  "maxPlanBytes": {
+                    "type": "integer"
+                  },
+                  "maxSteps": {
+                    "type": "integer"
+                  },
+                  "maxWallMs": {
+                    "type": "integer"
+                  },
+                  "maxToolDeadlineMs": {
+                    "type": "integer"
+                  },
+                  "maxJudgmentDeadlineMs": {
+                    "type": "integer"
+                  },
+                  "maxToolCalls": {
+                    "type": "integer"
+                  },
+                  "maxJudgments": {
+                    "type": "integer"
+                  },
+                  "maxResultBytes": {
+                    "type": "integer"
+                  },
+                  "maxObservationBytes": {
+                    "type": "integer"
+                  },
+                  "maxCandidates": {
+                    "type": "integer"
+                  },
+                  "maxCandidateBytes": {
+                    "type": "integer"
+                  },
+                  "maxJudgmentInputTokens": {
+                    "type": "integer"
+                  },
+                  "maxJudgmentOutputTokens": {
+                    "type": "integer"
+                  },
+                  "minimumProbability": {
+                    "type": "number"
+                  },
+                  "minimumMargin": {
+                    "type": "number"
+                  },
+                  "requireCalibration": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            },
+            "required": [
+              "version",
+              "name",
+              "goal",
+              "inputs",
+              "steps",
+              "completion"
+            ]
           }
         },
         "required": [

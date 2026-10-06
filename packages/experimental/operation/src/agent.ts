@@ -11,6 +11,7 @@ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { createForegroundProcessOperationPolicy, OperationToolPolicyError } from './policy.ts'
 import type { OperationToolPolicy } from './policy.ts'
 import type {} from './index.ts'
+import { PLAN_GUIDANCE, plannerExample } from './planner.ts'
 
 /** Plugin name for an explicitly composed coding profile. */
 export const name = 'operation-agent'
@@ -33,8 +34,6 @@ export const Config: z<Config> = z.object({
   maxMutationBytes: z.natural().min(1).required(),
   maxCatalogBytes: z.natural().min(1).required(),
 })
-
-const PLAN_GUIDANCE = 'Submit a version-one JSON plan with name, goal, inputs, steps and completion. Each step has a unique id, purpose, fixed tool name, arguments expression, nonempty assertions, observation.paths (JSON Pointers into its canonical result), and question. Completion has assertions, evidence expressions and question. Expressions are {kind:"literal",value:...}, {kind:"input",input:"name",pointer:""}, {kind:"result",step:"earlier-id",pointer:"/field"}, {kind:"selected",step:"earlier-id",pointer:"/field"}, {kind:"object",properties:{...}}, or {kind:"array",items:[...]}. References point backward only. Assertions include {kind:"present",value:expression} and {kind:"equals",left:expression,right:expression}. Make run_operation the only tool call in the response. Use short foreground shell plans and literal small edits. Shell commands and edits cannot derive arguments from tool output. Read/search can obtain evidence for later planning. The result includes the last complete declared observations. Incomplete evidence, uncertainty or failure returns control; analyze that outcome before submitting a new plan. Never automatically repeat an interrupted mutation.'
 
 /**
  * Bind reviewed current definitions and collapse this profile's direct executor.
@@ -83,12 +82,14 @@ export function apply(ctx: Context, config: Config): void {
     name: 'operation:plan',
     order: ctx.systemPrompt.getSectionOrder('TOOLS_SDK'),
     text: (context) => {
-      const catalog = bind().filter(definition =>
+      const admitted = bind().filter(definition =>
         (context.agent === undefined ? ctx.tools.get(definition.name, context.scope)
           : ctx.tools.admitted(definition.name, context.agent, true)) === definition)
+      const catalog = admitted
         .map(definition => ({ name: definition.name, description: definition.description,
           parameters: definition.parameters, output: definition.output.schema }))
-      const text = `${PLAN_GUIDANCE}\n\nOperation action catalog:\n${JSON.stringify(catalog)}`
+      const text = PLAN_GUIDANCE + plannerExample(admitted) + '\n\nOperation action catalog:\n\n```json\n'
+        + JSON.stringify(catalog) + '\n```'
       if (Buffer.byteLength(text, 'utf8') > config.maxCatalogBytes) {
         throw new Error('operation-agent action catalog exceeds its configured complete-byte limit')
       }

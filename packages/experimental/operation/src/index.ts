@@ -10,6 +10,7 @@ import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
 import { OperationJudgmentRegistry } from './judgment.ts'
 import { OperationToolPolicyRegistry } from './policy.ts'
 import { OperationRunner, type OperationConfig } from './runner.ts'
+import { operationPlanParameters } from './plan-schema.ts'
 import type { OperationJudgmentProvider, OperationSummary, OperationTokenizer } from './types.ts'
 
 export * from './types.ts'
@@ -94,9 +95,7 @@ export class OperationService extends Service {
     ctx.effect(() => ctx.tools.register(defineTool({
       name: 'run_operation',
       description: 'Execute one short, finite operation plan through existing tools. Only tools explicitly admitted by the composing profile are accepted; ordinary permissions still apply. Make this the only tool call in the assistant response. Supply version-one JSON with fixed tool names, explicit JSON-pointer observations, required deterministic assertions, and completion checks. The runner executes steps sequentially, records every checkpoint, and may return needs-replan or stopped instead of inventing values. Use foreground actions and literal small edits. Do not use this tool for background jobs, automatic retries, output-derived shell or edit arguments, or recursive operation plans.',
-      parameters: {
-        plan: { type: 'json', required: true, description: 'Version-one JSON operation plan with inputs, fixed steps, observations, assertions, and completion checks.' },
-      },
+      parameters: operationPlanParameters,
       output: {
         schema: {
           type: 'object',

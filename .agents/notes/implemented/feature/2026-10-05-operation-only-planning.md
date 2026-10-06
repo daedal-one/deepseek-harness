@@ -14,6 +14,8 @@ The [operation agent plugin](../../../../packages/experimental/operation/README.
 
 The planner receives complete declared observations only when `returnObservations` is enabled. They retain the existing observation byte bound and are logged in the ordinary outer tool result. Plan expressions cannot derive process or mutation arguments from previous results. The initial standalone read-only composition remains separately available; its root mapping and source completeness rationale stay in the [local serving note](2026-10-01-local-cpu-decision-serving.md).
 
+The operation entrypoint exposes required plan fields and tagged expression and assertion alternatives through the existing tool-schema vocabulary. Recursive expression children and semantic checks remain parser-owned; the schema introduces no nesting ceiling. Scoped guidance favors the smallest useful plan, specific evidence questions, reuse of settled read observations, and an answer once the requested facts are sufficient. A repository-status example appears only for an admitted compatible foreground bash definition and executes through ordinary tool dispatch. Guidance grants no completion, budget, or permission exemption.
+
 The private [Decision Engine repository](https://github.com/daedal-one/decision-engine) owns the extracted Python source history, provisioning, and independently supervised CPU scorer. DSH owns the adapter and wire protocol. A decision listener does not create a second DSH Web server or change existing Session execution environments. Private manifests, credentials, host paths, and resource assignments remain operator state.
 
 ## Alternatives considered
@@ -21,6 +23,8 @@ The private [Decision Engine repository](https://github.com/daedal-one/decision-
 **Hide schemas without executor enforcement.** A model can still name an omitted tool. Executor admission supplies the denial guarantee before an effect or approval prompt.
 
 **Give the planner a second direct read or edit path.** Two interaction paths weaken the requested delegation rule. Read/search and small edits use the same operation entrypoint and ordinary permissions.
+
+**Describe the plan only as unconstrained JSON.** Prose leaves required version and expression fields implicit. Structural schemas expose those obligations; the strict parser retains recursive validation and checks that the schema vocabulary cannot express.
 
 **Share an operation service globally or start another Web server.** Either choice gives the new composition the wrong scope. Preset-local service realms preserve existing conversations; the independent inference process owns only scoring.
 

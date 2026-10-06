@@ -1,0 +1,8 @@
+version: 1
+scenario: operation-first-plan
+profile: sdk
+composition: sdk-operation-first-plan
+recording: authored
+header:
+  class: sdk-operation-first-plan
+  pin: true

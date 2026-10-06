@@ -77,17 +77,17 @@ The [keyless SDK scenario](../../../snapshots/sdk/clm-operations/snapshot.yml) p
 
 #### What the model sees
 
-An opted-in composition exposes `run_operation` with one JSON `plan` argument, never executable code or shell interpolation. The tool returns a bounded terminal summary with the run identity, status, attempted and completed steps, and declared verification outcomes; detailed checkpoints remain log-only. The [tool definition](src/index.ts) owns the argument and result declarations.
+An opted-in composition exposes `run_operation` with a structured JSON `plan` argument. Its schema declares version 1, required fields, closed step and completion objects, tagged expression and assertion alternatives, observations, and optional tightening limits. The parser validates recursive expression children, nonempty collections, reference relationships, and numeric constraints; the schema imposes no recursive nesting ceiling. The tool returns a bounded terminal summary with the run identity, status, attempted and completed steps, and declared verification outcomes; detailed checkpoints remain log-only, while `returnObservations` optionally returns the last declared canonical observations. The [tool definition](src/index.ts) owns the argument and result declarations.
 
 ##### Operation tool description
 
 ```markdown
-Execute one short, finite operation plan through existing tools. Only independently reviewed, explicitly eligible read-only tools are accepted. Make this the only tool call in the assistant response. Supply version-one JSON with fixed tool names, explicit JSON-pointer observations, required deterministic assertions, and completion checks. The runner executes steps sequentially, records every checkpoint, and may return needs-replan or stopped instead of inventing values. Do not use this tool for workflows, delegation, background jobs, retries, dynamic shell commands, or recursive operation plans.
+Execute one short, finite operation plan through existing tools. Only tools explicitly admitted by the composing profile are accepted; ordinary permissions still apply. Make this the only tool call in the assistant response. Supply version-one JSON with fixed tool names, explicit JSON-pointer observations, required deterministic assertions, and completion checks. The runner executes steps sequentially, records every checkpoint, and may return needs-replan or stopped instead of inventing values. Use foreground actions and literal small edits. Do not use this tool for background jobs, automatic retries, output-derived shell or edit arguments, or recursive operation plans.
 ```
 
 #### Token effect
 
-The planning request gains the `run_operation` declaration and the returned summary, not each checkpoint's canonical data. The judgment provider receives only the bounded canonical observation and complete candidate actions recorded for that checkpoint; its separately counted input is rejected beyond the frozen budget rather than truncated.
+The planning request gains the structured `run_operation` declaration, scoped planning guidance, admitted action catalog, and returned summary. A compatible admitted bash action also receives the executable one-step repository-status example. Checkpoint details remain outside planning-model history unless selected as returned observations. The judgment provider receives only the bounded canonical observation and complete candidate actions recorded for that checkpoint; its separately counted input is rejected beyond the frozen budget rather than truncated.
 
 #### KV Cache effect
 
