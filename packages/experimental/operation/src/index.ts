@@ -9,15 +9,16 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
 import { OperationJudgmentRegistry } from './judgment.ts'
 import { OperationToolPolicyRegistry } from './policy.ts'
-import { OperationRunner, type OperationConfig } from './runner.ts'
+import { OperationRunError, OperationRunner, type OperationConfig } from './runner.ts'
 import { operationPlanParameters } from './plan-schema.ts'
+import { resolveOperationRequest } from './plan.ts'
 import type { OperationJudgmentProvider, OperationSummary, OperationTokenizer } from './types.ts'
 
 export * from './types.ts'
 export { OperationRunId, OperationJudgmentRequestId, OperationCandidateId } from './ids.ts'
 export { OperationJudgmentError, OperationJudgmentRegistry } from './judgment.ts'
 export { OperationJsonError, canonicalJson, digestJson, equalJson, jsonBytes, parseJsonPointer, resolveJsonPointer } from './json.ts'
-export { OperationPlanError, parseOperationPlan, resolveOperationPlan } from './plan.ts'
+export { OperationPlanError, parseOperationPlan, resolveOperationPlan, resolveOperationRequest } from './plan.ts'
 export {
   createForegroundProcessOperationPolicy,
   inspectForegroundProcessResult,
@@ -49,6 +50,7 @@ export class OperationService extends Service {
    */
   static Config: z<OperationConfig> = z.object({
     returnObservations: z.boolean().default(false),
+    maxReturnedObservationBytes: z.natural().min(1).default(65_536),
     maxPlanBytes: z.natural().min(1).default(65_536),
     maxSteps: z.natural().min(1).default(12),
     maxWallMs: z.natural().min(1).default(120_000),
@@ -94,7 +96,7 @@ export class OperationService extends Service {
     this.runner = new OperationRunner(ctx, this.judgments, this.toolPolicies, config)
     ctx.effect(() => ctx.tools.register(defineTool({
       name: 'run_operation',
-      description: 'Execute one short, finite operation plan through existing tools. Only tools explicitly admitted by the composing profile are accepted; ordinary permissions still apply. Make this the only tool call in the assistant response. Supply plan:{goal,steps:[{tool,arguments}]} with ordinary tool arguments. The harness supplies execution bookkeeping and checks; optional step.observe selects complete evidence. Detailed version-one programs remain available for explicit references and assertions. The runner executes steps sequentially, records every checkpoint, and may return needs-replan or stopped instead of inventing values. Use foreground actions and literal small edits. Do not use this tool for background jobs, automatic retries, output-derived shell or edit arguments, or recursive operation plans.',
+      description: 'Run a tool through the decision flow. For one action, supply tool and its ordinary arguments; goal is optional. Use plan only for a fixed sequence. Make this the only tool call in the response. Ordinary permissions apply. Actions run in the foreground. A decision failure does not undo an executed action: use returned observations and completedSteps, follow next, and never automatically repeat a mutation.',
       parameters: operationPlanParameters,
       output: {
         schema: {
@@ -115,6 +117,7 @@ export class OperationService extends Service {
             runId: { type: 'string', required: true },
             status: { type: 'string', required: true, enum: ['completed', 'needs-replan', 'stopped', 'failed', 'cancelled'] },
             reason: { type: 'string', required: true },
+            next: { type: 'string', required: true },
             attemptedSteps: { type: 'array', required: true, items: { type: 'string' } },
             completedSteps: { type: 'array', required: true, items: { type: 'string' } },
             verification: {
@@ -134,7 +137,7 @@ export class OperationService extends Service {
         },
         render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
       },
-      execute: async (args, exec) => this.runTool(exec, args.plan),
+      execute: async (args, exec) => this.runTool(exec, resolveOperationRequest(args)),
     })), 'operation.runOperationTool()')
     ctx.effect(() => async () => {
       this.closing = true
@@ -198,17 +201,33 @@ export class OperationService extends Service {
   }
 
   private async runTool(exec: ToolRunContext, plan: unknown) {
-    const summary = await this.run(exec, plan)
+    let summary: OperationSummary
+    try {
+      summary = await this.run(exec, plan)
+    } catch (error: unknown) {
+      if (!(error instanceof OperationRunError) || error.summary === undefined) throw error
+      // Keep the tool failure while preserving durably completed evidence for the caller.
+      throw new OperationRunError(JSON.stringify({ ...error.summary, next: nextAction(error.summary) }), error.code)
+    }
     return {
       runId: summary.runId,
       status: summary.status,
       reason: summary.reason,
+      next: nextAction(summary),
       attemptedSteps: [...summary.attemptedSteps],
       completedSteps: [...summary.completedSteps],
       verification: summary.verification.map(result => ({ index: result.index, passed: result.passed, reason: result.reason })),
       ...(summary.observations === undefined ? {} : { observations: summary.observations.map(observation => ({ ...observation })) }),
     }
   }
+}
+
+function nextAction(summary: OperationSummary): string {
+  if (summary.status === 'completed') return 'Use the returned output to continue the task or answer the user.'
+  if (summary.completedSteps.length > 0) {
+    return 'Completed steps already ran. Use their returned observations; answer if sufficient, otherwise request only missing facts. This operation is not certified complete. Do not repeat completed mutations or try to raise limits.'
+  }
+  return 'The operation did not complete. Inspect the reason and attemptedSteps before acting; an attempted mutation may have taken effect. Do not retry it automatically or try to raise limits.'
 }
 
 declare module '@deepseek-ai/cordis' {

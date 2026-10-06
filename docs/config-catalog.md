@@ -1022,6 +1022,8 @@ Requires: `tools` · `sessions`
 export interface OperationConfig extends Partial<OperationLimits> {
   /** Return the last complete declared observation to the planner in the ordinary tool result. */
   returnObservations?: boolean
+  /** Maximum complete observation bytes returned to the planner, independent of judgment evidence limits. */
+  maxReturnedObservationBytes?: number
   /**
    * Additional fixed tool names that operation plans may never dispatch.
    */

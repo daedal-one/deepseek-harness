@@ -1,0 +1,18 @@
+# Real scoped planner and shell, with synthetic model and judgment replies.
+- id: skill-filesystem
+  config:
+    includeDefaultRoots: false
+- id: session-persistence-jsonl
+  config:
+    root: !!js dshHomePath('sessions')
+    compression: none
+- insert:
+    - id: operations
+      name: '../../../packages/experimental/operation/lib/index.js'
+      config:
+        returnObservations: true
+        requireCalibration: false
+    - id: operation-planner-sdk-fixture
+      name: '../../../packages/experimental/operation/tests/fixtures/planner-profile.ts'
+      config:
+        failPreparation: true

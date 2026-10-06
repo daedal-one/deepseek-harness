@@ -1174,7 +1174,7 @@ for line in sys.stdin:
         assert provenance[0]["createdCommits"] == ["d" * 40]
 
 
-@pytest.mark.parametrize("scenario", ["clm-operations", "kev-operations", "operation-only", "operation-simple-plan"])
+@pytest.mark.parametrize("scenario", ["clm-operations", "kev-operations", "operation-only", "operation-simple-plan", "operation-action-feedback"])
 def test_recorded_operation_records_match_the_typescript_sdk(tmp_path: Path, scenario: str) -> None:
     fixture = Path(__file__).resolve().parents[3] / f"snapshots/sdk/{scenario}/notifications.expected.jsonl"
     expected_path = Path(__file__).parent / f"expected/{scenario}.json"
@@ -1247,8 +1247,20 @@ for line in sys.stdin:
         "callId": outer_call["callId"],
     }
     assert admission["rootCallId"] == outer_call["callId"]
-    supplied = json.loads(outer_call["arguments"])["plan"]
-    if scenario == "operation-simple-plan":
+    supplied_call = json.loads(outer_call["arguments"])
+    supplied = supplied_call.get("plan")
+    if scenario == "operation-action-feedback":
+        assert set(supplied_call) == {"tool", "arguments"}
+        assert admission["plan"]["goal"] == "Run bash and return its result"
+        assert admission["plan"]["steps"][0]["arguments"]["value"] == supplied_call["arguments"]
+        returned = next(event["data"]["message"]["content"][0] for event in result.events if event["type"] == "tool/result")
+        assert returned["isError"] is True
+        feedback = json.loads(returned["content"][0]["text"].removeprefix("Error: "))
+        assert feedback["status"] == "failed"
+        assert feedback["completedSteps"] == ["step-1"]
+        assert feedback["observations"][0]["value"]["stdout"]["text"] == "ready\n"
+        assert "Do not repeat completed mutations" in feedback["next"]
+    elif scenario == "operation-simple-plan":
         assert set(supplied) == {"goal", "steps"}
         assert admission["plan"]["goal"] == supplied["goal"]
         assert admission["plan"]["version"] == 1
@@ -1265,7 +1277,7 @@ for line in sys.stdin:
     starts = [event["data"] for event in actual if event["type"] == "operation/step-start"]
     outcomes = [event["data"] for event in actual if event["type"] == "operation/step-result"]
     identities = {identity["name"]: identity for identity in admission["toolIdentities"]}
-    step_count = 1 if scenario == "operation-simple-plan" else 2
+    step_count = 1 if scenario in ("operation-simple-plan", "operation-action-feedback") else 2
     assert len(identities) == len(starts) == len(outcomes) == step_count
     assert len({start["callId"] for start in starts}) == step_count
     assert outer_call["callId"] not in {start["callId"] for start in starts}
@@ -1286,8 +1298,9 @@ for line in sys.stdin:
     requests = [record["request"] for record in request_records]
     responses = [event["data"] for event in actual if event["type"] == "operation/judgment-result"]
     transitions = [event["data"] for event in actual if event["type"] == "operation/transition"]
-    assert len(requests) == len(responses) == len(transitions) == step_count
-    assert len({request["draft"]["id"] for request in requests}) == step_count
+    checkpoint_count = 0 if scenario == "operation-action-feedback" else step_count
+    assert len(requests) == len(responses) == len(transitions) == checkpoint_count
+    assert len({request["draft"]["id"] for request in requests}) == checkpoint_count
     assert [request["draft"]["id"] for request in requests] == [response["requestId"] for response in responses]
     assert [request["draft"]["id"] for request in requests] == [transition["requestId"] for transition in transitions]
     for record, response, transition in zip(request_records, responses, transitions):

@@ -1,0 +1,95 @@
+{
+  "final_response": "The fixture marker is ready.",
+  "finish_reason": "completed",
+  "event_types": [
+    "operation/run-start",
+    "operation/step-start",
+    "operation/step-result",
+    "operation/run-end"
+  ],
+  "admission": {
+    "caller": {
+      "sessionId": "{{session:1}}",
+      "callId": "call_operation_fixture"
+    },
+    "rootCallId": "call_operation_fixture",
+    "planDigest": "17d1dbdfb484b5199fc6e424024adbbbd2b7ca54ecce43aabbeb21a8add73a44",
+    "configuration": {
+      "forbiddenTools": [
+        "run_operation"
+      ]
+    },
+    "configurationDigest": "d3a62e8a3d1e5d7cc3f55f9003b5b6924c38dc6ecd03c049ccb1fc8b2d3fe3c6"
+  },
+  "tool_identities": [
+    {
+      "name": "bash",
+      "schemaDigest": "778a45a4d9469aebd6952ead3c9655f982bf5c2cbda8a63614a94702f6dda692"
+    }
+  ],
+  "steps": [
+    {
+      "step": "step-1",
+      "tool": "bash",
+      "arguments": {
+        "command": "printf '%s\\n' ready",
+        "description": "Read the fixture marker in foreground"
+      },
+      "callId": "{{call:1}}",
+      "schemaDigest": "778a45a4d9469aebd6952ead3c9655f982bf5c2cbda8a63614a94702f6dda692",
+      "argumentsDigest": "a0a729e2c9e4858da3b32e9f9a1f564dd4c3487f959e053714a6b7d0db1523af"
+    }
+  ],
+  "canonical_results": [
+    {
+      "kind": "foreground",
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "aborted": false,
+      "timeoutMs": 60000,
+      "stdout": {
+        "text": "ready\n",
+        "truncated": false
+      },
+      "stderr": {
+        "text": "",
+        "truncated": false
+      },
+      "sandbox": {
+        "mode": "workspace-write",
+        "denied": false,
+        "enforcement": "full"
+      }
+    }
+  ],
+  "executions": [
+    {
+      "stepId": "step-1",
+      "callId": "{{call:1}}",
+      "schemaDigest": "778a45a4d9469aebd6952ead3c9655f982bf5c2cbda8a63614a94702f6dda692",
+      "valueDigest": "d41a638becce4c64d2573735c06dac26ecffdfd98d62e31f9ffc8c0792c98f5e",
+      "execution": {
+        "body": "started",
+        "bodySignalAborted": false,
+        "callerCancelled": false,
+        "timedOut": false
+      }
+    }
+  ],
+  "judgment_kinds": [],
+  "judgment_fingerprints": [],
+  "distributions": [],
+  "terminal": {
+    "version": 1,
+    "status": "failed",
+    "reason": "operation judgment preparation failed: fixture decision service unavailable",
+    "attemptedSteps": [
+      "step-1"
+    ],
+    "completedSteps": [
+      "step-1"
+    ],
+    "verification": []
+  }
+}

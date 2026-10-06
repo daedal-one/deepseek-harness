@@ -26,9 +26,9 @@ import * as ShellEnv from '@deepseek-ai/dsh-shell-env'
 import { defineTool, type ToolDefinition, type ValueSchemaSpec } from '@deepseek-ai/dsh-tools'
 import { scopeOf } from '@deepseek-ai/dsh-scope'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import OperationService, { type OperationJudgmentProvider } from '../src/index.ts'
+import OperationService, { type OperationConfig, type OperationJudgmentProvider } from '../src/index.ts'
 import * as operationAgent from '../src/agent.ts'
-import { resolveOperationPlan } from '../src/plan.ts'
+import { resolveOperationPlan, resolveOperationRequest } from '../src/plan.ts'
 
 const execFile = promisify(execFileCallback)
 
@@ -51,7 +51,8 @@ const provider: OperationJudgmentProvider = {
 }
 
 async function setup(maxCatalogBytes = 65_536, lateTool = false, inventory: 'all' | string[] = 'all',
-  definitions: ToolDefinition[] = [], conflictingPolicy = false, realBash = false) {
+  definitions: ToolDefinition[] = [], conflictingPolicy = false, realBash = false,
+  options: { config?: OperationConfig; provider?: OperationJudgmentProvider } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'dsh-operation-agent-'))
   roots.push(root)
   const preset = join(root, 'presets', 'operation')
@@ -61,7 +62,7 @@ async function setup(maxCatalogBytes = 65_536, lateTool = false, inventory: 'all
     { name: 'cordis:fixture-fs', disabled: definitions.some(definition => definition.name === 'read') },
     { name: 'cordis:fixture-actions' },
     { id: 'operations', name: 'cordis:group', group: true, isolate: { operations: true, operationJudgments: true }, config: [
-      { name: 'cordis:fixture-operations', config: { requireCalibration: false, returnObservations: true } },
+      { name: 'cordis:fixture-operations', config: { requireCalibration: false, returnObservations: true, ...options.config } },
       { name: 'cordis:fixture-provider' },
       { name: 'cordis:fixture-agent', config: { tools: inventory, maxMutationBytes: 32, maxCatalogBytes } },
     ] },
@@ -82,7 +83,7 @@ async function setup(maxCatalogBytes = 65_536, lateTool = false, inventory: 'all
   let operations: OperationService | undefined
   ctx.loader.builtins['fixture-provider'] = { inject: ['operations', 'tools'], apply(ctx: Context) {
     operations = ctx.operations
-    ctx.effect(() => ctx.operations.registerJudgmentProvider(provider))
+    ctx.effect(() => ctx.operations.registerJudgmentProvider(options.provider ?? provider))
     if (conflictingPolicy) ctx.effect(() => ctx.operations.toolPolicies.register(ctx.tools.get('write', scopeOf(ctx))!, {
       allowOutputReferences: false, validateArguments() {}, inspectResult() { return { kind: 'complete' } },
     }))
@@ -135,10 +136,10 @@ describe('operation-only coding preset through the real Loader', () => {
     await writeFile(join(root, 'source.txt'), 'changed\n')
     const assembly = await ctx.systemPrompt.assemble(assembleContextFor(agent))
     const text = assembly.sections.find(section => section.name === 'operation:plan')!.text
-    const example = text.split('\n').find(line => line.startsWith('{"plan":'))!
+    const example = text.split('\n').find(line => line.startsWith('{"tool":'))!
     expect(example).toBeDefined()
-    const args = JSON.parse(example) as { plan: unknown }
-    expect(resolveOperationPlan(args.plan).steps).toHaveLength(1)
+    const args: unknown = JSON.parse(example)
+    expect(resolveOperationRequest(args).steps).toHaveLength(1)
     const seen: string[] = []
     ctx.on('tools/pre-execute', async (exec, next) => { seen.push(exec.name); return next() })
     const result = await execute(ctx, agent, 'run_operation', args)
@@ -149,6 +150,63 @@ describe('operation-only coding preset through the real Loader', () => {
     expect(observed).toContain('Fixture initial commit')
     expect(seen).toEqual(['run_operation', 'bash'])
     expect(agent.session.snapshotEvents().filter(event => event.type === 'operation/judgment-request')).toHaveLength(1)
+  })
+  it('executes single reads and small edits through the scoped operation pipeline', async () => {
+    const { ctx, agent, root } = await setup()
+    const read = await execute(ctx, agent, 'run_operation', { tool: 'read', arguments: { file_path: 'source.txt' } })
+    expect(read).toMatchObject({ isError: false, value: { status: 'completed', observations: [{ value: { totalLines: 3 } }] } })
+    const edit = await execute(ctx, agent, 'run_operation', { tool: 'edit', arguments: { file_path: 'source.txt', old_string: 'alpha', new_string: 'delta' } })
+    expect(edit).toMatchObject({ isError: false, value: { status: 'completed' } })
+    expect(await readFile(join(root, 'source.txt'), 'utf8')).toBe('delta\nbeta\ngamma\n')
+  })
+  it('rejects mixed single-action and plan requests before a write', async () => {
+    const { ctx, agent, root } = await setup()
+    expect(await execute(ctx, agent, 'run_operation', {
+      tool: 'write', arguments: { file_path: 'source.txt', content: 'changed' }, plan: plan('read', { file_path: 'source.txt' }, ''),
+    })).toMatchObject({ isError: true })
+    expect(await readFile(join(root, 'source.txt'), 'utf8')).toBe('alpha\nbeta\ngamma\n')
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'operation/run-start')).toEqual([])
+  })
+  it('returns complete executed evidence exceeding the judgment budget without dispatching the next action', async () => {
+    const output = { text: 'Useful evidence. '.repeat(20) }
+    const { ctx, agent } = await setup(65_536, false, 'all', [action('probe', output)], false, false,
+      { config: { maxObservationBytes: 64, maxReturnedObservationBytes: 1024 } })
+    const result = await execute(ctx, agent, 'run_operation', { plan: {
+      goal: 'Inspect evidence', steps: [{ tool: 'probe', arguments: {} }, { tool: 'probe', arguments: {} }],
+    } })
+    expect(result).toMatchObject({ isError: false, value: { status: 'needs-replan', completedSteps: ['step-1'],
+      observations: [{ value: output }] } })
+    expect(JSON.stringify(result.value)).toContain('already ran')
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'operation/step-start')).toHaveLength(1)
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'operation/judgment-request')).toHaveLength(0)
+  })
+  it('preserves completed write evidence in a failed tool result when judgment preparation rejects', async () => {
+    const { ctx, agent, root } = await setup(65_536, false, 'all', [], false, false, { provider: {
+      ...provider, async prepare() { throw new Error('fixture decision service unavailable') },
+    } })
+    const result = await execute(ctx, agent, 'run_operation', { plan: {
+      goal: 'Write two markers', steps: [
+        { tool: 'write', arguments: { file_path: 'first.txt', content: 'written once' } },
+        { tool: 'write', arguments: { file_path: 'second.txt', content: 'must not execute' } },
+      ],
+    } })
+    expect(result.isError).toBe(true)
+    if (!result.isError) throw new Error('Expected decision failure')
+    const feedback: unknown = JSON.parse(result.error.message)
+    expect(feedback).toMatchObject({ status: 'failed', completedSteps: ['step-1'], observations: [{ value: { operation: 'create', after: 'written once' } }] })
+    expect(result.error.message).toContain('Do not repeat completed mutations')
+    expect(await readFile(join(root, 'first.txt'), 'utf8')).toBe('written once')
+    await expect(readFile(join(root, 'second.txt'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'operation/step-start')).toHaveLength(1)
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'operation/run-end')).toMatchObject([{ data: { status: 'failed' } }])
+  })
+  it('never clips output that exceeds the separate planner feedback limit', async () => {
+    const { ctx, agent } = await setup(65_536, false, 'all', [action('probe', { text: 'x'.repeat(500) })], false, false,
+      { config: { maxReturnedObservationBytes: 64 } })
+    const result = await execute(ctx, agent, 'run_operation', { tool: 'probe', arguments: {} })
+    expect(result).toMatchObject({ isError: false, value: { status: 'needs-replan', completedSteps: ['step-1'], observations: [] } })
+    expect(JSON.stringify(result.value)).toContain('output cannot be returned')
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'operation/judgment-request')).toHaveLength(0)
   })
   it.each(['version', 'arguments'])('rejects malformed detailed %s before operation or action effects', async (field) => {
     const { ctx, agent } = await setup()

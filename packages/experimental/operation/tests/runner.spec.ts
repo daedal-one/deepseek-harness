@@ -603,6 +603,23 @@ describe('sequential operation runner', () => {
     expect(fixture.calls).toEqual([{ mode: 'read' }])
   })
 
+  it.each([true, false])('exposes completed feedback only after a successful failure-record flush: %s', async (durable) => {
+    const fixture = setup({
+      provider: { ...deterministicProvider(), async prepare() { throw new Error('fixture preparation failed') } },
+      config: { returnObservations: true },
+      flush: () => durable || fixture.records.at(-1)?.type !== 'operation/run-end',
+    })
+    const failure = fixture.runner.run(fixture.exec, plan())
+    if (durable) {
+      await expect(failure).rejects.toMatchObject({ summary: {
+        status: 'failed', completedSteps: ['read'], observations: [{ value: [{ target: 'alpha' }, { target: 'beta' }] }],
+      } })
+    } else {
+      await expect(failure).rejects.not.toHaveProperty('summary')
+    }
+    expect(fixture.calls).toEqual([{ mode: 'read' }])
+  })
+
   it('rejects a nonpositive tool deadline after synchronous boundary validation consumes wall time', async () => {
     const clock = { now: 1_000 }
     const now = vi.spyOn(Date, 'now').mockImplementation(() => clock.now)

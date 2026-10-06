@@ -125,9 +125,10 @@ interface SdkAssertions {
 }
 
 const SDK_ASSERTIONS: Readonly<Record<string, SdkAssertions>> = {
-  'operation-simple-plan': { expectedTools: { run_operation: ['plan'] }, expectedFinalResponse: 'The fixture marker is ready.' },
-  'operation-first-plan': { expectedTools: { run_operation: ['plan'] }, expectedFinalResponse: 'The fixture marker is ready.' },
-  'operation-only': { expectedTools: { run_operation: ['plan'] }, expectedFinalResponse: 'Verified beta in east from one complete canonical record.' },
+  'operation-simple-plan': { expectedTools: { run_operation: [] }, expectedFinalResponse: 'The fixture marker is ready.' },
+  'operation-action-feedback': { expectedTools: { run_operation: [] }, expectedFinalResponse: 'The fixture marker is ready.' },
+  'operation-first-plan': { expectedTools: { run_operation: [] }, expectedFinalResponse: 'The fixture marker is ready.' },
+  'operation-only': { expectedTools: { run_operation: [] }, expectedFinalResponse: 'Verified beta in east from one complete canonical record.' },
   'artifact-revisions': {
     patches: [fileURLToPath(new URL('./artifact-revisions/readiness.cordis.yml', import.meta.url))],
     expectedFinalResponse: 'ARTIFACT_COMPOSITION_OK',
@@ -910,7 +911,7 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         expect(finalResult?.events.filter(event => event.type === 'operation/step-start')).toHaveLength(1)
         expect(finalResult?.events.filter(event => event.type === 'operation/judgment-request')).toHaveLength(1)
         const assembly = await readFile(join(scenario.dir, 'system-prompt.expected.md'), 'utf8')
-        expect(assembly).toContain('Start with the smallest useful plan')
+        expect(assembly).toContain('Start with the smallest useful action')
         expect(assembly).toContain('Example run_operation arguments')
         if (scenario.name === 'operation-simple-plan') {
           const admitted = finalResult?.events.find(event => event.type === 'operation/run-start')?.data as JsonObject
@@ -919,6 +920,17 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
           const checkpoint = finalResult?.events.find(event => event.type === 'operation/judgment-request')?.data as JsonObject
           expect(checkpoint).toMatchObject({ request: { draft: { state: { observations: [{ pointer: '', value: result.value }] } } } })
         }
+      }
+      if (scenario.name === 'operation-action-feedback') {
+        const events = finalResult!.events
+        expect(events.filter(event => event.type === 'tool/call')).toHaveLength(1)
+        expect(events.filter(event => event.type === 'operation/step-start')).toHaveLength(1)
+        expect(events.filter(event => event.type === 'operation/judgment-request')).toHaveLength(0)
+        expect(events.find(event => event.type === 'operation/run-end')).toMatchObject({ data: { status: 'failed', completedSteps: ['step-1'] } })
+        const returned = events.find(event => event.type === 'tool/result')!.data as JsonObject
+        expect(JSON.stringify(returned)).toContain('Do not repeat completed mutations')
+        expect(JSON.stringify(returned)).toContain('ready')
+        expect(JSON.stringify(returned)).toContain('"isError":true')
       }
       if (['clm-operations', 'kev-operations', 'operation-only'].includes(scenario.name)) {
         if (finalResult === undefined) throw new Error('operation SDK scenario has no run result')

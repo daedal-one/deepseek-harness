@@ -37,8 +37,11 @@ const detailed = {
   },
 } as const satisfies ValueSchemaSpec
 
-/** Ordinary actions need only a goal and plain tool arguments; detailed programs remain supported. */
+/** Single actions use a tool name and plain arguments; fixed sequences and detailed programs remain supported. */
 export const operationPlanParameters = {
-  plan: { required: true, description: 'Prefer {goal,steps:[{tool,arguments}]}. The harness supplies execution bookkeeping, checks and semantic checkpoints.',
+  tool: { type: 'string', description: 'For one action: the exact tool name from the action catalog, for example read or bash. Supply arguments alongside it.' },
+  arguments: { type: 'object', additionalProperties: true, description: 'For one action: its ordinary argument object. No plan or step wrappers are needed.' },
+  goal: { type: 'string', description: 'Optional short purpose for the single action. Omit to run the action and return its result.' },
+  plan: { description: 'Advanced alternative for a fixed sequence: {goal,steps:[{tool,arguments}]}. Do not combine with tool, arguments or goal. Limits can only be tightened, never raised.',
     oneOf: [simple, detailed] },
 } as const satisfies ParameterSchemaSpec

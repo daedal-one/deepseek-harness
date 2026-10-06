@@ -24,6 +24,24 @@ const LIMIT_KEYS = [
 ] as const satisfies readonly (keyof OperationLimits)[]
 
 /**
+ * Resolve one ordinary tool call or an explicit plan before admitting any effects.
+ * @param raw Untrusted run_operation arguments; action and plan forms cannot be mixed.
+ * @returns Immutable version-one program with a purpose and complete result observations.
+ */
+export function resolveOperationRequest(raw: unknown): OperationPlan {
+  const request = object(raw, 'request')
+  if (Object.hasOwn(request, 'plan')) {
+    exact(request, ['plan'], 'request')
+    return resolveOperationPlan(request.plan)
+  }
+  exact(request, ['tool', 'arguments', 'goal'], 'request')
+  const tool = string(request.tool, 'tool')
+  const args = objectJson(request.arguments, 'arguments')
+  const goal = request.goal === undefined ? `Run ${tool} and return its result` : string(request.goal, 'goal')
+  return resolveOperationPlan({ goal, steps: [{ tool, arguments: args }] })
+}
+
+/**
 
  * Parse and statically validate version-one operation plan JSON.
 

@@ -51,6 +51,8 @@ import { OperationJudgmentRequestId, OperationRunId as toOperationRunId } from '
 export interface OperationConfig extends Partial<OperationLimits> {
   /** Return the last complete declared observation to the planner in the ordinary tool result. */
   returnObservations?: boolean
+  /** Maximum complete observation bytes returned to the planner, independent of judgment evidence limits. */
+  maxReturnedObservationBytes?: number
   /**
    * Additional fixed tool names that operation plans may never dispatch.
    */
@@ -93,18 +95,22 @@ export class OperationRunError extends Error {
    * Machine-routable terminal cause.
    */
   readonly code: string
+  /** Terminal facts available only after the failure record was durably flushed. */
+  readonly summary: OperationSummary | undefined
 
   /**
 
    * @param message Stable failure detail.
 
    * @param code Machine-routable terminal cause.
+   * @param summary Durably settled failure facts and bounded complete observations.
 
    */
-  constructor(message: string, code: string) {
+  constructor(message: string, code: string, summary?: OperationSummary) {
     super(message)
     this.name = 'OperationRunError'
     this.code = code
+    this.summary = summary
   }
 }
 
@@ -165,6 +171,7 @@ interface RunnerState {
 
  */
 export class OperationRunner {
+  private readonly maxReturnedObservationBytes: number
   /**
    * @param ctx Calling composition context.
    * @param judgments Configured narrow judgment seam.
@@ -178,6 +185,7 @@ export class OperationRunner {
     private readonly config: OperationConfig,
   ) {
     this.config = deepFreeze({ ...config, ...(config.forbiddenTools === undefined ? {} : { forbiddenTools: [...config.forbiddenTools] }) })
+    this.maxReturnedObservationBytes = resolveReturnedObservationLimit(config)
   }
 
   /**
@@ -298,6 +306,15 @@ export class OperationRunner {
         if (signalAborted(exec.signal)) return await this.cancel(state, 'caller cancelled after tool dispatch')
         if (!assertionsPassed(assertions)) return await this.finish(state, 'stopped', `required assertions failed for step ${JSON.stringify(step.id)}`, assertions)
         state.completed.push(step.id)
+        if (state.returnObservations) {
+          // Planner feedback has its own budget; a rejected checkpoint cannot erase a completed action.
+          try {
+            state.observations = observeCanonicalResult(step, outcome.result.value, this.maxReturnedObservationBytes)
+          } catch (error: unknown) {
+            state.observations = []
+            return await this.finish(state, 'needs-replan', `Action completed, but its output cannot be returned: ${message(error)}. Request a smaller read/search window; do not repeat a completed mutation.`, assertions)
+          }
+        }
         if (outcome.result.concludesTurn) {
           exec.concludeTurn()
           return await this.finish(state, 'stopped', `step ${JSON.stringify(step.id)} concluded the current turn`, assertions)
@@ -305,9 +322,8 @@ export class OperationRunner {
         let observations
         try {
           observations = observeCanonicalResult(step, outcome.result.value, limits.maxObservationBytes)
-          state.observations = observations
         } catch (error: unknown) {
-          return await this.finish(state, 'needs-replan', message(error), assertions)
+          return await this.finish(state, 'needs-replan', `Action completed; decision checkpoint unavailable: ${message(error)}`, assertions)
         }
         const next = plan.steps[index + 1]
         if (next === undefined) {
@@ -760,7 +776,7 @@ export class OperationRunner {
       completedSteps: state.completed,
       verification: [],
     })
-    throw new OperationRunError(reason, code)
+    throw new OperationRunError(reason, code, summary(state, 'failed', reason, []))
   }
 
   private async cancel(state: RunnerState, reason: string): Promise<never> {
@@ -1003,6 +1019,12 @@ function selectCandidate(
     return { candidate: replan, accepted: false, reason: 'distribution did not meet configured autonomous acceptance rule' }
   }
   return { candidate, accepted: candidate.kind === 'continue' || candidate.kind === 'complete', reason: 'distribution met configured autonomous acceptance rule' }
+}
+
+function resolveReturnedObservationLimit(config: OperationConfig): number {
+  const limit = config.maxReturnedObservationBytes ?? DEFAULT_OPERATION_LIMITS.maxObservationBytes
+  if (!Number.isSafeInteger(limit) || limit < 1) throw new OperationRunError('maxReturnedObservationBytes must be a positive safe integer', 'INVALID_CONFIG')
+  return limit
 }
 
 function summary(

@@ -353,10 +353,23 @@
     },
     {
       "name": "run_operation",
-      "description": "Execute one short, finite operation plan through existing tools. Only tools explicitly admitted by the composing profile are accepted; ordinary permissions still apply. Make this the only tool call in the assistant response. Supply plan:{goal,steps:[{tool,arguments}]} with ordinary tool arguments. The harness supplies execution bookkeeping and checks; optional step.observe selects complete evidence. Detailed version-one programs remain available for explicit references and assertions. The runner executes steps sequentially, records every checkpoint, and may return needs-replan or stopped instead of inventing values. Use foreground actions and literal small edits. Do not use this tool for background jobs, automatic retries, output-derived shell or edit arguments, or recursive operation plans.",
+      "description": "Run a tool through the decision flow. For one action, supply tool and its ordinary arguments; goal is optional. Use plan only for a fixed sequence. Make this the only tool call in the response. Ordinary permissions apply. Actions run in the foreground. A decision failure does not undo an executed action: use returned observations and completedSteps, follow next, and never automatically repeat a mutation.",
       "parameters": {
         "type": "object",
         "properties": {
+          "tool": {
+            "type": "string",
+            "description": "For one action: the exact tool name from the action catalog, for example read or bash. Supply arguments alongside it."
+          },
+          "arguments": {
+            "type": "object",
+            "description": "For one action: its ordinary argument object. No plan or step wrappers are needed.",
+            "additionalProperties": true
+          },
+          "goal": {
+            "type": "string",
+            "description": "Optional short purpose for the single action. Omit to run the action and return its result."
+          },
           "plan": {
             "oneOf": [
               {
@@ -451,12 +464,9 @@
                 ]
               }
             ],
-            "description": "Prefer {goal,steps:[{tool,arguments}]}. The harness supplies execution bookkeeping, checks and semantic checkpoints."
+            "description": "Advanced alternative for a fixed sequence: {goal,steps:[{tool,arguments}]}. Do not combine with tool, arguments or goal. Limits can only be tightened, never raised."
           }
-        },
-        "required": [
-          "plan"
-        ]
+        }
       }
     },
     {

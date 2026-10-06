@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { validateArgs } from '@deepseek-ai/dsh-tools'
 import { operationPlanParameters } from '../src/plan-schema.ts'
-import { parseOperationPlan, resolveOperationPlan } from '../src/plan.ts'
+import { parseOperationPlan, resolveOperationPlan, resolveOperationRequest } from '../src/plan.ts'
 
 const simple = {
   goal: 'Read repository status',
@@ -10,6 +10,24 @@ const simple = {
 }
 
 describe('concise operation requests', () => {
+  it('resolves an ordinary action without a goal or plan wrapper', () => {
+    const request = { tool: 'read', arguments: { file_path: 'README.md' } }
+    expect(validateArgs(operationPlanParameters, request)).toEqual([])
+    expect(resolveOperationRequest(request)).toMatchObject({
+      goal: 'Run read and return its result',
+      steps: [{ tool: 'read', arguments: { kind: 'literal', value: request.arguments } }],
+    })
+    expect(resolveOperationRequest({ ...request, goal: 'Read the project overview' }).goal).toBe('Read the project overview')
+    expect(resolveOperationRequest({ plan: simple })).toEqual(resolveOperationPlan(simple))
+  })
+  it.each([
+    {}, { tool: 'read' }, { arguments: {} }, { tool: '', arguments: {} },
+    { tool: 'read', arguments: null }, { tool: 'read', arguments: {}, goal: '' },
+    { tool: 'read', arguments: {}, plan: simple }, { plan: simple, goal: 'mixed' },
+    { tool: 'read', arguments: {}, steps: [] },
+  ])('rejects incomplete or ambiguous single actions %j', (request) => {
+    expect(() => resolveOperationRequest(request)).toThrow()
+  })
   it('accepts ordinary arguments and supplies immutable bookkeeping and complete evidence', () => {
     expect(validateArgs(operationPlanParameters, { plan: simple })).toEqual([])
     const resolved = resolveOperationPlan(simple)
