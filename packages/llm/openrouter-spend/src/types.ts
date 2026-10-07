@@ -1,4 +1,5 @@
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { OpenRouterFailure, OpenRouterFailureReason } from '@deepseek-ai/dsh-openrouter-catalog'
 
 /** OpenRouter key usage as reported by `GET {baseURL}/key`; every money field is USD. */
 export interface OpenRouterKeyUsage {
@@ -32,16 +33,10 @@ export interface OpenRouterSessionSpend {
 }
 
 /** Why one OpenRouter spend read could not complete. */
-export type OpenRouterSpendFailureReason =
-  | 'not-configured' | 'unauthorized' | 'rate-limited' | 'unreachable' | 'malformed-response'
+export type OpenRouterSpendFailureReason = OpenRouterFailureReason
 
 /** One failed OpenRouter spend read; `detail` never carries the credential or any part of it. */
-export interface OpenRouterSpendFailure {
-  /** Stable machine-readable failure class. */
-  readonly reason: OpenRouterSpendFailureReason
-  /** Human-readable explanation that names no secret. */
-  readonly detail: string
-}
+export type OpenRouterSpendFailure = OpenRouterFailure
 
 /** Point-in-time OpenRouter spend answer for one session. */
 export interface OpenRouterSpendSnapshot {

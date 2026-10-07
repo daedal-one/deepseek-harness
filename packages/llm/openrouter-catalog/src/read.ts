@@ -1,34 +1,35 @@
 /**
- * OpenRouter network boundary: the two GET endpoints the spend service reads.
- * Every exported failure keeps the credential out of `detail`.
- * @module @deepseek-ai/dsh-openrouter-spend/openrouter
+ * The OpenRouter network boundary: one JSON endpoint read with failure
+ * mapping, plus the public catalog read both the spend report and model
+ * routing consume. Every exported failure keeps the credential out of
+ * `detail`.
+ *
+ * @module @deepseek-ai/dsh-openrouter-catalog/read
  */
 
-import { parseKeyReply, parseModelsReply, type OpenRouterModelCatalogEntry } from './api.ts'
-import type { OpenRouterKeyUsage, OpenRouterSpendFailure } from './types.ts'
-
-/** Options for one OpenRouter read operation. */
-export interface OpenRouterReadOptions {
-  /** OpenRouter endpoint base; `/key` and `/models` are appended. */
-  readonly baseURL: string
-  /** The configured OpenRouter inference key; sent only in the Authorization header. */
-  readonly apiKey: string
-  /** Upper bound on one OpenRouter request, in milliseconds. */
-  readonly requestTimeoutMs: number
-}
-
-/** Result of one OpenRouter `GET /key` read. */
-export type OpenRouterKeyReadResult =
-  | { readonly ok: true; readonly value: OpenRouterKeyUsage }
-  | { readonly ok: false; readonly error: OpenRouterSpendFailure }
+import { parseModelsReply } from './parse.ts'
+import type {
+  OpenRouterModelCatalogEntry,
+  OpenRouterParseResult,
+  OpenRouterReadOptions,
+  OpenRouterReadResult,
+} from './types.ts'
 
 /** Result of one OpenRouter `GET /models` read. */
-export type OpenRouterModelsReadResult =
-  | { readonly ok: true; readonly value: readonly OpenRouterModelCatalogEntry[] }
-  | { readonly ok: false; readonly error: OpenRouterSpendFailure }
+export type OpenRouterModelsReadResult = OpenRouterReadResult<readonly OpenRouterModelCatalogEntry[]>
 
 /** Attribution header sent on every request; bump with the package version. */
 const USER_AGENT = 'deepseek-harness/0.1.5-alpha.2'
+
+/**
+ * Append one path segment to the endpoint base.
+ * @param baseURL - the configured base, with any trailing slash removed.
+ * @param segment - the path segment to append.
+ * @returns the full endpoint URL.
+ */
+export function endpointOf(baseURL: string, segment: string): string {
+  return `${baseURL.replace(/\/+$/u, '')}/${segment}`
+}
 
 /**
  * Read one JSON endpoint of OpenRouter and run its parser.
@@ -36,16 +37,16 @@ const USER_AGENT = 'deepseek-harness/0.1.5-alpha.2'
  * @param options - the endpoint base, key, and request bound.
  * @param signal - caller cancellation for the request.
  * @param parser - the pure body parser for this endpoint.
- * @param apiKey - optional inference credential, sent only to the key endpoint.
+ * @param apiKey - optional inference credential, sent only to an authenticated endpoint.
  * @returns the parsed value, or the mapped failure.
  */
-async function readEndpoint<T>(
+export async function readEndpoint<T>(
   endpoint: string,
   options: Pick<OpenRouterReadOptions, 'requestTimeoutMs'>,
   signal: AbortSignal,
-  parser: (payload: unknown) => { readonly ok: true; readonly value: T } | { readonly ok: false; readonly detail: string },
+  parser: (payload: unknown) => OpenRouterParseResult<T>,
   apiKey?: string,
-): Promise<{ readonly ok: true; readonly value: T } | { readonly ok: false; readonly error: OpenRouterSpendFailure }> {
+): Promise<OpenRouterReadResult<T>> {
   const timeout = AbortSignal.timeout(options.requestTimeoutMs)
   let response: Response
   try {
@@ -90,19 +91,6 @@ async function readEndpoint<T>(
 }
 
 /**
- * Read the configured key's usage from `GET {baseURL}/key`.
- * @param options - the endpoint base, key, and request bound.
- * @param signal - caller cancellation for the request.
- * @returns the parsed key usage, or the mapped failure.
- */
-export function readKeyUsage(
-  options: OpenRouterReadOptions,
-  signal: AbortSignal,
-): Promise<OpenRouterKeyReadResult> {
-  return readEndpoint(endpointOf(options.baseURL, 'key'), options, signal, parseKeyReply, options.apiKey)
-}
-
-/**
  * Read the public model catalog from `GET {baseURL}/models`.
  * @param options - the endpoint base and request bound for the public catalog read.
  * @param signal - caller cancellation for the request.
@@ -113,14 +101,4 @@ export function readModels(
   signal: AbortSignal,
 ): Promise<OpenRouterModelsReadResult> {
   return readEndpoint(endpointOf(options.baseURL, 'models'), options, signal, parseModelsReply)
-}
-
-/**
- * Append one path segment to the endpoint base.
- * @param baseURL - the configured base, with any trailing slash removed.
- * @param segment - the path segment to append.
- * @returns the full endpoint URL.
- */
-function endpointOf(baseURL: string, segment: string): string {
-  return `${baseURL.replace(/\/+$/u, '')}/${segment}`
 }

@@ -18,10 +18,10 @@ import type {} from '@deepseek-ai/dsh-session-projection'
 // Type-only: supplies the `modelSelection` projection declaration.
 import type {} from '@deepseek-ai/dsh-api-session-controller/types'
 import { TypertRemoteService, Remote } from '@deepseek-ai/dsh-typert-protocol'
-import { findModelPricing } from './api.ts'
-import { TtlCache } from './cache.ts'
+import { TtlCache, findModelPricing, readModels } from '@deepseek-ai/dsh-openrouter-catalog'
+import type { OpenRouterModelsReadResult, OpenRouterReadOptions } from '@deepseek-ai/dsh-openrouter-catalog'
 import { attributedSessionUsage, sessionCostUsd, type AttributedSessionUsage } from './pricing.ts'
-import { readKeyUsage, readModels, type OpenRouterKeyReadResult, type OpenRouterModelsReadResult, type OpenRouterReadOptions } from './openrouter.ts'
+import { readKeyUsage, type OpenRouterKeyReadResult } from './key-read.ts'
 import type {
   OpenRouterSpendFailure,
   OpenRouterSpendReadRequest,

@@ -29,6 +29,9 @@ The llm group provides the harness's model-call capability: one provider-neutral
 | [`plugin-package-inventory-deepseek/`](plugin-package-inventory-deepseek/README.md) | Contributes the active Loader package inventory to official DeepSeek requests | contributes `dsh_plugin_packages` |
 | [`llm-retry/`](llm-retry/README.md) | Retries failed model requests under each provider's policy at durable agent-step boundaries | listens to `agent/request-error` |
 | [`token-meter/`](token-meter/README.md) | Measures request and context pressure from the durable session log with a fixed heuristic | `ctx.tokenMeter` |
+| [`model-routing/`](model-routing/README.md) | Resolves a declared task class into a concrete route by ranking live catalog candidates against hard requirements, operator preference tiers, and price | `ctx.modelRouting`, declares `ctx.modelCatalog` |
+| [`openrouter-catalog/`](openrouter-catalog/README.md) | Reads OpenRouter's public model catalog and prices once, for both the spend report and model routing | library, no key |
+| [`openrouter-spend/`](openrouter-spend/README.md) | Reports the configured OpenRouter key's spend and a session's estimated USD cost to Web clients | Remote-only `openrouterSpend` |
 
 -----
 

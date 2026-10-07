@@ -152,6 +152,8 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/bundle/headless': { kind: 'none', reason: 'The one-shot runner submits the task as an ordinary user message; prompts and tools belong to the composed base and headless bundles.' },
   'packages/llm/llm': { kind: 'none', reason: 'The adapter registry forwards already-assembled requests unchanged.' },
   'packages/llm/openrouter-spend': { kind: 'none', reason: 'Read-only OpenRouter spend projection; it prices already-logged token buckets and registers nothing model-facing.' },
+  'packages/llm/openrouter-catalog': { kind: 'none', reason: 'Shared catalog and price parsing library; it registers nothing model-facing and its consumers own every model-visible use.' },
+  'packages/llm/model-routing': { kind: 'none', reason: 'The routing policy returns a route to a consumer that owns the request; it registers no prompt, schema, or message content.' },
   'packages/api/session-info': { kind: 'none', reason: 'Read-only Session, environment, and policy projection for the Web client; it registers nothing model-facing.' },
   'packages/llm/token-meter': { kind: 'indirect', reason: 'The measurement service leaves model-visible changes to its consumers.' },
   'packages/lsp/lsp': { kind: 'indirect', reason: 'The provider registry delegates model rendering to dsh-tool-lsp.' },

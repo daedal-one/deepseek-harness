@@ -58,10 +58,10 @@ The service projects one question — "what has this key spent, and what has thi
 | [`src/index.ts`](src/index.ts) | Package entry: the service, its `Config`, and the public type vocabulary |
 | [`src/service.ts`](src/service.ts) | `OpenRouterSpendService`: the `openrouterSpend` Remote service, credential resolution, and the two cached reads |
 | [`src/types.ts`](src/types.ts) | Public payload types: `OpenRouterKeyUsage`, `OpenRouterSpendSnapshot`, `OpenRouterSpendReadResult` |
-| [`src/api.ts`](src/api.ts) | Pure parsing of the `/key` and `/models` reply bodies |
-| [`src/pricing.ts`](src/pricing.ts) | Pure USD math over raw catalog price strings |
-| [`src/cache.ts`](src/cache.ts) | Bounded TTL cache with in-flight de-duplication |
-| [`src/openrouter.ts`](src/openrouter.ts) | The network boundary: the two GET reads and their failure mapping |
+| [`src/pricing.ts`](src/pricing.ts) | Pure USD math and durable route attribution over settled token buckets |
+| [`src/key-parse.ts`](src/key-parse.ts) | Pure parsing of the `/key` reply body |
+| [`src/key-read.ts`](src/key-read.ts) | The authenticated `GET /key` read and its failure mapping |
+| — | The `GET /models` catalog read, its price conversion, the bounded TTL cache, and the shared endpoint failure mapping live in [`dsh-openrouter-catalog`](../openrouter-catalog/README.md), which model routing consumes too. |
 | — | No runtime invariant companion is published; every value is projected from OpenRouter or from projection-owned session state. |
 
 Typert generates the Host and Client Remote artifacts exposed by `./typert` and `./remote`.

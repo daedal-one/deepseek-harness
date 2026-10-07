@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { readKeyUsage, readModels, type OpenRouterReadOptions } from '../src/openrouter.ts'
+import { readKeyUsage } from '../src/key-read.ts'
+import type { OpenRouterReadOptions } from '@deepseek-ai/dsh-openrouter-catalog'
 
 const KEY = 'sk-or-v1-secret-key-000'
 
@@ -20,10 +21,6 @@ const KEY_BODY = {
     limit_remaining: null,
     is_free_tier: false,
   },
-}
-
-const MODELS_BODY = {
-  data: [{ id: 'a/b', pricing: { prompt: '0.000001', completion: '0.000002' } }],
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -140,22 +137,3 @@ describe('readKeyUsage', () => {
   })
 })
 
-describe('readModels', () => {
-  it('GETs the public /models endpoint', async () => {
-    const fetchSpy = stubFetch(() => jsonResponse(MODELS_BODY))
-    const result = await readModels(options, new AbortController().signal)
-
-    expect(result).toEqual({ ok: true, value: [{ id: 'a/b', pricing: { prompt: '0.000001', completion: '0.000002', cacheRead: null, cacheWrite: null } }] })
-    const { url, init } = lastFetchCall(fetchSpy)
-    expect(url).toBe('https://openrouter.test/api/v1/models')
-    const headers = init.headers as Record<string, string>
-    expect(headers['user-agent']).toBe('deepseek-harness/0.1.5-alpha.2')
-    expect(headers['authorization']).toBeUndefined()
-  })
-
-  it('maps a malformed models body to malformed-response', async () => {
-    stubFetch(() => jsonResponse({ data: 'nope' }))
-    const result = await readModels(options, new AbortController().signal)
-    expect(result).toMatchObject({ ok: false, error: { reason: 'malformed-response', detail: '"data" must be an array' } })
-  })
-})

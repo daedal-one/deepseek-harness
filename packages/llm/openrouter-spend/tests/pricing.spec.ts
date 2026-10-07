@@ -1,44 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { OpenRouterModelPricing } from '../src/api.ts'
-import { sessionCostUsd, usdPerToken } from '../src/pricing.ts'
-
-describe('usdPerToken', () => {
-  it('prices a normal per-token string', () => {
-    expect(usdPerToken('0.000001')).toBe(0.000001)
-  })
-
-  it('prices zero as a legitimate price', () => {
-    expect(usdPerToken('0')).toBe(0)
-  })
-
-  it('treats the -1 pass-through marker as unpriceable', () => {
-    expect(usdPerToken('-1')).toBeNull()
-  })
-
-  it('treats any negative value as unpriceable', () => {
-    expect(usdPerToken('-0.5')).toBeNull()
-  })
-
-  it('treats a non-numeric string as unpriceable', () => {
-    expect(usdPerToken('abc')).toBeNull()
-  })
-
-  it('treats blank and whitespace-only prices as unpriceable rather than zero', () => {
-    expect(usdPerToken('')).toBeNull()
-    expect(usdPerToken('   ')).toBeNull()
-    expect(usdPerToken('\t\n')).toBeNull()
-  })
-
-  it('treats an absent slot as unpriceable', () => {
-    expect(usdPerToken(null)).toBeNull()
-  })
-
-  it('treats non-finite values as unpriceable', () => {
-    expect(usdPerToken('Infinity')).toBeNull()
-    expect(usdPerToken('-Infinity')).toBeNull()
-    expect(usdPerToken('NaN')).toBeNull()
-  })
-})
+import type { OpenRouterModelPricing } from '@deepseek-ai/dsh-openrouter-catalog'
+import { sessionCostUsd } from '../src/pricing.ts'
 
 function pricing(overrides: Partial<OpenRouterModelPricing> = {}): OpenRouterModelPricing {
   return {

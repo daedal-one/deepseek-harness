@@ -4,7 +4,8 @@
  */
 
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
-import type { OpenRouterModelPricing } from './api.ts'
+import { usdPerToken } from '@deepseek-ai/dsh-openrouter-catalog'
+import type { OpenRouterModelPricing } from '@deepseek-ai/dsh-openrouter-catalog'
 
 /** Token counts that one settled request cost estimate prices. */
 export interface OpenRouterTokenBuckets {
@@ -26,19 +27,6 @@ export interface AttributedSessionUsage {
   readonly model: string
   /** Provider-reported buckets for this one settled attempt. */
   readonly buckets: OpenRouterTokenBuckets
-}
-
-/**
- * Parse one OpenRouter catalog price string into a usable per-token USD value.
- * A value of `-1` is OpenRouter's pass-through marker: any blank, negative,
- * non-finite, or non-numeric price is unpriceable, never a real number.
- * @param raw - the raw catalog price string, or null when the slot is absent.
- * @returns the finite non-negative per-token USD value, or null when unpriceable.
- */
-export function usdPerToken(raw: string | null): number | null {
-  if (raw === null || raw.trim().length === 0) return null
-  const value = Number(raw)
-  return Number.isFinite(value) && value >= 0 ? value : null
 }
 
 /**

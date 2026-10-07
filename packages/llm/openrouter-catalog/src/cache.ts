@@ -1,6 +1,6 @@
 /**
  * Bounded TTL cache with in-flight de-duplication for one asynchronous load.
- * @module @deepseek-ai/dsh-openrouter-spend/cache
+ * @module @deepseek-ai/dsh-openrouter-catalog/cache
  */
 
 /** One value and the time its successful fetch completed. */
