@@ -36,6 +36,9 @@
       "path": "../../preset/agent-presets"
     },
     {
+      "path": "../../core/agent"
+    },
+    {
       "path": "../../interaction/permission-presets"
     },
     {

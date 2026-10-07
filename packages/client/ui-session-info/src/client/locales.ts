@@ -24,6 +24,7 @@ export const en = {
   'workspace.id': 'Workspace id',
   'workspace.none': 'This session is not accounted to a registered workspace.',
   'env.placement': 'Execution placement',
+  'env.environmentId': 'Environment id',
   'env.platform': 'Platform',
   'env.release': 'OS release',
   'env.node': 'Node.js',

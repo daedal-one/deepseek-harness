@@ -2,7 +2,7 @@ import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { afterEach, expect, it, vi } from 'vitest'
 import * as presets from '@deepseek-ai/dsh-agent-presets'
-import { executionEnvironment } from '../src/environment.ts'
+import { executionEnvironment, executionEnvironmentObservation } from '../src/environment.ts'
 
 const host = Symbol.for('@deepseek-ai/dsh/host-execution-world')
 afterEach(() => { vi.restoreAllMocks() })
@@ -67,4 +67,37 @@ it('uses profile-owned providers inside the agent execution context', () => {
   } } as never)
   expect(executionEnvironment(ctx, agent)).toBe('container')
   expect(initiated).toBe(false)
+})
+
+it('assigns no identity without a verified world and one stable identity per world object', () => {
+  const ctx = new Context()
+  const agent = { ctx } as Agent
+  expect(executionEnvironmentObservation(ctx, agent)).toEqual({ environment: 'unknown', environmentId: null })
+
+  const world = {}
+  ctx.provide('fs', { executionWorld: world } as never)
+  ctx.provide('subprocess', { executionWorld: world } as never)
+  const first = executionEnvironmentObservation(ctx, agent)
+  expect(first.environment).toBe('external')
+  expect(first.environmentId).toMatch(/^env-[0-9a-f]{8}$/)
+  expect(executionEnvironmentObservation(ctx, agent).environmentId).toBe(first.environmentId)
+})
+
+it('shares one host identity and keeps distinct worlds distinct', () => {
+  const ctx = new Context()
+  const agent = { ctx } as Agent
+  const files = { executionWorld: host as symbol | object }
+  const processes = { executionWorld: host as symbol | object }
+  ctx.provide('fs', files as never)
+  ctx.provide('subprocess', processes as never)
+  const hostId = executionEnvironmentObservation(ctx, agent).environmentId
+  expect(hostId).toMatch(/^host-[0-9a-f]{8}$/)
+  expect(executionEnvironmentObservation(ctx, agent).environmentId).toBe(hostId)
+
+  const other = {}
+  files.executionWorld = other
+  processes.executionWorld = other
+  const otherId = executionEnvironmentObservation(ctx, agent).environmentId
+  expect(otherId).toMatch(/^env-[0-9a-f]{8}$/)
+  expect(otherId).not.toBe(hostId)
 })

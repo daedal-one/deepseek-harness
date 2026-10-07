@@ -131,6 +131,7 @@ function EnvironmentBlock({ snapshot, t }: { readonly snapshot: SessionInfoSnaps
       <h2>{t('heading.environment')}</h2>
       <dl className={css.rows}>
         <Row label={t('env.placement')} value={t(PLACEMENT_KEYS[environment.placement])} />
+        <Row label={t('env.environmentId')} value={optional(environment.environmentId, t)} />
         <Row label={t('env.platform')} value={<code>{`${environment.platform} · ${environment.arch}`}</code>} />
         <Row label={t('env.release')} value={environment.release} />
         <Row label={t('env.node')} value={<code>{environment.node}</code>} />

@@ -7,7 +7,7 @@ kind: "package-reference"
 
 ## Summary
 
-The **Info** tab is the session's general information view. It reads the Host's `sessionInfo.read` snapshot and renders five sectioned blocks — **Conversation summary** (the latest accepted summary, or an explicit absence), **Session**, **Workspace**, **Environment**, and **Command authorization** — then appends a **Spend** block from the Host's separate `openrouterSpend.read` reading. Each Remote renders an in-flight state, the settled reading, and one distinct stated failure per Host-reported reason; the spend read settles independently, so its failure degrades only the spend block while a session-info failure fails the view. The view owns no timers and holds no credentials.
+The **Info** tab is the session's general information view. It reads the Host's `sessionInfo.read` snapshot and renders five sectioned blocks — **Conversation summary** (the latest accepted summary, or an explicit absence), **Session**, **Workspace**, **Environment**, and **Command authorization** — then appends a **Spend** block from the Host's separate `openrouterSpend.read` reading. Each Remote renders an in-flight state, the settled reading, and one distinct stated failure per Host-reported reason; the spend read settles independently, so its failure degrades only the spend block while a session-info failure fails the view. The view owns no timers and holds no credentials. The **Environment** block reports the verified execution placement, a process-local environment id — two Sessions showing the same id run in the same execution world on the Host — the Host platform and architecture, OS release, Node version, and home directory.
 
 ## Table of Contents
 

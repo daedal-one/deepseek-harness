@@ -30,6 +30,10 @@ import type {} from '@deepseek-ai/dsh-session-stats/types'
 import type {} from '@deepseek-ai/dsh-session-summary-llm/types'
 // Type-only: supplies the `permissions` projection declaration.
 import type {} from '@deepseek-ai/dsh-permission-presets/types'
+// Value: observes the Session's live execution world beside its placement.
+import { executionEnvironmentObservation } from '@deepseek-ai/dsh-permission-presets'
+// Type-only: declares `ctx.agents` on the Cordis Context.
+import type {} from '@deepseek-ai/dsh-agent'
 // Type-only: declares `ctx.sandboxPolicy` on the Cordis Context.
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 // Type-only: declares `ctx.approval` on the Cordis Context.
@@ -57,6 +61,26 @@ export class SessionInfoService extends TypertRemoteService {
    */
   constructor(ctx: Context) {
     super(ctx, 'sessionInfo')
+  }
+
+  /**
+   * Read the Session's live execution-world identity beside its recorded
+   * placement. The two facts have different owners by design: the placement is
+   * durable, while the world object is a process-local provider identity that
+   * must never be recorded in the Session log.
+   * @param session - the live Session whose Agent owns the execution context.
+   * @returns the identity, or `null` when no world can be observed now.
+   */
+  private environmentIdOf(session: Session): string | null {
+    const agent = this.ctx.get('agents')?.get(session.header.id)
+    if (agent === undefined) return null
+    try {
+      return executionEnvironmentObservation(this.ctx, agent).environmentId
+    } catch {
+      // Preset admission can refuse an observation mid-restore; the recorded
+      // placement stays authoritative and the identity degrades to null.
+      return null
+    }
   }
 
   /**
@@ -109,6 +133,7 @@ export class SessionInfoService extends TypertRemoteService {
         : { workspaceId: workspace.id, path: workspace.path, title: workspace.title },
       environment: {
         placement: permissions?.context?.environment ?? 'unknown',
+        environmentId: this.environmentIdOf(session),
         platform: process.platform,
         arch: process.arch,
         release: release(),

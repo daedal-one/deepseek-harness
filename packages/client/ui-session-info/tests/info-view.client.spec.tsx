@@ -57,6 +57,7 @@ const INFO: SessionInfoSnapshot = {
   workspace: { workspaceId: 'ws-1', path: '/work/fixture', title: 'Fixture workspace' },
   environment: {
     placement: 'host',
+    environmentId: 'host-1a2b3c4d',
     platform: 'linux',
     arch: 'x64',
     release: '7.0.0-fixture',
@@ -141,6 +142,7 @@ describe('InfoView', () => {
 
     expect(screen.getByText(en['heading.environment'])).toBeTruthy()
     expect(screen.getByText(en['placement.host'])).toBeTruthy()
+    expect(screen.getByText('host-1a2b3c4d')).toBeTruthy()
     expect(screen.getByText('linux · x64')).toBeTruthy()
     expect(screen.getByText('7.0.0-fixture')).toBeTruthy()
     expect(screen.getByText('v24.0.0')).toBeTruthy()
