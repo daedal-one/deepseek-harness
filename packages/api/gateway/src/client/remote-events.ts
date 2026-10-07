@@ -163,7 +163,7 @@ export class ClientRemoteEvents {
             throw new Error('client api: the event stream does not belong to the paired Host')
           }
           if (this.admission !== undefined) {
-            const capabilities = await abortable(admitHostCapabilities(
+            const capabilities = await abortable(() => admitHostCapabilities(
               this.connection.rpc, opening.host.identity, this.admission.requiredCapabilities, generationSignal,
             ), generationSignal)
             generationSignal.throwIfAborted()
@@ -265,7 +265,7 @@ export class ClientRemoteEvents {
       signal,
     }
     const value = await abortable(
-      Promise.resolve(privateEvents(target).waterfall(
+      () => Promise.resolve(privateEvents(target).waterfall(
         target,
         this.eventKey(frame.event),
         request,
@@ -364,15 +364,16 @@ function invalidRemoteEventFrame(): never {
   throw new TypeError('client api: invalid forwarded Remote event frame')
 }
 
-/** Observe supplied work even after cancellation; a pre-existing abort wins over a settled value. */
-async function abortable<T>(value: T | PromiseLike<T>, signal: AbortSignal): Promise<T> {
+/** Race listener completion against its delivery lifetime. */
+async function abortable<T>(value: () => T | PromiseLike<T>, signal: AbortSignal): Promise<T> {
+  signal.throwIfAborted()
   let rejectAbort: ((reason: unknown) => void) | undefined
   const aborted = new Promise<never>((_resolve, reject) => { rejectAbort = reject })
   const onAbort = (): void => { rejectAbort?.(signal.reason) }
   if (signal.aborted) onAbort()
   else signal.addEventListener('abort', onAbort, { once: true })
   try {
-    return await Promise.race([aborted, Promise.resolve(value)])
+    return await Promise.race([aborted, Promise.resolve().then(() => { signal.throwIfAborted(); return value() })])
   } finally {
     signal.removeEventListener('abort', onAbort)
   }

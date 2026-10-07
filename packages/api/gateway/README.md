@@ -71,7 +71,7 @@ Generated declaration merges provide the TypeScript API through the shared `Type
 
 ## Portable Client
 
-Supervised native read streams wait when the paired Host has no admitted generation and reopen through their existing baseline or cursor policy after generation loss. A different admitted Host remains a terminal refusal. Unary operations remain single-send and retain uncertain outcomes after a lost response.
+Supervised native read streams wait when the paired Host has no admitted generation and reopen through their existing baseline or cursor policy after generation loss. A different admitted Host remains a terminal refusal. Unary operations remain single-send and retain uncertain outcomes after a lost response. Cancelled event-stream openings start no capability admission; capability reads and forwarded listeners acquire their cancellation observer before execution.
 
 The event stream opens with `protocolVersion: 1` and the Connection-owned Host identity. This version describes the Gateway opening fields; it does not negotiate Session or domain API compatibility. `ctx.remote.$host.identity` exposes the validated active identity and becomes undefined after generation loss.
 

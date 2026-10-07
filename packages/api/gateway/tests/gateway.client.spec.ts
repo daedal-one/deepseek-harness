@@ -3126,6 +3126,25 @@ describe('native capability admission', () => {
     } finally { stop(); run.abort(); await run.done; await client.dispose() }
   })
 
+  it('does not start capability admission for an opening frame delivered after cancellation', async () => {
+    const opening = Promise.withResolvers<undefined>()
+    const call = vi.fn<ConnectionHandle['rpc']['call']>(() => Promise.reject(new Error('expired generation')))
+    const open: NonNullable<ConnectionHandle['rpc']['open']> = async function* (_channel, _endpoint, _payload, signal) {
+      await opening.promise
+      expect(signal.aborted).toBe(true)
+      yield { type: 'ready', protocolVersion: 1, clientId: 'late', host: { home: '/home/fixture', identity: HOST_IDENTITY } }
+    }
+    const { ctx, client, generation } = await benchFiber(call, 'in-process', open, install())
+    const run = generation.start()
+    try {
+      run.abort()
+      opening.resolve(undefined)
+      await run.done
+      expect(call).not.toHaveBeenCalled()
+      expect(ctx.remote.$host.capabilities).toBeUndefined()
+    } finally { opening.resolve(undefined); run.abort(); await run.done; await client.dispose() }
+  })
+
   it('holds readiness, operations and forwarded events until required capabilities match', async () => {
     const response = Promise.withResolvers<Awaited<ReturnType<ConnectionHandle['rpc']['call']>>>()
     const call = vi.fn<ConnectionHandle['rpc']['call']>(() => response.promise)
