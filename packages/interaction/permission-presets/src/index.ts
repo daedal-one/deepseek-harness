@@ -30,6 +30,9 @@ import type {} from '@deepseek-ai/dsh-commands'
 import type { PermissionContext, PermissionSelect, PresetOption } from './types.ts'
 import { executionEnvironment } from './environment.ts'
 
+export { executionEnvironment, executionEnvironmentObservation } from './environment.ts'
+export type { ExecutionEnvironmentObservation } from './environment.ts'
+
 export type * from './types.ts'
 
 declare module '@deepseek-ai/cordis' {

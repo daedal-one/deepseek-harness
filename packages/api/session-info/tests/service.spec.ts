@@ -40,6 +40,8 @@ interface HarnessOptions {
   readonly liveSession?: boolean
   readonly withPeers?: boolean
   readonly withSummary?: boolean
+  /** Compose the execution providers and agent registry this reading observes. */
+  readonly withEnvironment?: boolean
 }
 
 async function harness(options: HarnessOptions = {}): Promise<SessionInfoService> {
@@ -54,6 +56,15 @@ async function harness(options: HarnessOptions = {}): Promise<SessionInfoService
   ctx.provide('sessionProjections', {
     snapshot: () => ({ asOfSeq: 0, values: projectionValues(options.withSummary !== false) }),
   } as never)
+  if (options.withEnvironment !== false) {
+    const world = Symbol.for('@deepseek-ai/dsh/host-execution-world')
+    ctx.provide('fs', { executionWorld: world } as never)
+    ctx.provide('subprocess', { executionWorld: world } as never)
+    ctx.provide('agents', {
+      get: (id: string) => id === SESSION_ID ? { ctx } : undefined,
+      withInitiator: (_agent: unknown, run: () => unknown) => run(),
+    } as never)
+  }
   if (options.withPeers !== false) {
     ctx.provide('sandboxPolicy', {
       defaultMode: 'read-only',
@@ -97,6 +108,7 @@ describe('SessionInfoService.read', () => {
     expect(value.summary).toBe('Fixture summary')
     expect(value.workspace).toEqual({ workspaceId: 'ws-1', path: '/work/fixture', title: 'Fixture workspace' })
     expect(value.environment.placement).toBe('host')
+    expect(value.environment.environmentId).toMatch(/^host-[0-9a-f]{8}$/)
     expect(value.environment.platform).toBe(process.platform)
     expect(value.environment.arch).toBe(process.arch)
     expect(typeof value.environment.release).toBe('string')
@@ -142,6 +154,15 @@ describe('SessionInfoService.read', () => {
       canChangePermission: false,
     })
     expect(result.value.environment.placement).toBe('host')
+  })
+
+  it('reports no environment identity when no execution world is observable', async () => {
+    const service = await harness({ withEnvironment: false })
+    const result = await service.read({ sessionId: SESSION_ID }, new AbortController().signal)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.value.environment.environmentId).toBeNull()
   })
 
   it('answers session-unavailable for a Session this Host does not hold', async () => {

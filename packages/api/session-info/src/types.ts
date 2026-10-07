@@ -57,6 +57,13 @@ export interface SessionInfoWorkspaceFacts {
 export interface SessionInfoEnvironmentFacts {
   /** Verified execution placement of the Session's providers. */
   readonly placement: SessionInfoPlacement
+  /**
+   * Process-local identity of the verified execution world, or `null` when the
+   * Session's providers share no world this Host can name. Two readings with
+   * equal ids ran in the same environment. The id is assigned per Host process
+   * and is not durable: a restarted Host or recreated container names a new one.
+   */
+  readonly environmentId: string | null
   /** Host operating-system platform id (`process.platform`). */
   readonly platform: string
   /** Host processor architecture (`process.arch`). */
