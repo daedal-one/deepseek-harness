@@ -162,9 +162,10 @@ export class ClientRemoteEvents {
           if (this.admission !== undefined && opening.host.identity.hostId !== this.admission.expectedHostId) {
             throw new Error('client api: the event stream does not belong to the paired Host')
           }
-          if (this.admission !== undefined) {
+          const admission = this.admission
+          if (admission !== undefined) {
             const capabilities = await abortable(() => admitHostCapabilities(
-              this.connection.rpc, opening.host.identity, this.admission.requiredCapabilities, generationSignal,
+              this.connection.rpc, opening.host.identity, admission.requiredCapabilities, generationSignal,
             ), generationSignal)
             generationSignal.throwIfAborted()
             this.admitted = { host: opening.host, capabilities, signal: generationSignal }
