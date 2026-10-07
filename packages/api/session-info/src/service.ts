@@ -15,7 +15,7 @@ import { homedir, release } from 'node:os'
 import type { Context } from '@deepseek-ai/cordis'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 // Type-only: declares `ctx.sessions` on the Cordis Context.
-import type {} from '@deepseek-ai/dsh-session'
+import type { Session } from '@deepseek-ai/dsh-session'
 // Type-only: declares `ctx.sessionProjections` on the Cordis Context.
 import type {} from '@deepseek-ai/dsh-session-projection'
 // Type-only: supplies the `modelSelection` projection declaration.
