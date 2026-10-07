@@ -68,7 +68,7 @@ describe('TranscriptViewRow', () => {
     expect(screen.queryByRole('menuitem', { name: 'Compact' })).toBeNull()
   })
 
-  it('shows the conversation-display values in Chinese', () => {
+  it('shows the conversation-display values in English', () => {
     mount('compact', copy)
     fireEvent.click(screen.getByRole('button', { name: 'Compact' }))
     fireEvent.click(screen.getByRole('menuitem', { name: 'Normal' }))

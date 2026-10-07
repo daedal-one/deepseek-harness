@@ -74,7 +74,7 @@ describe('ui-settings-plugin-inventory browser plugin', () => {
     // real plugin registers; user-authored metadata stays untranslated.
     b.locale.register('settings.agentPreset', 'en', { presetStandardName: 'Standard mode' } as never)
     expect(injected.presetName({ id: 'standard', trust: 'system', isDefault: true, rows: [] })).toBe('Standard mode')
-    expect(injected.presetName({ id: 'mine', trust: 'user', name: '我自己的', isDefault: false, rows: [] })).toBe('我自己的')
+    expect(injected.presetName({ id: 'mine', trust: 'user', name: 'My custom preset', isDefault: false, rows: [] })).toBe('My custom preset')
     await b.ctx.fiber.dispose()
   })
 

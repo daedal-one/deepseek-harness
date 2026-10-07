@@ -134,7 +134,7 @@ describe('GoalBar', () => {
     expect(actions.onPause).toHaveBeenCalledTimes(1)
   })
 
-  it('active disarmed goal: "未运行的目标" with a resume action instead of pause', () => {
+  it('active disarmed goal: "Paused goal" with a resume action instead of pause', () => {
     const actions = makeActions()
     render(<GoalBar goal={makeGoal()} activation="disarmed" {...actions} t={t} />)
     expect(screen.getByText('Inactive Goal')).toBeTruthy()

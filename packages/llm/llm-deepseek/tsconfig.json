@@ -51,9 +51,6 @@
       "path": "../../util/timeout"
     },
     {
-      "path": "../../identity/anonymous-user-id"
-    },
-    {
       "path": "../../util/http-proxy"
     }
   ]

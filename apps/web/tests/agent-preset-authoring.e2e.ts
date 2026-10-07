@@ -55,7 +55,7 @@ describe('web e2e: agent-preset authoring is a host-side copy', () => {
       },
     })
     browser = await chromium.launch()
-    // The scenario asserts the shipped Chinese copy, so the browser asks for it.
+    // The scenario asserts the shipped English copy, so the browser asks for it.
     page = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: EN_BROWSER_LOCALE })
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
@@ -83,18 +83,18 @@ describe('web e2e: agent-preset authoring is a host-side copy', () => {
     // The intro states the copy path directly, and the shipped rows offer
     // view/copy but never delete or a location — their
     // install is overwritten by upgrades and is not the user's to manage.
-    expect(snapshot).toContain('或用「创造模式」让 Agent 帮你创建')
-    expect(snapshot).not.toContain('新建预设')
-    expect(snapshot).toContain('查看: 标准模式')
-    expect(snapshot).not.toContain('删除: 标准模式')
+    expect(snapshot).toContain('let the agent draft one for you in Creator mode')
+    expect(snapshot).not.toContain('New preset')
+    expect(snapshot).toContain('View: Standard mode')
+    expect(snapshot).not.toContain('Delete: Standard mode')
     expect(snapshot).not.toContain('Open folder')
   }, 60_000)
 
   it('views a shipped composition read-only instead of editing it', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-preset-authoring-view'))
     const dialog = settingsDialog()
-    await dialog.getByRole('button', { name: '查看: 标准模式' }).click()
-    const viewer = page.getByRole('dialog', { name: '查看 · 标准模式' })
+    await dialog.getByRole('button', { name: 'View: Standard mode' }).click()
+    const viewer = page.getByRole('dialog', { name: 'View · Standard mode' })
     await viewer.waitFor({ timeout: 10_000 })
 
     // The real shipped composition, not a golden: the viewer shows whatever
@@ -102,36 +102,36 @@ describe('web e2e: agent-preset authoring is a host-side copy', () => {
     const shipped = await readFile(join(SHIPPED_PRESETS, 'standard', 'agent.cordis.yml'), 'utf8')
     expect(await viewer.locator('pre').textContent()).toBe(shipped)
     expect(await viewer.getByRole('textbox').count()).toBe(0)
-    // The header X and the footer button share the 关闭 name; the footer one
+    // The header X and the footer button share the Close name; the footer one
     // is last in the dialog.
     await viewer.getByRole('button', { name: 'Close' }).last().click()
     await viewer.waitFor({ state: 'detached', timeout: 10_000 })
   }, 60_000)
 
-  it('copies 极简模式 whole under a new id and lands in its files', async () => {
+  it('copies Minimal mode whole under a new id and lands in its files', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-preset-authoring-copy'))
     const dialog = settingsDialog()
-    await dialog.getByRole('button', { name: '复制: 极简模式' }).click()
-    const copyDialog = page.getByRole('dialog', { name: '复制预设 · 复制自 极简模式' })
+    await dialog.getByRole('button', { name: 'Duplicate: Minimal mode' }).click()
+    const copyDialog = page.getByRole('dialog', { name: 'Duplicate preset · Copied from Minimal mode' })
     await copyDialog.waitFor({ timeout: 10_000 })
 
     const dialogSnapshot = await captureStableAria(
-      page, '[role="dialog"][aria-label^="复制预设"]', scaffold.workspaceCwd)
+      page, '[role="dialog"][aria-label^="Duplicate preset"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(COPY_DIALOG_EXPECTED, dialogSnapshot, MODE)
     // Two fields and nothing else: the id is the directory name the host
     // needs up front; description and composition live in the files.
     expect(dialogSnapshot).toContain('Identifier')
-    expect(dialogSnapshot).not.toContain('描述')
+    expect(dialogSnapshot).not.toContain('Description')
 
     await copyDialog.getByPlaceholder('my-agent').fill('my-agent')
-    await copyDialog.getByPlaceholder('Shown in the picker; defaults to the identifier').fill('我的模式')
+    await copyDialog.getByPlaceholder('Shown in the picker; defaults to the identifier').fill('My mode')
     await copyDialog.getByRole('button', { name: 'Create' }).click()
     await copyDialog.waitFor({ state: 'detached', timeout: 10_000 })
 
     // The new row lands in the custom group, and — with no desktop opener —
     // its directory is revealed as text right away: landing in the files is
     // the completion of a copy, not a follow-up.
-    await dialog.getByText('我的模式').first().waitFor({ timeout: 10_000 })
+    await dialog.getByText('My mode').first().waitFor({ timeout: 10_000 })
     await dialog.getByText('Preset files:').waitFor({ timeout: 10_000 })
     // The copy dialog is detached, so the settings dialog is the only one
     // left (it names itself via aria-labelledby, which a CSS attribute
@@ -149,21 +149,21 @@ describe('web e2e: agent-preset authoring is a host-side copy', () => {
     const composition = await readFile(join(userRoot, 'my-agent', 'agent.cordis.yml'), 'utf8')
     expect(composition).toBe(await readFile(join(SHIPPED_PRESETS, 'minimal', 'agent.cordis.yml'), 'utf8'))
     const metadata = await readFile(join(userRoot, 'my-agent', 'preset.yml'), 'utf8')
-    expect(metadata).toContain('name: 我的模式')
-    expect(metadata).toContain('description: 仅提供持久 shell 的单工具编码 Agent。')
+    expect(metadata).toContain('name: My mode')
+    expect(metadata).toContain('description: A coding agent with a single persistent shell tool.')
     expect(metadata).not.toContain('order:')
   }, 60_000)
 
   it('deletes the copy after confirmation and reclaims the roster', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-preset-authoring-delete'))
     const dialog = settingsDialog()
-    await dialog.getByRole('button', { name: '删除: 我的模式' }).click()
+    await dialog.getByRole('button', { name: 'Delete: My mode' }).click()
     const confirm = page.getByRole('dialog', { name: 'Delete this preset?' })
     await confirm.waitFor({ timeout: 10_000 })
     await confirm.getByRole('button', { name: 'Delete', exact: true }).click()
     await confirm.waitFor({ state: 'detached', timeout: 10_000 })
 
-    await expect.poll(async () => dialog.getByText('我的模式').count(), { timeout: 10_000 }).toBe(0)
+    await expect.poll(async () => dialog.getByText('My mode').count(), { timeout: 10_000 }).toBe(0)
     expect(existsSync(join(userRoot, 'my-agent'))).toBe(false)
     // The custom group outlives its only member: the heading stays with the
     // creator entry so the place to author a preset never disappears.
@@ -179,7 +179,7 @@ describe('web e2e: agent-preset authoring is a host-side copy', () => {
     await mkdir(join(userRoot, 'broken-yaml'), { recursive: true })
     await writeFile(join(userRoot, 'broken-yaml', 'agent.cordis.yml'), '- id: x\n  name: [unclosed\n')
     await mkdir(join(userRoot, 'ghost'), { recursive: true })
-    await writeFile(join(userRoot, 'ghost', 'preset.yml'), 'name: 幽灵预设\ndescription: composition 已被手动删除。\n')
+    await writeFile(join(userRoot, 'ghost', 'preset.yml'), 'name: Ghost preset\ndescription: Composition was manually deleted.\n')
 
     // The section reads the roster when it mounts; hop away and back.
     const dialog = settingsDialog()
@@ -193,36 +193,36 @@ describe('web e2e: agent-preset authoring is a host-side copy', () => {
     await compareOrRefreshGolden(DAMAGED_EXPECTED, snapshot, MODE)
     // Both damage shapes surface as marked, unselectable, uncopyable cards
     // that still carry their metadata and the discovery-reported reason.
-    expect(snapshot).toContain('加载失败: broken-yaml')
-    expect(snapshot).toContain('加载失败: 幽灵预设')
+    expect(snapshot).toContain('Failed to load: broken-yaml')
+    expect(snapshot).toContain('Failed to load: Ghost preset')
     expect(snapshot).toContain('not valid YAML')
     expect(snapshot).toContain('agent.cordis.yml is missing')
-    expect(await dialog.getByRole('button', { name: '加载失败: broken-yaml' }).isDisabled()).toBe(true)
-    expect(await dialog.getByRole('button', { name: '复制: 幽灵预设' }).isDisabled()).toBe(true)
+    expect(await dialog.getByRole('button', { name: 'Failed to load: broken-yaml' }).isDisabled()).toBe(true)
+    expect(await dialog.getByRole('button', { name: 'Duplicate: Ghost preset' }).isDisabled()).toBe(true)
     // A broken card offers no "set default" affordance at all — the aria name
     // IS the broken marking, so the picking name must not exist.
-    expect(await dialog.getByRole('button', { name: '设为默认: broken-yaml' }).count()).toBe(0)
+    expect(await dialog.getByRole('button', { name: 'Set as default: broken-yaml' }).count()).toBe(0)
 
     // The ghost's way out is the card's own delete — and the id it blocked
     // is claimable again immediately afterwards.
-    await dialog.getByRole('button', { name: '删除: 幽灵预设' }).click()
+    await dialog.getByRole('button', { name: 'Delete: Ghost preset' }).click()
     const confirm = page.getByRole('dialog', { name: 'Delete this preset?' })
     await confirm.waitFor({ timeout: 10_000 })
     await confirm.getByRole('button', { name: 'Delete', exact: true }).click()
     await confirm.waitFor({ state: 'detached', timeout: 10_000 })
-    await expect.poll(async () => dialog.getByText('幽灵预设').count(), { timeout: 10_000 }).toBe(0)
+    await expect.poll(async () => dialog.getByText('Ghost preset').count(), { timeout: 10_000 }).toBe(0)
     expect(existsSync(join(userRoot, 'ghost'))).toBe(false)
 
-    await dialog.getByRole('button', { name: '复制: 极简模式' }).click()
-    const copyDialog = page.getByRole('dialog', { name: '复制预设 · 复制自 极简模式' })
+    await dialog.getByRole('button', { name: 'Duplicate: Minimal mode' }).click()
+    const copyDialog = page.getByRole('dialog', { name: 'Duplicate preset · Copied from Minimal mode' })
     await copyDialog.waitFor({ timeout: 10_000 })
     await copyDialog.getByPlaceholder('my-agent').fill('ghost')
     await copyDialog.getByRole('button', { name: 'Create' }).click()
     await copyDialog.waitFor({ state: 'detached', timeout: 10_000 })
-    await dialog.getByRole('button', { name: '设为默认: ghost' }).waitFor({ timeout: 10_000 })
+    await dialog.getByRole('button', { name: 'Set as default: ghost' }).waitFor({ timeout: 10_000 })
 
     // Leave the roster as the earlier tests shaped it.
-    await dialog.getByRole('button', { name: '删除: ghost' }).click()
+    await dialog.getByRole('button', { name: 'Delete: ghost' }).click()
     const cleanup = page.getByRole('dialog', { name: 'Delete this preset?' })
     await cleanup.waitFor({ timeout: 10_000 })
     await cleanup.getByRole('button', { name: 'Delete', exact: true }).click()
@@ -254,7 +254,7 @@ describe('web e2e: agent-preset authoring is a host-side copy', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           type: 'client-request', rpcId: 'creator-draft-stage', method: 'session/list',
-          payload: { args: { _request: {} } },
+          payload: { args: { request: {} } },
         }),
       })
       const body = await response.json() as {

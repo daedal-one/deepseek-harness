@@ -725,14 +725,18 @@ describe('task admission and package contracts', () => {
 })
 
 describe('official spawn projection', () => {
-  it('forwards command, arguments, cwd, environment, and signal exactly', () => {
+  it('preserves process inputs and prevents SDK environment from enabling reporting', () => {
     vi.stubEnv('SDK_REMOVED_AMBIENT', 'ambient-value')
     const signal = new AbortController().signal
     const options = sdkSpawnOptions({
       command: '/official/claude',
       args: ['--one', 'two'],
       cwd: '/parent/workspace',
-      env: { A: 'one', B: undefined, C: 'three' },
+      env: {
+        A: 'one', B: undefined, C: 'three',
+        DISABLE_TELEMETRY: '', CLAUDE_CODE_ENABLE_TELEMETRY: '1',
+        OTEL_SDK_DISABLED: 'false', OTEL_LOGS_EXPORTER: 'otlp',
+      },
       signal,
     })
     expect(sdkEnvironmentOverlay(options.env)).toEqual(expect.objectContaining({
@@ -740,6 +744,16 @@ describe('official spawn projection', () => {
       B: undefined,
       C: 'three',
       SDK_REMOVED_AMBIENT: undefined,
+      DISABLE_TELEMETRY: '1',
+      DISABLE_ERROR_REPORTING: '1',
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+      CLAUDE_CODE_ENABLE_TELEMETRY: '0',
+      CLAUDE_CODE_ENABLE_FEEDBACK_SURVEY_FOR_OTEL: '0',
+      ENABLE_BETA_TRACING_DETAILED: '0',
+      OTEL_SDK_DISABLED: 'true',
+      OTEL_LOGS_EXPORTER: 'none',
+      OTEL_METRICS_EXPORTER: 'none',
+      OTEL_TRACES_EXPORTER: 'none',
     }))
     const spawnSpec = claudeSpawnSpec(options, 321)
     expect(spawnSpec).toMatchObject({
@@ -754,6 +768,16 @@ describe('official spawn projection', () => {
       B: undefined,
       C: 'three',
       SDK_REMOVED_AMBIENT: undefined,
+      DISABLE_TELEMETRY: '1',
+      DISABLE_ERROR_REPORTING: '1',
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+      CLAUDE_CODE_ENABLE_TELEMETRY: '0',
+      CLAUDE_CODE_ENABLE_FEEDBACK_SURVEY_FOR_OTEL: '0',
+      ENABLE_BETA_TRACING_DETAILED: '0',
+      OTEL_SDK_DISABLED: 'true',
+      OTEL_LOGS_EXPORTER: 'none',
+      OTEL_METRICS_EXPORTER: 'none',
+      OTEL_TRACES_EXPORTER: 'none',
     }))
     const missingCwd = sdkSpawnOptions()
     delete missingCwd.cwd

@@ -275,20 +275,20 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     await compareOrRefreshGolden(DECLARED_EDIT_EXPECTED, snapshot, MODE)
 
     await protocol.selectOption('anthropic-messages')
-    await name.fill('Acme 网关')
+    await name.fill('Acme Gateway')
     await dialog.getByRole('button', { name: 'Apply', exact: true }).click()
     await expect.poll(async () => dialog.getByLabel('API protocol').count(), { timeout: 10_000 }).toBe(0)
     // The adapter re-resolved the route under the new protocol and re-registered
     // it under the new name: an unserviceable profile would have been refused
     // at the write instead, and a rename that did not re-register would leave
     // the old label on the row.
-    await dialog.getByText('Acme 网关', { exact: true }).first().waitFor({ timeout: 10_000 })
+    await dialog.getByText('Acme Gateway', { exact: true }).first().waitFor({ timeout: 10_000 })
     // The status line names the route as the refreshed directory reports it;
     // the target captured when the card opened still carries the old name.
-    await dialog.getByText('Saved Acme 网关 (acme-gateway).', { exact: true }).waitFor({ timeout: 10_000 })
+    await dialog.getByText('Saved Acme Gateway (acme-gateway).', { exact: true }).waitFor({ timeout: 10_000 })
     const document = await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')
     expect(document).toContain('api: anthropic-messages')
-    expect(document).toContain('displayName: Acme 网关')
+    expect(document).toContain('displayName: Acme Gateway')
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 

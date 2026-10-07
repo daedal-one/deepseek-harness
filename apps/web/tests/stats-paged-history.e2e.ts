@@ -3,7 +3,7 @@
 // seeded cold through the REAL persistence API must render whole-log turn/step
 // counts from the sessionStats projection on first open, and loading the
 // older page must NOT change them. This pins the bug the projection fixed:
-// the pre-projection window fold recounted per loaded page, so 加载更早 grew
+// the pre-projection window fold recounted per loaded page, so Load earlier grew
 // the counter. Zero model calls; the seed is generated, not recorded, because
 // no line of it is model output.
 import { fileURLToPath } from 'node:url'
@@ -125,7 +125,7 @@ describe('web e2e: whole-session stats survive history paging', () => {
     const strip = page.getByText(FULL_COUNTS, { exact: false }).locator('..')
     const stripBeforePaging = await strip.textContent()
 
-    // 加载更早: prepending the older page must not move ANY strip figure —
+    // Load earlier: prepending the older page must not move ANY strip figure —
     // counts, wall times, or token groups.
     await page.getByRole('button', { name: 'Load earlier' }).click()
     await expect.poll(() => page.getByText('m1', { exact: true }).count(), { timeout: 10_000 }).toBe(1)

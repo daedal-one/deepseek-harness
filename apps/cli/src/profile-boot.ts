@@ -78,8 +78,12 @@ export function homePatchPath(): string {
 /** Absolute path of this dsh installation's package.json (both anchors: src/ and lib/ sit one level under apps/cli). */
 export const INSTALL_ANCHOR = fileURLToPath(new URL('../package.json', import.meta.url))
 
-/** The session-telemetry row id the DSH_TELEMETRY_DISABLED switch targets. */
-const TELEMETRY_ROW_ID = 'session-telemetry-otel'
+/** Reporting modules disabled after user overlays by DSH_TELEMETRY_DISABLED. */
+const TELEMETRY_MODULES = new Set([
+  '@deepseek-ai/dsh-session-telemetry-otel',
+  '@deepseek-ai/dsh-session-log-deepseek',
+  '@deepseek-ai/dsh-plugin-package-inventory-deepseek',
+])
 
 /** The empty root entry list every profile tree patches over. */
 const PROFILE_ROOT_CONFIG = `# dsh profile root — an empty entry list. The tree is composed as patches:
@@ -155,19 +159,19 @@ export function initializeProfileFromDefault(
 }
 
 /**
- * Resolve the telemetry opt-out switch into its boot patch. ANY non-empty
- * value (including `'0'`/`'false'`) disables: a privacy switch prefers
- * off-by-mistake over on-by-mistake. A composition without the telemetry row
- * exports nothing, so the switch is then trivially satisfied and no patch is
- * generated — custom profiles need not mount telemetry to run with the
- * switch set.
- * @param disabledEnv - the raw `DSH_TELEMETRY_DISABLED` value (`undefined` when unset).
- * @param hasRow - whether the composition carries the telemetry row.
- * @returns the disable patch, or `undefined` when no hard-disable patch is required.
+ * Disable every reporting plugin after user overlays when the opt-out switch
+ * is non-empty, including falsy-looking values and custom row ids.
+ * @param disabledEnv - raw `DSH_TELEMETRY_DISABLED` value, undefined when unset.
+ * @param rows - fully composed profile rows, before the hard-disable patches.
+ * @returns patches disabling reporting rows, or an empty list when the switch is unset.
  */
-export function resolveTelemetryPatch(disabledEnv: string | undefined, hasRow: boolean): PatchOptions | undefined {
-  if ((disabledEnv ?? '') === '' || !hasRow) return undefined
-  return { id: TELEMETRY_ROW_ID, disabled: true }
+export function resolveTelemetryPatches(
+  disabledEnv: string | undefined,
+  rows: readonly EntryOptions[],
+): PatchOptions[] {
+  if ((disabledEnv ?? '') === '') return []
+  return rows.filter(row => TELEMETRY_MODULES.has(row.name))
+    .map(row => ({ id: row.id, disabled: true }))
 }
 
 /**
@@ -235,13 +239,11 @@ async function composeProfile(
   const homePatches = loadOptionalPatches(NAME, homePatchPath()) ?? []
   const overlays = patchFiles.flatMap(file => loadOverlayPatches(NAME, resolve(file)))
   const bundlePatches = profile.layers.flatMap(layer => layer.patches)
-  const rows = new Map<string, EntryOptions>()
-  for (const row of composeEntries([bundlePatches, profile.patches, homePatches, overlays])) {
-    if (typeof row.id === 'string') rows.set(row.id, row)
-  }
-  const composedOverlays = [...overlays]
-  const telemetryPatch = resolveTelemetryPatch(process.env.DSH_TELEMETRY_DISABLED, rows.has(TELEMETRY_ROW_ID))
-  if (telemetryPatch !== undefined) composedOverlays.push(telemetryPatch)
+  const rows = composeEntries([bundlePatches, profile.patches, homePatches, overlays])
+  const composedOverlays = [
+    ...overlays,
+    ...resolveTelemetryPatches(process.env.DSH_TELEMETRY_DISABLED, rows),
+  ]
   return { profile, bundlePatches, homePatches, overlays: composedOverlays }
 }
 

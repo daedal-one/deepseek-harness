@@ -1,42 +1,48 @@
-- dialog "设置":
+- dialog "Settings":
   - navigation:
-    - text: 设置
-    - button "通用设置":
+    - text: Settings
+    - button "General":
       - img
-      - text: 通用设置
-    - button "模型":
+      - text: General
+    - button "Models":
       - img
-      - text: 模型
-    - button "插件":
+      - text: Models
+    - button "Plugins":
       - img
-      - text: 插件
-    - button "Agent 预设":
+      - text: Plugins
+    - button "Agent presets":
       - img
-      - text: Agent 预设
-  - button "打开配置文件"
-  - button "关闭":
+      - text: Agent presets
+    - button "Agents":
+      - img
+      - text: Agents
+    - button "Devices":
+      - img
+      - text: Devices
+  - button "Open configuration file"
+  - button "Close":
     - img
-    - text: 关闭
-  - heading "模型" [level=2]
-  - paragraph: 填入各提供方的 API 密钥即可使用其模型。
+    - text: Close
+  - heading "Models" [level=2]
+  - paragraph: Sign in to an account or enter an API key to use these providers.
   - list:
     - listitem:
       - text: openrouter
-      - button "编辑 openrouter": 编辑
-      - button "删除 openrouter": 删除
+      - button "Edit openrouter": Edit
+      - button "Delete openrouter": Delete
       - alert: "llm-pi-ai: provider \"openrouter\" model \"111\" needs an api; the installed catalog does not describe it, so set the route's api to the wire protocol its endpoint speaks"
     - listitem:
       - text: zai
-      - button "编辑 zai": 编辑
-      - button "删除 zai": 删除
+      - button "Edit zai": Edit
+      - button "Delete zai": Delete
     - listitem:
-      - text: acme-gateway 自定义
-      - button "编辑 acme-gateway": 编辑
-      - button "删除 acme-gateway": 删除
+      - text: acme-gateway Custom
+      - button "Edit acme-gateway": Edit
+      - button "Delete acme-gateway": Delete
       - alert: "llm-pi-ai: provider \"acme-gateway\" model \"custom-model\" needs an api; the installed catalog does not describe it, so set the route's api to the wire protocol its endpoint speaks"
-  - button "添加提供方":
+  - button "Add provider":
     - img
-    - text: 添加提供方
-  - button "添加自定义提供方":
+    - text: Add provider
+  - button "Add a custom provider":
     - img
-    - text: 添加自定义提供方
+    - text: Add a custom provider

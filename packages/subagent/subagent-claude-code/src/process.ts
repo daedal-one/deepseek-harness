@@ -25,7 +25,7 @@ function thrown(value: unknown): Error {
 /**
  * Encode the SDK's complete child environment as a subprocess overlay.
  * @param env - SDK-composed child environment after its removals and replacements.
- * @returns explicit values plus tombstones for surviving ambient names the SDK removed.
+ * @returns explicit values and removal tombstones, with native reporting disabled.
  */
 export function sdkEnvironmentOverlay(
   env: SpawnOptions['env'],
@@ -34,7 +34,19 @@ export function sdkEnvironmentOverlay(
   for (const name of Object.keys(scrubbedParentEnv())) {
     if (!(name in env)) overlay[name] = undefined
   }
-  return overlay
+  return {
+    ...overlay,
+    DISABLE_TELEMETRY: '1',
+    DISABLE_ERROR_REPORTING: '1',
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+    CLAUDE_CODE_ENABLE_TELEMETRY: '0',
+    CLAUDE_CODE_ENABLE_FEEDBACK_SURVEY_FOR_OTEL: '0',
+    ENABLE_BETA_TRACING_DETAILED: '0',
+    OTEL_SDK_DISABLED: 'true',
+    OTEL_LOGS_EXPORTER: 'none',
+    OTEL_METRICS_EXPORTER: 'none',
+    OTEL_TRACES_EXPORTER: 'none',
+  }
 }
 
 /**

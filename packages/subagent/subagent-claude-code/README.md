@@ -37,6 +37,8 @@ dsh --profile <name>
 
 Removing the package withdraws the provider and its private runtime closure on the next Profile start. Installation controls Host availability, not model permission: the model can only reach the provider through a delegation tool row you compose.
 
+Every SDK-spawned Claude child receives a final environment overlay disabling telemetry, error reporting, nonessential traffic, beta tracing, and OTel exporters. Inherited and provider-supplied environment values cannot re-enable these reporting paths for the child. Authentication, model routing, and permissions retain their native owners.
+
 ### Configuration
 
 | Field | Default | Meaning |

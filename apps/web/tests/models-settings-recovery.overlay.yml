@@ -1,0 +1,3 @@
+# Catalog-drift coverage excludes deployment-supplied protocol overrides.
+- id: llm-pi-ai
+  config: {}

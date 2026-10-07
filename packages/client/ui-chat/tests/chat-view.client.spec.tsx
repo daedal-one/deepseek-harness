@@ -2087,7 +2087,7 @@ describe('ChatView', () => {
     // tokens over 6.4s of model requests move into its dialog.
     const timeTrigger = view.getByRole('button', { name: /Ran for 19s/ })
     expect(timeTrigger.textContent).toBe('Ran for 19s')
-    expect(view.queryByText(/速度 20 tok\/s|首 token/)).toBeNull()
+    expect(view.queryByText(/20 tok\/s|Time to first token/)).toBeNull()
     fireEvent.click(timeTrigger)
     const timeDialog = view.getByRole('dialog')
     expect(timeDialog.getAttribute('aria-label')).toBe('Turn time and speed')
@@ -2126,7 +2126,7 @@ describe('ChatView', () => {
       turnEnds: new Map(),
     }, { running: true })
     const view = render(<h.ChatView {...h.props} />)
-    expect(view.queryByText(/首 token|tok\/s/)).toBeNull()
+    expect(view.queryByText(/Time to first token|tok\/s/)).toBeNull()
   })
 
   it('keeps only the latest turn tail actions permanently visible', () => {

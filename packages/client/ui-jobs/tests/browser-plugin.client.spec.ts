@@ -36,7 +36,7 @@ async function bench(): Promise<{ ctx: Context; fiber: ReturnType<Context['plugi
   ctx.provide('remote', { $on: () => () => {} } as never)
   ctx.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
   await ctx.plugin({ inject: localeInject, apply: applyLocale }).await()
-  // These specs assert the shipped Chinese copy. There is no jsdom `window` in
+  // These specs assert the shipped English copy. There is no jsdom `window` in
   // this lane, so browser-language detection never runs and the locale comes
   // from FALLBACK_LOCALE (en): state the asserted locale explicitly.
   ctx.locale.setLocale('en')
@@ -69,7 +69,7 @@ describe('ui-job browser half', () => {
     expect(translate('list.aria')).not.toBe(en['list.aria'])
   })
 
-  it('keeps the English dictionary key-identical to the Chinese source of truth', () => {
+  it('keeps the English dictionary keys consistent with its typed owner', () => {
     expect(Object.keys(en).sort()).toEqual(Object.keys(copy).sort())
   })
 })

@@ -383,7 +383,7 @@ describe('StatsPills', () => {
   })
 
   it('renders whole-log speed and dialog figures from the projection, not the loaded window', () => {
-    // The 加载更早 hazard beyond counts: the pill's speed segment and the
+    // The Load earlier hazard beyond counts: the pill's speed segment and the
     // dialog's time split, TTFT, and throughput must not grow per loaded page
     // either. An untimed 1-node window renders the projection's whole-log figures.
     const { source } = makeSource({ nodes: [assistant(1, 1)] })

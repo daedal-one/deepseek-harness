@@ -833,14 +833,14 @@ describe('authoring a preset on the shipped composition', () => {
   })
 
   it('copies a shipped preset a session then really composes from', async () => {
-    await authorCtx.agentPresets.copy('minimal', 'my-agent', '我的模式')
+    await authorCtx.agentPresets.copy('minimal', 'my-agent', 'My mode')
 
     // Round-trips through the roster as a `user` row carrying the given name
     // and the source's description, over the source's own composition text.
     const preset = await authorCtx.agentPresets.resolve('my-agent')
     const source = await authorCtx.agentPresets.resolve('minimal')
     expect(preset.trust).toBe('user')
-    expect(preset.name).toBe('我的模式')
+    expect(preset.name).toBe('My mode')
     expect(preset.description).toBe(source.description)
     expect(await authorCtx.agentPresets.read('my-agent')).toBe(await authorCtx.agentPresets.read('minimal'))
     // Owner-only, in an owner-only directory: a composition is executable

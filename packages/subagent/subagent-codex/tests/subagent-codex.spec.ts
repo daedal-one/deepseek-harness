@@ -390,6 +390,12 @@ describe('task admission and package contracts', () => {
       resolve(dirname(codexPackageJson), codexManifest.bin.codex),
       'app-server',
       '--stdio',
+      '-c', 'analytics.enabled=false',
+      '-c', 'feedback.enabled=false',
+      '-c', 'otel.exporter="none"',
+      '-c', 'otel.trace_exporter="none"',
+      '-c', 'otel.metrics_exporter="none"',
+      '-c', 'otel.log_user_prompt=false',
     ])
 
     const lockfile = readFileSync(resolve(root, '../../../pnpm-lock.yaml'), 'utf8')

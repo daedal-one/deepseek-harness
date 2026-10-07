@@ -177,7 +177,7 @@ describe('the preset list', () => {
       rows: [
         { id: 'standard', trust: 'system', isDefault: true },
         {
-          id: 'ghost', trust: 'user', isDefault: false, name: 'Ghost preset', description: '我自己写的',
+          id: 'ghost', trust: 'user', isDefault: false, name: 'Ghost preset', description: 'Written by me',
           broken: 'the composition file agent.cordis.yml is missing',
         },
       ],
@@ -190,7 +190,7 @@ describe('the preset list', () => {
       .toBe(`${en.brokenBadge}the composition file agent.cordis.yml is missing`)
     // A picker card keeps showing what the preset is; a package specifier in
     // its place would tell a chooser nothing they can act on there.
-    expect(within(ghost).getByText('我自己写的')).toBeTruthy()
+    expect(within(ghost).getByText('Written by me')).toBeTruthy()
     // Reachable without a pointer: the disabled body leaves the tab order, so
     // this node is the only reading assistive technology gets.
     expect(within(ghost).getByRole('alert').textContent).toContain('is missing')
@@ -475,7 +475,7 @@ describe('a long card description', () => {
     disconnect(): void {}
   }
 
-  const LONG = 'A friendly general assistant that always communicates in Simplified Chinese, with persistent bash and file-editing capabilities.'.repeat(8)
+  const LONG = 'A friendly general assistant that always communicates in English, with persistent bash and file-editing capabilities.'.repeat(8)
 
   /** Force the clamp to report an overflow: jsdom lays nothing out, so both heights are 0. */
   function clamp(overflowing: boolean): void {

@@ -133,7 +133,15 @@ export function codexStartupFailure(cause: unknown): Error {
  * @returns Node, the official wrapper, and the fixed app-server arguments.
  */
 export function codexAppServerArgv(): string[] {
-  return [process.execPath, CODEX_PACKAGE_BIN, 'app-server', '--stdio']
+  return [
+    process.execPath, CODEX_PACKAGE_BIN, 'app-server', '--stdio',
+    '-c', 'analytics.enabled=false',
+    '-c', 'feedback.enabled=false',
+    '-c', 'otel.exporter="none"',
+    '-c', 'otel.trace_exporter="none"',
+    '-c', 'otel.metrics_exporter="none"',
+    '-c', 'otel.log_user_prompt=false',
+  ]
 }
 
 /** Fully resolved inputs for one Codex app-server run. */

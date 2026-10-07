@@ -1760,7 +1760,7 @@ export interface DeepSeekCatalogModel {
 
 Depends on: [`ModelModality`](../packages/llm/llm/src/index.ts) · [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts) · [`SystemPromptUpdate`](../packages/llm/llm/src/index.ts)
 
-Source: [`packages/llm/llm-deepseek/src/index.ts:120`](../packages/llm/llm-deepseek/src/index.ts)
+Source: [`packages/llm/llm-deepseek/src/index.ts:119`](../packages/llm/llm-deepseek/src/index.ts)
 
 <a id="deepseek-aidsh-llm-pi-ai"></a>
 
@@ -2398,6 +2398,94 @@ export interface Config {
 
 Source: [`packages/feedback/message-feedback/src/index.ts:40`](../packages/feedback/message-feedback/src/index.ts)
 
+<a id="deepseek-aidsh-model-routing"></a>
+
+## `@deepseek-ai/dsh-model-routing`
+
+Requires: `modelCatalog`
+
+```ts config-catalog
+/** Composition fields of the routing policy. */
+export interface Config {
+  /** Declared task classes keyed by id. */
+  classes?: TaskClassTable
+}
+
+/** Declared classes keyed by their validated id. */
+export type TaskClassTable = Readonly<Record<string, TaskClassSpec>>
+
+/** One complete deployment-declared task class. */
+export interface TaskClassSpec {
+  /** Hard capability requirements. */
+  requirements: TaskClassRequirements
+  /** Ordered preference tiers, best first; must contain at least one tier. */
+  tiers: PreferenceTier[]
+  /** Token counts of one representative call, used to compare prices. */
+  costBasis: CostBasis
+}
+
+/**
+ * Hard capability requirements. Every stated requirement must hold or the
+ * candidate is not eligible; an unstated requirement constrains nothing.
+ *
+ * These are filters, not preferences: a candidate that fails one is removed
+ * from consideration rather than ranked lower, which is what keeps a
+ * resolution from silently landing on a model known to be incapable.
+ */
+export interface TaskClassRequirements {
+  /**
+   * Minimum context capacity in tokens. A candidate whose capacity is unknown
+   * fails this requirement, because unknown capacity cannot prove it satisfies
+   * a hard requirement.
+   */
+  minContextTokens?: number
+  /** Whether the class requires adapter-exposed selectable reasoning levels. */
+  requiresReasoning?: boolean
+  /**
+   * Input modalities the model must accept, matched exactly against the
+   * adapter-declared set. A candidate that declares no modalities fails; an
+   * empty list requires nothing.
+   */
+  inputModalities?: string[]
+}
+
+/**
+ * One operator-declared preference tier.
+ *
+ * Tiers are ordered best-first by their position in
+ * {@link TaskClassSpec.tiers}. A model matching an earlier tier always beats a
+ * model matching a later one, whatever either costs.
+ */
+export interface PreferenceTier {
+  /** Operator-facing tier name, repeated in decision evidence. */
+  name: string
+  /**
+   * Patterns matched against the exact candidate model id, where `*` matches
+   * any run of characters and every other character is literal. A pattern
+   * names a model or a family — `deepseek/*` admits a new DeepSeek release
+   * without a configuration edit.
+   */
+  modelPatterns: string[]
+}
+
+/**
+ * Token counts of one representative call of a class.
+ *
+ * Prices are compared by pricing this call, so the basis is a stated modelling
+ * assumption rather than an unexplained blend: two candidates are ranked by
+ * what the deployment actually expects a call of this kind to cost. Both
+ * counts must be non-negative and at least one must be positive.
+ */
+export interface CostBasis {
+  /** Prompt tokens assumed for one representative call. */
+  inputTokens: number
+  /** Completion tokens assumed for one representative call. */
+  outputTokens: number
+}
+```
+
+Source: [`packages/llm/model-routing/src/index.ts:29`](../packages/llm/model-routing/src/index.ts)
+
 <a id="deepseek-aidsh-permission-presets"></a>
 
 ## `@deepseek-ai/dsh-permission-presets`
@@ -2491,7 +2579,7 @@ Requires: `agents` · `deepseekLlmApiExtensions` · `loader`
 ```ts config-catalog
 /** Plugin-package request contribution configuration. */
 export interface Config {
-  /** Contribute `dsh_plugin_packages` to official DeepSeek requests. Defaults to `true`. */
+  /** Contribute `dsh_plugin_packages` to official DeepSeek requests. Defaults to `false`. */
   enabled?: boolean
 }
 ```
@@ -2917,7 +3005,7 @@ Requires: `sessions`
  * and shutdown deadline at plugin load; `DISABLED` reads neither.
  */
 export interface Config {
-  /** Defaults to `FEEDBACK_ONLY`: capture session history only when feedback is explicitly submitted. */
+  /** Defaults to `DISABLED`: construct no reporting transport or capture coordinator. */
   mode?: SessionTelemetryMode
   /**
    * Passed verbatim to the SDK's OTLP/HTTP log exporter — the complete
@@ -4753,6 +4841,7 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 - `@deepseek-ai/dsh-llm-mock-server` ([`packages/test-support/llm-mock-server/src/index.ts`](../packages/test-support/llm-mock-server/src/index.ts))
 - `@deepseek-ai/dsh-loader-smoke` ([`packages/test-support/loader-smoke/src/index.ts`](../packages/test-support/loader-smoke/src/index.ts))
 - `@deepseek-ai/dsh-native-command` ([`packages/util/native-command/src/index.ts`](../packages/util/native-command/src/index.ts))
+- `@deepseek-ai/dsh-openrouter-catalog` ([`packages/llm/openrouter-catalog/src/index.ts`](../packages/llm/openrouter-catalog/src/index.ts))
 - `@deepseek-ai/dsh-openrouter-spend` ([`packages/llm/openrouter-spend/src/index.ts`](../packages/llm/openrouter-spend/src/index.ts))
 - `@deepseek-ai/dsh-output-retention` ([`packages/util/output-retention/src/index.ts`](../packages/util/output-retention/src/index.ts))
 - `@deepseek-ai/dsh-package-manifest` ([`packages/util/package-manifest/src/index.ts`](../packages/util/package-manifest/src/index.ts))

@@ -12,7 +12,7 @@ import { BrowseDirectoryFlow } from '../src/client/flow.ts'
 import { apply as nodeApply } from '../src/index.ts'
 
 // The service reads its initial locale from the browser; these specs assert
-// the shipped Chinese copy, so they state the browser they assume.
+// the shipped English copy, so they state the browser they assume.
 usePinnedBrowserLanguages('en-US')
 
 afterEach(cleanup)

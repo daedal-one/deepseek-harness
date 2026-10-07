@@ -11,6 +11,7 @@ import {
 } from './scaffold.ts'
 import { saveFailureShot, EN_BROWSER_LOCALE } from './support.ts'
 
+const OVERLAY = fileURLToPath(new URL('./models-settings-recovery.overlay.yml', import.meta.url))
 const EXPECTED = fileURLToPath(new URL('./expected/models-settings-recovery/stored-error.expected.md', import.meta.url))
 const FAILURE = 'llm-pi-ai: provider "openrouter" model "111" needs an api; '
   + 'the installed catalog does not describe it, so set the route\'s api to the wire protocol its endpoint speaks'
@@ -31,14 +32,14 @@ describe('web e2e: repairs a stored provider after catalog drift', () => {
       '        - id: "111"', '    zai: {}', '    acme-gateway:',
       '      baseURL: https://gateway.example/v1', '      models:', '        - id: "custom-model"', '',
     ].join('\n'))
-    scaffold = await launchWebScaffold({ harnessHome: home })
+    scaffold = await launchWebScaffold({ harnessHome: home, openRouterMissingCredential: true, extraOverlayPath: OVERLAY })
     browser = await chromium.launch()
     page = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: EN_BROWSER_LOCALE })
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await page.getByRole('button', { name: 'Settings', exact: true }).click()
     const dialog = page.getByRole('dialog', { name: 'Settings' })
-    await dialog.getByRole('button', { name: 'Model', exact: true }).click()
+    await dialog.getByRole('button', { name: 'Models', exact: true }).click()
     await dialog.getByText(FAILURE, { exact: true }).waitFor()
   }, 120_000)
 
@@ -82,7 +83,7 @@ describe('web e2e: repairs a stored provider after catalog drift', () => {
     await dialog.getByRole('button', { name: 'Apply', exact: true }).click()
     await expect.poll(() => dialog.getByText(FAILURE, { exact: true }).count()).toBe(2)
     expect(await readFile(join(home, 'settings.yaml'), 'utf8')).toBe(before)
-    await dialog.getByRole('button', { name: '删除模型 1', exact: true }).click()
+    await dialog.getByRole('button', { name: 'Delete model 1', exact: true }).click()
     await dialog.getByRole('button', { name: 'Apply', exact: true }).click()
     await dialog.getByText('Saved openrouter.', { exact: true }).waitFor()
     expect(await dialog.getByText(FAILURE, { exact: true }).count()).toBe(0)

@@ -37,6 +37,8 @@ dsh --profile <name>
 
 Removing the package withdraws the provider and its private runtime closure on the next Profile start. Installation controls Host availability, not model permission: the model can only reach the provider through a delegation tool row you compose.
 
+Every DSH-launched Codex app-server disables analytics, feedback collection, and OTel log, trace, and metrics exporters through fixed command-line overrides. Native user configuration cannot re-enable these reporting paths for the child. Authentication, model routing, and permission configuration retain their native owners.
+
 ### Configuration
 
 | Field | Default | Meaning |
@@ -96,7 +98,7 @@ This section explains how the provider drives a real Codex app-server and where 
 ### Design concept
 
 - **One fresh process, thread, and turn per run.** Every run spawns a fresh app-server, creates one ephemeral thread, and executes exactly one turn; there is no continuation, resume, or pooling.
-- **Native configuration is authoritative.** Codex configuration and authentication stay native through the parent cwd, `HOME`, and `CODEX_HOME`; the provider overrides only the optional model and the thread's approval, reviewer, and sandbox fields.
+- **Native configuration is authoritative.** Codex configuration and authentication stay native through the parent cwd, `HOME`, and `CODEX_HOME`; the provider selects the optional model and the thread's approval, reviewer, and sandbox fields, and forces native reporting off at process launch.
 - **Unattended by design.** Approval, user-input, and MCP requests are answered or declined without a human; unknown server requests fail the run.
 
 ### Source map

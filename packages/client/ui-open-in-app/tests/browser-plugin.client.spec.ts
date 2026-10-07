@@ -113,7 +113,7 @@ describe('open-in-app browser half', () => {
     expect(translate('menu.aria')).not.toBe(en['menu.aria'])
   })
 
-  it('keeps the English dictionary key-identical to the Chinese source of truth', () => {
+  it('keeps the English dictionary keys consistent with its typed owner', () => {
     expect(Object.keys(en).sort()).toEqual(Object.keys(copy).sort())
   })
 })

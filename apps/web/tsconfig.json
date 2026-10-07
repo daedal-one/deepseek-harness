@@ -99,6 +99,7 @@
     "tests/shipped-composition.e2e.ts",
     "tests/schedule-after.e2e.ts",
     "tests/feedback-command.e2e.ts",
+    "tests/reporting-disabled.e2e.ts",
     "tests/feedback-release.e2e.ts",
     "tests/agent-team-panel.e2e.ts",
     "tests/sidebar-right.e2e.ts",

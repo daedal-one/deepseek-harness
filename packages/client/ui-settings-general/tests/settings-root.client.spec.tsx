@@ -132,8 +132,8 @@ describe('SettingsRoot trigger', () => {
   it.each([
     { column: 'expanded English', wide: true, dictionary: en, name: 'Settings' },
     { column: 'collapsed English', wide: false, dictionary: en, name: 'Settings' },
-    { column: 'expanded Chinese', wide: true, dictionary: copy, name: 'Settings' },
-    { column: 'collapsed Chinese', wide: false, dictionary: copy, name: 'Settings' },
+    { column: 'expanded English', wide: true, dictionary: copy, name: 'Settings' },
+    { column: 'collapsed English', wide: false, dictionary: copy, name: 'Settings' },
   ])('uses the locale name and accepts keyboard-style activation for the $column trigger', ({
     wide, dictionary, name,
   }) => {

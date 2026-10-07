@@ -1,6 +1,7 @@
 # Agent Note: DeepSeek request user and session identity headers
 
 Status: implemented
+Archived: 2026-10-07
 
 ## Problem
 

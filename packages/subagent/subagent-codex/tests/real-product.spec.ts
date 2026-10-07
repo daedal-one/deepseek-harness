@@ -258,6 +258,12 @@ describe('real @openai/codex 0.153.4 product', () => {
       codexEntry,
       'app-server',
       '--stdio',
+      '-c', 'analytics.enabled=false',
+      '-c', 'feedback.enabled=false',
+      '-c', 'otel.exporter="none"',
+      '-c', 'otel.trace_exporter="none"',
+      '-c', 'otel.metrics_exporter="none"',
+      '-c', 'otel.log_user_prompt=false',
     ])
 
     expect(fixture.requests).toHaveLength(1)

@@ -1,7 +1,19 @@
 # Test-only patch over the shipped headless profile. The driver points the
-# production telemetry row at its mock collector through the public env vars.
+# disabled telemetry row at its mock collector through test-owned env vars.
 - id: session-telemetry-otel
   disabled: false
+  config:
+    mode: !!js process.env.DSH_TELEMETRY_MODE || 'FEEDBACK_ONLY'
+    shutdownTimeoutMillis: 3000
+    exporter:
+      url: !!js process.env.DSH_TELEMETRY_OTLP_URL
+      compression: gzip
+      timeoutMillis: 1000
+    processor:
+      scheduledDelayMillis: 10000
+      maxQueueSize: 2048
+      maxExportBatchSize: 2048
+      exportTimeoutMillis: 1500
 
 - id: headless-startup
   disabled: true

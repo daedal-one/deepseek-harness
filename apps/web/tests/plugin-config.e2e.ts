@@ -29,7 +29,7 @@ describe('web e2e: plugin configuration section', () => {
   beforeAll(async () => {
     scaffold = await launchWebScaffold({})
     browser = await chromium.launch()
-    // Chinese browser: the section asserts the localized copy the client
+    // English browser: the section asserts the localized copy the client
     // derives from it, as the rest of the settings surface does.
     page = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: EN_BROWSER_LOCALE })
     tripwire = watchConsole(page)
@@ -78,10 +78,10 @@ describe('web e2e: plugin configuration section', () => {
     // Every card the shipped web composition exposes: the shell executor, the
     // agent loop, subagent selection, and the DeepSeek search provider.
     await dialog.getByText('Subagent', { exact: true }).waitFor({ timeout: 10_000 })
-    expect(await dialog.getByRole('button', { name: '展开设置: Subagent' }).count()).toBe(1)
-    await dialog.getByText('Terminal', { exact: true }).waitFor({ timeout: 10_000 })
+    expect(await dialog.getByRole('button', { name: 'Show settings: Subagent' }).count()).toBe(1)
+    await dialog.getByText('Shell', { exact: true }).waitFor({ timeout: 10_000 })
     expect(await dialog.getByText('Agent loop', { exact: true }).count()).toBe(1)
-    expect(await dialog.getByText('Search', { exact: true }).count()).toBe(1)
+    expect(await dialog.getByText('Web search', { exact: true }).count()).toBe(1)
     // Collapsed: a card's fields appear only once it is expanded.
     expect(await dialog.getByLabel('Command timeout (ms)').count()).toBe(0)
 
@@ -101,9 +101,9 @@ describe('web e2e: plugin configuration section', () => {
     await models.waitFor({ timeout: 10_000 })
     const firstModel = models.getByRole('checkbox').first()
     await firstModel.check()
-    await dialog.getByRole('button', { name: 'Apply', exact: true }).click()
+    await dialog.getByRole('button', { name: 'Save', exact: true }).click()
 
-    const expandSubagent = dialog.getByRole('button', { name: '展开设置: Subagent' })
+    const expandSubagent = dialog.getByRole('button', { name: 'Show settings: Subagent' })
     await expandSubagent.waitFor({ timeout: 5_000 })
     await expect.poll(async () => (await settingsDocument()).includes('subagent-model-selection:'), { timeout: 10_000 })
       .toBe(true)
@@ -113,11 +113,11 @@ describe('web e2e: plugin configuration section', () => {
     expect(await settingsDocument()).toContain('model:')
     await expandSubagent.click()
     await expect.poll(() => toggle.getAttribute('aria-checked'), { timeout: 5_000 }).toBe('true')
-    await expect.poll(() => dialog.getByRole('button', { name: 'Apply', exact: true }).isDisabled()).toBe(true)
+    await expect.poll(() => dialog.getByRole('button', { name: 'Save', exact: true }).isDisabled()).toBe(true)
     expect(await dialog.getByText('Unsaved', { exact: true }).count()).toBe(0)
 
     await toggle.click()
-    await dialog.getByRole('button', { name: 'Apply', exact: true }).click()
+    await dialog.getByRole('button', { name: 'Save', exact: true }).click()
     await expandSubagent.waitFor({ timeout: 5_000 })
     await expect.poll(async () => (await settingsDocument()).includes('enabled: false'), { timeout: 10_000 })
       .toBe(true)
@@ -132,7 +132,7 @@ describe('web e2e: plugin configuration section', () => {
   it('stages an edit and writes it only when saved', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-config-write'))
     const dialog = await openPlugins()
-    await dialog.getByText('Terminal', { exact: true }).click()
+    await dialog.getByText('Shell', { exact: true }).click()
 
     const timeout = dialog.getByLabel('Command timeout (ms)')
     await timeout.waitFor({ timeout: 10_000 })
@@ -144,13 +144,13 @@ describe('web e2e: plugin configuration section', () => {
     // Nothing crosses the wire until the user saves: leaving the control is
     // not a decision to store the value.
     expect(await settingsDocument()).not.toContain('timeoutMs')
-    const save = dialog.getByRole('button', { name: 'Apply', exact: true })
+    const save = dialog.getByRole('button', { name: 'Save', exact: true })
     await expect.poll(() => save.isEnabled(), { timeout: 5_000 }).toBe(true)
     await save.click()
 
     await expect.poll(async () => (await settingsDocument()).includes('timeoutMs: 12000'), { timeout: 10_000 })
       .toBe(true)
-    const expandTerminal = dialog.getByRole('button', { name: '展开设置: 终端' })
+    const expandTerminal = dialog.getByRole('button', { name: 'Show settings: Shell' })
     await expandTerminal.waitFor({ timeout: 5_000 })
     await expandTerminal.click()
     // Presence in the user layer is what the badge reports, and the reset is
@@ -165,7 +165,7 @@ describe('web e2e: plugin configuration section', () => {
   it('drops a staged edit on discard without touching the document', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-config-discard'))
     const dialog = await openPlugins()
-    await dialog.getByText('Terminal', { exact: true }).click()
+    await dialog.getByText('Shell', { exact: true }).click()
     const timeout = dialog.getByLabel('Command timeout (ms)')
     await timeout.waitFor({ timeout: 10_000 })
 
@@ -180,13 +180,13 @@ describe('web e2e: plugin configuration section', () => {
   it('refuses to save a draft that is not a number', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-config-invalid'))
     const dialog = await openPlugins()
-    await dialog.getByText('Terminal', { exact: true }).click()
+    await dialog.getByText('Shell', { exact: true }).click()
     const timeout = dialog.getByLabel('Command timeout (ms)')
     await timeout.waitFor({ timeout: 10_000 })
 
     await timeout.fill('soon')
 
-    const save = dialog.getByRole('button', { name: 'Apply', exact: true })
+    const save = dialog.getByRole('button', { name: 'Save', exact: true })
     await expect.poll(() => save.isDisabled(), { timeout: 5_000 }).toBe(true)
     expect(await dialog.getByText('Enter a number, or leave blank to use the default.').count()).toBe(1)
     await dialog.getByRole('button', { name: 'Discard' }).click()
@@ -196,7 +196,7 @@ describe('web e2e: plugin configuration section', () => {
   it('clears the field back to the composed default on reset', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-config-reset'))
     const dialog = await openPlugins()
-    await dialog.getByText('Terminal', { exact: true }).click()
+    await dialog.getByText('Shell', { exact: true }).click()
     const timeout = dialog.getByLabel('Command timeout (ms)')
     await timeout.waitFor({ timeout: 10_000 })
     expect(await timeout.inputValue()).toBe('12000')
@@ -207,11 +207,11 @@ describe('web e2e: plugin configuration section', () => {
     await expect.poll(() => timeout.inputValue(), { timeout: 5_000 }).toBe('60000')
     expect(await settingsDocument()).toContain('timeoutMs: 12000')
 
-    await dialog.getByRole('button', { name: 'Apply', exact: true }).click()
+    await dialog.getByRole('button', { name: 'Save', exact: true }).click()
 
     await expect.poll(async () => (await settingsDocument()).includes('timeoutMs'), { timeout: 10_000 })
       .toBe(false)
-    const expandTerminal = dialog.getByRole('button', { name: '展开设置: 终端' })
+    const expandTerminal = dialog.getByRole('button', { name: 'Show settings: Shell' })
     await expandTerminal.waitFor({ timeout: 5_000 })
     await expandTerminal.click()
     expect(await timeout.inputValue()).toBe('60000')

@@ -27,7 +27,7 @@ Incremental canonical session-log upload for official DeepSeek LLM API requests.
 |---|---:|---|
 | `enabled` | `false` | Register the `dsh_session_log` contribution. Set it to `true` to opt into Session-log upload. |
 
-Shipped profiles mount the plugin so an overlay can enable it, but the default configuration registers no request field and appends no acceptance watermark.
+Shipped profiles disable the row. An explicit overlay must set `disabled: false` and `config.enabled: true` to upload Session-log suffixes. Omitted configuration registers no request field and appends no acceptance watermark.
 
 <a id="request-field"></a>
 ## Request field

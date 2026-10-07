@@ -386,7 +386,7 @@ describe('LocaleRuntime', () => {
     expect(svc.bind('ns')('onlyEn')).toBe('English only')
     // The reverse no longer resolves: a Spanish-only key is unreachable from en, so
     // the key itself surfaces (fail loud) rather than silently rendering Spanish.
-    svc.register('ns2', 'es', { onlySpanish: '仅Español' })
+    svc.register('ns2', 'es', { onlySpanish: 'Solo español' })
     svc.register('ns2', 'en', {})
     svc.setLocale('en')
     expect(svc.bind('ns2')('onlySpanish')).toBe('onlySpanish')

@@ -1,6 +1,7 @@
 # Agent Note: Feedback-gated session-telemetry default
 
 Status: implemented
+Archived: 2026-10-07
 
 ## Problem
 
