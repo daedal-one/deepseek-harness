@@ -1,0 +1,57 @@
+#cloud-config
+write_files:
+  - path: /usr/local/sbin/dsh-provision-pnpm-store
+    owner: root:root
+    permissions: '0755'
+    content: |
+      #!/bin/sh
+      set -eu
+
+      store_dir=${1:-/home/carlo/.local/share/pnpm/store}
+      cache_dir=${2:-/var/cache/pnpm-store}
+      case "$store_dir" in /*) ;; *) echo 'pnpm store path must be absolute' >&2; exit 1 ;; esac
+      case "$cache_dir" in /*) ;; *) echo 'pnpm cache path must be absolute' >&2; exit 1 ;; esac
+
+      mkdir -p "$cache_dir"
+      if [ "$(findmnt -n -o FSTYPE -T "$cache_dir")" != ext4 ]; then
+        echo "pnpm cache must be on guest ext4: $cache_dir" >&2
+        exit 1
+      fi
+      if [ -L "$store_dir" ]; then
+        if [ "$(readlink -f "$store_dir")" != "$(readlink -f "$cache_dir")" ]; then
+          echo "pnpm store symlink targets another directory: $store_dir" >&2
+          exit 1
+        fi
+      elif [ -e "$store_dir" ]; then
+        echo "pnpm store path already exists; migrate it explicitly: $store_dir" >&2
+        exit 1
+      fi
+
+      node --input-type=module - "$cache_dir" <<'JS'
+      import { strict as assert } from 'node:assert';
+      import { mkdtempSync, rmSync } from 'node:fs';
+      import { join } from 'node:path';
+      import { DatabaseSync } from 'node:sqlite';
+      const root = mkdtempSync(join(process.argv[2], '.wal-probe-'));
+      try {
+        const db = new DatabaseSync(join(root, 'probe.sqlite'));
+        try {
+          assert.equal(db.prepare('PRAGMA journal_mode=WAL').get().journal_mode, 'wal');
+          db.exec('CREATE TABLE probe(value INTEGER); INSERT INTO probe VALUES (1)');
+          assert.equal(db.prepare('SELECT value FROM probe').get().value, 1);
+        } finally {
+          db.close();
+        }
+      } finally {
+        rmSync(root, { recursive: true });
+      }
+      JS
+
+      mkdir -p "$(dirname "$store_dir")"
+      if [ ! -L "$store_dir" ]; then
+        ln -s "$cache_dir" "$store_dir"
+      fi
+      corepack enable
+      corepack pnpm@11.7.0 config set --global storeDir "$store_dir"
+runcmd:
+  - [sh, -c, 'cd /root && /usr/local/sbin/dsh-provision-pnpm-store']
