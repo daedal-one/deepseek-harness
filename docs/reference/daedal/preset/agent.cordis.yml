@@ -339,6 +339,10 @@
       config:
         provider: spawn
         toolName: subagent
+        # The shared `list_subagent_models` name registers once per tool scope,
+        # so only this definition samples the Host route policy and exposes the
+        # child `provider`, `model`, and `reasoning_effort` fields.
+        modelSelectionSettings: true
         backgroundMode: continuable
 
     - id: tool-subagent-fork
