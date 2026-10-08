@@ -761,7 +761,10 @@ export function ChatView({
   }, [loadingOlder, loadThrough])
 
   return (
-    <div className={css.root}>
+    // Chat is the one View that lays its content on the shared content-width
+    // axis; the marker elects the transcript drag handles beside it, which
+    // ConversationRoot hides for every other View.
+    <div className={css.root} data-conversation-width-axis="">
       <div ref={listRef} className={css.scroll}>
         <TurnNavigator
           items={railItems}
