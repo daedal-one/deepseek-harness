@@ -8,6 +8,7 @@ owners: [carlo]
 refines:
   - REQ:llm/preset-model-routes#c-selection
   - REQ:llm/openrouter-agent-models#c-catalog
+aspects: [preset-route-selection, provider-catalog]
 categorized_under: []
 ---
 

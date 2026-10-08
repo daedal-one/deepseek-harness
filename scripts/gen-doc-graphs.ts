@@ -176,6 +176,21 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Owns streaming intake, durable storage, and staged receipt lifetime; the Session controller binds receipts to accepted submissions.',
   },
   {
+    key: 'modelCatalog',
+    pkg: 'model-routing',
+    title: 'Revisioned model catalog',
+    mode: 'seam',
+    consumers: ['model-routing'],
+    note: 'Defines provider-owned candidate snapshots; no catalog provider is shipped in this tree.',
+  },
+  {
+    key: 'modelRouting',
+    pkg: 'model-routing',
+    title: 'Task-class model selection',
+    mode: 'core',
+    note: 'Ranks declared task classes against one provider catalog snapshot; no runtime routing consumer is composed in this tree.',
+  },
+  {
     key: 'llm',
     pkg: 'llm',
     title: 'LLM adapter registry',

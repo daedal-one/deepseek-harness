@@ -42,6 +42,10 @@ interface HarnessOptions {
   readonly withSummary?: boolean
   /** Compose the execution providers and agent registry this reading observes. */
   readonly withEnvironment?: boolean
+  /** Latest request-header fold the Session answers, or undefined before one lands. */
+  readonly header?: unknown
+  /** Derived model-visible messages the Session answers. */
+  readonly messages?: readonly unknown[]
 }
 
 async function harness(options: HarnessOptions = {}): Promise<SessionInfoService> {
@@ -49,6 +53,8 @@ async function harness(options: HarnessOptions = {}): Promise<SessionInfoService
   contexts.push(ctx)
   const session = {
     header: { id: SESSION_ID, cwd: '/work/fixture' },
+    requestHeader: () => options.header,
+    deriveMessages: () => options.messages ?? [],
   } as unknown as Session
   ctx.provide('sessions', {
     get: (id: string) => (options.liveSession === false ? undefined : id === SESSION_ID ? session : undefined),
@@ -181,6 +187,109 @@ describe('SessionInfoService.read', () => {
     const controller = new AbortController()
     controller.abort()
     await expect(service.read({ sessionId: SESSION_ID }, controller.signal)).resolves.toEqual({
+      ok: false,
+      error: { reason: 'session-unavailable', detail: 'request aborted before the Session was read' },
+    })
+  })
+})
+
+/** One system-role message carrying rendered prompt text. */
+function systemMessage(text: string): unknown {
+  return { id: 'm-system', role: 'system', content: [{ type: 'text', text }], source: { kind: 'plugin', plugin: 'fixture' } }
+}
+
+/** One tool schema as a request header carries it. */
+const TOOL = {
+  name: 'bash',
+  description: 'Run a shell command.',
+  parameters: {
+    type: 'object',
+    properties: { command: { type: 'string', description: 'Command line.' } },
+    required: ['command'],
+  },
+}
+const OTHER_TOOL = { name: 'read', description: 'Read a file.', parameters: { type: 'object', properties: {} } }
+
+describe('SessionInfoService.readPrompt', () => {
+  it('reads the effective system prompt and the tool catalog from the Session log folds', async () => {
+    const service = await harness({
+      header: { config: { provider: 'openrouter', model: 'vendor/model-x' }, tools: [TOOL, OTHER_TOOL] },
+      messages: [
+        { id: 'm-user', role: 'user', content: [{ type: 'text', text: 'hello' }], source: { kind: 'user' } },
+        systemMessage('You are a fixture agent.'),
+      ],
+    })
+    const result = await service.readPrompt({ sessionId: SESSION_ID }, new AbortController().signal)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.value.systemPrompt).toBe('You are a fixture agent.')
+    expect(result.value.tools).toEqual([TOOL, OTHER_TOOL])
+    expect(result.value.model).toEqual({ provider: 'openrouter', model: 'vendor/model-x' })
+    expect(typeof result.value.readAt).toBe('number')
+  })
+
+  it('takes the last system node as the effective prompt and joins its text blocks', async () => {
+    const service = await harness({
+      messages: [
+        systemMessage('First instructions.'),
+        systemMessage('Second instructions.'),
+        { id: 'm-update', role: 'system', content: [{ type: 'text', text: 'a' }, { type: 'text', text: 'b' }], source: { kind: 'plugin', plugin: 'fixture' } },
+      ],
+    })
+    const result = await service.readPrompt({ sessionId: SESSION_ID }, new AbortController().signal)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.value.systemPrompt).toBe('a\nb')
+  })
+
+  it('renders a non-text system block through its JSON form', async () => {
+    const service = await harness({
+      messages: [{ id: 'm-json', role: 'system', content: [{ type: 'custom-block', value: 1 }], source: { kind: 'plugin', plugin: 'fixture' } }],
+    })
+    const result = await service.readPrompt({ sessionId: SESSION_ID }, new AbortController().signal)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.value.systemPrompt).toBe('{"type":"custom-block","value":1}')
+  })
+
+  it('reports an explicit empty prompt and catalog before the first request', async () => {
+    const service = await harness()
+    const result = await service.readPrompt({ sessionId: SESSION_ID }, new AbortController().signal)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.value).toMatchObject({ systemPrompt: '', tools: [], model: null })
+  })
+
+  it('omits tools and the model route when the header carries none', async () => {
+    const service = await harness({ header: { config: { provider: 'openrouter', model: 'vendor/model-x' } }, messages: [systemMessage('Prompt.')] })
+    const result = await service.readPrompt({ sessionId: SESSION_ID }, new AbortController().signal)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.value.tools).toEqual([])
+    expect(result.value.model).toEqual({ provider: 'openrouter', model: 'vendor/model-x' })
+  })
+
+  it('answers session-unavailable for a Session this Host does not hold', async () => {
+    const service = await harness({ liveSession: false })
+    await expect(service.readPrompt({ sessionId: OTHER_ID }, new AbortController().signal)).resolves.toEqual({
+      ok: false,
+      error: {
+        reason: 'session-unavailable',
+        detail: `session "${OTHER_ID}" is not live on this Host`,
+      },
+    })
+  })
+
+  it('answers session-unavailable for an already-aborted request without reading anything', async () => {
+    const service = await harness()
+    const controller = new AbortController()
+    controller.abort()
+    await expect(service.readPrompt({ sessionId: SESSION_ID }, controller.signal)).resolves.toEqual({
       ok: false,
       error: { reason: 'session-unavailable', detail: 'request aborted before the Session was read' },
     })

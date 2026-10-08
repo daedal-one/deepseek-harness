@@ -1892,6 +1892,51 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'modelCatalog',
+    summary: 'Service Definition for the live model catalog.',
+    description: 'Service Definition for the live model catalog.\n\nA provider implements snapshot, which must stay cheap for a repeated read of unchanged contents: the routing policy calls it on the request path and relies on the provider\'s own caching to keep an unchanged catalog off the network.',
+    methods: [
+      {
+        signature: 'abstract snapshot(provider: string, signal?: AbortSignal): Promise<ModelCatalogSnapshot>',
+        description: 'Read the provider\'s current candidates and their revision.',
+        parameters: [{ name: 'provider', description: 'registered provider route to inspect.' }, { name: 'signal', description: 'optional caller cancellation for a provider-owned read.' }],
+        returns: 'one consistent snapshot of candidates and their revision.',
+      },
+    ],
+  },
+  {
+    key: 'modelRouting',
+    summary: 'Owns the deployment\'s declared task classes and resolves one into a route.',
+    description: 'Owns the deployment\'s declared task classes and resolves one into a route.\n\nResolution is a function of the declared class and one catalog snapshot, so the same inputs always produce the same route. A result is memoized against the catalog revision it was computed from, which keeps a repeated step of one turn from re-ranking an unchanged catalog.\n\nThe service selects within the provider route it is asked about and never reaches for another: provider choice stays a deployment decision.',
+    methods: [
+      {
+        signature: 'classIds(): readonly TaskClassId[]',
+        description: 'List the declared class ids in stable order.',
+        parameters: [],
+        returns: 'the ids, sorted ascending.',
+      },
+      {
+        signature: 'specOf(id: TaskClassId): TaskClassSpec',
+        description: 'Read one declared class.',
+        parameters: [{ name: 'id', description: 'the class to read.' }],
+        returns: 'the declared class.',
+        throws: ['{Error} naming an undeclared class.'],
+      },
+      {
+        signature: 'async resolve(id: TaskClassId, provider: string, signal?: AbortSignal): Promise<RoutingResult>',
+        description: 'Resolve one declared class against a provider route\'s live catalog.',
+        parameters: [{ name: 'id', description: 'the declared class to resolve.' }, { name: 'provider', description: 'the deployment-authorized provider route to select within.' }, { name: 'signal', description: 'optional caller cancellation for the catalog read.' }],
+        returns: 'the selected route with its evidence, or an unsatisfied outcome naming the cause.',
+        throws: ['{Error} when the class is not declared.'],
+      },
+      {
+        signature: 'invalidate(): void',
+        description: 'Drop every memoized resolution. A caller uses this after changing the declared classes at runtime; a catalog change needs no call because the revision comparison already invalidates it.',
+        parameters: [],
+      },
+    ],
+  },
+  {
     key: 'operationJudgments',
     summary: 'Narrow provider and tokenizer service seam used by the sequential runner.',
     description: 'Narrow provider and tokenizer service seam used by the sequential runner.',
@@ -4924,6 +4969,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface CordisRuntimeTreeReader {\n    getTree(): Promise<CordisRuntimeTree>;\n}',
   },
   {
+    name: 'CostBasis',
+    declaration: 'export interface CostBasis {\n    inputTokens: number;\n    outputTokens: number;\n}',
+  },
+  {
     name: 'CreateAgentOptions',
     declaration: 'export interface CreateAgentOptions {\n    readonly sessionId: SessionId;\n    readonly parentAgent?: Agent;\n    readonly meta?: {\n        readonly cwd?: string;\n        readonly parentSession?: SessionId;\n        readonly isSeeded?: boolean;\n        readonly origin?: \'subagent\';\n        readonly delegationDepth?: number;\n        readonly agentPreset?: string;\n    };\n    readonly inheritedEventCount?: SessionLogOffset;\n    readonly seed?: readonly SessionEvent[];\n    readonly agentOptions?: AgentOptions;\n    readonly signal?: AbortSignal;\n    readonly setup?: AgentSetup;\n}',
   },
@@ -5732,16 +5781,8 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface MessageSourceMap {\n    user: {\n        kind: \'user\';\n    };\n    plugin: {\n        kind: \'plugin\';\n        plugin: string;\n    } & ContextFormed;\n    model: ModelMessageSource;\n    tool: ToolMessageSource;\n}',
   },
   {
-    name: 'ModelCatalog',
-    declaration: 'export interface ModelCatalog {\n    readonly default: ModelSelection;\n    readonly routableProviders: readonly string[];\n    readonly groups: readonly ModelProviderGroup[];\n    readonly failures: readonly ModelCatalogFailure[];\n}',
-  },
-  {
-    name: 'ModelCatalogFailure',
-    declaration: 'export interface ModelCatalogFailure {\n    readonly id: string;\n    readonly name: string;\n    readonly message: string;\n}',
-  },
-  {
-    name: 'ModelCatalogModel',
-    declaration: 'export interface ModelCatalogModel {\n    readonly id: string;\n    readonly name: string;\n    readonly description?: string;\n    readonly reasoning?: ModelReasoning;\n}',
+    name: 'ModelCatalogSnapshot',
+    declaration: 'export interface ModelCatalogSnapshot {\n    readonly revision: string;\n    readonly candidates: readonly RoutingCandidate[];\n}',
   },
   {
     name: 'ModelMessageSource',
@@ -5756,16 +5797,8 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ModelModalityMap {\n    text: \'text\';\n    image: \'image\';\n}',
   },
   {
-    name: 'ModelProviderGroup',
-    declaration: 'export interface ModelProviderGroup {\n    readonly id: string;\n    readonly name: string;\n    readonly models: readonly ModelCatalogModel[];\n}',
-  },
-  {
-    name: 'ModelReasoning',
-    declaration: 'export interface ModelReasoning {\n    readonly efforts: readonly ModelReasoningEffort[];\n    readonly defaultEffort?: string;\n}',
-  },
-  {
-    name: 'ModelReasoningEffort',
-    declaration: 'export interface ModelReasoningEffort {\n    readonly id: string;\n    readonly name: string;\n    readonly description?: string;\n}',
+    name: 'ModelRejection',
+    declaration: 'export interface ModelRejection {\n    readonly model: string;\n    readonly reason: string;\n}',
   },
   {
     name: 'ObjectJsonSchema',
@@ -5878,6 +5911,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'PostToolDecision',
     declaration: 'export type PostToolDecision = {\n    kind: \'accept\';\n    content?: ContentBlock[];\n    value?: never;\n    additionalContexts?: UserMessage[];\n} | {\n    kind: \'accept\';\n    value: JsonValue;\n    content?: never;\n    additionalContexts?: UserMessage[];\n} | {\n    kind: \'block\';\n    feedback: ContentBlock[];\n    additionalContexts?: UserMessage[];\n};',
+  },
+  {
+    name: 'PreferenceTier',
+    declaration: 'export interface PreferenceTier {\n    name: string;\n    modelPatterns: string[];\n}',
   },
   {
     name: 'PreparedAdapterCall',
@@ -6106,6 +6143,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ResumeAgentOptions',
     declaration: 'export interface ResumeAgentOptions {\n    readonly resumeSessionId: SessionId;\n    readonly parentAgent?: Agent;\n    readonly agentOptions?: AgentOptions;\n    readonly signal?: AbortSignal;\n    readonly setup?: AgentSetup;\n}',
+  },
+  {
+    name: 'RoutingCandidate',
+    declaration: 'export interface RoutingCandidate {\n    readonly model: string;\n    readonly contextTokens?: number;\n    readonly supportsReasoning: boolean;\n    readonly inputModalities?: readonly string[];\n    readonly inputUsdPerToken: number | null;\n    readonly outputUsdPerToken: number | null;\n}',
+  },
+  {
+    name: 'RoutingEvidence',
+    declaration: 'export interface RoutingEvidence {\n    readonly eligible: readonly string[];\n    readonly observed: readonly string[];\n    readonly rejected: readonly ModelRejection[];\n}',
+  },
+  {
+    name: 'RoutingResult',
+    declaration: 'export type RoutingResult = ({\n    readonly kind: \'selected\';\n    readonly taskClass: TaskClassId;\n    readonly tier: string;\n    readonly winner: RoutingCandidate;\n    readonly estimatedUsd: number;\n    readonly runnerUp?: RoutingRunnerUp;\n} & RoutingEvidence) | ({\n    readonly kind: \'unsatisfied\';\n    readonly taskClass: TaskClassId;\n    readonly detail: string;\n} & RoutingEvidence);',
+  },
+  {
+    name: 'RoutingRunnerUp',
+    declaration: 'export interface RoutingRunnerUp {\n    readonly model: string;\n    readonly estimatedUsd: number;\n}',
   },
   {
     name: 'RunnerFailureRule',
@@ -7098,6 +7151,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'TableValueOf',
     declaration: 'export type TableValueOf<S extends DomainSpec, N extends keyof S[\'tables\']> = S[\'tables\'][N] extends DomainTableSpec<string, infer V> ? V : never;',
+  },
+  {
+    name: 'TaskClassId',
+    declaration: 'export type TaskClassId = Branded<\'TaskClassId\'>;',
+  },
+  {
+    name: 'TaskClassRequirements',
+    declaration: 'export interface TaskClassRequirements {\n    minContextTokens?: number;\n    requiresReasoning?: boolean;\n    inputModalities?: string[];\n}',
+  },
+  {
+    name: 'TaskClassSpec',
+    declaration: 'export interface TaskClassSpec {\n    requirements: TaskClassRequirements;\n    tiers: PreferenceTier[];\n    costBasis: CostBasis;\n}',
   },
   {
     name: 'TeamId',

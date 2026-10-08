@@ -783,7 +783,7 @@ Source: [`packages/experimental/operation/src/types.ts:772`](../packages/experim
 'permission/context': PermissionContext
 ```
 
-Source: [`packages/interaction/permission-presets/src/index.ts:51`](../packages/interaction/permission-presets/src/index.ts)
+Source: [`packages/interaction/permission-presets/src/index.ts:54`](../packages/interaction/permission-presets/src/index.ts)
 
 <a id="permissionpreset--log-only"></a>
 
@@ -799,7 +799,7 @@ Source: [`packages/interaction/permission-presets/src/index.ts:51`](../packages/
 'permission/preset': { preset: string }
 ```
 
-Source: [`packages/interaction/permission-presets/src/index.ts:58`](../packages/interaction/permission-presets/src/index.ts)
+Source: [`packages/interaction/permission-presets/src/index.ts:61`](../packages/interaction/permission-presets/src/index.ts)
 
 ### `plan/*`
 

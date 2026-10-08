@@ -467,6 +467,11 @@ const workspaceSetups: Record<string, (cwd: string) => Promise<void>> = {
     const manifest = readProfileManifest('snapshot', dir)
     writeProfileManifest(dir, { ...manifest, dsh: { ...manifest.dsh, profile: { ...manifest.dsh?.profile, sandbox: false } } })
   },
+  async 'deploy-live-harness-skill'(cwd) {
+    const target = join(cwd, '.dsh', 'skills', 'dsh-deploy-live-harness', 'SKILL.md')
+    await mkdir(dirname(target), { recursive: true })
+    await copyFile(join(repoRoot, '.agents', 'skills', 'dsh-deploy-live-harness', 'SKILL.md'), target)
+  },
   async 'editing-cordis-skill'(cwd) {
     const target = join(cwd, '.dsh', 'skills', 'editing-cordis-compositions', 'SKILL.md')
     await mkdir(dirname(target), { recursive: true })

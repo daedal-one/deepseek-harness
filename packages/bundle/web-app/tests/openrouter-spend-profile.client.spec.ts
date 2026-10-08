@@ -141,13 +141,17 @@ describe('OpenRouter spend Web profile slice', () => {
     client.provide('locale', new LocaleRuntime(client))
     new TestRemote(client, {
       openrouterSpend: { read: async () => ({ ok: true, value: { ok: false, error: { reason: 'not-configured', detail: 'unused' } } }) },
-      sessionInfo: { read: async () => ({ ok: true, value: { ok: false, error: { reason: 'session-unavailable', detail: 'unused' } } }) },
+      sessionInfo: {
+        read: async () => ({ ok: true, value: { ok: false, error: { reason: 'session-unavailable', detail: 'unused' } } }),
+        readPrompt: async () => ({ ok: true, value: { ok: false, error: { reason: 'session-unavailable', detail: 'unused' } } }),
+      },
     })
     declareConversationView(client.get('slots') as SlotRegistry)
     const clientFiber = client.plugin({ inject: [...infoClientInject], apply: applyInfoClient })
     await clientFiber.await()
     expect((client.get('slots') as SlotRegistry).entries('conversation.view')).toMatchObject([
       { options: { id: 'info', order: 20 } },
+      { options: { id: 'prompt', order: 30 } },
     ])
   })
 

@@ -28,12 +28,13 @@ The package is a library, not a plugin: it registers no service, holds no state 
 Parse a catalog reply you already have, price one model, or perform the read:
 
 ```ts
-import { TtlCache, findModelPricing, parseModelsReply, readModels, usdPerToken } from '@deepseek-ai/dsh-openrouter-catalog'
+import { findModelPricing, parseModelsReply, usdPerToken } from '@deepseek-ai/dsh-openrouter-catalog'
 
-const parsed = parseModelsReply(await response.json())
-if (parsed.ok) {
-  const pricing = findModelPricing(parsed.value, 'deepseek/deepseek-v4.1-flash')
-  const promptUsdPerToken = pricing === null || pricing === undefined ? null : usdPerToken(pricing.prompt)
+function promptPrice(reply: unknown, model: string): number | null {
+  const parsed = parseModelsReply(reply)
+  if (!parsed.ok) throw new Error(parsed.detail)
+  const pricing = findModelPricing(parsed.value, model)
+  return pricing === null || pricing === undefined ? null : usdPerToken(pricing.prompt)
 }
 ```
 
@@ -44,6 +45,10 @@ if (parsed.ok) {
 The package ships a bounded TTL cache rather than a module-level one, so each consumer owns its own freshness policy:
 
 ```ts
+import { TtlCache, readModels, type OpenRouterModelCatalogEntry } from '@deepseek-ai/dsh-openrouter-catalog'
+
+const options = { baseURL: 'https://openrouter.ai/api/v1', requestTimeoutMs: 10_000 }
+const signal = AbortSignal.timeout(10_000)
 const cache = new TtlCache<readonly OpenRouterModelCatalogEntry[]>(60_000)
 const entry = await cache.read(async () => {
   const result = await readModels(options, signal)

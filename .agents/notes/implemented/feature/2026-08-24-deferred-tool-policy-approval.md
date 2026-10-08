@@ -14,6 +14,8 @@ One chain is consecutive within an open turn and identifies a call by tool name 
 
 The enforcer derives the chain from durable `tool/call`, effective `tool-policy/decision`, and `tool/result` events already owned by the execution path. It retains no process-local counter, so pickup and restart preserve the same threshold position. Provider decision events retain the provider reason; effective deferred decisions retain the complete bounded reason returned to the acting agent.
 
+When the system-prompt service is composed, the enforcer explains its actual activation and configured threshold in logged runtime context. Policy-review deferrals use an unchanged tool call, not a wider file sandbox request. Reaching the threshold enters the approval service; it does not promise a prompt or grant when the session's approval policy or answerer refuses one. Provider coverage remains independent, so active review does not imply that every tool is classified.
+
 ## Alternatives considered
 
 **Prompt on the first ask.** This minimizes the number of model turns before a human can grant the call, but turns every classifier uncertainty into an immediate interruption and prevents the acting agent from adapting to the reason first.

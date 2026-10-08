@@ -1,7 +1,8 @@
 /**
  * Browser-safe vocabulary for the Session Info Remote: one point-in-time
  * snapshot of a Session's identity, Workspace, execution environment, and
- * effective command-authorization policy.
+ * effective command-authorization policy, beside one reading of the
+ * model-visible prompt state in force for the Session.
  *
  * @module @deepseek-ai/dsh-session-info/types
  */
@@ -111,6 +112,51 @@ export interface SessionInfoSnapshot {
   /** Epoch milliseconds at which this reading was assembled. */
   readonly readAt: number
 }
+
+/**
+ * JSON data a tool's argument schema is made of. Declared beside the payload it
+ * describes rather than aliased from a utility package, so this browser-safe
+ * vocabulary module keeps no import edge of its own; the Remote boundary
+ * accepts it because every member is JSON.
+ */
+export type SessionPromptSchema =
+  | string
+  | number
+  | boolean
+  | null
+  | SessionPromptSchema[]
+  | { [key: string]: SessionPromptSchema }
+
+/** One tool the model can call, exactly as the Session's latest request carried it. */
+export interface SessionPromptTool {
+  /** Model-facing tool name. */
+  readonly name: string
+  /** Model-facing tool description. */
+  readonly description: string
+  /** JSON Schema object for the tool's arguments. */
+  readonly parameters: SessionPromptSchema
+}
+
+/** Point-in-time answer to one `sessionInfo/readPrompt` call. */
+export interface SessionPromptSnapshot {
+  /**
+   * Rendered system prompt on the Session's model-visible surface — the last
+   * nonempty system node, which an `'in-history'` route reads as the effective
+   * prompt. Empty records "no system prompt" rather than an absent reading.
+   */
+  readonly systemPrompt: string
+  /** Tool schemas of the Session's latest request header, or empty before one lands. */
+  readonly tools: readonly SessionPromptTool[]
+  /** Model route recorded on that header, or null before one lands. */
+  readonly model: SessionInfoModel | null
+  /** Epoch milliseconds at which this reading was assembled. */
+  readonly readAt: number
+}
+
+/** Result of one `sessionInfo/readPrompt` Remote call. */
+export type SessionPromptReadResult =
+  | { readonly ok: true; readonly value: SessionPromptSnapshot }
+  | { readonly ok: false; readonly error: SessionInfoFailure }
 
 /** Why one Session Info read could not complete. */
 export interface SessionInfoFailure {

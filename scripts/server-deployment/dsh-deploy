@@ -1,0 +1,9 @@
+#!/bin/sh
+# Only the public, validated command interface is available through sudo.
+set -eu
+case "${1-}" in
+  prepare|activate) [ "$#" -eq 3 ] ;;
+  status) [ "$#" -eq 2 ] ;;
+  *) echo 'Usage: dsh-deploy prepare OP REV | activate OP DIGEST | status OP' >&2; exit 2 ;;
+esac
+exec /usr/bin/python3 -I -B /usr/local/libexec/dsh-deploy/controller.py "$@"

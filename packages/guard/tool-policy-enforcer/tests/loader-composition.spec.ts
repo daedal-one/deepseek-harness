@@ -148,7 +148,7 @@ describe('real Loader policy composition', () => {
           : undefined
       },
     })
-    const agent = { options: {}, session: Session.create(SessionId('contained-world')) } as unknown as Agent
+    const agent = { ctx: loaded, options: {}, session: Session.create(SessionId('contained-world')) } as unknown as Agent
     await loaded.toolPolicy.prewarm({ session: agent.session, signal: new AbortController().signal })
     await expect(loaded.tools.execute({
       callId: ToolCallId('contained'), name: 'bash', arguments: { command: 'printf contained' }, agent,

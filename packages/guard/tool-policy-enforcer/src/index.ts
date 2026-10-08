@@ -5,6 +5,7 @@ import z from '@deepseek-ai/schemastery'
 import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import { SANDBOX_MODES } from '@deepseek-ai/dsh-sandbox-policy'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import type {} from '@deepseek-ai/dsh-system-prompt'
 import { ToolPolicyProviderId, type ToolPolicyOpinion, type ToolPolicyVerdict } from '@deepseek-ai/dsh-tool-policy'
 import type { PreToolDecision, ToolExecution } from '@deepseek-ai/dsh-tools'
 import type { ApprovalPolicy } from '@deepseek-ai/dsh-user-approval'
@@ -157,12 +158,29 @@ function consecutiveAskDenials(exec: ToolExecution): number {
 }
 
 function deferredReason(reason: string, attempt: number, threshold: number): string {
-  return `Automatic policy review denied this call without asking the user (attempt ${attempt}/${threshold}): ${reason}. Change approach or retry this exact tool call; attempt ${threshold} asks the user.`
+  return `Automatic policy review denied this call without asking the user (attempt ${attempt}/${threshold}): ${reason}. Change approach or retry this exact tool call; attempt ${threshold} enters approval if an approval service is available and its policy permits prompting. This is a policy deferral, not a sandbox denial; do not add sandbox_permissions.`
 }
 
-/** Install the policy consumer on `tools/pre-execute`. */
+/** Install policy enforcement and its optional runtime-context contribution. */
 export function apply(ctx: Context, config: Config = {}): void {
   const approvalThreshold = config.approvalThreshold ?? 3
+  ctx.inject(['systemPrompt'], (scope: Context) => {
+    scope.systemPrompt.context({
+      name: 'tool-policy:enforcement',
+      order: scope.systemPrompt.getContextOrder('APPROVAL_POLICY'),
+      text: (context) => {
+        const session = context.agent?.session
+        if (session === undefined) return ''
+        const active = shouldEnforce(session.snapshotEvents(), config.enforceWhen)
+        const status = active
+          ? 'Tool-policy enforcement is active for this session. Policy providers determine which tools are reviewed; unsupported tools pass through this review.'
+          : 'Tool-policy enforcement is bypassed for this session under its current permission values. This does not bypass file sandbox restrictions or other approval requirements.'
+        const threshold = `Configured policy approval threshold: ${approvalThreshold} consecutive identical ask verdicts.`
+        if (!active) return `${status}\n\n${threshold}`
+        return `${status}\n\n${threshold} Before this threshold, an ask verdict returns a deferred denial without prompting. You may change approach or retry the exact tool and canonical JSON arguments in the same turn; object-key order does not matter. Any intervening tool call or turn boundary resets the chain. At the threshold, ask still goes through the approval service if available; a policy that disables prompts rejects it without asking the user.\n\nA deferred policy denial is not a file sandbox denial: do not add sandbox_permissions for a policy deferral. File sandbox escalation is a separate one-call approval request after an actual sandbox denial. A permanent policy deny cannot be bypassed by retries or sandbox escalation.`
+      },
+    })
+  })
   const lifetime = new AbortController()
   const disposePrewarm = ctx.on('session/event', (session, event) => {
     const directUser = event.type === 'user/message' && event.data.source.kind === 'user'

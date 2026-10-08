@@ -1,0 +1,10 @@
+version: 1
+scenario: tool-policy-deferred-context
+profile: headless
+composition: deferred-tools-command-rules
+recording: authored
+platform: posix
+header:
+  class: deferred-tools-command-rules
+workspace:
+  setup: deploy-live-harness-skill

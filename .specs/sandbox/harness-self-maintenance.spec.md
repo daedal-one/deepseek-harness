@@ -9,6 +9,7 @@ refines:
   - REQ:sandbox/host-maintenance#c-handoff
   - REQ:sandbox/host-maintenance#c-daedal-handoff
   - REQ:sandbox/host-maintenance#c-deployment
+aspects: [host-handoff, verified-preparation, independent-activation]
 categorized_under: []
 ---
 
@@ -24,7 +25,7 @@ The harness can already be inspected and extended from inside a session, and a h
 - {#c-install-authority} Because the plugin management path performs no confirmation, registry allowlist, or signature verification, an automated participant MUST reach it through an explicit authorization decision and MUST NOT invoke it as a routine unattended action. The authorization and its outcome MUST be durably recorded.
 - {#c-health} A maintenance report MUST present the evidence it gathered — gate results, the composed configuration, and the plugin inventory — and MUST NOT claim a health verdict produced by a diagnostics service, because no such service, report, or status query exists and the invariant registry reports nothing beyond throwing on violation.
 - {#c-preparation} Preparing a host update MUST be separable from activating it. Preparation MUST resolve the target revision, apply and verify the candidate change, determine the exact remaining host steps, and record the verification evidence.
-- {#c-activation} Activating a host update MUST occur only in a host-backed session reached through the existing human-confirmed handoff, and the harness MUST NOT attempt to update or restart the process that is hosting the Session preparing the change. The change MUST NOT be presented as performable by an in-session command, because no upgrade or self-update command, and no runtime check for a newer release, exists.
+- {#c-activation} Activating a host update MUST require explicit human approval of an immutable qualified candidate. A host-backed session reached through the existing human-confirmed handoff MAY submit that approved operation to an operator-installed external controller. The controller MUST survive termination of the submitting Session and own activation, authenticated verification, durable status, and recovery. The submitting Session MUST NOT replace its running artifacts or directly restart its supervising process.
 - {#c-review} The confirmation a human gives MUST be a review of an already-verified change rather than a manual investigation: it MUST present the target revision, the verification already performed, the exact host steps that remain, and the rollback position.
 - {#c-rollback} A prepared update MUST preserve a known working release and MUST account for persisted Session compatibility when rolling back, so a failed candidate cannot strand the operator without a working service.
 - {#c-evidence} Focused tests MUST prove that in-session maintenance actions are authority-checked and durably recorded, that the plugin management path is reached only through a recorded authorization, that introspection is refused when its tools are not mounted, that a maintenance report cites gathered evidence rather than a health verdict, that preparation produces the revision and verification evidence without touching the host, that an activation attempt outside a host-backed session is refused, and that the confirmation payload carries revision, checks, remaining steps, and rollback position.

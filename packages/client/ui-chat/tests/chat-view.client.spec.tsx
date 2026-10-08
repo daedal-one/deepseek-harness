@@ -564,6 +564,14 @@ describe('Chat node rendering', () => {
 })
 
 describe('ChatView', () => {
+  it('elects the shared content-width axis at its root', () => {
+    const h = makeHarness({})
+    const view = render(<h.ChatView {...h.props} />)
+    // ConversationRoot hides the transcript width handles for every View that
+    // does not publish this marker.
+    expect(view.container.firstElementChild?.hasAttribute('data-conversation-width-axis')).toBe(true)
+  })
+
   it('leaves the turn rail unrendered when an unrelated Chat update commits', () => {
     const snapshot = chatSnapshotFixture({
       nodes: [

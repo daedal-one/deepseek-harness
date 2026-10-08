@@ -1037,6 +1037,71 @@ Types: [FileAttachmentRef](attachment.md)
 
 Source: [`packages/llm/llm/src/index.ts`](../../packages/llm/llm/src/index.ts)
 
+<a id="ctxmodelcatalog--modelcatalog-abstract-seam"></a>
+
+### `ctx.modelCatalog` — `ModelCatalog` (abstract seam)
+
+Service Definition for the live model catalog.
+
+A provider implements snapshot, which must stay cheap for a repeated read of unchanged contents: the routing policy calls it on the request path and relies on the provider's own caching to keep an unchanged catalog off the network.
+
+```ts cordis-catalog
+/**
+ * Read the provider's current candidates and their revision.
+ * @param provider - registered provider route to inspect.
+ * @param signal - optional caller cancellation for a provider-owned read.
+ * @returns one consistent snapshot of candidates and their revision.
+ */
+abstract snapshot(provider: string, signal?: AbortSignal): Promise<ModelCatalogSnapshot>
+```
+
+Source: [`packages/llm/model-routing/src/catalog.ts`](../../packages/llm/model-routing/src/catalog.ts)
+
+<a id="ctxmodelrouting--modelrouting"></a>
+
+### `ctx.modelRouting` — `ModelRouting`
+
+Owns the deployment's declared task classes and resolves one into a route.
+
+Resolution is a function of the declared class and one catalog snapshot, so the same inputs always produce the same route. A result is memoized against the catalog revision it was computed from, which keeps a repeated step of one turn from re-ranking an unchanged catalog.
+
+The service selects within the provider route it is asked about and never reaches for another: provider choice stays a deployment decision.
+
+```ts cordis-catalog
+/**
+ * List the declared class ids in stable order.
+ * @returns the ids, sorted ascending.
+ */
+classIds(): readonly TaskClassId[]
+
+/**
+ * Read one declared class.
+ * @param id - the class to read.
+ * @returns the declared class.
+ * @throws {Error} naming an undeclared class.
+ */
+specOf(id: TaskClassId): TaskClassSpec
+
+/**
+ * Resolve one declared class against a provider route's live catalog.
+ * @param id - the declared class to resolve.
+ * @param provider - the deployment-authorized provider route to select within.
+ * @param signal - optional caller cancellation for the catalog read.
+ * @returns the selected route with its evidence, or an unsatisfied outcome naming the cause.
+ * @throws {Error} when the class is not declared.
+ */
+async resolve(id: TaskClassId, provider: string, signal?: AbortSignal): Promise<RoutingResult>
+
+/**
+ * Drop every memoized resolution. A caller uses this after changing the
+ * declared classes at runtime; a catalog change needs no call because the
+ * revision comparison already invalidates it.
+ */
+invalidate(): void
+```
+
+Source: [`packages/llm/model-routing/src/index.ts`](../../packages/llm/model-routing/src/index.ts)
+
 <a id="llm-events"></a>
 
 ### `llm/*` events

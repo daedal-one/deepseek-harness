@@ -82,6 +82,8 @@ export const SERVICE_PAGE: Record<string, string> = {
   webServer: 'web-server.md',
   invariants: 'invariants.md',
   llm: 'llm-streaming.md',
+  modelCatalog: 'llm-streaming.md',
+  modelRouting: 'llm-streaming.md',
   lsp: 'lsp.md',
   memory: 'memory.md',
   messageFeedback: 'feedback.md',
@@ -777,6 +779,10 @@ export const FOUNDATION_TYPE_NAMES: ReadonlySet<string> = new Set([
 
 /** Project types deliberately documented outside the subsystems catalog. */
 export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
+  ModelCatalogSnapshot: 'Catalog snapshot is documented in packages/llm/model-routing/README.md.',
+  TaskClassId: 'Task class identity is documented in packages/llm/model-routing/README.md.',
+  TaskClassSpec: 'Task class requirements are documented in packages/llm/model-routing/README.md.',
+  RoutingResult: 'Routing outcome is documented in packages/llm/model-routing/README.md.',
   z: 'schemastery schema constructor is owned by vendor/schemastery (vendored upstream)',
   BeginCommandRequest: 'event-local request contract is owned by packages/client/ui-input-trigger/src/types.ts',
   InsertReferenceRequest: 'event-local request contract is owned by packages/client/ui-input-trigger/src/types.ts',

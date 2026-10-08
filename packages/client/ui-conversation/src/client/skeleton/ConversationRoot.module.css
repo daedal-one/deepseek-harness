@@ -288,9 +288,11 @@
   opacity: 1;
 }
 
-/* Views that elect a composer overlay (trajectory etc.) own their full-bleed
-   scrollers; the strips would sit over their content and steal clicks. */
-.root:has([data-conversation-composer-overlay]) .widthHandle {
+/* Only the View that lays its content on the shared width axis elects the
+   strips — Chat publishes it. Every other View (trajectory, terminal, prompt,
+   info) owns a full-bleed surface the strips would sit over and steal clicks
+   from, whether or not it also elects a composer overlay. */
+.root:not(:has([data-conversation-width-axis])) .widthHandle {
   display: none;
 }
 

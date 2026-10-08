@@ -1,7 +1,8 @@
 /**
- * Client half of the Session Info plugin: one localized conversation-view
- * entry that reads the Host `sessionInfo` snapshot and the OpenRouter
- * `openrouterSpend` reading into a per-Session store the view renders.
+ * Client half of the Session Info plugin: two localized conversation-view
+ * entries — Info, which reads the Host `sessionInfo` snapshot and the
+ * OpenRouter `openrouterSpend` reading, and Prompt, which reads the Host's
+ * `sessionInfo/readPrompt` system prompt and tool catalog.
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { BoundActions } from '@deepseek-ai/dsh-client-store'
@@ -16,14 +17,19 @@ import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import { InfoView, type InfoViewInjected } from './InfoView.tsx'
+import { PromptView, type PromptViewInjected } from './PromptView.tsx'
 import { en, NS, type SessionInfoKey } from './locales.ts'
 import { createInfoStore } from './store.ts'
+import { createPromptStore } from './prompt-store.ts'
 
 export { NS } from './locales.ts'
 export type { SessionInfoKey } from './locales.ts'
 export type { InfoViewInjected, InfoViewProps } from './InfoView.tsx'
+export type { PromptViewInjected, PromptViewProps } from './PromptView.tsx'
 export type { InfoInfoState, InfoSpendState, InfoViewState } from './store.ts'
+export type { PromptReadingState, PromptViewState } from './prompt-store.ts'
 export { createInfoStore } from './store.ts'
+export { createPromptStore } from './prompt-store.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -31,17 +37,18 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
-/** Required client services for the locale dictionary and the Info contribution. */
+/** Required client services for the locale dictionary and both view contributions. */
 export const inject = ['slots', 'locale', 'remote', 'remote.sessionInfo', 'remote.openrouterSpend']
 
 /**
- * Register the Info view contribution.
+ * Register the Info and Prompt view contributions.
  * @param ctx - the plugin client context.
  */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { en }), 'ui-session-info: dictionaries')
   const t = ctx.locale.bind(NS)
   const infoStore = createInfoStore()
+  const promptStore = createPromptStore()
 
   ctx.slots.inject('conversation.view', () => ctx.slots.register({
     name: 'conversation.view',
@@ -102,4 +109,37 @@ export function apply(ctx: ClientContext): void {
       return { loadInfo, loadSpend }
     },
   }, InfoView))
+
+  ctx.slots.inject('conversation.view', () => ctx.slots.register({
+    name: 'conversation.view',
+    id: 'prompt',
+    order: 30,
+    locale: NS,
+    label: () => t('view.prompt'),
+    store: promptStore,
+    inject: (sessionId: SessionId, actions: BoundActions<ReturnType<typeof createPromptStore>>): PromptViewInjected => {
+      let promptController: AbortController | undefined
+      const loadPrompt = (): void => {
+        promptController?.abort()
+        const own = new AbortController()
+        promptController = own
+        actions.begin()
+        void ctx.remote.sessionInfo.readPrompt({ sessionId }, own.signal)
+          .then((result) => {
+            if (own.signal.aborted) return
+            if (!result.ok) {
+              actions.fail({ reason: 'session-unavailable', detail: result.error.message })
+              return
+            }
+            if (result.value.ok) actions.succeed(result.value.value)
+            else actions.fail(result.value.error)
+          })
+          .catch((error: unknown) => {
+            if (own.signal.aborted) return
+            actions.fail({ reason: 'session-unavailable', detail: String(error) })
+          })
+      }
+      return { loadPrompt }
+    },
+  }, PromptView))
 }

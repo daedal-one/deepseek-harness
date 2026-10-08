@@ -1,12 +1,13 @@
 /**
- * Session Info service: one Remote-only read that assembles a Session's
- * identity, Workspace, execution environment, and effective
- * command-authorization policy for the Web client.
+ * Session Info service: Remote-only reads that assemble a Session's identity,
+ * Workspace, execution environment, and effective command-authorization
+ * policy, and the model-visible prompt state in force for it, for the Web
+ * client.
  *
  * Every fact is read from the service that owns it — the Session header, the
- * registered projection units, the sandbox policy, the approval service, and
- * the Workspace registry — and each absent owner degrades to an explicit null
- * instead of a fabricated value.
+ * registered projection units, the sandbox policy, the approval service, the
+ * Workspace registry, and the Session's own log folds — and each absent owner
+ * degrades to an explicit null instead of a fabricated value.
  *
  * @module @deepseek-ai/dsh-session-info/service
  */
@@ -44,10 +45,27 @@ import type {
   SessionInfoReadRequest,
   SessionInfoReadResult,
   SessionInfoSnapshot,
+  SessionPromptReadResult,
+  SessionPromptSchema,
+  SessionPromptSnapshot,
 } from './types.ts'
 
 /** Client-visible projection units this reading consumes, in one consistent cut. */
 const PROJECTION_KEYS = ['title', 'summary', 'agentPreset', 'modelSelection', 'sessionStats', 'permissions'] as const
+
+/**
+ * Render the effective system prompt from a Session's derived model-visible
+ * history: its last system-role message, which an `'in-history'` route reads
+ * as the prompt in force. Empty-content system nodes derive to no message, so
+ * an absent system message records "no system prompt".
+ * @param messages - the Session's derived model-visible history.
+ * @returns the rendered prompt text, or `''` when the surface holds none.
+ */
+function effectiveSystemPrompt(messages: ReturnType<Session['deriveMessages']>): string {
+  const system = messages.findLast(message => message.role === 'system')
+  if (system === undefined) return ''
+  return system.content.map(block => block.type === 'text' ? block.text : JSON.stringify(block)).join('\n')
+}
 
 /**
  * Remote-only service answering, for the Web client, what a Session is running
@@ -152,6 +170,44 @@ export class SessionInfoService extends TypertRemoteService {
         permissionPresetDescription: option?.description ?? null,
         canChangePermission: permissions?.canChange ?? null,
       },
+      readAt: Date.now(),
+    }
+    return Promise.resolve({ ok: true, value: snapshot })
+  }
+
+  /**
+   * Assemble the model-visible prompt state in force for a Session: the system
+   * prompt on its surface and the tool catalog its latest request carried.
+   * Both facts come from the Session's own log folds, so the reading is the
+   * exact request state rather than a second assembly that could diverge.
+   * @param request - the Session to describe.
+   * @param signal - carrier cancellation; an already-cancelled call reads nothing.
+   * @returns the reading, or `session-unavailable` when the Session is not live.
+   */
+  @Remote('readPrompt')
+  readPrompt(request: SessionInfoReadRequest, signal: AbortSignal): Promise<SessionPromptReadResult> {
+    if (signal.aborted) {
+      return Promise.resolve({ ok: false, error: { reason: 'session-unavailable', detail: 'request aborted before the Session was read' } })
+    }
+    const session = this.ctx.sessions.get(request.sessionId)
+    if (session === undefined) {
+      return Promise.resolve({
+        ok: false,
+        error: { reason: 'session-unavailable', detail: `session "${request.sessionId}" is not live on this Host` },
+      })
+    }
+
+    const header = session.requestHeader()
+    const snapshot: SessionPromptSnapshot = {
+      systemPrompt: effectiveSystemPrompt(session.deriveMessages()),
+      tools: (header?.tools ?? []).map(tool => ({
+        name: tool.name,
+        description: tool.description,
+        // Logged tool schemas are JSON by session-event validation; the
+        // declared record type is the looser spelling of that same value.
+        parameters: tool.parameters as SessionPromptSchema,
+      })),
+      model: header === undefined ? null : { provider: header.config.provider, model: header.config.model },
       readAt: Date.now(),
     }
     return Promise.resolve({ ok: true, value: snapshot })

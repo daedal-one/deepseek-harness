@@ -45,15 +45,17 @@ function world(ctx: Context, identity: symbol = host): void {
 async function destination(publicUrl?: string) {
   const ctx = context()
   world(ctx)
+  await ctx.plugin(SessionStore)
+  const admittedSession = ctx.sessions.create(SessionId('destination'))
   const create = vi.fn(async () => ({ sessionId: SessionId('unused') }))
   const prompt = vi.fn(async (_request: unknown, _signal: AbortSignal) => ({ accepted: true as const }))
   ctx.provide('sessionController', { create, prompt } as never)
   const resolve = vi.fn(async (): Promise<{ id: string; trust: string; permissionPreset?: string }> =>
     ({ id: 'maintenance', trust: 'system', permissionPreset: 'policy-reviewed' }))
-  ctx.provide('agentPresets', { resolve } as never)
+  ctx.provide('agentPresets', { resolve, hasAgentAdmission: () => false, requiresSessionAdmission: () => false } as never)
   ctx.provide('permissionPresets', { defaultPreset: 'workspace-write', current: () => 'policy-reviewed',
     resolve: () => ({ sandbox: 'danger-full-access', approval: 'ask' }) } as never)
-  ctx.provide('agents', { get: () => ({ ctx, session: {} }), withInitiator: (_agent: Agent, run: () => unknown) => run() } as never)
+  ctx.provide('agents', { get: () => ({ ctx, session: admittedSession }), withInitiator: (_agent: Agent, run: () => unknown) => run() } as never)
   const cwd = await mkdtemp(join(tmpdir(), 'dsh-handoff-')); roots.push(cwd)
   await ctx.plugin(WebServer, { host: '127.0.0.1', port: 0 })
   const seen = vi.fn<(request: IncomingMessage) => void>()

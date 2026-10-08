@@ -1,4 +1,4 @@
-/** `sessionInfo` namespace dictionaries for the Info conversation view. */
+/** `sessionInfo` namespace dictionaries for the Info and Prompt conversation views. */
 
 /** Dictionary namespace owned by this plugin. */
 export const NS = 'sessionInfo'
@@ -6,6 +6,7 @@ export const NS = 'sessionInfo'
 /** English copy for this feature. */
 export const en = {
   'view.info': 'Info',
+  'view.prompt': 'Prompt',
   'heading.summary': 'Conversation summary',
   'heading.session': 'Session',
   'heading.workspace': 'Workspace',
@@ -60,8 +61,28 @@ export const en = {
   'spend.unavailable': 'The spend reading is unavailable.',
   'spend.loading': 'Reading spend…',
   'state.loading': 'Reading session info…',
+  'prompt.loading': 'Reading the prompt and tools…',
+  'heading.systemPrompt': 'System prompt',
+  'heading.tools': 'Available tools',
+  'prompt.none': 'This session has no system prompt on its model-visible surface.',
+  'prompt.model': 'Assembled for {provider} · {model}',
+  'prompt.stats': 'Lines: {lines} · Characters: {characters}',
+  'prompt.matches': 'Matches in the system prompt: {count}',
+  'tools.none': 'No tool schemas are recorded for this session yet.',
+  'tools.noMatches': 'No tool matches the search.',
+  'tools.count': 'Tools: {count}',
+  'tool.parameters': 'Parameters: {count}',
+  'tool.parametersHeading': 'Parameters',
+  'tool.schemaHeading': 'JSON Schema',
+  'tool.noParameters': 'This tool takes no parameters.',
+  'parameter.required': 'required',
+  'parameter.noType': 'untyped',
+  'search.label': 'Search the system prompt and tools',
+  'search.placeholder': 'Filter tools by name, description, or parameter',
+  'search.count': 'Showing {shown} of {total} tools',
   'action.refresh': 'Refresh',
   'detail.readAt': 'Read at {time}',
+  'detail.promptReadAt': 'Prompt read at {time}',
   'detail.spendFetchedAt': 'Spend read at {time}',
   'failure.session-unavailable': 'This session is not live on the Host.',
   'failure.not-configured': 'No OpenRouter key is configured on the Host.',

@@ -1354,6 +1354,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     occupants: [
       'client-ui-chat ChatView id \'chat\'',
       'client-ui-session-info InfoView id \'info\'',
+      'client-ui-session-info PromptView id \'prompt\'',
       'client-ui-terminal TerminalView id \'terminal\'',
       'client-ui-trajectory TrajectoryView id \'trajectory\'',
     ],

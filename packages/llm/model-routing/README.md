@@ -7,9 +7,7 @@ kind: "package-reference"
 
 ## Summary
 
-Declare what a kind of work needs, and let the harness pick the cheapest eligible model for it. A **task class** carries hard capability requirements, an ordered operator preference over model families, and the token counts of one representative call; resolving a class filters the live catalog by the requirements, takes the highest-preference tier that still has an eligible candidate, and selects the cheapest eligible model within it.
-
-The policy is pure. Ranking is a function of the declared class and one catalog snapshot, so the same inputs always produce the same route and a decision can be replayed against a recorded candidate set. Selection stays inside the provider route it is asked about, never reaching for another credential.
+Declare a task class's capability requirements, ordered model preferences, and representative token counts. Resolve it against a catalog snapshot to select the cheapest eligible model in the highest available preference tier. Ranking is a pure function of those inputs, so the same class and snapshot produce the same route. Selection stays within the requested provider route and never selects another credential.
 
 ## Table of Contents
 

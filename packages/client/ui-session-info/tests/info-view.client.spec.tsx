@@ -157,8 +157,31 @@ describe('InfoView', () => {
     expect(screen.getByText(/Read at /)).toBeTruthy()
   })
 
+  it('keeps long identifiers and paths intact in labeled facts', () => {
+    const sessionId = `session-${'x'.repeat(96)}` as SessionId
+    const path = `/workspace/${'deeply-nested/'.repeat(12)}project`
+    render(<InfoView {...viewProps(settled({
+      ...INFO,
+      session: { ...INFO.session, sessionId, cwd: path },
+      workspace: { ...INFO.workspace!, path },
+    }), vi.fn(), vi.fn())} />)
+
+    expect(screen.getByText(sessionId).closest('dd')?.previousElementSibling?.textContent).toBe(en['row.sessionId'])
+    expect(screen.getAllByText(path)).toHaveLength(2)
+  })
+
   it('renders the spend rows and the session estimate for a priced model', () => {
     render(<InfoView {...viewProps(settled(), vi.fn(), vi.fn())} />)
+
+    const keyHeading = screen.getByRole('heading', { name: en['spend.key'] })
+    const keyFacts = screen.getByText(en['spend.row.total']).closest('dl')
+    const spendColumns = keyHeading.parentElement?.parentElement?.parentElement
+    expect(keyHeading.parentElement?.parentElement).toBe(keyFacts?.parentElement)
+    expect(spendColumns?.children).toHaveLength(2)
+    const estimate = screen.getByRole('heading', { name: en['spend.session'] }).parentElement
+    expect(spendColumns?.lastElementChild).toBe(estimate)
+    expect(estimate?.querySelector('code')?.textContent).toBe('vendor/model-x')
+    expect(estimate?.querySelector('code')?.nextElementSibling?.textContent).toBe('openrouter')
 
     expect(screen.getByText(en['heading.spend'])).toBeTruthy()
     expect(screen.getByText(en['spend.key'])).toBeTruthy()
@@ -200,6 +223,33 @@ describe('InfoView', () => {
 
     expect(screen.getByText(en['heading.summary'])).toBeTruthy()
     expect(screen.getByText(en['summary.none'])).toBeTruthy()
+  })
+
+  it('states an explicit absence for unset session facts and reports a changeable permission', () => {
+    render(<InfoView {...viewProps(settled({
+      ...INFO,
+      session: { ...INFO.session, title: null, agentPreset: null, model: null, cwd: null },
+      policies: { ...INFO.policies, canChangePermission: true },
+    }), vi.fn(), vi.fn())} />)
+
+    expect(screen.getByText(en['model.none'])).toBeTruthy()
+    expect(screen.getAllByText(en['value.none'])).toHaveLength(3)
+    expect(screen.getByText(en['value.yes'])).toBeTruthy()
+  })
+
+  it('renders the spend loading state and omits the session estimate when the reading carries none', () => {
+    const loading = createInfoStore().create()
+    loading.actions.infoSucceed(INFO)
+    render(<InfoView {...viewProps(loading, vi.fn(), vi.fn())} />)
+    expect(screen.getByText(en['spend.loading'])).toBeTruthy()
+    expect(screen.queryByText(en['spend.key'])).toBeNull()
+
+    const withoutSession = createInfoStore().create()
+    withoutSession.actions.infoSucceed(INFO)
+    withoutSession.actions.spendSucceed({ ...SPEND, session: null })
+    render(<InfoView {...viewProps(withoutSession, vi.fn(), vi.fn())} />)
+    expect(screen.getByText(en['spend.session'])).toBeTruthy()
+    expect(screen.getByText(KEY.label)).toBeTruthy()
   })
 
   it('marks a free-tier key and renders both limit rows as unlimited when no limit is configured', () => {
@@ -302,7 +352,10 @@ describe('session info plugin wiring', () => {
     ctx.provide('locale', locale)
     const readInfo = vi.fn()
     const readSpend = vi.fn()
-    new TestRemote(ctx, { sessionInfo: { read: readInfo }, openrouterSpend: { read: readSpend } })
+    new TestRemote(ctx, {
+      sessionInfo: { read: readInfo, readPrompt: vi.fn() },
+      openrouterSpend: { read: readSpend },
+    })
     return { ctx, slots: ctx.get('slots') as SlotRegistry, readInfo, readSpend }
   }
 
@@ -326,7 +379,7 @@ describe('session info plugin wiring', () => {
     declare(b.slots)
     const fiber = b.ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
-    await vi.waitFor(() => { expect(b.slots.entries('conversation.view')).toHaveLength(1) })
+    await vi.waitFor(() => { expect(b.slots.entries('conversation.view')).toHaveLength(2) })
 
     const entry = b.slots.entries('conversation.view')[0]!
     expect(entry.component).toBe(InfoView)
@@ -357,10 +410,22 @@ describe('session info plugin wiring', () => {
       expect(store.getSnapshot().info).toEqual({ status: 'failed', failure: { reason: 'session-unavailable', detail: 'connection refused' } })
     })
 
+    b.readInfo.mockRejectedValueOnce(new Error('boom'))
+    injected.loadInfo()
+    await vi.waitFor(() => {
+      expect(store.getSnapshot().info).toEqual({ status: 'failed', failure: { reason: 'session-unavailable', detail: 'Error: boom' } })
+    })
+
     b.readSpend.mockRejectedValueOnce(new Error('boom'))
     injected.loadSpend()
     await vi.waitFor(() => {
       expect(store.getSnapshot().spend).toEqual({ status: 'failed', failure: { reason: 'unreachable', detail: 'Error: boom' } })
+    })
+
+    b.readSpend.mockResolvedValueOnce({ ok: false, error: new RemoteError('gateway/internal', 'connection refused', {}) })
+    injected.loadSpend()
+    await vi.waitFor(() => {
+      expect(store.getSnapshot().spend).toEqual({ status: 'failed', failure: { reason: 'unreachable', detail: 'connection refused' } })
     })
 
     const spendFailure: OpenRouterSpendFailure = { reason: 'unauthorized', detail: '401' }
@@ -376,7 +441,7 @@ describe('session info plugin wiring', () => {
     declare(b.slots)
     const fiber = b.ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
-    await vi.waitFor(() => { expect(b.slots.entries('conversation.view')).toHaveLength(1) })
+    await vi.waitFor(() => { expect(b.slots.entries('conversation.view')).toHaveLength(2) })
 
     const entry = b.slots.entries('conversation.view')[0]!
     const store = createInfoStore().create()

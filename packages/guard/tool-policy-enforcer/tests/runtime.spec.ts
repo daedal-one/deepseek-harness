@@ -8,6 +8,7 @@ import ToolRuntime, { defineTool } from '@deepseek-ai/dsh-tools'
 import ApprovalService, { type ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import { describe, expect, it, vi } from 'vitest'
 import { apply, Config, shouldEnforce } from '../src/index.ts'
+import * as enforcer from '../src/index.ts'
 
 function fakeAgent() {
   const events: Array<Record<string, unknown>> = [{ type: 'turn/start', data: { turn: 1 } }]
@@ -76,6 +77,61 @@ describe('tool-policy enforcement through ToolRuntime', () => {
     expect(shouldEnforce(events('danger-full-access', 'never'), condition)).toBe(false)
   })
 
+  it('reports effective enforcement and threshold from the latest durable permissions', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ToolRuntime)
+    await ctx.plugin(ToolPolicyService, {})
+    const fiber = await ctx.plugin(enforcer, {
+      approvalThreshold: 5,
+      enforceWhen: { sandboxModes: ['danger-full-access'], approvalPolicies: ['ask'] },
+    })
+    const { agent, events } = fakeAgent()
+    const contextFor = async (context: object = { agent }) =>
+      (await ctx.systemPrompt.assemble(context)).contexts.find(entry => entry.name === 'tool-policy:enforcement')?.text
+    expect(await contextFor({})).toBe('')
+    const active = await contextFor()
+    expect(active).toContain('Tool-policy enforcement is active')
+    expect(active).toContain('Policy providers determine which tools are reviewed')
+    expect(active).toContain('threshold: 5 consecutive identical ask verdicts')
+    expect(active).toContain('canonical JSON arguments in the same turn')
+    expect(active).toContain('Any intervening tool call or turn boundary resets')
+    expect(active).toContain('ask still goes through the approval service if available')
+    expect(active).toContain('disables prompts rejects it without asking the user')
+    expect(active).toContain('do not add sandbox_permissions for a policy deferral')
+    expect(active).toContain('permanent policy deny cannot be bypassed')
+    expect(await contextFor()).toBe(active)
+    events.push({ type: 'sandbox/mode', data: { mode: 'workspace-write' } })
+    const bypass = await contextFor()
+    expect(bypass).toContain('Tool-policy enforcement is bypassed')
+    expect(bypass).toContain('threshold: 5 consecutive identical ask verdicts')
+    expect(bypass).not.toContain('You may change approach or retry')
+    events.push({ type: 'sandbox/mode', data: { mode: 'danger-full-access' } })
+    expect(await contextFor()).toBe(active)
+    events.push({ type: 'approval/policy', data: { policy: 'never' } })
+    expect(await contextFor()).toBe(bypass)
+    events.push({ type: 'approval/policy', data: { policy: 'ask' } })
+    expect(await contextFor()).toBe(active)
+    await fiber.dispose()
+    expect(await contextFor()).toBeUndefined()
+    await ctx.fiber.dispose()
+  })
+
+  it('attaches context when systemPrompt becomes available without requiring it for policy listeners', async () => {
+    const ctx = new Context()
+    await ctx.plugin(ToolPolicyService, {})
+    apply(ctx)
+    expect(ctx.get('systemPrompt')).toBeUndefined()
+    const fiber = await ctx.plugin(SystemPrompt)
+    const { agent } = fakeAgent()
+    expect((await ctx.systemPrompt.assemble({ agent })).contexts)
+      .toContainEqual({ name: 'tool-policy:enforcement', text: expect.stringContaining('threshold: 3') as unknown })
+    await fiber.dispose()
+    await ctx.plugin(SystemPrompt)
+    expect((await ctx.systemPrompt.assemble({ agent })).contexts.filter(entry => entry.name === 'tool-policy:enforcement')).toHaveLength(1)
+    await ctx.fiber.dispose()
+  })
+
   it('defers identical asks twice, prompts from the third denial, and resets after success', async () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
@@ -105,7 +161,7 @@ describe('tool-policy enforcement through ToolRuntime', () => {
     })
     expect(first).toMatchObject({
       isError: true,
-      content: [{ text: 'Error: Automatic policy review denied this call without asking the user (attempt 1/3): network access needs review. Change approach or retry this exact tool call; attempt 3 asks the user.' }],
+      content: [{ text: 'Error: Automatic policy review denied this call without asking the user (attempt 1/3): network access needs review. Change approach or retry this exact tool call; attempt 3 enters approval if an approval service is available and its policy permits prompting. This is a policy deferral, not a sandbox denial; do not add sandbox_permissions.' }],
     })
     const second = await executeLogged(
       ctx,
@@ -230,6 +286,36 @@ describe('tool-policy enforcement through ToolRuntime', () => {
     await expect(executeLogged(ctx, agent, events, 'configured-2', { command: 'same' }))
       .resolves.toMatchObject({ isError: false })
     expect(prompted).toHaveBeenCalledOnce()
+  })
+
+  it('keeps threshold asks denied when approval policy disables prompting', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ApprovalService, { policy: 'never' })
+    await ctx.plugin(ToolRuntime)
+    await ctx.plugin(ToolPolicyService, {})
+    ctx.toolPolicy.register(ToolPolicyProviderId('fake'), { evaluate: async () => ({
+      providerId: ToolPolicyProviderId('fake'), decision: 'ask', risk: 60,
+      categories: [], reason: 'review', opinions: [],
+    }) })
+    apply(ctx, { approvalThreshold: 2 })
+    const prompted = vi.fn(() => Promise.resolve<ApprovalOutcome>('allowed-once'))
+    ctx.on('approval/request', prompted)
+    const execute = vi.fn(async () => 'ran')
+    ctx.tools.register(defineTool({
+      name: 'probe', description: 'probe', parameters: {},
+      output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
+      execute,
+    }))
+    const { agent, events } = fakeAgent()
+    await executeLogged(ctx, agent, events, 'never-1', {})
+    await expect(executeLogged(ctx, agent, events, 'never-2', {}))
+      .resolves.toMatchObject({ isError: true, content: [{ text: 'Error: the user rejected tool "probe"' }] })
+    expect(prompted).not.toHaveBeenCalled()
+    expect(execute).not.toHaveBeenCalled()
+    expect(events.filter(event => event.type === 'approval/asked')).toHaveLength(1)
+    expect(events.filter(event => event.type === 'approval/decided')).toHaveLength(1)
+    await ctx.fiber.dispose()
   })
 
   it('bypasses providers outside configured permission values', async () => {
