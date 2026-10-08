@@ -80,5 +80,9 @@
             decision: deny
             reason: This value is forbidden by deployment policy.
             match: ["printf '%s' FORBIDDEN"]
+          - pattern: [printf, '%s', REVIEW_ME]
+            decision: ask
+            reason: This value requires approval
+            match: ["printf '%s' REVIEW_ME"]
     - id: snapshot-policy-enforcer
       name: '@deepseek-ai/dsh-tool-policy-enforcer'

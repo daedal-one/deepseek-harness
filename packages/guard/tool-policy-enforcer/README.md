@@ -25,6 +25,8 @@ This consumer enforces `ctx.toolPolicy` on `tools/pre-execute`. Unsupported and 
 
 `enforceWhen` optionally restricts evaluation to a conjunction of effective `sandbox/mode` and `approval/policy` values. The enforcer folds those values from the calling session's durable events before consulting any provider. An omitted condition preserves unconditional enforcement, and a missing configured value keeps enforcement active because the session cannot establish the configured bypass.
 
+When `systemPrompt` is composed, an optional injection contributes the effective enforcement state and configured threshold to its runtime context. Policy-only consumers keep the enforcement listeners without needing the prompt service. The contribution shares the approval context's ordering slot; it imposes no ordering dependency on that context.
+
 When an enforced session accepts a direct user message, the enforcer calls `ctx.toolPolicy.prewarm()` without delaying event publication. Permission changes also offer a prewarm opportunity for the latest direct message. Provider preparation is optional and fail-closed evaluation remains authoritative; calls outside `enforceWhen` do not start preparation.
 
 ## Approval threshold
@@ -39,19 +41,19 @@ No invariant companion is published because the tool-policy service owns the dur
 
 ## Model Experience
 
-### Conditional tool result
+### Runtime context and conditional tool result
 
 #### What the model sees
 
-The first two identical `ask` verdicts under the default threshold return `Error: Automatic policy review denied this call without asking the user (attempt <n>/3): <reason>. Change approach or retry this exact tool call; attempt 3 asks the user.` The third opens the existing human approval flow. A grant executes that exact call once; rejection, cancellation, or an unavailable answerer returns the approval service's bounded tool error. Deterministic denials use the provider's bounded reason without prompting.
+The runtime snapshot states whether enforcement is active or bypassed under the session's latest durable permissions and reports `approvalThreshold`. Active guidance explains that providers own tool coverage, exact-call retries stay within the same turn, argument-object order is irrelevant, and intervening calls reset the chain. It distinguishes policy deferrals from one-call sandbox escalation and prohibits retry-bypassing permanent denials. The prompt service logs the named `tool-policy:enforcement` contribution with the model-visible snapshot; changing permissions changes the next assembled snapshot without changing the system prompt. The first two identical `ask` verdicts under the default threshold return `Error: Automatic policy review denied this call without asking the user (attempt <n>/3): <reason>. Change approach or retry this exact tool call; attempt 3 enters approval if an approval service is available and its policy permits prompting. This is a policy deferral, not a sandbox denial; do not add sandbox_permissions.` At the threshold, the existing approval service decides; a policy that disables prompts rejects without asking the user. A grant executes that exact call once; rejection, cancellation, or an unavailable answerer returns the approval service's bounded tool error. Without an approval service, the call remains denied. Deterministic denials use the provider's bounded reason without prompting.
 
 #### Token effect
 
-Calls outside `enforceWhen`, allowed calls, and unsupported calls add no model-visible tokens. Denied or deferred calls add one bounded tool result to the next request.
+Compositions with runtime context enabled add one complete policy-context contribution on the first request and when its effective state changes. Allowed calls and unsupported calls add no policy-result text. Denied or deferred calls add one bounded tool result to the next request.
 
 #### KV Cache effect
 
-Policy feedback is append-only after the existing conversation prefix and does not invalidate prior KV-cache entries.
+Runtime context and policy feedback append after the existing conversation prefix; unchanged context is not repeated. Permission switches do not rewrite the stable system prompt.
 
 ## Known Limitations and Deferred Work
 
