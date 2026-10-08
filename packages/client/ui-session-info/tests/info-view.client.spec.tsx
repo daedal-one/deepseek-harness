@@ -157,8 +157,31 @@ describe('InfoView', () => {
     expect(screen.getByText(/Read at /)).toBeTruthy()
   })
 
+  it('keeps long identifiers and paths intact in labeled facts', () => {
+    const sessionId = `session-${'x'.repeat(96)}` as SessionId
+    const path = `/workspace/${'deeply-nested/'.repeat(12)}project`
+    render(<InfoView {...viewProps(settled({
+      ...INFO,
+      session: { ...INFO.session, sessionId, cwd: path },
+      workspace: { ...INFO.workspace!, path },
+    }), vi.fn(), vi.fn())} />)
+
+    expect(screen.getByText(sessionId).closest('dd')?.previousElementSibling?.textContent).toBe(en['row.sessionId'])
+    expect(screen.getAllByText(path)).toHaveLength(2)
+  })
+
   it('renders the spend rows and the session estimate for a priced model', () => {
     render(<InfoView {...viewProps(settled(), vi.fn(), vi.fn())} />)
+
+    const keyHeading = screen.getByRole('heading', { name: en['spend.key'] })
+    const keyFacts = screen.getByText(en['spend.row.total']).closest('dl')
+    const spendColumns = keyHeading.parentElement?.parentElement?.parentElement
+    expect(keyHeading.parentElement?.parentElement).toBe(keyFacts?.parentElement)
+    expect(spendColumns?.children).toHaveLength(2)
+    const estimate = screen.getByRole('heading', { name: en['spend.session'] }).parentElement
+    expect(spendColumns?.lastElementChild).toBe(estimate)
+    expect(estimate?.querySelector('code')?.textContent).toBe('vendor/model-x')
+    expect(estimate?.querySelector('code')?.nextElementSibling?.textContent).toBe('openrouter')
 
     expect(screen.getByText(en['heading.spend'])).toBeTruthy()
     expect(screen.getByText(en['spend.key'])).toBeTruthy()

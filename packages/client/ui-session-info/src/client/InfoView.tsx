@@ -71,7 +71,7 @@ function optional(value: string | null, t: Translate): ReactNode {
 function SummaryBlock({ snapshot, t }: { readonly snapshot: SessionInfoSnapshot; readonly t: Translate }): ReactNode {
   const summary = snapshot.summary
   return (
-    <section className={css.block}>
+    <section className={`${css.block} ${css.wide}`}>
       <h2>{t('heading.summary')}</h2>
       {summary === null
         ? <p className={css.muted}>{t('summary.none')}</p>
@@ -169,7 +169,7 @@ function PoliciesBlock({ snapshot, t }: { readonly snapshot: SessionInfoSnapshot
 /** The key spend rows over one settled reading. */
 function KeySpend({ usage, t }: { readonly usage: OpenRouterKeyUsage; readonly t: Translate }): ReactNode {
   return (
-    <>
+    <div className={css.spendKey}>
       <div className={css.blockHeader}>
         <h3>{t('spend.key')}</h3>
         <span className={css.keyMeta}>
@@ -188,7 +188,7 @@ function KeySpend({ usage, t }: { readonly usage: OpenRouterKeyUsage; readonly t
           value={formatUsdOptional(t, usage.limitUsd === null ? null : usage.limitRemainingUsd)}
         />
       </dl>
-    </>
+    </div>
   )
 }
 
@@ -223,7 +223,7 @@ function SessionEstimate({
 /** The spend block in its in-flight, settled, or failed state. */
 function SpendBlock({ state, t }: { readonly state: InfoSpendState; readonly t: Translate }): ReactNode {
   return (
-    <section className={css.block}>
+    <section className={`${css.block} ${css.wide}`}>
       <h2>{t('heading.spend')}</h2>
       {state.status === 'loading' ? <p className={css.status}>{t('spend.loading')}</p> : null}
       {state.status === 'failed' ? (
@@ -231,8 +231,10 @@ function SpendBlock({ state, t }: { readonly state: InfoSpendState; readonly t: 
       ) : null}
       {state.status === 'ready' ? (
         <>
-          <KeySpend usage={state.snapshot.key} t={t} />
-          <SessionEstimate session={state.snapshot.session} t={t} />
+          <div className={css.spendColumns}>
+            <KeySpend usage={state.snapshot.key} t={t} />
+            <SessionEstimate session={state.snapshot.session} t={t} />
+          </div>
           <p className={css.meta}>{t('detail.spendFetchedAt', { time: new Date(state.snapshot.fetchedAt).toLocaleString() })}</p>
         </>
       ) : null}
@@ -262,6 +264,12 @@ export function InfoView({ loadInfo, loadSpend, useStore, t }: InfoViewProps): R
 
   return (
     <div className={css.root} aria-busy={state.info.status === 'loading'}>
+      <div className={css.toolbar}>
+        {state.info.status === 'ready'
+          ? <p className={css.meta}>{t('detail.readAt', { time: new Date(state.info.snapshot.readAt).toLocaleString() })}</p>
+          : null}
+        <button type="button" className={css.refresh} onClick={refresh}>{t('action.refresh')}</button>
+      </div>
       {state.info.status === 'loading' ? <p className={css.status}>{t('state.loading')}</p> : null}
       {state.info.status === 'failed' ? (
         <div className={css.failure}>
@@ -269,17 +277,15 @@ export function InfoView({ loadInfo, loadSpend, useStore, t }: InfoViewProps): R
         </div>
       ) : null}
       {state.info.status === 'ready' ? (
-        <div className={css.content}>
+        <div className={css.grid}>
           <SummaryBlock snapshot={state.info.snapshot} t={t} />
           <SessionBlock snapshot={state.info.snapshot} t={t} />
           <WorkspaceBlock snapshot={state.info.snapshot} t={t} />
           <EnvironmentBlock snapshot={state.info.snapshot} t={t} />
           <PoliciesBlock snapshot={state.info.snapshot} t={t} />
           <SpendBlock state={state.spend} t={t} />
-          <p className={css.meta}>{t('detail.readAt', { time: new Date(state.info.snapshot.readAt).toLocaleString() })}</p>
         </div>
       ) : null}
-      <button type="button" className={css.refresh} onClick={refresh}>{t('action.refresh')}</button>
     </div>
   )
 }
