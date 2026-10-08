@@ -30,7 +30,7 @@ The deployment workflow uses the existing Daedal host handoff and an operator-ow
 - Focused tests and a keyless recorded-session scenario cover effective activation, bypass, disposal, deferred feedback, and logged model context. Documentation records any unavailable host verification separately from source checks.
 
 - An independent systemd unit owns each preparation or activation. Duplicate activation requests refuse replay; candidate or configuration drift requires new qualification. The operator installs the controller and definition with root ownership; agents receive only its bounded command interface.
-- Preparation builds a committed ancestor of remote master in a detached release, runs the declared checks, and uses a separate Harness home with no production Sessions on an alternate loopback listener. Activation preserves release-owned dependency links, configuration, companions, and every existing Session prefix. Automatic code rollback requires unchanged persistence sources and never restores old Session data over new history.
+- Preparation builds a committed ancestor of remote master in a detached release, runs the declared checks, and uses a separate Harness home with no production Sessions on an alternate loopback listener. Activation preserves release-owned dependency links, configuration, companions, and every existing Session prefix. Activation and recovery wait for companion startup within the configured health timeout; a transient activating state does not trigger immediate rollback. Automatic code rollback requires unchanged persistence sources and never restores old Session data over new history.
 
 ## Verification
 

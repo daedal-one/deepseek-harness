@@ -1,0 +1,8 @@
+
+[[redirect]]
+from = "TASK:ui/prompt-introspection-tab"
+to = "TASK:tasks/prompt-introspection-tab"
+
+[[redirect]]
+from = "TASK:ui/session-info-layout-polish"
+to = "TASK:tasks/session-info-layout-polish"

@@ -2,6 +2,7 @@
 import importlib.util
 import json
 import os
+import subprocess
 from pathlib import Path
 import tempfile
 import unittest
@@ -176,6 +177,30 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(history.read_text(), 'original\nnew data\n')
         self.assertEqual(json.loads((directory / 'status.json').read_text())['phase'], 'recovered')
         self.assertFalse(any(args[0] == 'tar' and '-xf' in args for args in calls))
+
+    def test_companion_startup_is_part_of_bounded_live_readiness(self):
+        config = {'service': 'web', 'url': 'http://localhost', 'companions': ['companion']}
+        states = iter(['activating', 'active'])
+        def run(args, **kwargs):
+            if args[:2] == ['systemctl', 'is-active']:
+                state = next(states)
+                if state != 'active':
+                    raise subprocess.CalledProcessError(3, args, output=state)
+                return state
+            return ''
+        with patch.object(c, 'run', side_effect=run), \
+             patch.object(c, 'health', return_value={'authenticatedBoot': True}), \
+             patch.object(c.time, 'monotonic', side_effect=[0, 0]), \
+             patch.object(c.time, 'sleep') as sleep:
+            self.assertEqual(c.wait_health(lambda: c.live_health(config), 20), {'authenticatedBoot': True})
+            sleep.assert_called_once_with(1)
+        with patch.object(c, 'run', side_effect=lambda args, **kw: 'inactive'), \
+             patch.object(c, 'health', return_value={'authenticatedBoot': True}), \
+             patch.object(c.time, 'monotonic', side_effect=[0, 20]), \
+             patch.object(c.time, 'sleep') as sleep:
+            with self.assertRaisesRegex(RuntimeError, 'readiness timed out'):
+                c.wait_health(lambda: c.live_health(config), 20)
+            sleep.assert_not_called()
 
     def test_busy_host_never_stops_service(self):
         config, directory, definition, plan = self.activation_fixture()

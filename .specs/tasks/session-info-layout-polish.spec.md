@@ -1,5 +1,5 @@
 ---
-id: TASK:ui/session-info-layout-polish
+id: TASK:tasks/session-info-layout-polish
 type: task
 status: accepted
 summary: Keep Info tab facts readable across narrow and wide conversation view widths.

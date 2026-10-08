@@ -1,5 +1,5 @@
 ---
-id: TASK:ui/prompt-introspection-tab
+id: TASK:tasks/prompt-introspection-tab
 type: task
 status: accepted
 summary: Add a sessionInfo.readPrompt Remote read and a searchable Prompt conversation view over the Session's logged system prompt and tool catalog.

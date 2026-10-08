@@ -208,6 +208,8 @@ def live_health(config):
     for url in config.get('additionalUrls', []):
         # The login secret stays local; each declared origin gets its own cookie jar.
         health(log.replace(config['url'] + '/?token=', url + '/?token='), url)
+    for companion in config['companions']:
+        require(run(['systemctl', 'is-active', companion]) == 'active', 'Companion unavailable: ' + companion)
     return proof
 
 
@@ -427,8 +429,6 @@ def activate(config, directory, approved_digest):
             require(service_args(config) == new_args, 'Active service command differs from approved command')
             with account(config):
                 verify_prefixes(home, original)
-            for companion in config['companions']:
-                require(run(['systemctl', 'is-active', companion]) == 'active', 'Companion unavailable: ' + companion)
             with account(config):
                 link(Path(config['state']) / 'previous', plan['previous'])
                 link(Path(config['state']) / 'current', str(candidate))
