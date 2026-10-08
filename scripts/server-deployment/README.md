@@ -40,7 +40,7 @@ An administrator installs [controller.py](controller.py) at the declared `contro
 
 The definition explicitly supplies service identity, user identity, repository, release and receipt roots, locks, the final service override, live and qualification listeners, environment-file references, declared checks, persistence compatibility paths, preset files containing release references, companion units, idle check, and timeouts. Preparation refuses to rebuild the running or retained rollback release. The controller executes build commands and the candidate as the service account. Configuration files hold paths, not copied credential values. Environment files must use simple `NAME=value` assignments.
 
-The main service continues to launch through `dsh --profile web`. The controller preserves its existing arguments and environment drop-ins and changes only the launcher path. It retargets existing release-owned profile links after proving their candidate targets exist; unrelated package aliases remain unchanged. The existing update timer may continue preparing releases, but it must not activate them without this operation's explicit approval.
+The main service continues to launch through `dsh --profile web`. The controller preserves its existing arguments and environment drop-ins and changes only the launcher path. It retargets existing release-owned profile links after proving their candidate targets exist; unrelated package aliases remain unchanged. Disable legacy update timers that write into the same release directories. The controller owns preparation; a competing builder could change qualified artifacts while approval is pending.
 
 ## Preservation and recovery
 
