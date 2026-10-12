@@ -23,6 +23,8 @@ Apply a tool-policy decision before a tool executes. The enforcer permits accept
 
 This consumer enforces `ctx.toolPolicy` on `tools/pre-execute`. Unsupported and allowed tools delegate with `next()`; denial short-circuits execution. An `ask` verdict first returns its bounded reason to the acting agent, then enters the existing approval pipeline when the configured consecutive-identical threshold is reached, so `ctx.approval` remains the sole owner of the human decision and its durable audit.
 
+No shipped profile mounts this consumer. The opt-in [`@deepseek-ai/dsh-policy`](../../bundle/policy/README.md) bundle declares its row disabled, because an active enforcer with no registered provider receives an unavailable policy and defers every agent tool call.
+
 `enforceWhen` optionally restricts evaluation to a conjunction of effective `sandbox/mode` and `approval/policy` values. The enforcer folds those values from the calling session's durable events before consulting any provider. An omitted condition preserves unconditional enforcement, and a missing configured value keeps enforcement active because the session cannot establish the configured bypass.
 
 When an enforced session accepts a direct user message, the enforcer calls `ctx.toolPolicy.prewarm()` without delaying event publication. Permission changes also offer a prewarm opportunity for the latest direct message. Provider preparation is optional and fail-closed evaluation remains authoritative; calls outside `enforceWhen` do not start preparation.

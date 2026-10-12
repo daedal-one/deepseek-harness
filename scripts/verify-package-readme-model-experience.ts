@@ -149,6 +149,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/client/ui-session-info': { kind: 'none', reason: 'Browser-side Session, environment, policy, and spend presentation; it renders Host readings and registers nothing model-facing.' },
   'packages/integration/forge-project-workspaces': { kind: 'none', reason: 'Host-side Forge project reconciliation and browser selection register nothing model-facing.' },
   'packages/bundle/base': { kind: 'indirect', reason: 'The bundle is a patch-list carrier; each inserted row\'s package owns its model-facing behavior.' },
+  'packages/bundle/policy': { kind: 'indirect', reason: 'The bundle is a patch-list carrier; each declared row\'s package owns its model-facing behavior.' },
   'packages/bundle/headless': { kind: 'none', reason: 'The one-shot runner submits the task as an ordinary user message; prompts and tools belong to the composed base and headless bundles.' },
   'packages/llm/llm': { kind: 'none', reason: 'The adapter registry forwards already-assembled requests unchanged.' },
   'packages/llm/openrouter-spend': { kind: 'none', reason: 'Read-only OpenRouter spend projection; it prices already-logged token buckets and registers nothing model-facing.' },

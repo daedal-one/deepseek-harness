@@ -1,0 +1,70 @@
+# The dsh-policy bundle patch: the opt-in tool-authorization layer, applied
+# after dsh-base (and after any surface bundle) over a base-backed profile. No
+# shipped profile lists this bundle; a deployment adds it with
+# `dsh plugin --profile <name> add @deepseek-ai/dsh-policy` and then enables
+# the rows below in its own profile cordis.patch.yml.
+#
+# Row states in this layer:
+#   * `tool-policy` is mounted: the decision service must exist before any
+#     provider or enforcement row can activate.
+#   * The enforcement consumer and both providers ship `disabled: true`. A
+#     disabled row is declared, resolvable, and addressable by id, but it never
+#     loads, so adding this bundle changes no running behavior on its own.
+#     Enabling one in the profile patch replaces its whole config, which is
+#     where a deployment supplies the values this layer cannot state.
+#   * `tool-policy-shell` and `tool-policy-mcp` carry no `config` here because
+#     every required value is deployment-owned: auxiliary review routes and
+#     explicit shell mappings for the first, one exact rule per reviewed MCP
+#     tool for the second. Enabling either without restating its config fails
+#     loud at load against that package's schema.
+#
+# A patch replaces the targeted row's whole `config` rather than merging into
+# it, so an enabling layer restates every key it wants. Row order carries no
+# load semantics (activation is service-availability driven).
+
+- insert:
+    # ── the decision service ────────────────────────────────────────────────
+
+    # The provider-neutral authorization service: providers register against
+    # it and an enforcement consumer asks it for a verdict. `providers` is
+    # deliberately omitted so evaluation selects every registered provider;
+    # naming ids here would fail loud for a deployment that enables only one
+    # provider row. With no provider registered, evaluation throws and the
+    # enforcement consumer below fails closed, so enable them together.
+    - id: tool-policy
+      name: '@deepseek-ai/dsh-tool-policy'
+
+    # ── declared, disabled until a deployment configures them ───────────────
+
+    # The execution gate on `tools/pre-execute`. Disabled because a live
+    # enforcer with no registered provider denies every agent tool call: the
+    # unavailable policy becomes `ask`, and below the threshold that is a
+    # deferred denial. Enable it together with at least one provider row, or
+    # with the deployment's own provider. The threshold is restated from the
+    # package default so the profile's effective chain length is visible; the
+    # package accepts integers of 2 or more.
+    - id: tool-policy-enforcer
+      name: '@deepseek-ai/dsh-tool-policy-enforcer'
+      disabled: true
+      config:
+        approvalThreshold: 3
+
+    # Model-reviewed shell authorization, scoped to the deployment's own shell
+    # tools. Disabled without a config: the explicit `mappings` (tool name plus
+    # its command and optional intent arguments, bash or pwsh) and the three
+    # auxiliary review routes (provider and model ids) belong to the
+    # deployment, a route matching the acting model is excluded at runtime, and
+    # missing independent evidence fails closed. See the package README for
+    # every required bound and the deterministic rule form.
+    - id: tool-policy-shell
+      name: '@deepseek-ai/dsh-tool-policy-shell'
+      disabled: true
+
+    # Deterministic authorization for an exact reviewed MCP tool surface.
+    # Disabled without a config: activation refuses an empty rule set, and each
+    # rule names one public `mcp__...` tool observed at execution time with its
+    # verdict, risk, categories, optional principals, URL arguments, and
+    # forbidden arguments. See the package README for the rule contract.
+    - id: tool-policy-mcp
+      name: '@deepseek-ai/dsh-tool-policy-mcp'
+      disabled: true

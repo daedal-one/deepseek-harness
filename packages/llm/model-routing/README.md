@@ -111,7 +111,7 @@ None from ranking itself. A consumer that applies a resolved route to a running 
 ## Known Limitations and Deferred Work
 
 - No provider ships in this package. `ctx.modelCatalog` is a Service Definition only, so a deployment must mount a provider that maps a provider's catalog into `RoutingCandidate`; the OpenRouter provider is not implemented yet.
-- No consumer is wired yet. Delegation does not accept a `task_class` argument, and no listener replaces a running Agent's route from a resolved class, so the policy is reachable from a composition and from tests but not from a model turn.
+- No shipped bundle mounts it, and no production consumer is wired yet. No shipped profile and no shipped bundle declares a row for this package, and no runtime code calls `ctx.modelRouting`: delegation does not accept a `task_class` argument, and no listener replaces a running Agent's route from a resolved class, so the policy is reachable from a composition and from tests but not from a model turn. The package is catalogued for deployments that mount it and wire a consumer, and the generated config catalog lists it as mounted by no shipped profile or bundle.
 - A resolution is not recorded durably. The class, policy revision, candidates, and winner are returned to the caller but not yet written as a session event, so a historical decision cannot be read back from a log.
 - One requirement set applies per class. There is no way to vary requirements by turn, by participant, or by an escalation within one class.
 
