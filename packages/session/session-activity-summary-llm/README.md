@@ -22,7 +22,7 @@ Use `dsh-session-activity-summary-llm` to replace dense live process rows with a
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the plugin beside the Session and LLM services. Every field is required so a deployment chooses its route and complete cost, byte, line, token, and time policy explicitly.
+Mount the plugin beside the Session and LLM services. The byte, line, token, and time fields are required; `provider` and `model` are optional, and omitting them makes each dispatch inherit the Session's main-agent route.
 
 ```yaml
 - name: '@deepseek-ai/dsh-session-activity-summary-llm'
@@ -34,9 +34,11 @@ Mount the plugin beside the Session and LLM services. Every field is required so
     maxSummaryBytes: 720
     maxLines: 3
     timeoutMs: 20000
-    provider: openrouter
-    model: deepseek/deepseek-v4.1-flash
+    # provider: openrouter                # optional; pin both to route
+    # model: deepseek/deepseek-v4.1-flash # summaries apart from the agent
 ```
+
+`provider` and `model` are supplied together or not at all. When they are absent, each dispatch resolves its route in this order: the explicit pair, then the Session's logged main-request route from the latest `request/header` event, then the current main-Agent selection read from the optional `agentModels` service. A Session with none of those sources dispatches nothing: the plugin logs one `no main-Agent route is available` warning for that Session, reaches no provider, and leaves the batch queued, because a background summarizer must not spend a credential the user did not choose.
 
 `operationsPerSummary` accepts only four, five, or six. `maxLines` accepts one through three. A Tool result, nested PTC dispatch, or reasoning-bearing settled Assistant update is one completed operation. An Assistant operation contributes a content-free completion marker and may include its visible text, but never its reasoning text. Tool arguments and results are individually capped by `maxOperationBytes`, and the complete JSON frame must fit `maxInputBytes`.
 
@@ -75,7 +77,8 @@ None for the main agent. Each auxiliary request is independent and carries only 
 <a id="known-limitations-and-deferred-work"></a>
 
 - **Session-local view** — a parent Session summarizes delegation calls but does not ingest a child Session's private operation log.
-- **No retry inside a failed Turn** — one failed summary keeps the detailed trace visible and disables later automatic attempts until the next Turn.
+- **No retry inside a failed Turn** — one failed summary keeps the detailed trace visible and disables later automatic attempts until the next Turn. An unresolvable route is not such a failure: the batch stays queued and the same Session reports the missing route once.
+- **Inheritance resolves the main agent only** — without an explicit route, a Session whose summarizer should run on a named Agent role's route must pin `provider` and `model`, because that role's selection is not reachable from the Session alone.
 
 <a id="dev-note"></a>
 ### Dev Note

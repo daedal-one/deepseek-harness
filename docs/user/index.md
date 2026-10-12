@@ -7,3 +7,5 @@ head:
 ---
 
 # DeepSeek Harness
+
+Reference: [Session telemetry](./telemetry.md).

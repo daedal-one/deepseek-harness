@@ -87,8 +87,10 @@
       name: '@deepseek-ai/dsh-session-turn-outline'
 
     # A cheap auxiliary route condenses every five completed agent operations
-    # into at most three live status lines. The durable detailed trace remains
-    # available to Trajectory.
+    # into at most three live status lines. The pinned route keeps keyless
+    # recorded-session replay stable; remove provider and model to inherit the
+    # Session's main-agent route. The durable detailed trace remains available
+    # to Trajectory.
     - id: session-activity-summary
       name: '@deepseek-ai/dsh-session-activity-summary-llm'
       config:
@@ -104,7 +106,9 @@
 
     # One bounded auxiliary request per closed Turn keeps a short durable
     # account of the conversation's topic and progress in the `summary`
-    # projection, which the Info view and the Session hover card both read.
+    # projection, which the Info view and the Session hover card both read. The
+    # pinned route keeps keyless recorded-session replay stable; remove provider
+    # and model to inherit the Session's main-agent route.
     - id: session-summary
       name: '@deepseek-ai/dsh-session-summary-llm'
       config:

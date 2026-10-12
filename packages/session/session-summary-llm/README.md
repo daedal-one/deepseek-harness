@@ -22,7 +22,7 @@ Use `dsh-session-summary-llm` to give every Session a short durable account of i
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the plugin beside the Session, Session-projection, and LLM services. Every field is required so a deployment chooses its route and its complete byte, token, and time policy explicitly.
+Mount the plugin beside the Session, Session-projection, and LLM services. The byte, token, and time fields are required; `provider` and `model` are optional, and omitting them makes each request inherit the Session's main-agent route.
 
 ```yaml
 - name: '@deepseek-ai/dsh-session-summary-llm'
@@ -33,9 +33,11 @@ Mount the plugin beside the Session, Session-projection, and LLM services. Every
     maxOutputTokens: 200
     maxSummaryBytes: 1200
     timeoutMs: 20000
-    provider: openrouter
-    model: deepseek/deepseek-v4.1-flash
+    # provider: openrouter                # optional; pin both to route
+    # model: deepseek/deepseek-v4.1-flash # summaries apart from the agent
 ```
+
+`provider` and `model` are supplied together or not at all. When they are absent, each request resolves its route in this order: the explicit pair, then the Session's logged main-request route from the latest `request/header` event, then the current main-Agent selection read from the optional `agentModels` service. A Session with none of those sources dispatches nothing: the plugin logs one `no main-Agent route is available` warning for that Session, reaches no provider, and leaves the previous accepted summary standing, because a background summarizer must not spend a credential the user did not choose.
 
 `targetSentences` is stated to the model as the requested length; it is not enforced against the reply. Each collected entry's text is capped by `maxEntryBytes`, and the complete JSON frame must fit `maxInputBytes`: when it does not, the oldest entries of that Turn are dropped, and a frame that still does not fit is a failure rather than a truncated request.
 
@@ -48,7 +50,7 @@ Accepted output is one plain-text paragraph that must fit `maxSummaryBytes`. A T
 
 The plugin registers the `summary` projection — the latest accepted text, or `null` before one lands — and listens to committed `session/event` records. A `turn/end` collects that Turn's human `user/message` text, its visible `assistant/message` text, and its `tool/call` names; a `turn/start` aborts any in-flight revision. Each Session owns at most one request at a time, and a newer Turn supersedes an older one instead of queueing behind it.
 
-Every request is recorded as `session/summary-llm-request` before dispatch, carrying the exact route, system prompt, messages, output-token cap, reasoning effort, and source seqs. An accepted result appends `session/summary` with the summary text, the folded source seqs, the highest covered seq, and the route; that event is the projection's only input, so a replay rebuilds the same value. Hidden reasoning, Tool arguments, and Tool results never enter the request. Requests select the `off` reasoning effort, and the DeepSeek adapter also disables thinking for the `session-summary` purpose. Session and plugin disposal abort and join owned requests.
+Every request is recorded as `session/summary-llm-request` before dispatch, carrying the exact resolved route, system prompt, messages, output-token cap, reasoning effort, and source seqs. An accepted result appends `session/summary` with the summary text, the folded source seqs, the highest covered seq, and the route; that event is the projection's only input, so a replay rebuilds the same value. Hidden reasoning, Tool arguments, and Tool results never enter the request. Requests select the `off` reasoning effort, and the DeepSeek adapter also disables thinking for the `session-summary` purpose. Session and plugin disposal abort and join owned requests.
 
 -----
 
@@ -76,6 +78,8 @@ None for the main agent. Each auxiliary request is independent and carries only 
 - **No summary before the first closed Turn** — a Session with no closed Turn has no accepted summary, and its surfaces state that absence rather than deriving one.
 - **A failed revision is not retried** — one rejection leaves the previous accepted summary standing until the next Turn closes, so the projected text can lag the conversation by a Turn.
 - **Session-local view** — a parent Session's summary covers its own log; a child Session's private transcript is not folded in.
+- **Inheritance resolves the main agent only** — without an explicit route, a Session whose summarizer should run on a named Agent role's route must pin `provider` and `model`, because that role's selection is not reachable from the Session alone.
+- **A Session with no route source is never summarized** — a composed profile that mounts neither `agent-default-model` nor a session whose agent logged a `request/header` produces one warning and no summaries until a route is configured.
 
 <a id="dev-note"></a>
 ### Dev Note
