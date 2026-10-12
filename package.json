@@ -139,6 +139,8 @@
     "rescope-vendor": "tsx scripts/rescope-vendor.ts",
     "rescope-vendor:check": "tsx scripts/rescope-vendor.ts --check",
     "verify-client-domain-graph": "tsx scripts/verify-client-domain-graph.ts",
+    "gen-agent-preset-variants": "tsx --tsconfig tsconfig.base.json scripts/gen-agent-preset-variants.ts --write",
+    "verify-agent-preset-variants": "tsx --tsconfig tsconfig.base.json scripts/gen-agent-preset-variants.ts --check",
     "gen-tsconfig-paths": "tsx scripts/gen-tsconfig-paths.ts",
     "verify-tsconfig-paths": "tsx scripts/gen-tsconfig-paths.ts --check",
     "gen-cordis-catalog": "tsx scripts/gen-cordis-catalog.ts",
