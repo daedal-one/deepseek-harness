@@ -99,6 +99,12 @@ Authoring is copy-only: creating a preset copies an existing preset's whole dire
 
 A copy is refused when the id is not `[a-z0-9][a-z0-9-]*` (the id becomes a directory name), when the id is already taken (a copy never overwrites), or when the source is unknown. Deleting removes only locally authored presets; presets that ship with the deployment are not removable. A session already running on a deleted preset keeps running on it.
 
+### Maintaining shipped definitions
+
+The authored [Standard composition](presets/standard/agent.cordis.yml) owns the common coding rows. The repository [generator](../../../scripts/gen-agent-preset-variants.ts) materializes the `ptc` and `cordis` (Create) presets from that composition and explicit variant changes; [the `cordis` patch](variants/cordis.patch.yml) owns its persona and local skill configuration. Run `pnpm run gen-agent-preset-variants` after editing those sources, and `pnpm run verify-agent-preset-variants` to check freshness. Minimal remains independently authored.
+
+The package distributes complete `agent.cordis.yml` files and each preset's local assets, not an inheritance relationship. An ordinary directory copy needs neither the generator nor its authoring inputs. Edit a locally copied composition directly; repository regeneration affects only the finite derived files, not user roots or installed presets.
+
 ### Switching a session's preset
 
 A session can switch to a different preset only while it has produced nothing — no messages or tool calls. After that, the composition is fixed for the session's life, because swapping tools mid-conversation would leave logged tool calls the new composition cannot make. A committed switch emits `tools/change` because the resolved tool set changed without a registry edit. The switch is also recorded in the session log, so a resumed or forked session rebuilds under the composition it ran.
@@ -203,7 +209,7 @@ These limits define when the roster is a poor fit or needs special operational c
 - **A superseded generation is never reclaimed** — sessions already joined keep the generation they run on, and the roster holds no join count that could tell when the last one left, so the whole subtree stays mounted until the process ends. The cost is per generation rather than per session, but it is not free: `dsh-skill-filesystem` watches its roots by default, so each edit-then-create cycle adds a live watcher set.
 - **A copy is never mounted to validate** — it is byte-identical to its source, so a source broken on disk yields a copy exactly as broken as the source; discovery's health check marks both rows on the next roster read rather than deferring the failure to a session start.
 - **Health asks what is installed, not what would import** — discovery proves the composition parses in the loader dialect, holds named rows, and that each row it can prove will start names a package present above the harness base or a file that exists; it never imports one, so a package whose own entry file is missing, a plugin that throws on apply, and one waiting forever for a service all still fail at the first session. `disabled` is the one entry field the Loader interpolates, so a row carrying an expression there is left unchecked rather than judged from the file.
-- **A copy is a snapshot that drifts** — upgrading the deployment does not update copies of shipped presets, and there is no patch semantics at this layer to express "standard plus one change"; the shipped set itself accepts the same cost — `cordis` and `code` each duplicate `standard`'s full assembly and then edit it — so the whole assembly stays readable in one file.
+- **A copy is a snapshot that drifts** — upgrading the deployment does not update copies of shipped presets, and there is no patch semantics at this layer to express "standard plus one change"; the shipped set itself accepts the same cost — `ptc` and `cordis` each carry `standard`'s full assembly with their variant edits — so the whole assembly stays readable in one file. Persona strings stay restated per preset as deployment-owned prompt text and are deliberately not factored into a shared default.
 - **Root scans are not watched** — every read hits the filesystem instead, which keeps the roster fresh but puts one `readdir` per root on each `list()`.
 
 <a id="dev-note"></a>

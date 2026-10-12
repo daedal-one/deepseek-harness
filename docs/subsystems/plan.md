@@ -19,12 +19,15 @@ The only append point while an agent is running is a prepended `agent/pre-step` 
 ```ts type-equiv
 /** Deployment-owned plan guidance. */
 interface PlanModeConfig {
-  /** Guidance rendered as the `plan:policy` prompt section while plan mode is active. */
-  section: string
+  /**
+   * Guidance rendered as the `plan:policy` prompt section while plan mode is
+   * active; omitted, it takes {@link PLAN_MODE_SECTION}.
+   */
+  section?: string
 }
 ```
 
-A missing, blank, or non-string `section` and any unknown key fail at plugin load rather than being ignored. While plan mode is active, the exact `section` text renders as the `plan:policy` [system-prompt section](system-prompt.md) at order 50; inactive plan mode contributes no text.
+An omitted `section` renders the shipped plan-mode policy text (`PLAN_MODE_SECTION`, the schema default); a blank or non-string value and any unknown key fail at plugin load rather than being ignored. While plan mode is active, the effective `section` text renders as the `plan:policy` [system-prompt section](system-prompt.md) at order 500; inactive plan mode contributes no text.
 
 ## The exit tool and the `/plan` command
 

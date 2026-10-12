@@ -13,7 +13,7 @@ import CommandRuntime from '@deepseek-ai/dsh-commands'
 import { CodeRuntime, type CodeRunRequest, type CodeRunResult } from '@deepseek-ai/dsh-code-runtime'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { turnBoundaryProjectionDefinition } from '@deepseek-ai/dsh-agent-loop'
-import PlanModeController, { EXIT_PLAN_MODE, planProjectionDefinition, resolveConfig } from '../src/index.ts'
+import PlanModeController, { EXIT_PLAN_MODE, PLAN_MODE_SECTION, planProjectionDefinition, resolveConfig } from '../src/index.ts'
 import type { PlanModeConfig } from '../src/index.ts'
 import type { PlanUnitState } from '../src/types.ts'
 
@@ -181,12 +181,14 @@ function execute(ctx: Context, name: string, agent?: Agent) {
 
 describe('resolveConfig', () => {
   it('requires string, non-empty plan instructions', () => {
-    expect(() => resolveConfig({} as PlanModeConfig))
-      .toThrow('needs a string `section`')
     expect(() => resolveConfig({ section: 5 } as unknown as PlanModeConfig))
       .toThrow('needs a string `section`')
     expect(() => resolveConfig({ section: '   ' }))
       .toThrow('needs a non-empty `section`')
+  })
+
+  it('defaults an omitted section to the shipped policy text', () => {
+    expect(resolveConfig({})).toEqual({ section: PLAN_MODE_SECTION })
   })
 
   it('returns a detached plan config', () => {
