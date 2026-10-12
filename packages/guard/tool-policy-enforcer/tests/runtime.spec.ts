@@ -105,7 +105,7 @@ describe('tool-policy enforcement through ToolRuntime', () => {
     })
     expect(first).toMatchObject({
       isError: true,
-      content: [{ text: 'Error: Automatic policy review denied this call without asking the user (attempt 1/3): network access needs review. Change approach or retry this exact tool call; attempt 3 asks the user.' }],
+      content: [{ text: 'Error: Automatic policy review denied this call without asking the user (attempt 1/3): network access needs review. Vary the approach, which is the expected response to an automatic denial; deliberately repeating this exact call is how you reach the user when the retry is genuinely wanted. An intervening different call or turn change resets the chain, and a deterministic denial never becomes approvable however often it repeats. Attempt 3 enters approval if an approval service is available and its policy permits prompting. This is a policy deferral, not a sandbox denial; do not add sandbox_permissions.' }],
     })
     const second = await executeLogged(
       ctx,

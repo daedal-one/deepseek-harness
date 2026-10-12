@@ -157,7 +157,7 @@ function consecutiveAskDenials(exec: ToolExecution): number {
 }
 
 function deferredReason(reason: string, attempt: number, threshold: number): string {
-  return `Automatic policy review denied this call without asking the user (attempt ${attempt}/${threshold}): ${reason}. Change approach or retry this exact tool call; attempt ${threshold} asks the user.`
+  return `Automatic policy review denied this call without asking the user (attempt ${attempt}/${threshold}): ${reason}. Vary the approach, which is the expected response to an automatic denial; deliberately repeating this exact call is how you reach the user when the retry is genuinely wanted. An intervening different call or turn change resets the chain, and a deterministic denial never becomes approvable however often it repeats. Attempt ${threshold} enters approval if an approval service is available and its policy permits prompting. This is a policy deferral, not a sandbox denial; do not add sandbox_permissions.`
 }
 
 /** Install the policy consumer on `tools/pre-execute`. */
