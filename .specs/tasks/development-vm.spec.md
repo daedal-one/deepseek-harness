@@ -4,7 +4,7 @@ type: task
 status: accepted
 summary: Implement and verify opt-in conversation development VMs using Incus, guest Docker, and authenticated previews.
 owners: [carlo]
-progress: completed
+progress: done
 addresses:
   - REQ:sandbox/development-vm#c-world
   - REQ:sandbox/development-vm#c-docker

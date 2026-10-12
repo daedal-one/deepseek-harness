@@ -4,7 +4,7 @@ type: task
 status: accepted
 summary: Repair fork CI provider wiring, clean-checkout fixtures, and English UI expectations after the upstream rebase.
 owners: [carlo]
-progress: in_progress
+progress: in-progress
 addresses:
   - REQ:ui/english-only
   - REQ:llm/provider-management

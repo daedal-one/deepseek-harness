@@ -4,7 +4,7 @@ type: task
 status: accepted
 summary: Retain running and latest operations outside Chat process summaries.
 owners: [carlo]
-progress: completed
+progress: done
 addresses: ["REQ:ui/chat-operation-visibility#c-visible", "REQ:ui/chat-operation-visibility#c-expand", "REQ:ui/chat-operation-visibility#c-replay", "REQ:ui/live-agent-activity-summaries#c-presentation", "REQ:ui/live-agent-activity-summaries#c-evidence"]
 ---
 
