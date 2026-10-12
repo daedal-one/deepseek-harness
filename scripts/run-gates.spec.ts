@@ -225,8 +225,8 @@ describe('gate graph validation', () => {
     const ids = withPnpmEntrypoint(() => gatesForMode('doc-sync').map(subject => subject.id))
 
     expect(ids.slice(0, 11)).toEqual([
-      'doc-typecheck', 'docs-site-build', 'doc-graphs', 'markdown-links', 'spec-lint', 'type-equivalence',
-      'cordis-catalog', 'cordis-inspect-catalog', 'mermaid', 'scoped-events', 'markdown-wrap',
+      'doc-typecheck', 'docs-site-build', 'doc-graphs', 'markdown-links', 'spec-lint', 'forge-spec-baseline',
+      'type-equivalence', 'cordis-catalog', 'cordis-inspect-catalog', 'mermaid', 'scoped-events',
     ])
   })
 

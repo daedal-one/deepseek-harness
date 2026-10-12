@@ -21,14 +21,17 @@ Run a Harness session inside a Forge-assigned worktree with explicit credentials
 
 ## Use this package
 
-This plugin is the DeepSeek Harness implementation of `forge.agent.session/v1`. Forge owns durable work, exact revision selection, Temporal lifecycle, executor allocation, and policy. The adapter accepts that allocated world, injects a verified Forge Spec v0.6 agent render before the first model request, and mounts Forge Intellect as the only model-visible workspace action surface.
+This plugin is the DeepSeek Harness implementation of `forge.agent.session/v1`. Forge owns durable work, exact revision selection, Temporal lifecycle, executor allocation, and policy. The adapter accepts that allocated world, injects a verified Forge Spec v0.7 agent render before the first model request, and mounts Forge Intellect as the only model-visible workspace action surface.
 
 ## Runtime contract
 
 - `GET /v1/capabilities` reports the protocol, command set, approval semantics, checkpoint support, limitations, and evidence versions.
 - Every route requires the deployment-owned token in `X-Forge-Adapter-Token`. The adapter does not accept generic `Authorization`, so a lifecycle reverse proxy can strip ambient credentials without stripping adapter authentication.
 - `POST /v1/sessions/{id}/commands` accepts normalized, idempotent Forge commands. Provider-native fields are never required.
-- `start` fails closed unless the render is `forge-spec-v0.6.0`, its SHA-256 digest matches, lint reported zero errors, the render revision equals the session intent revision, the render target equals the durable work id, and the preflight carries `forge.intellect.action/v2` evidence.
+- `start` fails closed unless the render is `forge-spec-v0.7.0`, its SHA-256 digest matches, lint reported zero errors, the render revision equals the session intent revision, the render target equals the durable work id, and the preflight carries `forge.intellect.action/v2` evidence.
+- `start` verifies the optional extended preflight before any agent handle exists. When the intent carries `specRefs`, the adapter requires the `specsRoot` configuration and refuses start with `SPECS_ROOT_REQUIRED` when it is unset. It resolves each id to a committed `*.spec.md` whose frontmatter declares it, and refuses with `SPEC_UNRESOLVABLE` for an unresolvable or twice-declared id and with `SPEC_RENDER_DRIFT` when the file bytes no longer hash to the declared SHA-256.
+- When the intent carries `repoRevision`, the adapter uses the configured `repoRoot` or derives it as the `specsRoot` parent, and refuses with `REPO_ROOT_REQUIRED` when neither is available. It runs `git rev-parse HEAD` in that root and refuses with `REPO_REVISION_MISMATCH` on a different commit or `REPO_REVISION_UNAVAILABLE` when git cannot report HEAD. A preflight carrying neither extended field keeps the baseline-only behavior, and every refusal is a failed `start` observed through the normal command response.
+- The adapter never reads `.specs/_config.toml` at runtime; a deployment ships neither the spec tree nor its repository root. `scripts/verify-forge-spec-baseline.ts` asserts instead that the exported baseline, the spec tree configuration, and the root AGENTS.md format phrase agree.
 - Each agent scope launches `forge-intellect-action-mcp` and exposes exactly `workspace_read`, `workspace_apply`, `workspace_run`, `workspace_reconcile`, and `workspace_watermarks` under the `mcp__forge_intellect__*` namespace.
 - Workspace and session ledger identities use the same URL-namespace UUIDv5 derivation as Forge's preflight worker, so preflight and agent actions remain one provenance stream.
 - Reads are allowed. Workspace mutations and commands ask through the Harness approval seam; `approve` resolves the pending Forge decision without blocking the Temporal command activity.
@@ -77,6 +80,8 @@ The roster is fixed and prefix-stable for the session. Action results are append
 - **Pause/resume commands are not advertised** — durable process restart uses Harness session resume, but operator pause semantics remain a Forge adapter protocol extension.
 - **One approval is pending per session** — shipped compositions use serial tool calls. A concurrent second question fails closed as unavailable.
 - **Diff content is retained as evidence** — the protocol returns Intellect artifact and watermark references rather than embedding an unbounded patch.
+- **Extended preflight verification needs the committed tree on disk** — a deployment whose intents carry `specRefs` or `repoRevision` must configure `specsRoot`, and `repoRoot` unless it is the `specsRoot` parent, against a checkout at the matching revision. The adapter fails closed instead of skipping a declared check.
+- **Spec id resolution is a frontmatter match, not a spec parse** — the adapter reads the `id:` line of each `*.spec.md` file and does not interpret Forge Spec grammar, refines relationships, or lint a tree it verifies.
 
 ### Dev Note
 

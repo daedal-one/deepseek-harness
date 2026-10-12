@@ -97,6 +97,7 @@
     "verify-md-wrap": "tsx scripts/verify-md-wrap.ts",
     "verify-md-links": "tsx scripts/verify-md-links.ts",
     "spec-lint": "tsx scripts/spec-lint.ts",
+    "verify-forge-spec-baseline": "tsx scripts/verify-forge-spec-baseline.ts",
     "verify-doc-site-fragments": "tsx scripts/verify-doc-site-fragments.ts",
     "verify-public-repository-links": "tsx scripts/verify-public-repository-links.ts",
     "verify-doc-refs": "tsx scripts/verify-doc-refs.ts",

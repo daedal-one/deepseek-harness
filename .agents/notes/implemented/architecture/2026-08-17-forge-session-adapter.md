@@ -8,7 +8,7 @@ Forge had accepted DeepSeek Harness as its first coding-harness adapter, but the
 
 ## Decision
 
-`@deepseek-ai/dsh-forge-session-adapter` translates the Forge protocol at an authenticated HTTP boundary. It requires a canonical executor workspace that Forge has already allocated and refuses `start` unless Forge supplies a digest-checked `forge-spec-v0.6.0` agent render for the exact intent revision, zero lint errors, and correlated `forge.intellect.action/v2` preflight evidence. The render is injected before any user message can drive a model request.
+`@deepseek-ai/dsh-forge-session-adapter` translates the Forge protocol at an authenticated HTTP boundary. It requires a canonical executor workspace that Forge has already allocated and refuses `start` unless Forge supplies a digest-checked `forge-spec-v0.7.0` agent render for the exact intent revision, zero lint errors, and correlated `forge.intellect.action/v2` preflight evidence. The render is injected before any user message can drive a model request. The optional committed-spec and checkout-revision checks are [an extension of this boundary](2026-10-09-forge-adapter-spec-baseline-and-preflight-verification.md).
 
 Each adapter-created Agent receives a scoped `dsh-mcp-client` instance connected to `forge-intellect-action-mcp`. The exact five action tools are the entire model-visible workspace surface. Reads proceed; mutations and commands use the Harness approval seam. The adapter returns at an approval boundary so Temporal can send a later `approve` command without deadlocking the active turn.
 
