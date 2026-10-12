@@ -42,6 +42,7 @@ Every package lives in exactly one group; new packages join existing groups, and
 | [`sandbox/`](sandbox/README.md) | Process-confinement seam; bwrap/Landlock/Seatbelt backends |
 | [`fs/`](fs/README.md) | Filesystem capability family: seam, local impl, model-facing file tools, discovery tools |
 | [`lsp/`](lsp/README.md) | LSP capability family: seam, generic stdio provider, and the `lsp` tool |
+| [`mcp/`](mcp/README.md) | External Model Context Protocol servers whose tools become native tools |
 | [`skill/`](skill/README.md) | Skill capability family: provider registry, local provider, model-facing catalog/loader |
 | [`compaction/`](compaction/README.md) | Compaction capability family: Service Definition + basic provider + command Consumer |
 | [`context/`](context/README.md) | Model-visible request context: workspace instructions, time context, references |
@@ -62,6 +63,7 @@ Every package lives in exactly one group; new packages join existing groups, and
 | [`hooks/`](hooks/README.md) | Hook bridges + the shared Claude Code / Codex wire-protocol library |
 | [`session/`](session/README.md) | Durable session data plane: persistence seam + backends, projection seam, log-backed titles, session reporting |
 | [`session-query/`](session-query/README.md) | Session retrieval family: logical corpus, bounded reads, lineage, semantic filtering, SQLite full-text search |
+| [`memory/`](memory/README.md) | Durable reviewed project and global knowledge with an evidence and review lifecycle |
 | [`settings/`](settings/README.md) | User-settings seam + file-backed provider |
 | [`credentials/`](credentials/README.md) | Credential-reference and credential-record seam + env-over-`.env` provider + authorization flows that ask a human |
 | [`storage/`](storage/README.md) | Non-session storage hub + backends + domain form |
@@ -70,6 +72,7 @@ Every package lives in exactly one group; new packages join existing groups, and
 | [`sdk/`](sdk/README.md) | Out-of-process SDK: JSON-RPC protocol and TypeScript client/server |
 | [`acp/`](acp/README.md) | Automation-only Agent Client Protocol server |
 | [`interaction/`](interaction/README.md) | Human-collaboration plane: approval/interaction seams, permission preset, commands, ask-user tool |
+| [`integration/`](integration/README.md) | Project roster, execution, and confirmed host-session integrations |
 | [`boot/`](boot/README.md) | Shared app-bin boot glue |
 | [`host/`](host/README.md) | Web-GUI host half: API gateway + HTTP route server |
 | [`client/`](client/README.md) | Web-GUI browser half: shell, wire, object services, slots, `ui-*` plugins |
