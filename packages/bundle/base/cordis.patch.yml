@@ -72,12 +72,23 @@
 
     # The transport-independent default for Agents created by entry points.
     # Settings may supply a saved selection; consumers read it at creation time.
+    # `credentialRef` keys the primary route on the key its OpenRouter adapter
+    # needs, so a deployment holding only `DEEPSEEK_API_KEY` starts on the
+    # first-party DeepSeek route instead of failing on the missing OpenRouter
+    # key. Both credentials absent keeps the OpenRouter route, whose request
+    # then fails with `MISSING_CREDENTIAL` naming `OPENROUTER_API_KEY`.
     - id: agent-default-model
       name: '@deepseek-ai/dsh-agent-default-model'
       config:
         provider: openrouter
         model: deepseek/deepseek-v4.1-flash
         reasoningEffort: high
+        credentialRef: OPENROUTER_API_KEY
+        fallbacks:
+          - provider: deepseek-official
+            model: deepseek-flash
+            reasoningEffort: high
+            credentialRef: DEEPSEEK_API_KEY
 
     - id: jobs
       name: '@deepseek-ai/dsh-jobs-local'
@@ -99,9 +110,13 @@
       name: '@deepseek-ai/dsh-credentials-local'
 
     # The shipped OpenRouter route: V4.1 Flash rides a catalog entry for the
-    # retired V4 Flash (pi-ai's installed catalog predates the release), with
-    # every model fact overridden to the new model. The dated nitro route it
-    # replaces is gone; deployments pinning it keep only their own settings.
+    # retired V4 Flash. The installed @earendil-works/pi-ai 0.85.1 OpenRouter
+    # catalog serves the `deepseek/deepseek-v4-flash` family and no V4.1 entry,
+    # and `modelAliases` requires a `catalogModel` from that installed catalog.
+    # Every model fact on the alias is overridden to the release; dropping the
+    # alias waits for a pi-ai bump whose catalog names the V4.1 id directly.
+    # The dated nitro route this replaces is gone; deployments pinning it keep
+    # only their own settings.
     - id: llm-pi-ai
       name: '@deepseek-ai/dsh-llm-pi-ai'
       config:
