@@ -4,7 +4,7 @@ DeepSeek Harness is an all-plugin Cordis agent harness. Read [docs/architecture.
 
 ## Specification workflow
 
-Durable intent lives in `.specs/` using Specs Format v0.6 with Forge Intellect as the evidence provider. Before behavior changes, inspect impact, update or add the accepted TASK, render affected intent for agents, and run `spec lint`; commits touching specs carry a `Spec-Ref:` trailer. Keep forge-spec authoritative for intent and Forge Intellect authoritative for attributable action and adherence evidence.
+Durable intent lives in `.specs/` using Specs Format v0.7 with Forge Intellect as the evidence provider. Before behavior changes, inspect impact, update or add the accepted TASK, render affected intent for agents, and run `spec lint`. Commits touching specs carry a `Spec-Ref:` trailer; a behavior change with no applicable spec carries `Spec-Ref: none (<reason>)`, and the lefthook commit-msg gate requires the trailer on `feat`/`fix`/`perf` commits. Keep forge-spec authoritative for intent and Forge Intellect for attributable action and adherence evidence.
 
 ## Pre-stable APIs and released Session data
 

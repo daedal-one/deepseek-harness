@@ -31,6 +31,11 @@ pre-commit:
     - name: vendor manifest guard
       run: scripts/check-vendor-manifest.sh
 
+commit-msg:
+  jobs:
+    - name: spec-ref trailer
+      run: node_modules/.bin/tsx scripts/verify-spec-ref-commit-msg.ts {1}
+
 pre-merge-commit:
   jobs:
     - name: archived agent notes
