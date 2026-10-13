@@ -124,7 +124,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'currentSelection(id: AgentModelTargetId = MAIN_AGENT_MODEL_TARGET): ModelSelection',
-        description: 'Read one registered target\'s current provider, model, and optional effort.',
+        description: 'Read one registered target\'s current provider, model, and optional effort. The main route follows credential presence, and a stored selection is projected under whichever provider that route currently names.',
         parameters: [{ name: 'id', description: 'target to resolve; defaults to the main Agent.' }],
         returns: 'a detached complete selection.',
       },

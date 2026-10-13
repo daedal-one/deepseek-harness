@@ -101,9 +101,9 @@ A copy is refused when the id is not `[a-z0-9][a-z0-9-]*` (the id becomes a dire
 
 ### Maintaining shipped definitions
 
-The authored [Standard composition](presets/standard/agent.cordis.yml) owns the common coding rows. The repository [generator](../../../scripts/gen-agent-preset-variants.ts) materializes the `ptc` and `cordis` (Create) presets from that composition and explicit variant changes; [the `cordis` patch](variants/cordis.patch.yml) owns its persona and local skill configuration. Run `pnpm run gen-agent-preset-variants` after editing those sources, and `pnpm run verify-agent-preset-variants` to check freshness. Minimal remains independently authored.
+Each shipped preset has a complete, authored composition: [Standard](presets/standard/agent.cordis.yml), [PTC](presets/ptc/agent.cordis.yml), [Create](presets/cordis/agent.cordis.yml), and [Minimal](presets/minimal/agent.cordis.yml). Edit the affected composition directly, and apply shared changes to every preset that needs them.
 
-The package distributes complete `agent.cordis.yml` files and each preset's local assets, not an inheritance relationship. An ordinary directory copy needs neither the generator nor its authoring inputs. Edit a locally copied composition directly; repository regeneration affects only the finite derived files, not user roots or installed presets.
+The package distributes each composition with its preset's local assets. A locally copied preset is independent of the shipped definition; edit its own files to change its composition.
 
 ### Switching a session's preset
 

@@ -1,6 +1,6 @@
 ---
 description: "The shared read of OpenRouter's public model catalog: pure reply parsing, raw-price conversion, a bounded TTL cache, and the failure-mapped network boundary, consumed by both the spend report and model routing."
-kind: "package-reference"
+kind: "package-library"
 ---
 
 # @deepseek-ai/dsh-openrouter-catalog

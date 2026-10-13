@@ -473,6 +473,8 @@ registerTarget(target: AgentModelTarget): () => void
 
 /**
  * Read one registered target's current provider, model, and optional effort.
+ * The main route follows credential presence, and a stored selection is
+ * projected under whichever provider that route currently names.
  * @param id - target to resolve; defaults to the main Agent.
  * @returns a detached complete selection.
  */
