@@ -1189,7 +1189,7 @@ export interface OperationLimits {
 }
 ```
 
-Source: [`packages/experimental/operation/src/runner.ts:52`](../packages/experimental/operation/src/runner.ts)
+Source: [`packages/experimental/operation/src/runner.ts:51`](../packages/experimental/operation/src/runner.ts)
 
 <a id="deepseek-aidsh-experimental-operation-clm"></a>
 
@@ -1892,7 +1892,7 @@ export interface DeepSeekCatalogModel {
 
 Depends on: [`ModelModality`](../packages/llm/llm/src/index.ts) · [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts) · [`SystemPromptUpdate`](../packages/llm/llm/src/index.ts)
 
-Source: [`packages/llm/llm-deepseek/src/index.ts:120`](../packages/llm/llm-deepseek/src/index.ts)
+Source: [`packages/llm/llm-deepseek/src/index.ts:119`](../packages/llm/llm-deepseek/src/index.ts)
 
 <a id="deepseek-aidsh-llm-pi-ai"></a>
 
@@ -2735,14 +2735,14 @@ Source: [`packages/plan/plan-mode/src/index.ts:82`](../packages/plan/plan-mode/s
 
 ## `@deepseek-ai/dsh-plugin-package-inventory-deepseek`
 
-Mounted in shipped profiles: acp, headless, sdk, sdk-minimal, web
+Mounted in shipped profiles: sdk-minimal
 
 Requires: `agents` · `deepseekLlmApiExtensions` · `loader`
 
 ```ts config-catalog
 /** Plugin-package request contribution configuration. */
 export interface Config {
-  /** Contribute `dsh_plugin_packages` to official DeepSeek requests. Defaults to `true`. */
+  /** Contribute `dsh_plugin_packages` to official DeepSeek requests. Defaults to `false`. */
   enabled?: boolean
 }
 ```
@@ -2991,7 +2991,7 @@ Source: [`packages/session/session-activity-summary-llm/src/index.ts:87`](../pac
 
 ## `@deepseek-ai/dsh-session-log-deepseek`
 
-Mounted in shipped profiles: acp, headless, sdk, sdk-minimal, web
+Mounted in shipped profiles: sdk-minimal
 
 Requires: `deepseekLlmApiExtensions` · `sessions`
 
@@ -3189,7 +3189,7 @@ Source: [`packages/session/session-summary-llm/src/index.ts:109`](../packages/se
 
 ## `@deepseek-ai/dsh-session-telemetry-otel`
 
-Mounted in shipped profiles: acp, headless, sdk, web
+Not mounted by any shipped profile (opt-in via the `@deepseek-ai/dsh-base` bundle)
 
 Requires: `sessions`
 
@@ -3200,7 +3200,7 @@ Requires: `sessions`
  * and shutdown deadline at plugin load; `DISABLED` reads neither.
  */
 export interface Config {
-  /** Defaults to `FEEDBACK_ONLY`: capture session history only when feedback is explicitly submitted. */
+  /** Defaults to `DISABLED`: construct no reporting transport or capture coordinator. */
   mode?: SessionTelemetryMode
   /**
    * Passed verbatim to the SDK's OTLP/HTTP log exporter — the complete
@@ -4218,7 +4218,7 @@ export interface EnforcementCondition {
 
 Depends on: [`ApprovalPolicy`](subsystems/approval.md) · [`SandboxMode`](subsystems/sandbox.md)
 
-Source: [`packages/guard/tool-policy-enforcer/src/index.ts:27`](../packages/guard/tool-policy-enforcer/src/index.ts)
+Source: [`packages/guard/tool-policy-enforcer/src/index.ts:25`](../packages/guard/tool-policy-enforcer/src/index.ts)
 
 <a id="deepseek-aidsh-tool-policy-mcp"></a>
 
@@ -4739,7 +4739,7 @@ export interface ToolDiscoveryConfig {
 export type ToolPresentationMode = 'native' | 'ptc' | 'both' | 'operation'
 ```
 
-Source: [`packages/core/tools/src/index.ts:687`](../packages/core/tools/src/index.ts)
+Source: [`packages/core/tools/src/index.ts:676`](../packages/core/tools/src/index.ts)
 
 <a id="deepseek-aidsh-typert-loader"></a>
 
