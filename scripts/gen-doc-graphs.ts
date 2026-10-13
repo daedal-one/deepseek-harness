@@ -418,6 +418,15 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Owns WorkspaceId-branded records over the domain facility; stable sessionIds accounts drive Host RPC and GUI projections.',
   },
   {
+    key: 'docsSearch',
+    pkg: 'docs-search',
+    title: 'Local documentation search',
+    mode: 'seam',
+    implementations: ['docs-search-local'],
+    consumers: ['tool-docs-search'],
+    note: 'Located documentation sections with bounded excerpts, optional semantic ranking, and explicit index builds.',
+  },
+  {
     key: 'sessionQuery',
     pkg: 'session-query',
     title: 'Session reads, traces, filters, and search',

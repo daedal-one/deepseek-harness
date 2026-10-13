@@ -1236,6 +1236,32 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'docsSearch',
+    summary: 'Abstract hybrid documentation search service.',
+    description: 'Abstract hybrid documentation search service. Subclass, implement the abstract methods, and load the subclass as a plugin — it registers as `ctx.docsSearch` (one implementation per context; loading a second throws, which is cordis\' standard duplicate-service behavior).\n\nImplementations must honor these semantics:\n\n- search resolves with ranked results even while the semantic arm is degraded or an index build is running; it rejects only for a rejected request (blank query, out-of-range limit) or an unusable index.\n- A result locates a section by `file` and `anchor` and carries only a bounded excerpt. The complete section body is never returned.\n- reindex returns as soon as a build is scheduled. Callers observe progress through status.\n- Missing embedding assets leave lexical retrieval available. An unusable store prevents both arms from searching. Failures appear in DocsSearchStatus.lastError.',
+    methods: [
+      {
+        signature: 'abstract search(request: DocsSearchRequest): Promise<DocsSearchResult[]>',
+        description: 'Search the documentation corpus with lexical and semantic retrieval.',
+        parameters: [{ name: 'request', description: 'query text, optional corpus kind, and optional result limit.' }],
+        returns: 'ranked section locations, highest score first.',
+        throws: ['when the query is blank or `limit` is outside the provider\'s accepted range.'],
+      },
+      {
+        signature: 'abstract status(): DocsSearchStatus',
+        description: 'Read the current index and semantic-arm state without mutating either.',
+        parameters: [],
+        returns: 'stored chunk and file counts, model readiness, build progress, and the last degradation reason.',
+      },
+      {
+        signature: 'abstract reindex(): DocsReindexHandle',
+        description: 'Schedule an index build that brings stored chunks in line with the corpus.',
+        parameters: [],
+        returns: 'the scheduled build\'s background job id, absent when no job runtime is mounted.',
+      },
+    ],
+  },
+  {
     key: 'e2b',
     summary: 'Creates one lazily consumable E2B SDK handle and deletes the sandbox at timeout or disposal.',
     description: 'Creates one lazily consumable E2B SDK handle and deletes the sandbox at timeout or disposal. Creation begins at plugin construction; adapters await getSandbox before their first operation.',
@@ -5120,6 +5146,34 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'DirectoryRegistrationHandle',
     declaration: 'export interface DirectoryRegistrationHandle {\n    (): void;\n    replace(entries: readonly LlmConfigurableProvider[]): void;\n}',
+  },
+  {
+    name: 'DocsReindexHandle',
+    declaration: 'export interface DocsReindexHandle {\n    jobId?: JobId;\n}',
+  },
+  {
+    name: 'DocsSearchArms',
+    declaration: 'export interface DocsSearchArms {\n    lexical?: number;\n    semantic?: number;\n}',
+  },
+  {
+    name: 'DocsSearchKind',
+    declaration: 'export type DocsSearchKind = \'all\' | DocsSourceKind;',
+  },
+  {
+    name: 'DocsSearchRequest',
+    declaration: 'export interface DocsSearchRequest {\n    query: string;\n    kind?: DocsSearchKind;\n    limit?: number;\n}',
+  },
+  {
+    name: 'DocsSearchResult',
+    declaration: 'export interface DocsSearchResult {\n    source: DocsSourceKind;\n    file: string;\n    anchor: string;\n    title: string;\n    snippet: string;\n    score: number;\n    arms: DocsSearchArms;\n}',
+  },
+  {
+    name: 'DocsSearchStatus',
+    declaration: 'export interface DocsSearchStatus {\n    chunks: number;\n    indexed: number;\n    modelReady: boolean;\n    building: boolean;\n    lastError?: string;\n}',
+  },
+  {
+    name: 'DocsSourceKind',
+    declaration: 'export type DocsSourceKind = \'readme\' | \'catalog\' | \'subsystem\' | \'note\' | \'spec\' | \'guide\';',
   },
   {
     name: 'Domain',

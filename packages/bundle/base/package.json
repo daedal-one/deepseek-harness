@@ -34,6 +34,8 @@
     }
   },
   "dependencies": {
+    "@deepseek-ai/dsh-docs-search-local": "workspace:^",
+    "@deepseek-ai/dsh-tool-docs-search": "workspace:^",
     "@deepseek-ai/cordis-plugin-hmr": "workspace:^",
     "@deepseek-ai/cordis-plugin-timer": "workspace:^",
     "@deepseek-ai/dsh-agent": "workspace:^",

@@ -1,0 +1,8 @@
+version: 1
+scenario: docs-search
+profile: headless
+composition: docs-search
+recording: authored
+header:
+  class: docs-search
+  pin: true

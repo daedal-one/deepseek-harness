@@ -1602,6 +1602,41 @@
       "source": "packages/session-query/session-query/src/types.ts"
     },
     {
+      "doc": "docs/subsystems/docs-search.md",
+      "symbol": "DocsSourceKind",
+      "source": "packages/docs/docs-search/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/docs-search.md",
+      "symbol": "DocsSearchKind",
+      "source": "packages/docs/docs-search/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/docs-search.md",
+      "symbol": "DocsSearchArms",
+      "source": "packages/docs/docs-search/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/docs-search.md",
+      "symbol": "DocsSearchResult",
+      "source": "packages/docs/docs-search/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/docs-search.md",
+      "symbol": "DocsSearchRequest",
+      "source": "packages/docs/docs-search/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/docs-search.md",
+      "symbol": "DocsSearchStatus",
+      "source": "packages/docs/docs-search/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/docs-search.md",
+      "symbol": "DocsReindexHandle",
+      "source": "packages/docs/docs-search/src/types.ts"
+    },
+    {
       "doc": "docs/subsystems/subprocess.md",
       "symbol": "SubprocessSpawnSpec",
       "source": "packages/subprocess/subprocess/src/types.ts"

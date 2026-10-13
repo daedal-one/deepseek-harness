@@ -166,6 +166,10 @@ flowchart LR
   cfg --> plugin_dsh_base_web_fetch_http
   plugin_dsh_base_tool_web["tool-web<br/>@deepseek-ai/dsh-tool-web"]
   cfg --> plugin_dsh_base_tool_web
+  plugin_dsh_base_docs_search_local["docs-search-local<br/>@deepseek-ai/dsh-docs-search-local"]
+  cfg --> plugin_dsh_base_docs_search_local
+  plugin_dsh_base_tool_docs_search["tool-docs-search<br/>@deepseek-ai/dsh-tool-docs-search"]
+  cfg --> plugin_dsh_base_tool_docs_search
   plugin_dsh_base_tools["tools<br/>@deepseek-ai/dsh-tools"]
   cfg --> plugin_dsh_base_tools
   plugin_dsh_base_system_prompt["system-prompt<br/>@deepseek-ai/dsh-system-prompt"]
@@ -259,6 +263,8 @@ flowchart LR
 | `web-search-openrouter` | `@deepseek-ai/dsh-web-search-openrouter` |
 | `web-fetch-http` | `@deepseek-ai/dsh-web-fetch-http` |
 | `tool-web` | `@deepseek-ai/dsh-tool-web` |
+| `docs-search-local` | `@deepseek-ai/dsh-docs-search-local` |
+| `tool-docs-search` | `@deepseek-ai/dsh-tool-docs-search` |
 | `tools` | `@deepseek-ai/dsh-tools` |
 | `system-prompt` | `@deepseek-ai/dsh-system-prompt` |
 | `agent-loop` | `@deepseek-ai/dsh-agent-loop` |
@@ -360,6 +366,8 @@ Patch: [`packages/bundle/base/cordis.patch.yml`](../../packages/bundle/base/cord
 | `web-search-openrouter` | `@deepseek-ai/dsh-web-search-openrouter` | `insert` |
 | `web-fetch-http` | `@deepseek-ai/dsh-web-fetch-http` | `insert` |
 | `tool-web` | `@deepseek-ai/dsh-tool-web` | `insert` |
+| `docs-search-local` | `@deepseek-ai/dsh-docs-search-local` | `insert` |
+| `tool-docs-search` | `@deepseek-ai/dsh-tool-docs-search` | `insert` |
 | `tools` | `@deepseek-ai/dsh-tools` | `insert` |
 | `system-prompt` | `@deepseek-ai/dsh-system-prompt` | `insert` |
 | `agent-loop` | `@deepseek-ai/dsh-agent-loop` | `insert` |
@@ -605,6 +613,8 @@ Patch: [`packages/bundle/base/cordis.patch.yml`](../../packages/bundle/base/cord
 | `web-search-openrouter` | `@deepseek-ai/dsh-web-search-openrouter` | `insert` |
 | `web-fetch-http` | `@deepseek-ai/dsh-web-fetch-http` | `insert` |
 | `tool-web` | `@deepseek-ai/dsh-tool-web` | `insert` |
+| `docs-search-local` | `@deepseek-ai/dsh-docs-search-local` | `insert` |
+| `tool-docs-search` | `@deepseek-ai/dsh-tool-docs-search` | `insert` |
 | `tools` | `@deepseek-ai/dsh-tools` | `insert` |
 | `system-prompt` | `@deepseek-ai/dsh-system-prompt` | `insert` |
 | `agent-loop` | `@deepseek-ai/dsh-agent-loop` | `insert` |
@@ -778,6 +788,8 @@ Patch: [`packages/bundle/base/cordis.patch.yml`](../../packages/bundle/base/cord
 | `web-search-openrouter` | `@deepseek-ai/dsh-web-search-openrouter` | `insert` |
 | `web-fetch-http` | `@deepseek-ai/dsh-web-fetch-http` | `insert` |
 | `tool-web` | `@deepseek-ai/dsh-tool-web` | `insert` |
+| `docs-search-local` | `@deepseek-ai/dsh-docs-search-local` | `insert` |
+| `tool-docs-search` | `@deepseek-ai/dsh-tool-docs-search` | `insert` |
 | `tools` | `@deepseek-ai/dsh-tools` | `insert` |
 | `system-prompt` | `@deepseek-ai/dsh-system-prompt` | `insert` |
 | `agent-loop` | `@deepseek-ai/dsh-agent-loop` | `insert` |
@@ -931,6 +943,8 @@ Patch: [`packages/bundle/base/cordis.patch.yml`](../../packages/bundle/base/cord
 | `web-search-openrouter` | `@deepseek-ai/dsh-web-search-openrouter` | `insert` |
 | `web-fetch-http` | `@deepseek-ai/dsh-web-fetch-http` | `insert` |
 | `tool-web` | `@deepseek-ai/dsh-tool-web` | `insert` |
+| `docs-search-local` | `@deepseek-ai/dsh-docs-search-local` | `insert` |
+| `tool-docs-search` | `@deepseek-ai/dsh-tool-docs-search` | `insert` |
 | `tools` | `@deepseek-ai/dsh-tools` | `insert` |
 | `system-prompt` | `@deepseek-ai/dsh-system-prompt` | `insert` |
 | `agent-loop` | `@deepseek-ai/dsh-agent-loop` | `insert` |
@@ -1039,6 +1053,8 @@ Patch: [`packages/bundle/base/cordis.patch.yml`](../../packages/bundle/base/cord
 | `web-search-openrouter` | `@deepseek-ai/dsh-web-search-openrouter` | `insert` |
 | `web-fetch-http` | `@deepseek-ai/dsh-web-fetch-http` | `insert` |
 | `tool-web` | `@deepseek-ai/dsh-tool-web` | `insert` |
+| `docs-search-local` | `@deepseek-ai/dsh-docs-search-local` | `insert` |
+| `tool-docs-search` | `@deepseek-ai/dsh-tool-docs-search` | `insert` |
 | `tools` | `@deepseek-ai/dsh-tools` | `insert` |
 | `system-prompt` | `@deepseek-ai/dsh-system-prompt` | `insert` |
 | `agent-loop` | `@deepseek-ai/dsh-agent-loop` | `insert` |
@@ -1294,6 +1310,8 @@ Patch: [`packages/bundle/base/cordis.patch.yml`](../../packages/bundle/base/cord
 | `web-search-openrouter` | `@deepseek-ai/dsh-web-search-openrouter` | `insert` |
 | `web-fetch-http` | `@deepseek-ai/dsh-web-fetch-http` | `insert` |
 | `tool-web` | `@deepseek-ai/dsh-tool-web` | `insert` |
+| `docs-search-local` | `@deepseek-ai/dsh-docs-search-local` | `insert` |
+| `tool-docs-search` | `@deepseek-ai/dsh-tool-docs-search` | `insert` |
 | `tools` | `@deepseek-ai/dsh-tools` | `insert` |
 | `system-prompt` | `@deepseek-ai/dsh-system-prompt` | `insert` |
 | `agent-loop` | `@deepseek-ai/dsh-agent-loop` | `insert` |

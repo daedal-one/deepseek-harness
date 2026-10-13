@@ -439,6 +439,16 @@
         fetch: true
         searchTimeoutMs: 60000
 
+    # Opt-in: explicit reindex builds the corpus; first semantic use may download model weights.
+    - id: docs-search-local
+      name: '@deepseek-ai/dsh-docs-search-local'
+      disabled: true
+
+    # Opt-in: consumes the docs-search seam and stays disabled with its service until a deployment enables both.
+    - id: tool-docs-search
+      name: '@deepseek-ai/dsh-tool-docs-search'
+      disabled: true
+
     # ── rows every mode mounts, whose values each overlay may state ──────────────
 
     # The tool registry. Presentation mode is a deployment choice; omitting it here
