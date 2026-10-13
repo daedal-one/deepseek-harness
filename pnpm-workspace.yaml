@@ -56,6 +56,14 @@ allowBuilds:
   # Dockerode exposes an optional SSH transport that this Unix-socket-only owner never uses.
   cpu-features: false
   ssh2: false
+  # The docs-search provider runs EmbeddingGemma locally through
+  # transformers.js; onnxruntime-node is the ONNX runtime that inference
+  # requires, so its install script (native backend selection) is allowed.
+  onnxruntime-node: true
+  # Pulled in by transformers.js for image preprocessing, which the text-only
+  # documentation corpus never exercises; the install script is a prebuilt
+  # fallback we do not need.
+  sharp: false
 
 minimumReleaseAgeExclude:
   # Fresh pi-ai releases carry the model catalog updates that are the whole

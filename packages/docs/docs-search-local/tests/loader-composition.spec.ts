@@ -88,7 +88,7 @@ describe('docs-search real Loader composition through cordis.yml', () => {
     } as unknown as NonNullable<typeof context.loader.internal>
     await context.loader.create({
       name: 'cordis:include',
-      config: { path: `${pathToFileURL(configPath).href}` },
+      config: { path: pathToFileURL(configPath).href },
     })
     await context.loader.await()
 

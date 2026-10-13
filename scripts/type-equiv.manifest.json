@@ -1353,6 +1353,16 @@
     },
     {
       "doc": "docs/subsystems/subagent.md",
+      "symbol": "ChildComposition",
+      "source": "packages/subagent/subagent/src/child-agent.ts"
+    },
+    {
+      "doc": "docs/subsystems/subagent.md",
+      "symbol": "ResolvedChildComposition",
+      "source": "packages/subagent/subagent/src/child-agent.ts"
+    },
+    {
+      "doc": "docs/subsystems/subagent.md",
       "symbol": "ResolvedSubagentStartRequest",
       "source": "packages/subagent/subagent/src/types.ts"
     },
@@ -1600,6 +1610,41 @@
       "doc": "docs/subsystems/session-query.md",
       "symbol": "SessionSearchHit",
       "source": "packages/session-query/session-query/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/docs-search.md",
+      "symbol": "DocsSourceKind",
+      "source": "packages/docs/docs-search/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/docs-search.md",
+      "symbol": "DocsSearchKind",
+      "source": "packages/docs/docs-search/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/docs-search.md",
+      "symbol": "DocsSearchArms",
+      "source": "packages/docs/docs-search/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/docs-search.md",
+      "symbol": "DocsSearchResult",
+      "source": "packages/docs/docs-search/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/docs-search.md",
+      "symbol": "DocsSearchRequest",
+      "source": "packages/docs/docs-search/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/docs-search.md",
+      "symbol": "DocsSearchStatus",
+      "source": "packages/docs/docs-search/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/docs-search.md",
+      "symbol": "DocsReindexHandle",
+      "source": "packages/docs/docs-search/src/types.ts"
     },
     {
       "doc": "docs/subsystems/subprocess.md",

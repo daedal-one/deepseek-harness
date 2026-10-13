@@ -81,6 +81,7 @@ The tool is built on four commitments:
 | [`src/index.ts`](src/index.ts) | Plugin entry: `Config` schema, load-time budget validation, `docs_search` registration |
 | [`src/format.ts`](src/format.ts) | Pure validation, snippet bounding, and the bounded markdown render |
 | [`src/types.ts`](src/types.ts) | Package-owned type declarations: the tool's argument and canonical-result shapes |
+| — | No runtime invariant companion is published; the tool owns no independently maintained mutable relation. |
 
 ### Export shape
 

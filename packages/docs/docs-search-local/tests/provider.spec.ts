@@ -47,7 +47,7 @@ interface StubState {
   /** Whether embedder preparation must fail, proving the degraded path. */
   failModel: boolean
   /** The instance the plugin call constructed. */
-  created?: StubDocsSearch
+  created?: LocalDocsSearchService
 }
 
 /**
