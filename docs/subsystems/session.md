@@ -881,7 +881,7 @@ workspaceDesktop(): { name: string; available: boolean; fileManager: 'finder' | 
 @Remote('historyDetail') historyDetail(request: SessionHistoryDetailRequest, signal: AbortSignal): Promise<SessionEventEntry>
 
 /**
- * Read one cold-safe, message-aligned Session history page.
+ * Read one cold-safe Session history page preserving surface message groups.
  * @param request - durable address, backward cursor, and page budget.
  * @param signal - cancellation for persistence reads.
  * @returns one chronological page.

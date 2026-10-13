@@ -456,7 +456,7 @@ export interface SessionHistoryDetailRequest {
   readonly seq: number
 }
 
-/** One message-aligned backwards-history request. */
+/** One backwards-history request preserving surface message groups. */
 export interface SessionPageRequest {
   readonly address: SessionAddress
   /** Inclusive log cut obtained from the corresponding follow opening frame. */
@@ -529,7 +529,7 @@ export type SessionAssistantStreamFrame =
 export interface SessionPage {
   readonly records: readonly SessionHistoryRecord[]
   readonly hasMore: boolean
-  /** One complete message group exceeds the configured byte limit. */
+  /** One indivisible surface message group or log event exceeds the configured byte limit. */
   readonly oversized?: { readonly bytes: number }
 }
 

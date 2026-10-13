@@ -123,6 +123,84 @@ describe('Session history raw journal', () => {
     }
   })
 
+  it.each([true, false])('pages a long log-only tail with a preceding message: %s', async (withMessage) => {
+    const { ctx } = await harness()
+    const session = ctx.sessions.create(undefined, { meta: { cwd: '/workspace' } })
+    if (withMessage) appendAssistantText(session, 'Workspace return is pending.', 1)
+    for (let index = 0; index < 80; index++) {
+      appendExtension(session, 'workspace/state', { index, error: '等待'.repeat(90) })
+    }
+    const original = session.snapshotEvents()
+    const history = new SessionHistoryController(ctx, (observation) => { observation[Symbol.dispose]() }, 4096)
+    const abort = new AbortController()
+    const address = { kind: 'session' as const, sessionId: session.id }
+    const iterator = history.follow({ address }, abort.signal)[Symbol.asyncIterator]()
+    try {
+      const opened = await iterator.next()
+      if (opened.done || opened.value.type !== 'snapshot') throw new Error('Missing opening snapshot')
+      expect(Buffer.byteLength(JSON.stringify(opened.value), 'utf8')).toBeLessThanOrEqual(4096)
+      expect(opened.value.oversized).toBeUndefined()
+      expect(opened.value.cursor).toBe(original.at(-1)!.seq)
+      expect(opened.value.hasMore).toBe(true)
+      let page: SessionPage = opened.value
+      const reconstructed = [...pageEvents(page)]
+      while (page.hasMore) {
+        const beforeSeq = (page.records[0] as SessionPage['records'][number]).event.seq
+        page = await history.page({ address, beforeSeq, throughSeq: opened.value.cursor }, abort.signal)
+        expect(Buffer.byteLength(JSON.stringify(page), 'utf8')).toBeLessThanOrEqual(4096)
+        expect(page.oversized).toBeUndefined()
+        expect((page.records.at(-1) as SessionPage['records'][number]).event.seq).toBe(beforeSeq - 1)
+        reconstructed.unshift(...pageEvents(page))
+      }
+      expect(reconstructed).toEqual(original)
+      expect(session.snapshotEvents()).toEqual(original)
+    } finally {
+      await disposeFollow(ctx, iterator, abort)
+    }
+  })
+
+  it('counts the final page metadata against the byte allowance', async () => {
+    const { ctx } = await harness()
+    const session = ctx.sessions.create(undefined, { meta: { cwd: '/workspace' } })
+    appendExtension(session, 'workspace/state', { status: 'saving' })
+    appendExtension(session, 'workspace/state', { status: 'pending' })
+    const events = session.snapshotEvents()
+    const complete = { records: events.map(event => ({ type: 'event', event })), hasMore: false }
+    const maxBytes = Buffer.byteLength(JSON.stringify(complete), 'utf8') - 1
+    const history = new SessionHistoryController(ctx, (observation) => { observation[Symbol.dispose]() }, maxBytes)
+    try {
+      const page = await history.page({
+        address: { kind: 'session', sessionId: session.id },
+        throughSeq: (events.at(-1) as SessionEvent).seq,
+      }, new AbortController().signal)
+      expect(Buffer.byteLength(JSON.stringify(page), 'utf8')).toBeLessThanOrEqual(maxBytes)
+      expect(page.hasMore).toBe(true)
+      expect(page.oversized).toBeUndefined()
+      expect(page.records.length).toBeLessThan(events.length)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('reports an indivisible log event exceeding the complete response allowance', async () => {
+    const { ctx } = await harness()
+    const session = ctx.sessions.create(undefined, { meta: { cwd: '/workspace' } })
+    appendUserText(session, 'Hello')
+    const event = appendExtension(session, 'workspace/state', { error: '界'.repeat(4096) })
+    const history = new SessionHistoryController(ctx, (observation) => { observation[Symbol.dispose]() }, 1024)
+    const abort = new AbortController()
+    const iterator = history.follow({ address: { kind: 'session', sessionId: session.id } }, abort.signal)[Symbol.asyncIterator]()
+    try {
+      const opened = await iterator.next()
+      if (opened.done || opened.value.type !== 'snapshot') throw new Error('Missing opening snapshot')
+      expect(opened.value.records).toEqual([{ type: 'event', event }])
+      expect(opened.value.hasMore).toBe(true)
+      expect(opened.value.oversized?.bytes).toBe(Buffer.byteLength(JSON.stringify(opened.value), 'utf8'))
+    } finally {
+      await disposeFollow(ctx, iterator, abort)
+    }
+  })
+
   it('reports the exact oversized payload when one complete message cannot fit', async () => {
     const { ctx } = await harness()
     const session = ctx.sessions.create(undefined, { meta: { cwd: '/workspace' } })
