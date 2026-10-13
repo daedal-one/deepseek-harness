@@ -20,6 +20,7 @@ This group maps the installable patch layers used by `dsh --profile`. Each packa
 
 | Package | Role | ctx key |
 |---|---|---|
+| [`deadal-intellect`](deadal-intellect/README.md) | Conversational specification verification for browser and headless profiles | `forgeIntellect` |
 | [`base`](base/README.md) | Shared core for base-backed profiles | — (patch only) |
 | [`acp-app`](acp-app/README.md) | Automation-only ACP stdio application over base | mounts the ACP bridge |
 | [`web-app`](web-app/README.md) | Browser application layer over base | mounts Web rows |

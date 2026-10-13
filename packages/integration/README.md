@@ -7,7 +7,7 @@ kind: "package-group"
 
 ## Summary
 
-Connect externally owned projects and execution scopes to Harness workspaces and sessions. Forge allocates worktrees, authorization, and credentials; its adapters translate those decisions into Harness configuration. Daedal can transfer approved host maintenance to a separately configured host profile.
+Connect externally owned projects and execution scopes to Harness workspaces and sessions. Forge allocates worktrees, authorization, and credentials; its adapters translate those decisions into Harness configuration. Daedal can transfer approved host maintenance to a separately configured host profile. The Intellect verification profile also works directly in a local repository.
 
 ## Packages
 
@@ -15,6 +15,10 @@ Connect externally owned projects and execution scopes to Harness workspaces and
 - [forge-project-workspaces](forge-project-workspaces/README.md) reconciles project roots into the workspace roster.
 - [forge-session-adapter](forge-session-adapter/README.md) configures the execution scope and command restrictions for an Agent.
 
+- [forge-intellect](forge-intellect/README.md) verifies local code against durable specifications.
+
 ## Related documentation
 
 The [workspace subsystem](../../docs/subsystems/workspace.md) owns workspace identity. The [session subsystem](../../docs/subsystems/session.md) owns the durable session lifecycle.
+
+The [verification subsystem](../../docs/subsystems/forge-intellect.md) owns local plans, reviews and native evidence authority.

@@ -145,7 +145,9 @@ flowchart TD
     pkg_agent_plane["agent-plane"]
     pkg_artifacts_bundle["artifacts-bundle"]
     pkg_base["base"]
+    pkg_deadal_intellect["deadal-intellect"]
     pkg_headless["headless"]
+    pkg_policy["policy"]
     pkg_sdk_app["sdk-app"]
     pkg_sdk_minimal["sdk-minimal"]
     pkg_web_app["web-app"]
@@ -284,6 +286,7 @@ flowchart TD
   end
   subgraph group_integration["packages/integration"]
     pkg_daedal_handoff["daedal-handoff"]
+    pkg_forge_intellect["forge-intellect"]
     pkg_forge_project_workspaces["forge-project-workspaces"]
     pkg_forge_session_adapter["forge-session-adapter"]
   end
@@ -590,6 +593,7 @@ flowchart TD
   pkg_llm_retry --> pkg_timeout
   pkg_agent_default_model --> pkg_agent
   pkg_agent_default_model --> pkg_brand
+  pkg_agent_default_model --> pkg_credentials
   pkg_agent_default_model --> pkg_llm
   pkg_agent_default_model --> pkg_settings
   pkg_agent_default_model --> pkg_typert_protocol
@@ -911,6 +915,19 @@ flowchart TD
   pkg_tool_policy_enforcer --> pkg_tool_policy
   pkg_tool_policy_enforcer --> pkg_tools
   pkg_tool_policy_enforcer --> pkg_user_approval
+  pkg_forge_intellect --> pkg_agent
+  pkg_forge_intellect --> pkg_agent_default_model
+  pkg_forge_intellect --> pkg_credentials
+  pkg_forge_intellect --> pkg_home_paths
+  pkg_forge_intellect --> pkg_jobs
+  pkg_forge_intellect --> pkg_llm
+  pkg_forge_intellect --> pkg_llm_pi_ai
+  pkg_forge_intellect --> pkg_persona
+  pkg_forge_intellect --> pkg_session
+  pkg_forge_intellect --> pkg_subprocess
+  pkg_forge_intellect --> pkg_system_prompt
+  pkg_forge_intellect --> pkg_tools
+  pkg_forge_intellect --> pkg_user_approval
   pkg_tool_ask_user --> pkg_agent
   pkg_tool_ask_user --> pkg_tools
   pkg_tool_ask_user --> pkg_user_questions
@@ -1422,6 +1439,8 @@ flowchart TD
 | [`agent-plane`](../packages/bundle/agent-plane) | `bundle` | — |
 | [`artifacts-bundle`](../packages/bundle/artifacts) | `bundle` | — |
 | [`base`](../packages/bundle/base) | `bundle` | — |
+| [`deadal-intellect`](../packages/bundle/deadal-intellect) | `bundle` | — |
+| [`policy`](../packages/bundle/policy) | `bundle` | — |
 | [`sdk-app`](../packages/bundle/sdk-app) | `bundle` | — |
 | [`sdk-minimal`](../packages/bundle/sdk-minimal) | `bundle` | — |
 | [`client-hmr`](../packages/client/hmr) | `client` | — |
@@ -1565,7 +1584,7 @@ flowchart TD
 | [`llm-deepseek`](../packages/llm/llm-deepseek) | `llm` | [`atomic-write`](../packages/util/atomic-write), [`attachment`](../packages/attachment/attachment), [`credentials`](../packages/credentials/credentials), [`deepseek-llm-api-extensions`](../packages/llm/deepseek-llm-api-extensions), [`fs`](../packages/fs/fs), [`home-paths`](../packages/util/home-paths), [`launch-environment`](../packages/util/launch-environment), [`llm`](../packages/llm/llm), [`settings`](../packages/settings/settings), [`timeout`](../packages/util/timeout) |
 | [`llm-pi-ai`](../packages/llm/llm-pi-ai) | `llm` | [`attachment`](../packages/attachment/attachment), [`authorization`](../packages/credentials/authorization), [`credentials`](../packages/credentials/credentials), [`fs`](../packages/fs/fs), [`launch-environment`](../packages/util/launch-environment), [`llm`](../packages/llm/llm), [`settings`](../packages/settings/settings), [`timeout`](../packages/util/timeout) |
 | [`llm-retry`](../packages/llm/llm-retry) | `llm` | [`agent`](../packages/core/agent), [`brand`](../packages/util/brand), [`invariants`](../packages/runtime-diagnostics/invariants), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`timeout`](../packages/util/timeout) |
-| [`agent-default-model`](../packages/core/agent-default-model) | `core` | [`agent`](../packages/core/agent), [`brand`](../packages/util/brand), [`llm`](../packages/llm/llm), [`settings`](../packages/settings/settings), [`typert-protocol`](../packages/typert/protocol) |
+| [`agent-default-model`](../packages/core/agent-default-model) | `core` | [`agent`](../packages/core/agent), [`brand`](../packages/util/brand), [`credentials`](../packages/credentials/credentials), [`llm`](../packages/llm/llm), [`settings`](../packages/settings/settings), [`typert-protocol`](../packages/typert/protocol) |
 | [`goal`](../packages/goal/goal) | `goal` | [`agent`](../packages/core/agent), [`brand`](../packages/util/brand), [`invariants`](../packages/runtime-diagnostics/invariants), [`llm`](../packages/llm/llm), [`scope`](../packages/core/scope), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`typert-protocol`](../packages/typert/protocol) |
 | [`fs-local`](../packages/fs/fs-local) | `fs` | [`fs`](../packages/fs/fs) |
 | [`fs-observation-policy`](../packages/fs/fs-observation-policy) | `fs` | [`fs`](../packages/fs/fs) |
@@ -1632,6 +1651,7 @@ flowchart TD
 | [`repeat-tool-reminder`](../packages/guard/repeat-tool-reminder) | `guard` | [`agent`](../packages/core/agent), [`tools`](../packages/core/tools) |
 | [`tool-call-timeout-policy`](../packages/guard/timeout-policy) | `guard` | [`llm`](../packages/llm/llm), [`timeout`](../packages/util/timeout), [`tools`](../packages/core/tools) |
 | [`tool-policy-enforcer`](../packages/guard/tool-policy-enforcer) | `guard` | [`sandbox`](../packages/sandbox/sandbox), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`session`](../packages/core/session), [`system-prompt`](../packages/core/system-prompt), [`tool-policy`](../packages/guard/tool-policy), [`tools`](../packages/core/tools), [`user-approval`](../packages/interaction/user-approval) |
+| [`forge-intellect`](../packages/integration/forge-intellect) | `integration` | [`agent`](../packages/core/agent), [`agent-default-model`](../packages/core/agent-default-model), [`credentials`](../packages/credentials/credentials), [`home-paths`](../packages/util/home-paths), [`jobs`](../packages/jobs/jobs), [`llm`](../packages/llm/llm), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`persona`](../packages/preset/persona), [`session`](../packages/core/session), [`subprocess`](../packages/subprocess/subprocess), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`user-approval`](../packages/interaction/user-approval) |
 | [`tool-ask-user`](../packages/interaction/tool-ask-user) | `interaction` | [`agent`](../packages/core/agent), [`tools`](../packages/core/tools), [`user-questions`](../packages/interaction/user-questions) |
 | [`tool-jobs`](../packages/jobs/tool-jobs) | `jobs` | [`agent`](../packages/core/agent), [`jobs`](../packages/jobs/jobs), [`llm`](../packages/llm/llm), [`output-retention`](../packages/util/output-retention), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools) |
 | [`tool-lsp`](../packages/lsp/tool-lsp) | `lsp` | [`llm`](../packages/llm/llm), [`lsp`](../packages/lsp/lsp), [`system-prompt`](../packages/core/system-prompt), [`timeout`](../packages/util/timeout), [`tools`](../packages/core/tools) |

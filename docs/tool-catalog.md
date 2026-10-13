@@ -7,7 +7,7 @@ Every model-facing tool a shipped plugin contributes to `ctx.tools`: the `name`,
 
 This file is GENERATED and verified fresh by `pnpm run verify-tool-catalog` (part of `doc-sync`) — do not edit it by hand. Unlike the cordis catalog (a pure source-AST pass), this generator BOOTS each tool plugin on a real context and reads `ctx.tools.schemas()`, because a tool schema is not statically knowable (runtime-spread enums, concatenated descriptions, config-driven names, raw-JSON-Schema MCP tools). A completeness guard globs `packages/*/tool-*` and fails if any package is missing from the generator's boot manifest, so a new tool cannot be silently undocumented.
 
-Scope: shipped product tools under `packages/*/tool-*`, each booted with its DEFAULT config, except where a Config field is REQUIRED with no default — there the generator must choose, and the per-package note records which branch this page shows. The registered tool NAME can be a load-time config (e.g. `tool-subagent`'s `toolName`), so a deployment may expose a package under a different or additional name — a per-package note records those shipped aliases where they exist. The `examples/` demo tools (e.g. `echo`) are excluded, matching the cordis catalog's packages-only scope.
+Scope: shipped product tools under `packages/*/tool-*` and explicitly catalogued integration entries, each booted with its DEFAULT config, except where a Config field is REQUIRED with no default — there the generator must choose, and the per-package note records which branch this page shows. The registered tool NAME can be a load-time config (e.g. `tool-subagent`'s `toolName`), so a deployment may expose a package under a different or additional name — a per-package note records those shipped aliases where they exist. The `examples/` demo tools (e.g. `echo`) are excluded, matching the cordis catalog's packages-only scope.
 
 ## Tool Package Map
 
@@ -17,6 +17,7 @@ This table connects model-visible tool names to the plugin package and service s
 | --- | --- | --- | --- | --- | --- |
 | `@deepseek-ai/dsh-daedal-handoff` | `handoff_to_host` | `ctx.tools`, `ctx.systemPrompt`, `ctx.fs`, `ctx.subprocess`, `ctx.agents`, `ctx.daedalHandoff (execution time)` | `tool/call`, `tool/result after user confirmation or refusal` | - | Mounted only by the Daedal and Daedal OpenAI presets. The default service does not publish this tool globally. |
 | `@deepseek-ai/dsh-tool-artifact` | `artifact_list`, `artifact_publish`, `artifact_read`, `artifact_restore` | `ctx.tools`, `ctx.artifacts`, `ctx.workspaceRegistry`, `owning agent Session` | `tool/call`, `artifact/published`, `tool/result` | - | - |
+| `@deepseek-ai/dsh-forge-intellect` | `intellect_attest`, `intellect_overview`, `intellect_prepare`, `intellect_reassess`, `intellect_result`, `intellect_run` | `ctx.tools`, `ctx.forgeIntellect`, `an owning Agent at execution time` | `tool/call`, `tool/result`, `approved jobs and retained native verification evidence` | - | The Deadal-intellect profiles mount these tools in the verification preset. Native tools own evidence validation and attestation; schema collection starts no native commands or models. |
 | `@deepseek-ai/dsh-tool-ask-user` | `ask_user_question` | `ctx.tools`, `ctx.userQuestions` | `tool/call`, `tool/result after a UI/provider answers the question` | - | ask_user_question pauses the tool call until the active UI provider returns a human answer. |
 | `@deepseek-ai/dsh-tools` | `run_code`, `tool_search` | `ctx.tools`, `ctx.codeRuntime (execution time)`, `ctx.systemPrompt` | `tool/call`, `one tool/ptc-dispatch-start + tool/ptc-dispatch pair per bridged sub-call`, `tool/result` | - | `tool_search` is present only when discovery is configured; these example bounds defer the MCP namespace. Successful recorded search results admit authorized names for subsequent requests. `run_code` is the reserved transport under `mode: ptc` / `mode: both`. Under `ptc` it is the registry's only wire contribution; other admitted capabilities, including tool_search, are declared in the runtime language's generated SDK. Their program bindings re-enter the guarded tool pipeline and link each nested execution to the outer result. |
 | `@deepseek-ai/dsh-plan-mode` | `exit_plan_mode` | `ctx.tools`, `ctx.systemPrompt`, `ctx.userQuestions (execution time, opportunistic)` | `tool/call`, `plan/mode inactive on an approved review`, `tool/result` | - | exit_plan_mode stays in the model-facing schema while planning is inactive so transitions add no tool-catalog churn on top of the plan-policy change. Its execute path rejects calls outside plan mode; in plan mode it presents the plan over the user-questions seam (approve / keep planning with feedback), and approval logs plan mode inactive at the step boundary. |
@@ -278,6 +279,205 @@ Restore an immutable revision by creating a new head, preserving all history. ex
 ```
 
 Source: [`packages/artifact/tool-artifact/src/index.ts`](../packages/artifact/tool-artifact/src/index.ts)
+
+<a id="deepseek-aidsh-forge-intellect"></a>
+
+## `@deepseek-ai/dsh-forge-intellect`
+
+### `intellect_attest`
+
+Ask native Intellect to issue a qualified immutable local attestation. Requires supported complete owner scope, authenticated intact evidence, current clean revision and exact Spec-Ref implements provenance. Never falls back to manual attestation. Does not push Git notes.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "runId": {
+      "type": "string",
+      "description": "Retained runId returned by intellect_run or listed by intellect_overview."
+    }
+  },
+  "required": [
+    "runId"
+  ]
+}
+```
+
+Source: [`packages/integration/forge-intellect/src/tool.ts`](../packages/integration/forge-intellect/src/tool.ts)
+
+### `intellect_overview`
+
+Discover the current repository, durable specifications, verification prerequisites, configured reviewers, and retained runs. No model requests or repository tests are executed.
+
+```json
+{
+  "type": "object",
+  "properties": {}
+}
+```
+
+Source: [`packages/integration/forge-intellect/src/tool.ts`](../packages/integration/forge-intellect/src/tool.ts)
+
+### `intellect_prepare`
+
+Prepare a concrete immutable verification plan for the clean current repository revision. Select authoritative REQ, INV, IFC or SCN subjects and relevant source files. Every check is required and must have meaningful success markers from actual test assertions; zero executed tests must not count as success. No tests or models run until intellect_run obtains approval. A whole owner includes all its clauses; TASK is never adherence.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "subjects": {
+      "type": "array",
+      "description": "Durable spec IDs, optionally clause anchors. Prefer whole owner scope for attestation.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "source_paths": {
+      "type": "array",
+      "description": "Relevant repository-relative source and test files. Native linked source is added automatically.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "checks": {
+      "type": "array",
+      "description": "Fixed checks for the user to review. Do not invent evidence markers.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique lowercase kebab-case check name."
+          },
+          "argv": {
+            "type": "array",
+            "description": "Exact executable and arguments; no shell expansion.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "obligations": {
+            "type": "array",
+            "description": "Subjects or clauses this check tests.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "timeout_seconds": {
+            "type": "integer",
+            "description": "Positive deadline, at most 3600 seconds."
+          },
+          "success_markers": {
+            "type": "array",
+            "description": "All nonempty exact output markers required with exit zero.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "failure_markers": {
+            "type": "array",
+            "description": "Markers distinguishing failed assertions from infrastructure failures.",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "argv",
+          "obligations",
+          "timeout_seconds",
+          "success_markers",
+          "failure_markers"
+        ]
+      }
+    }
+  },
+  "required": [
+    "subjects",
+    "source_paths",
+    "checks"
+  ]
+}
+```
+
+Source: [`packages/integration/forge-intellect/src/tool.ts`](../packages/integration/forge-intellect/src/tool.ts)
+
+### `intellect_reassess`
+
+Request fresh independent reviewers over authenticated retained executions. The original code, policy and execution dependencies must still be current. Preserves the original run. New commands, changed code or uncaptured source require a full new run.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "runId": {
+      "type": "string",
+      "description": "Retained runId returned by intellect_run or listed by intellect_overview."
+    },
+    "planId": {
+      "type": "string",
+      "description": "Original run plan id from intellect_overview."
+    }
+  },
+  "required": [
+    "runId",
+    "planId"
+  ]
+}
+```
+
+Source: [`packages/integration/forge-intellect/src/tool.ts`](../packages/integration/forge-intellect/src/tool.ts)
+
+### `intellect_result`
+
+Read authenticated native verification decisions and exact-revision freshness. Supported, contradicted, inconclusive and stale are distinct. A missing artifact fails verification; a successful process is not an attestation.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "runId": {
+      "type": "string",
+      "description": "Retained runId returned by intellect_run or listed by intellect_overview."
+    },
+    "evidence": {
+      "type": "boolean",
+      "description": "Include authenticated source citations, reviewer findings and executed-check evidence."
+    }
+  },
+  "required": [
+    "runId"
+  ]
+}
+```
+
+Source: [`packages/integration/forge-intellect/src/tool.ts`](../packages/integration/forge-intellect/src/tool.ts)
+
+### `intellect_run`
+
+Present the exact prepared plan for human approval, then start native verification as a background job. Uses the existing Harness credentials. Returns runId and jobId; collect with job_output (wait: true), then intellect_result. Changed or dirty revisions require a new plan. Job completion is separate from implementation support.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "planId": {
+      "type": "string",
+      "description": "Immutable plan id returned by intellect_prepare."
+    }
+  },
+  "required": [
+    "planId"
+  ]
+}
+```
+
+Source: [`packages/integration/forge-intellect/src/tool.ts`](../packages/integration/forge-intellect/src/tool.ts)
+
+The Deadal-intellect profiles mount these tools in the verification preset. Native tools own evidence validation and attestation; schema collection starts no native commands or models.
 
 <a id="deepseek-aidsh-tool-ask-user"></a>
 

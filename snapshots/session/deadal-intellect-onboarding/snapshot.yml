@@ -1,0 +1,9 @@
+version: 1
+scenario: deadal-intellect-onboarding
+profile: headless
+composition: deadal-intellect
+recording: authored
+header:
+  class: deadal-intellect
+  pin: true
+platform: posix

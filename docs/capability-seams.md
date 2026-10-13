@@ -32,6 +32,8 @@ flowchart LR
   pkg_workspace_files["workspace-files"]
   pkg_file_reference_local["file-reference-local"]
   svc_localContainerRuntime["ctx.localContainerRuntime<br/>Disposable local container execution world"]
+  pkg_forge_intellect["forge-intellect"]
+  svc_forgeIntellect["ctx.forgeIntellect<br/>Native specification verification"]
   pkg_attachment["attachment"]
   svc_attachments["ctx.attachments<br/>Durable binary attachment storage"]
   pkg_attachment_local["attachment-local"]
@@ -314,6 +316,7 @@ flowchart LR
   pkg_experimental_operation_clm --> svc_operationJudgments
   pkg_file_reference --> svc_fileReferences
   pkg_file_reference_local --> svc_fileReferences
+  pkg_forge_intellect --> svc_forgeIntellect
   pkg_forge_project_workspaces --> svc_forgeProjectWorkspaces
   pkg_forge_session_adapter --> svc_forgeSessionAdapter
   pkg_fs --> svc_fs
@@ -571,6 +574,7 @@ flowchart LR
 | `ctx.operationJudgments` | `seam` | [`experimental-operation`](../packages/experimental/operation) | [`experimental-operation-clm`](../packages/experimental/operation-clm) | [`experimental-operation`](../packages/experimental/operation) | - | The operation service owns the sole ranking provider and exact-tokenizer registrations; the CLM adapter supplies bounded System One requests. |
 | `ctx.conversationWorkspaces` | `core` | [`local-container-runtime`](../packages/sandbox/local-container-runtime) | - | [`fs-local-container`](../packages/fs/fs-local-container), [`subprocess-local-container`](../packages/subprocess/subprocess-local-container), `workspace-files`, [`file-reference-local`](../packages/context/file-reference-local) | - | Opt-in ownership, recovery, and automatic branch return for conversation repositories. |
 | `ctx.localContainerRuntime` | `core` | [`local-container-runtime`](../packages/sandbox/local-container-runtime) | - | [`fs-local-container`](../packages/fs/fs-local-container), [`subprocess-local-container`](../packages/subprocess/subprocess-local-container) | - | Owns one verified rootless container world and removable process ranges shared by the filesystem and subprocess providers. |
+| `ctx.forgeIntellect` | `core` | [`forge-intellect`](../packages/integration/forge-intellect) | - | - | - | Owns immutable plans, approved native check jobs, independent reviewer sessions, and qualified attestation tools. |
 | `ctx.attachments` | `seam` | [`attachment`](../packages/attachment/attachment) | [`attachment-local`](../packages/attachment/attachment-local) | [`api-session-controller`](../packages/api/session-controller), [`tool-fs`](../packages/fs/tool-fs), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-deepseek`](../packages/llm/llm-deepseek) | - | The host commits accepted images before session events; provider adapters resolve authorized durable references into provider-native content. |
 | `ctx.fileUploads` | `core` | [`client-file-upload`](../packages/client/file-upload) | - | [`api-session-controller`](../packages/api/session-controller) | - | Owns streaming intake, durable storage, and staged receipt lifetime; the Session controller binds receipts to accepted submissions. |
 | `ctx.modelCatalog` | `seam` | [`model-routing`](../packages/llm/model-routing) | - | [`model-routing`](../packages/llm/model-routing) | - | Defines provider-owned candidate snapshots; no catalog provider is shipped in this tree. |

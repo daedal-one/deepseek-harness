@@ -950,4 +950,442 @@ Patch: [`packages/bundle/acp-app/cordis.patch.yml`](../../packages/bundle/acp-ap
 
 This profile mounts no agent plane, so its model-facing rows stay in the process composition and no per-session preset is mounted.
 
+## Profile `deadal-intellect`
+
+Bundles, in order: `@deepseek-ai/dsh-base` → `@deepseek-ai/dsh-agent-plane` → `@deepseek-ai/dsh-web-app` → `@deepseek-ai/dsh-deadal-intellect`, then the profile's own patch layer.
+
+### Layer `@deepseek-ai/dsh-base`
+
+Patch: [`packages/bundle/base/cordis.patch.yml`](../../packages/bundle/base/cordis.patch.yml).
+
+| Plugin id | Package / module | Layer effect |
+| --- | --- | --- |
+| `timer` | `@deepseek-ai/cordis-plugin-timer` | `insert` |
+| `hmr` | `@deepseek-ai/cordis-plugin-hmr` | `insert` |
+| `llm` | `@deepseek-ai/dsh-llm` | `insert` |
+| `deepseek-llm-api-extensions` | `@deepseek-ai/dsh-deepseek-llm-api-extensions` | `insert` |
+| `session` | `@deepseek-ai/dsh-session` | `insert` |
+| `session-log-deepseek` | `@deepseek-ai/dsh-session-log-deepseek` | `insert` |
+| `typert` | `@deepseek-ai/dsh-typert-registry` | `insert` |
+| `typert-loader` | `@deepseek-ai/dsh-typert-loader` | `insert` |
+| `typert-gateway` | `@deepseek-ai/dsh-api-gateway` | `insert` |
+| `session-title` | `@deepseek-ai/dsh-session-title` | `insert` |
+| `session-title-llm` | `@deepseek-ai/dsh-session-title-first-prompt-llm` | `insert` |
+| `user-questions` | `@deepseek-ai/dsh-user-questions` | `insert` |
+| `agent` | `@deepseek-ai/dsh-agent` | `insert` |
+| `plugin-package-inventory-deepseek` | `@deepseek-ai/dsh-plugin-package-inventory-deepseek` | `insert` |
+| `agent-default-model` | `@deepseek-ai/dsh-agent-default-model` | `insert` |
+| `jobs` | `@deepseek-ai/dsh-jobs-local` | `insert` |
+| `llm-retry` | `@deepseek-ai/dsh-llm-retry` | `insert` |
+| `settings` | `@deepseek-ai/dsh-settings-file` | `insert` |
+| `credentials` | `@deepseek-ai/dsh-credentials-local` | `insert` |
+| `llm-pi-ai` | `@deepseek-ai/dsh-llm-pi-ai` | `insert` |
+| `session-persistence-jsonl` | `@deepseek-ai/dsh-session-persistence-jsonl` | `insert` |
+| `attachment-local` | `@deepseek-ai/dsh-attachment-local` | `insert` |
+| `session-query-sqlite` | `@deepseek-ai/dsh-session-query-sqlite` | `insert` |
+| `session-projection` | `@deepseek-ai/dsh-session-projection` | `insert` |
+| `storage` | `@deepseek-ai/dsh-storage` | `insert` |
+| `storage-json` | `@deepseek-ai/dsh-storage-json` | `insert` |
+| `storage-domain` | `@deepseek-ai/dsh-storage-domain` | `insert` |
+| `session-projection-cache` | `@deepseek-ai/dsh-session-projection-cache` | `insert` |
+| `session-telemetry-otel` | `@deepseek-ai/dsh-session-telemetry-otel` | `insert` |
+| `subprocess` | `@deepseek-ai/dsh-subprocess-local` | `insert` |
+| `sandbox` | `@deepseek-ai/dsh-sandbox-local` | `insert` |
+| `sandbox-policy` | `@deepseek-ai/dsh-sandbox-policy` | `insert` |
+| `bash-sandbox` | `@deepseek-ai/dsh-bash-sandbox` | `insert` |
+| `pwsh-sandbox` | `@deepseek-ai/dsh-pwsh-sandbox` | `insert` |
+| `approval` | `@deepseek-ai/dsh-user-approval` | `insert` |
+| `permission` | `@deepseek-ai/dsh-permission-presets` | `insert` |
+| `shell-env` | `@deepseek-ai/dsh-shell-env` | `insert` |
+| `tool-bash` | `@deepseek-ai/dsh-tool-bash` | `insert` |
+| `tool-pwsh` | `@deepseek-ai/dsh-tool-pwsh` | `insert` |
+| `tool-jobs` | `@deepseek-ai/dsh-tool-jobs` | `insert` |
+| `fs-observation-policy` | `@deepseek-ai/dsh-fs-observation-policy` | `insert` |
+| `tool-fs` | `@deepseek-ai/dsh-tool-fs` | `insert` |
+| `tool-fs-search` | `@deepseek-ai/dsh-tool-fs-search` | `insert` |
+| `agent-instructions` | `@deepseek-ai/dsh-agent-instructions` | `insert` |
+| `skill` | `@deepseek-ai/dsh-skill` | `insert` |
+| `skill-filesystem` | `@deepseek-ai/dsh-skill-filesystem` | `insert` |
+| `skill-badge` | `@deepseek-ai/dsh-skill-badge` | `insert` |
+| `tool-skill` | `@deepseek-ai/dsh-tool-skill` | `insert` |
+| `commands` | `@deepseek-ai/dsh-commands` | `insert` |
+| `command-feedback` | `@deepseek-ai/dsh-command-feedback` | `insert` |
+| `goal` | `@deepseek-ai/dsh-goal` | `insert` |
+| `goal-round-driver` | `@deepseek-ai/dsh-goal-round-driver` | `insert` |
+| `command-goal` | `@deepseek-ai/dsh-command-goal` | `insert` |
+| `plan-mode` | `@deepseek-ai/dsh-plan-mode` | `insert` |
+| `token-meter` | `@deepseek-ai/dsh-token-meter` | `insert` |
+| `compaction-basic` | `@deepseek-ai/dsh-compaction-basic` | `insert` |
+| `command-compact` | `@deepseek-ai/dsh-command-compact` | `insert` |
+| `subagent` | `@deepseek-ai/dsh-subagent` | `insert` |
+| `subagent-spawn-in-process` | `@deepseek-ai/dsh-subagent-spawn-in-process` | `insert` |
+| `subagent-fork-in-process` | `@deepseek-ai/dsh-subagent-fork-in-process` | `insert` |
+| `tool-subagent-control` | `@deepseek-ai/dsh-tool-subagent-control` | `insert` |
+| `tool-subagent-list-agents` | `@deepseek-ai/dsh-tool-subagent-control/list-agents` | `insert` |
+| `tool-subagent` | `@deepseek-ai/dsh-tool-subagent` | `insert` |
+| `tool-subagent-fork` | `@deepseek-ai/dsh-tool-subagent` | `insert` |
+| `workflow-worker-thread` | `@deepseek-ai/dsh-workflow-worker-thread` | `insert` |
+| `tool-workflow` | `@deepseek-ai/dsh-tool-workflow` | `insert` |
+| `timeout-policy` | `@deepseek-ai/dsh-tool-call-timeout-policy` | `insert` |
+| `spill-local` | `@deepseek-ai/dsh-spill-local` | `insert` |
+| `spill-policy` | `@deepseek-ai/dsh-spill-policy` | `insert` |
+| `session-checkpoint-policy` | `@deepseek-ai/dsh-session-checkpoint-policy` | `insert` |
+| `tool-result-pruner` | `@deepseek-ai/dsh-compaction-tool-result-pruner` | `insert` |
+| `tool-todo` | `@deepseek-ai/dsh-tool-todo` | `insert` |
+| `tool-goal` | `@deepseek-ai/dsh-tool-goal` | `insert` |
+| `tool-ralph` | `@deepseek-ai/dsh-tool-ralph` | `insert` |
+| `repeat-tool-reminder` | `@deepseek-ai/dsh-repeat-tool-reminder` | `insert` |
+| `web` | `@deepseek-ai/dsh-web` | `insert` |
+| `web-search-openrouter` | `@deepseek-ai/dsh-web-search-openrouter` | `insert` |
+| `web-fetch-http` | `@deepseek-ai/dsh-web-fetch-http` | `insert` |
+| `tool-web` | `@deepseek-ai/dsh-tool-web` | `insert` |
+| `tools` | `@deepseek-ai/dsh-tools` | `insert` |
+| `system-prompt` | `@deepseek-ai/dsh-system-prompt` | `insert` |
+| `agent-loop` | `@deepseek-ai/dsh-agent-loop` | `insert` |
+| `fs-sandbox` | `@deepseek-ai/dsh-fs-sandbox` | `insert` |
+| `llm-deepseek` | `@deepseek-ai/dsh-llm-deepseek` | `insert` |
+
+### Layer `@deepseek-ai/dsh-agent-plane`
+
+Patch: [`packages/bundle/agent-plane/cordis.patch.yml`](../../packages/bundle/agent-plane/cordis.patch.yml).
+
+| Plugin id | Package / module | Layer effect |
+| --- | --- | --- |
+| `tool-bash` | `@deepseek-ai/dsh-tool-bash` | `disable` |
+| `tool-pwsh` | `@deepseek-ai/dsh-tool-pwsh` | `disable` |
+| `tool-jobs` | `@deepseek-ai/dsh-tool-jobs` | `disable` |
+| `tool-fs` | `@deepseek-ai/dsh-tool-fs` | `disable` |
+| `tool-fs-search` | `@deepseek-ai/dsh-tool-fs-search` | `disable` |
+| `skill-filesystem` | `@deepseek-ai/dsh-skill-filesystem` | `disable` |
+| `tool-skill` | `@deepseek-ai/dsh-tool-skill` | `disable` |
+| `command-goal` | `@deepseek-ai/dsh-command-goal` | `disable` |
+| `tool-goal` | `@deepseek-ai/dsh-tool-goal` | `disable` |
+| `plan-mode` | `@deepseek-ai/dsh-plan-mode` | `disable` |
+| `compaction-basic` | `@deepseek-ai/dsh-compaction-basic` | `disable` |
+| `command-compact` | `@deepseek-ai/dsh-command-compact` | `disable` |
+| `tool-result-pruner` | `@deepseek-ai/dsh-compaction-tool-result-pruner` | `disable` |
+| `tool-subagent-control` | `@deepseek-ai/dsh-tool-subagent-control` | `disable` |
+| `tool-subagent-list-agents` | `@deepseek-ai/dsh-tool-subagent-control/list-agents` | `disable` |
+| `tool-subagent` | `@deepseek-ai/dsh-tool-subagent` | `disable` |
+| `tool-subagent-fork` | `@deepseek-ai/dsh-tool-subagent` | `disable` |
+| `workflow-worker-thread` | `@deepseek-ai/dsh-workflow-worker-thread` | `disable` |
+| `tool-workflow` | `@deepseek-ai/dsh-tool-workflow` | `disable` |
+| `tool-ralph` | `@deepseek-ai/dsh-tool-ralph` | `disable` |
+| `agent-instructions` | `@deepseek-ai/dsh-agent-instructions` | `disable` |
+| `tool-todo` | `@deepseek-ai/dsh-tool-todo` | `disable` |
+| `tool-web` | `@deepseek-ai/dsh-tool-web` | `disable` |
+| `subagent-model-selection-settings` | `@deepseek-ai/dsh-tool-subagent/model-selection-settings` | `insert` |
+| `agent-presets` | `@deepseek-ai/dsh-agent-presets` | `insert` |
+
+### Layer `@deepseek-ai/dsh-web-app`
+
+Patch: [`packages/bundle/web-app/cordis.patch.yml`](../../packages/bundle/web-app/cordis.patch.yml).
+
+| Plugin id | Package / module | Layer effect |
+| --- | --- | --- |
+| `system-prompt` | `@deepseek-ai/dsh-system-prompt` | `override` |
+| `session-query-sqlite` | `@deepseek-ai/dsh-session-query-sqlite` | `override` |
+| `tools` | `@deepseek-ai/dsh-tools` | `override` |
+| `code-runtime` | `@deepseek-ai/dsh-code-runtime-worker-thread` | `insert` |
+| `message-feedback` | `@deepseek-ai/dsh-message-feedback` | `insert` |
+| `session-log-download` | `@deepseek-ai/dsh-session-log-export` | `insert` |
+| `open-in-app` | `@deepseek-ai/dsh-host-open-in-app` | `insert` |
+| `ui-open-in-app` | `@deepseek-ai/dsh-client-ui-open-in-app` | `insert` |
+| `workspace` | `@deepseek-ai/dsh-workspace` | `insert` |
+| `session-reference` | `@deepseek-ai/dsh-session-reference` | `insert` |
+| `file-reference-local` | `@deepseek-ai/dsh-file-reference-local` | `insert` |
+| `session-stats` | `@deepseek-ai/dsh-session-stats` | `insert` |
+| `session-turn-outline` | `@deepseek-ai/dsh-session-turn-outline` | `insert` |
+| `session-activity-summary` | `@deepseek-ai/dsh-session-activity-summary-llm` | `insert` |
+| `session-summary` | `@deepseek-ai/dsh-session-summary-llm` | `insert` |
+| `directory-picker` | `@deepseek-ai/dsh-host-directory-picker-auto` | `insert` |
+| `plugin-inventory` | `@deepseek-ai/dsh-host-plugin-inventory` | `insert` |
+| `openrouter-spend` | `@deepseek-ai/dsh-openrouter-spend` | `insert` |
+| `session-info` | `@deepseek-ai/dsh-session-info` | `insert` |
+| `session-controller` | `@deepseek-ai/dsh-api-session-controller` | `insert` |
+| `workspace-files` | `@deepseek-ai/dsh-api-workspace-files` | `insert` |
+| `authorization` | `@deepseek-ai/dsh-authorization` | `insert` |
+| `settings-controller` | `@deepseek-ai/dsh-api-settings-controller` | `insert` |
+| `workspace-controller` | `@deepseek-ai/dsh-api-workspace-controller` | `insert` |
+| `cordis-host-runner` | `@deepseek-ai/dsh-cordis-host-runner` | `insert` |
+| `web-startup` | `@deepseek-ai/dsh-web-app/startup` | `insert` |
+| `webserver` | `@deepseek-ai/dsh-host-webserver` | `insert` |
+| `web-runtime` | `@deepseek-ai/dsh-web-app` | `insert` |
+| `client-hmr` | `@deepseek-ai/dsh-client-hmr` | `insert` |
+| `modules` | `@deepseek-ai/dsh-client-modules` | `insert` |
+| `connection` | `@deepseek-ai/dsh-client-connection` | `insert` |
+| `file-upload` | `@deepseek-ai/dsh-client-file-upload` | `insert` |
+| `api-remotes` | `@deepseek-ai/dsh-api-remotes` | `insert` |
+| `cordis-client-runner` | `@deepseek-ai/dsh-cordis-client-runner` | `insert` |
+| `ui-theme` | `@deepseek-ai/dsh-client-ui-theme` | `insert` |
+| `locale` | `@deepseek-ai/dsh-client-locale` | `insert` |
+| `ui-layout` | `@deepseek-ai/dsh-client-ui-layout` | `insert` |
+| `ui-renderer` | `@deepseek-ai/dsh-client-ui-renderer` | `insert` |
+| `ui-session` | `@deepseek-ai/dsh-client-ui-session` | `insert` |
+| `resources` | `@deepseek-ai/dsh-client-resources` | `insert` |
+| `ui-sidebar` | `@deepseek-ai/dsh-client-ui-sidebar` | `insert` |
+| `ui-sidebar-right` | `@deepseek-ai/dsh-client-ui-sidebar-right` | `insert` |
+| `ui-sidebar-documentpreview` | `@deepseek-ai/dsh-client-ui-sidebar-documentpreview` | `insert` |
+| `ui-sidebar-files` | `@deepseek-ai/dsh-client-ui-sidebar-files` | `insert` |
+| `ui-settings` | `@deepseek-ai/dsh-client-ui-settings` | `insert` |
+| `ui-settings-general` | `@deepseek-ai/dsh-client-ui-settings-general` | `insert` |
+| `ui-device-access` | `@deepseek-ai/dsh-client-ui-device-access` | `insert` |
+| `ui-settings-models` | `@deepseek-ai/dsh-client-ui-settings-models` | `insert` |
+| `ui-settings-plugin-inventory` | `@deepseek-ai/dsh-client-ui-settings-plugin-inventory` | `insert` |
+| `ui-conversation` | `@deepseek-ai/dsh-client-ui-conversation` | `insert` |
+| `ui-approval` | `@deepseek-ai/dsh-client-ui-approval` | `insert` |
+| `ui-chat` | `@deepseek-ai/dsh-client-ui-chat` | `insert` |
+| `ui-brand-official` | `@deepseek-ai/dsh-client-ui-brand-official` | `insert` |
+| `ui-attachment` | `@deepseek-ai/dsh-client-ui-attachment` | `insert` |
+| `ui-tool` | `@deepseek-ai/dsh-client-ui-tool` | `insert` |
+| `ui-cordis` | `@deepseek-ai/dsh-client-ui-cordis` | `insert` |
+| `ui-workflow-run` | `@deepseek-ai/dsh-client-ui-workflow-run` | `insert` |
+| `ui-deliverables` | `@deepseek-ai/dsh-client-ui-deliverables` | `insert` |
+| `ui-workspace` | `@deepseek-ai/dsh-client-ui-workspace` | `insert` |
+| `ui-input-trigger` | `@deepseek-ai/dsh-client-ui-input-trigger` | `insert` |
+| `ui-commands` | `@deepseek-ai/dsh-client-ui-commands` | `insert` |
+| `ui-skill` | `@deepseek-ai/dsh-client-ui-skill` | `insert` |
+| `ui-subagent` | `@deepseek-ai/dsh-client-ui-subagent` | `insert` |
+| `ui-reference` | `@deepseek-ai/dsh-client-ui-reference` | `insert` |
+| `ui-schedule` | `@deepseek-ai/dsh-client-ui-schedule` | `insert` |
+| `ui-jobs` | `@deepseek-ai/dsh-client-ui-jobs` | `insert` |
+| `ui-goal` | `@deepseek-ai/dsh-client-ui-goal` | `insert` |
+| `ui-message-feedback` | `@deepseek-ai/dsh-client-ui-message-feedback` | `insert` |
+| `ui-model-selection` | `@deepseek-ai/dsh-client-ui-model-selection` | `insert` |
+| `ui-permission` | `@deepseek-ai/dsh-client-ui-permission-presets` | `insert` |
+| `ui-agent-preset` | `@deepseek-ai/dsh-client-ui-agent-preset` | `insert` |
+| `ui-settings-plugins` | `@deepseek-ai/dsh-client-ui-settings-plugins` | `insert` |
+| `ui-plan` | `@deepseek-ai/dsh-client-ui-plan` | `insert` |
+| `ui-user-questions` | `@deepseek-ai/dsh-client-ui-user-questions` | `insert` |
+| `ui-trajectory` | `@deepseek-ai/dsh-client-ui-trajectory` | `insert` |
+| `ui-session-info` | `@deepseek-ai/dsh-client-ui-session-info` | `insert` |
+| `ui-terminal` | `@deepseek-ai/dsh-client-ui-terminal` | `insert` |
+
+### Layer `@deepseek-ai/dsh-deadal-intellect`
+
+Patch: [`packages/bundle/deadal-intellect/cordis.patch.yml`](../../packages/bundle/deadal-intellect/cordis.patch.yml).
+
+| Plugin id | Package / module | Layer effect |
+| --- | --- | --- |
+| `agent-presets` | `@deepseek-ai/dsh-agent-presets` | `override` |
+| `agent-default-model` | `@deepseek-ai/dsh-agent-default-model` | `override` |
+| `forge-intellect` | `@deepseek-ai/dsh-forge-intellect` | `insert` |
+
+### Per-session preset plane
+
+The `@deepseek-ai/dsh-agent-plane` layer disables 23 model-facing host rows and inserts `agent-presets` with `default: standard`. Every session then mounts [`packages/preset/agent-presets/presets/standard/agent.cordis.yml`](../../packages/preset/agent-presets/presets/standard/agent.cordis.yml) in its own scope, so the table resolves each disabled host row to the package the default preset mounts for it.
+
+| Host row disabled by the agent plane | Package mounted by the default preset |
+| --- | --- |
+| `tool-bash` | `@deepseek-ai/dsh-tool-bash` |
+| `tool-pwsh` | `@deepseek-ai/dsh-tool-pwsh` |
+| `tool-jobs` | `@deepseek-ai/dsh-tool-jobs` |
+| `tool-fs` | `@deepseek-ai/dsh-tool-fs` |
+| `tool-fs-search` | `@deepseek-ai/dsh-tool-fs-search` |
+| `skill-filesystem` | `@deepseek-ai/dsh-skill-filesystem` |
+| `tool-skill` | `@deepseek-ai/dsh-tool-skill` |
+| `command-goal` | `@deepseek-ai/dsh-command-goal` |
+| `tool-goal` | `@deepseek-ai/dsh-tool-goal` |
+| `plan-mode` | `@deepseek-ai/dsh-plan-mode` |
+| `compaction-basic` | `@deepseek-ai/dsh-compaction-basic` |
+| `command-compact` | `@deepseek-ai/dsh-command-compact` |
+| `tool-result-pruner` | `@deepseek-ai/dsh-compaction-tool-result-pruner` |
+| `tool-subagent-control` | `@deepseek-ai/dsh-tool-subagent-control` |
+| `tool-subagent-list-agents` | `@deepseek-ai/dsh-tool-subagent-control/list-agents` |
+| `tool-subagent` | `@deepseek-ai/dsh-tool-subagent` |
+| `tool-subagent-fork` | `@deepseek-ai/dsh-tool-subagent` |
+| `workflow-worker-thread` | `@deepseek-ai/dsh-workflow-worker-thread` |
+| `tool-workflow` | `@deepseek-ai/dsh-tool-workflow` |
+| `tool-ralph` | `@deepseek-ai/dsh-tool-ralph` |
+| `agent-instructions` | `@deepseek-ai/dsh-agent-instructions` |
+| `tool-todo` | `@deepseek-ai/dsh-tool-todo` |
+| `tool-web` | `@deepseek-ai/dsh-tool-web` |
+
+The preset also mounts rows with no host row: `persona` (`@deepseek-ai/dsh-persona`), `planning` (`cordis:group`), `compaction` (`cordis:group`), `delegation` (`cordis:group`), `tool-ask-user` (`@deepseek-ai/dsh-tool-ask-user`), `present` (`@deepseek-ai/dsh-tool-present`).
+
+The preset carries these rows disabled: `tool-subagent-codex` (`@deepseek-ai/dsh-tool-subagent`), `tool-subagent-claude-code` (`@deepseek-ai/dsh-tool-subagent`).
+
+## Profile `deadal-intellect-headless`
+
+Bundles, in order: `@deepseek-ai/dsh-base` → `@deepseek-ai/dsh-agent-plane` → `@deepseek-ai/dsh-headless` → `@deepseek-ai/dsh-deadal-intellect`, then the profile's own patch layer.
+
+### Layer `@deepseek-ai/dsh-base`
+
+Patch: [`packages/bundle/base/cordis.patch.yml`](../../packages/bundle/base/cordis.patch.yml).
+
+| Plugin id | Package / module | Layer effect |
+| --- | --- | --- |
+| `timer` | `@deepseek-ai/cordis-plugin-timer` | `insert` |
+| `hmr` | `@deepseek-ai/cordis-plugin-hmr` | `insert` |
+| `llm` | `@deepseek-ai/dsh-llm` | `insert` |
+| `deepseek-llm-api-extensions` | `@deepseek-ai/dsh-deepseek-llm-api-extensions` | `insert` |
+| `session` | `@deepseek-ai/dsh-session` | `insert` |
+| `session-log-deepseek` | `@deepseek-ai/dsh-session-log-deepseek` | `insert` |
+| `typert` | `@deepseek-ai/dsh-typert-registry` | `insert` |
+| `typert-loader` | `@deepseek-ai/dsh-typert-loader` | `insert` |
+| `typert-gateway` | `@deepseek-ai/dsh-api-gateway` | `insert` |
+| `session-title` | `@deepseek-ai/dsh-session-title` | `insert` |
+| `session-title-llm` | `@deepseek-ai/dsh-session-title-first-prompt-llm` | `insert` |
+| `user-questions` | `@deepseek-ai/dsh-user-questions` | `insert` |
+| `agent` | `@deepseek-ai/dsh-agent` | `insert` |
+| `plugin-package-inventory-deepseek` | `@deepseek-ai/dsh-plugin-package-inventory-deepseek` | `insert` |
+| `agent-default-model` | `@deepseek-ai/dsh-agent-default-model` | `insert` |
+| `jobs` | `@deepseek-ai/dsh-jobs-local` | `insert` |
+| `llm-retry` | `@deepseek-ai/dsh-llm-retry` | `insert` |
+| `settings` | `@deepseek-ai/dsh-settings-file` | `insert` |
+| `credentials` | `@deepseek-ai/dsh-credentials-local` | `insert` |
+| `llm-pi-ai` | `@deepseek-ai/dsh-llm-pi-ai` | `insert` |
+| `session-persistence-jsonl` | `@deepseek-ai/dsh-session-persistence-jsonl` | `insert` |
+| `attachment-local` | `@deepseek-ai/dsh-attachment-local` | `insert` |
+| `session-query-sqlite` | `@deepseek-ai/dsh-session-query-sqlite` | `insert` |
+| `session-projection` | `@deepseek-ai/dsh-session-projection` | `insert` |
+| `storage` | `@deepseek-ai/dsh-storage` | `insert` |
+| `storage-json` | `@deepseek-ai/dsh-storage-json` | `insert` |
+| `storage-domain` | `@deepseek-ai/dsh-storage-domain` | `insert` |
+| `session-projection-cache` | `@deepseek-ai/dsh-session-projection-cache` | `insert` |
+| `session-telemetry-otel` | `@deepseek-ai/dsh-session-telemetry-otel` | `insert` |
+| `subprocess` | `@deepseek-ai/dsh-subprocess-local` | `insert` |
+| `sandbox` | `@deepseek-ai/dsh-sandbox-local` | `insert` |
+| `sandbox-policy` | `@deepseek-ai/dsh-sandbox-policy` | `insert` |
+| `bash-sandbox` | `@deepseek-ai/dsh-bash-sandbox` | `insert` |
+| `pwsh-sandbox` | `@deepseek-ai/dsh-pwsh-sandbox` | `insert` |
+| `approval` | `@deepseek-ai/dsh-user-approval` | `insert` |
+| `permission` | `@deepseek-ai/dsh-permission-presets` | `insert` |
+| `shell-env` | `@deepseek-ai/dsh-shell-env` | `insert` |
+| `tool-bash` | `@deepseek-ai/dsh-tool-bash` | `insert` |
+| `tool-pwsh` | `@deepseek-ai/dsh-tool-pwsh` | `insert` |
+| `tool-jobs` | `@deepseek-ai/dsh-tool-jobs` | `insert` |
+| `fs-observation-policy` | `@deepseek-ai/dsh-fs-observation-policy` | `insert` |
+| `tool-fs` | `@deepseek-ai/dsh-tool-fs` | `insert` |
+| `tool-fs-search` | `@deepseek-ai/dsh-tool-fs-search` | `insert` |
+| `agent-instructions` | `@deepseek-ai/dsh-agent-instructions` | `insert` |
+| `skill` | `@deepseek-ai/dsh-skill` | `insert` |
+| `skill-filesystem` | `@deepseek-ai/dsh-skill-filesystem` | `insert` |
+| `skill-badge` | `@deepseek-ai/dsh-skill-badge` | `insert` |
+| `tool-skill` | `@deepseek-ai/dsh-tool-skill` | `insert` |
+| `commands` | `@deepseek-ai/dsh-commands` | `insert` |
+| `command-feedback` | `@deepseek-ai/dsh-command-feedback` | `insert` |
+| `goal` | `@deepseek-ai/dsh-goal` | `insert` |
+| `goal-round-driver` | `@deepseek-ai/dsh-goal-round-driver` | `insert` |
+| `command-goal` | `@deepseek-ai/dsh-command-goal` | `insert` |
+| `plan-mode` | `@deepseek-ai/dsh-plan-mode` | `insert` |
+| `token-meter` | `@deepseek-ai/dsh-token-meter` | `insert` |
+| `compaction-basic` | `@deepseek-ai/dsh-compaction-basic` | `insert` |
+| `command-compact` | `@deepseek-ai/dsh-command-compact` | `insert` |
+| `subagent` | `@deepseek-ai/dsh-subagent` | `insert` |
+| `subagent-spawn-in-process` | `@deepseek-ai/dsh-subagent-spawn-in-process` | `insert` |
+| `subagent-fork-in-process` | `@deepseek-ai/dsh-subagent-fork-in-process` | `insert` |
+| `tool-subagent-control` | `@deepseek-ai/dsh-tool-subagent-control` | `insert` |
+| `tool-subagent-list-agents` | `@deepseek-ai/dsh-tool-subagent-control/list-agents` | `insert` |
+| `tool-subagent` | `@deepseek-ai/dsh-tool-subagent` | `insert` |
+| `tool-subagent-fork` | `@deepseek-ai/dsh-tool-subagent` | `insert` |
+| `workflow-worker-thread` | `@deepseek-ai/dsh-workflow-worker-thread` | `insert` |
+| `tool-workflow` | `@deepseek-ai/dsh-tool-workflow` | `insert` |
+| `timeout-policy` | `@deepseek-ai/dsh-tool-call-timeout-policy` | `insert` |
+| `spill-local` | `@deepseek-ai/dsh-spill-local` | `insert` |
+| `spill-policy` | `@deepseek-ai/dsh-spill-policy` | `insert` |
+| `session-checkpoint-policy` | `@deepseek-ai/dsh-session-checkpoint-policy` | `insert` |
+| `tool-result-pruner` | `@deepseek-ai/dsh-compaction-tool-result-pruner` | `insert` |
+| `tool-todo` | `@deepseek-ai/dsh-tool-todo` | `insert` |
+| `tool-goal` | `@deepseek-ai/dsh-tool-goal` | `insert` |
+| `tool-ralph` | `@deepseek-ai/dsh-tool-ralph` | `insert` |
+| `repeat-tool-reminder` | `@deepseek-ai/dsh-repeat-tool-reminder` | `insert` |
+| `web` | `@deepseek-ai/dsh-web` | `insert` |
+| `web-search-openrouter` | `@deepseek-ai/dsh-web-search-openrouter` | `insert` |
+| `web-fetch-http` | `@deepseek-ai/dsh-web-fetch-http` | `insert` |
+| `tool-web` | `@deepseek-ai/dsh-tool-web` | `insert` |
+| `tools` | `@deepseek-ai/dsh-tools` | `insert` |
+| `system-prompt` | `@deepseek-ai/dsh-system-prompt` | `insert` |
+| `agent-loop` | `@deepseek-ai/dsh-agent-loop` | `insert` |
+| `fs-sandbox` | `@deepseek-ai/dsh-fs-sandbox` | `insert` |
+| `llm-deepseek` | `@deepseek-ai/dsh-llm-deepseek` | `insert` |
+
+### Layer `@deepseek-ai/dsh-agent-plane`
+
+Patch: [`packages/bundle/agent-plane/cordis.patch.yml`](../../packages/bundle/agent-plane/cordis.patch.yml).
+
+| Plugin id | Package / module | Layer effect |
+| --- | --- | --- |
+| `tool-bash` | `@deepseek-ai/dsh-tool-bash` | `disable` |
+| `tool-pwsh` | `@deepseek-ai/dsh-tool-pwsh` | `disable` |
+| `tool-jobs` | `@deepseek-ai/dsh-tool-jobs` | `disable` |
+| `tool-fs` | `@deepseek-ai/dsh-tool-fs` | `disable` |
+| `tool-fs-search` | `@deepseek-ai/dsh-tool-fs-search` | `disable` |
+| `skill-filesystem` | `@deepseek-ai/dsh-skill-filesystem` | `disable` |
+| `tool-skill` | `@deepseek-ai/dsh-tool-skill` | `disable` |
+| `command-goal` | `@deepseek-ai/dsh-command-goal` | `disable` |
+| `tool-goal` | `@deepseek-ai/dsh-tool-goal` | `disable` |
+| `plan-mode` | `@deepseek-ai/dsh-plan-mode` | `disable` |
+| `compaction-basic` | `@deepseek-ai/dsh-compaction-basic` | `disable` |
+| `command-compact` | `@deepseek-ai/dsh-command-compact` | `disable` |
+| `tool-result-pruner` | `@deepseek-ai/dsh-compaction-tool-result-pruner` | `disable` |
+| `tool-subagent-control` | `@deepseek-ai/dsh-tool-subagent-control` | `disable` |
+| `tool-subagent-list-agents` | `@deepseek-ai/dsh-tool-subagent-control/list-agents` | `disable` |
+| `tool-subagent` | `@deepseek-ai/dsh-tool-subagent` | `disable` |
+| `tool-subagent-fork` | `@deepseek-ai/dsh-tool-subagent` | `disable` |
+| `workflow-worker-thread` | `@deepseek-ai/dsh-workflow-worker-thread` | `disable` |
+| `tool-workflow` | `@deepseek-ai/dsh-tool-workflow` | `disable` |
+| `tool-ralph` | `@deepseek-ai/dsh-tool-ralph` | `disable` |
+| `agent-instructions` | `@deepseek-ai/dsh-agent-instructions` | `disable` |
+| `tool-todo` | `@deepseek-ai/dsh-tool-todo` | `disable` |
+| `tool-web` | `@deepseek-ai/dsh-tool-web` | `disable` |
+| `subagent-model-selection-settings` | `@deepseek-ai/dsh-tool-subagent/model-selection-settings` | `insert` |
+| `agent-presets` | `@deepseek-ai/dsh-agent-presets` | `insert` |
+
+### Layer `@deepseek-ai/dsh-headless`
+
+Patch: [`packages/bundle/headless/cordis.patch.yml`](../../packages/bundle/headless/cordis.patch.yml).
+
+| Plugin id | Package / module | Layer effect |
+| --- | --- | --- |
+| `system-prompt` | `@deepseek-ai/dsh-system-prompt` | `override` |
+| `tools` | `@deepseek-ai/dsh-tools` | `override` |
+| `code-runtime` | `@deepseek-ai/dsh-code-runtime-worker-thread` | `insert` |
+| `headless-startup` | `@deepseek-ai/dsh-headless/startup` | `insert` |
+| `headless-runner` | `@deepseek-ai/dsh-headless` | `insert` |
+
+### Layer `@deepseek-ai/dsh-deadal-intellect`
+
+Patch: [`packages/bundle/deadal-intellect/cordis.patch.yml`](../../packages/bundle/deadal-intellect/cordis.patch.yml).
+
+| Plugin id | Package / module | Layer effect |
+| --- | --- | --- |
+| `agent-presets` | `@deepseek-ai/dsh-agent-presets` | `override` |
+| `agent-default-model` | `@deepseek-ai/dsh-agent-default-model` | `override` |
+| `forge-intellect` | `@deepseek-ai/dsh-forge-intellect` | `insert` |
+
+### Per-session preset plane
+
+The `@deepseek-ai/dsh-agent-plane` layer disables 23 model-facing host rows and inserts `agent-presets` with `default: standard`. Every session then mounts [`packages/preset/agent-presets/presets/standard/agent.cordis.yml`](../../packages/preset/agent-presets/presets/standard/agent.cordis.yml) in its own scope, so the table resolves each disabled host row to the package the default preset mounts for it.
+
+| Host row disabled by the agent plane | Package mounted by the default preset |
+| --- | --- |
+| `tool-bash` | `@deepseek-ai/dsh-tool-bash` |
+| `tool-pwsh` | `@deepseek-ai/dsh-tool-pwsh` |
+| `tool-jobs` | `@deepseek-ai/dsh-tool-jobs` |
+| `tool-fs` | `@deepseek-ai/dsh-tool-fs` |
+| `tool-fs-search` | `@deepseek-ai/dsh-tool-fs-search` |
+| `skill-filesystem` | `@deepseek-ai/dsh-skill-filesystem` |
+| `tool-skill` | `@deepseek-ai/dsh-tool-skill` |
+| `command-goal` | `@deepseek-ai/dsh-command-goal` |
+| `tool-goal` | `@deepseek-ai/dsh-tool-goal` |
+| `plan-mode` | `@deepseek-ai/dsh-plan-mode` |
+| `compaction-basic` | `@deepseek-ai/dsh-compaction-basic` |
+| `command-compact` | `@deepseek-ai/dsh-command-compact` |
+| `tool-result-pruner` | `@deepseek-ai/dsh-compaction-tool-result-pruner` |
+| `tool-subagent-control` | `@deepseek-ai/dsh-tool-subagent-control` |
+| `tool-subagent-list-agents` | `@deepseek-ai/dsh-tool-subagent-control/list-agents` |
+| `tool-subagent` | `@deepseek-ai/dsh-tool-subagent` |
+| `tool-subagent-fork` | `@deepseek-ai/dsh-tool-subagent` |
+| `workflow-worker-thread` | `@deepseek-ai/dsh-workflow-worker-thread` |
+| `tool-workflow` | `@deepseek-ai/dsh-tool-workflow` |
+| `tool-ralph` | `@deepseek-ai/dsh-tool-ralph` |
+| `agent-instructions` | `@deepseek-ai/dsh-agent-instructions` |
+| `tool-todo` | `@deepseek-ai/dsh-tool-todo` |
+| `tool-web` | `@deepseek-ai/dsh-tool-web` |
+
+The preset also mounts rows with no host row: `persona` (`@deepseek-ai/dsh-persona`), `planning` (`cordis:group`), `compaction` (`cordis:group`), `delegation` (`cordis:group`), `tool-ask-user` (`@deepseek-ai/dsh-tool-ask-user`), `present` (`@deepseek-ai/dsh-tool-present`).
+
+The preset carries these rows disabled: `tool-subagent-codex` (`@deepseek-ai/dsh-tool-subagent`), `tool-subagent-claude-code` (`@deepseek-ai/dsh-tool-subagent`).
+
 Maintenance mode: hybrid: each bundle patch row list is parsed from its `cordis.patch.yml`; shipped profile bundles and the default agent preset are parsed from source.

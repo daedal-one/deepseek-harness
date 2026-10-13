@@ -159,6 +159,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Owns one verified rootless container world and removable process ranges shared by the filesystem and subprocess providers.',
   },
   {
+    key: 'forgeIntellect',
+    pkg: 'forge-intellect',
+    title: 'Native specification verification',
+    mode: 'core',
+    note: 'Owns immutable plans, approved native check jobs, independent reviewer sessions, and qualified attestation tools.',
+  },
+  {
     key: 'attachments',
     pkg: 'attachment',
     title: 'Durable binary attachment storage',
@@ -988,7 +995,7 @@ function renderAppComposition(example: AppExample, pkgs: Pkg[]): string {
 const PROFILE_TEMPLATES_REL = 'packages/boot/app-boot/src/profile.ts'
 
 /** Shipped profile names in the order this page presents them. */
-const PROFILE_ORDER: readonly string[] = ['web', 'headless', 'sdk', 'sdk-minimal', 'acp']
+const PROFILE_ORDER: readonly string[] = ['web', 'headless', 'sdk', 'sdk-minimal', 'acp', 'deadal-intellect', 'deadal-intellect-headless']
 
 /** The bundle whose patch moves model-facing rows into per-session agent presets. */
 const AGENT_PLANE_BUNDLE = '@deepseek-ai/dsh-agent-plane'
