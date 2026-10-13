@@ -6,6 +6,10 @@ import AgentModelConfig, {
   AGENT_MODELS_SETTINGS_NAMESPACE,
   agentModelTargetId,
 } from '../src/index.ts'
+import type { Config } from '../src/index.ts'
+import { credentialRef } from '@deepseek-ai/dsh-credentials'
+import type { CredentialInfo, CredentialRef } from '@deepseek-ai/dsh-credentials'
+import { MemoryCredentials } from '../../../credentials/credentials/tests/memory.ts'
 import { SettingsProvider } from '@deepseek-ai/dsh-settings'
 import type { SettingsNamespace } from '@deepseek-ai/dsh-settings'
 import LlmRuntime, {
@@ -80,10 +84,41 @@ class CatalogAdapter extends LlmAdapter {
   }
 }
 
+/** Credentials whose presence read fails, so its observation must survive the failure. */
+class FailingCredentials extends MemoryCredentials {
+  override describe(ref: CredentialRef): Promise<CredentialInfo> {
+    void ref
+    return Promise.reject(new Error('credential store unavailable'))
+  }
+}
+
+/** Shipped-shaped config: an OpenRouter primary route keyed on its own credential. */
+const ARMED_CONFIG: Config = {
+  provider: 'openrouter',
+  model: 'fast',
+  reasoningEffort: 'high',
+  credentialRef: 'OPENROUTER_API_KEY',
+  fallbacks: [
+    {
+      provider: 'deepseek-official',
+      model: 'deepseek-flash',
+      reasoningEffort: 'high',
+      credentialRef: 'DEEPSEEK_API_KEY',
+    },
+  ],
+}
+
+const PRIMARY_ROUTE = { provider: 'openrouter', model: 'fast', reasoningEffort: 'high' }
+const FALLBACK_ROUTE = {
+  provider: 'deepseek-official',
+  model: 'deepseek-flash',
+  reasoningEffort: 'high',
+}
+
 async function boot(config: ConstructorParameters<typeof AgentModelConfig>[1] = {
   provider: 'openrouter',
   model: 'fast',
-}): Promise<{
+}, credentials?: Record<string, string>): Promise<{
   ctx: Context
   settingsFiber: Context['fiber']
   models: AgentModelConfig
@@ -92,10 +127,18 @@ async function boot(config: ConstructorParameters<typeof AgentModelConfig>[1] = 
   await ctx.plugin(LlmRuntime)
   ctx.llm.registerAdapter(['openrouter'], new CatalogAdapter(OPENROUTER_MODELS))
   ctx.llm.registerAdapter(['openai-codex'], new CatalogAdapter(CODEX_MODELS))
+  if (credentials !== undefined) await ctx.plugin(MemoryCredentials, credentials)
   const settingsFiber = ctx.plugin(MemorySettings)
   await settingsFiber.await()
   await ctx.plugin(AgentModelConfig, config)
   return { ctx, settingsFiber, models: ctx.agentModels }
+}
+
+/** A context carrying only the LLM runtime, for configs that must be rejected. */
+async function runtimeOnly(): Promise<Context> {
+  const ctx = new Context()
+  await ctx.plugin(LlmRuntime)
+  return ctx
 }
 
 describe('AgentModelConfig', () => {
@@ -252,5 +295,133 @@ describe('AgentModelConfig', () => {
     await bench.settingsFiber.dispose()
     expect(bench.models.currentSelection()).toEqual({ provider: 'openrouter', model: 'fast' })
     await bench.ctx.fiber.dispose()
+  })
+
+  it('uses the primary route while its declared credential resolves', async () => {
+    const bench = await boot(ARMED_CONFIG, {
+      OPENROUTER_API_KEY: 'sk-openrouter',
+      DEEPSEEK_API_KEY: 'sk-deepseek',
+    })
+    expect(bench.models.currentSelection()).toEqual(PRIMARY_ROUTE)
+    expect(bench.models.mainSelection()).toEqual(PRIMARY_ROUTE)
+    await bench.ctx.fiber.dispose()
+  })
+
+  it('selects declared fallbacks by credential presence and returns to the primary', async () => {
+    const bench = await boot({
+      ...ARMED_CONFIG,
+      fallbacks: [
+        { provider: 'openai-codex', model: 'gpt-5.6-terra', credentialRef: 'CODEX_KEY' },
+        {
+          provider: 'deepseek-official',
+          model: 'deepseek-flash',
+          reasoningEffort: 'high',
+          credentialRef: 'DEEPSEEK_API_KEY',
+        },
+      ],
+    }, { DEEPSEEK_API_KEY: 'sk-deepseek' })
+
+    await vi.waitFor(() => { expect(bench.models.currentSelection()).toEqual(FALLBACK_ROUTE) })
+    await bench.ctx.credentials.set(credentialRef('CODEX_KEY'), 'sk-codex')
+    await vi.waitFor(() => {
+      expect(bench.models.currentSelection()).toEqual({ provider: 'openai-codex', model: 'gpt-5.6-terra' })
+    })
+    await bench.ctx.credentials.set(credentialRef('OPENROUTER_API_KEY'), 'sk-openrouter')
+    await vi.waitFor(() => { expect(bench.models.currentSelection()).toEqual(PRIMARY_ROUTE) })
+
+    await bench.ctx.credentials.unset(credentialRef('OPENROUTER_API_KEY'))
+    await vi.waitFor(() => {
+      expect(bench.models.currentSelection()).toEqual({ provider: 'openai-codex', model: 'gpt-5.6-terra' })
+    })
+    await bench.ctx.fiber.dispose()
+  })
+
+  it('keeps the primary route when neither declared credential resolves', async () => {
+    const bench = await boot(ARMED_CONFIG, {})
+    expect(bench.models.currentSelection()).toEqual(PRIMARY_ROUTE)
+    const listed = await bench.models.list()
+    expect(listed.targets.find(target => target.id === 'main')).toMatchObject({
+      provider: 'openrouter',
+      selection: { model: 'fast', reasoningEffort: 'high' },
+      defaultSelection: { model: 'fast', reasoningEffort: 'high' },
+    })
+    expect(listed.catalogs.map(catalog => catalog.provider)).toEqual(['openrouter'])
+    await bench.ctx.fiber.dispose()
+  })
+
+  it('reports the fallback route as a target it can validate and save under', async () => {
+    const bench = await boot({
+      ...ARMED_CONFIG,
+      fallbacks: [{ provider: 'openai-codex', model: 'gpt-5.6-terra', credentialRef: 'CODEX_KEY' }],
+    }, { CODEX_KEY: 'sk-codex' })
+    await vi.waitFor(() => {
+      expect(bench.models.currentSelection()).toEqual({ provider: 'openai-codex', model: 'gpt-5.6-terra' })
+    })
+    const listed = await bench.models.list()
+    expect(listed.targets.find(target => target.id === 'main'))
+      .toMatchObject({ provider: 'openai-codex', defaultSelection: { model: 'gpt-5.6-terra' } })
+    expect(listed.catalogs.map(catalog => catalog.provider)).toEqual(['openai-codex'])
+    await bench.models.saveSelection({ provider: 'openai-codex', model: 'gpt-5.6-sol' })
+    expect(bench.models.currentSelection()).toEqual({
+      provider: 'openai-codex', model: 'gpt-5.6-sol', reasoningEffort: 'high',
+    })
+    await expect(bench.models.saveSelection({ provider: 'deepseek-official', model: 'gpt-5.6-sol' }))
+      .rejects.toThrow(/cannot replace target provider/)
+    await bench.ctx.fiber.dispose()
+  })
+
+  it('leaves an unarmed config, and an unread credential plane, on the primary route', async () => {
+    const withCredentials = await boot(ARMED_CONFIG)
+    const withoutCredentials = await boot({
+      provider: 'openrouter', model: 'fast', reasoningEffort: 'high',
+    })
+    expect(JSON.stringify(withCredentials.models.currentSelection()))
+      .toBe(JSON.stringify(withoutCredentials.models.currentSelection()))
+    expect(withoutCredentials.models.currentSelection()).toEqual(PRIMARY_ROUTE)
+    await withCredentials.ctx.fiber.dispose()
+    await withoutCredentials.ctx.fiber.dispose()
+  })
+
+  it('keeps the last observation when a credential presence read fails', async () => {
+    const ctx = await runtimeOnly()
+    await ctx.plugin(FailingCredentials)
+    const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => undefined)
+    await ctx.plugin(AgentModelConfig, ARMED_CONFIG)
+    await vi.waitFor(() => { expect(warn).toHaveBeenCalled() })
+    expect(warn.mock.calls[0]?.[0]).toMatch(/credential presence read failed/)
+    expect(ctx.agentModels.currentSelection()).toEqual(PRIMARY_ROUTE)
+    await ctx.fiber.dispose()
+  })
+
+  it('rejects malformed fallback declarations', async () => {
+    const malformedRef = await runtimeOnly()
+    await expect(malformedRef.plugin(AgentModelConfig, {
+      ...ARMED_CONFIG,
+      fallbacks: [{ provider: 'deepseek-official', model: 'deepseek-flash', credentialRef: '9BAD' }],
+    })).rejects.toThrow(/credentialRef/)
+    const malformedPrimaryRef = await runtimeOnly()
+    await expect(malformedPrimaryRef.plugin(AgentModelConfig, {
+      ...ARMED_CONFIG,
+      credentialRef: 'not-a-ref',
+    })).rejects.toThrow(/credentialRef/)
+    const missingFallbackRef = await runtimeOnly()
+    await expect(missingFallbackRef.plugin(AgentModelConfig, {
+      provider: 'openrouter',
+      model: 'fast',
+      credentialRef: 'OPENROUTER_API_KEY',
+      fallbacks: [{ provider: 'deepseek-official', model: 'deepseek-flash' } as never],
+    })).rejects.toThrow(/credentialRef/)
+    const fallbacksWithoutPrimary = await runtimeOnly()
+    await expect(fallbacksWithoutPrimary.plugin(AgentModelConfig, {
+      provider: 'openrouter',
+      model: 'fast',
+      fallbacks: [{ provider: 'deepseek-official', model: 'deepseek-flash', credentialRef: 'DEEPSEEK_API_KEY' }],
+    })).rejects.toThrow(/fallbacks require the primary route's credentialRef/)
+    const primaryWithoutFallbacks = await runtimeOnly()
+    await expect(primaryWithoutFallbacks.plugin(AgentModelConfig, {
+      provider: 'openrouter',
+      model: 'fast',
+      credentialRef: 'OPENROUTER_API_KEY',
+    })).rejects.toThrow(/credentialRef requires at least one fallback route/)
   })
 })

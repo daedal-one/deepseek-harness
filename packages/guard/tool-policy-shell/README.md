@@ -24,6 +24,8 @@ Review shell commands against user intent and deployment policy before execution
 
 This effect-scoped provider interprets explicitly mapped shell tools through the existing `ctx.toolPolicy` service. It combines fixed security checks, ordered deployment rules, a conservative parsed read-only set, and bounded independent intent and command-effect review. Bash and PowerShell are supported by configuration; neither tool name nor argument name is built in.
 
+No shipped profile mounts this provider. The opt-in [`@deepseek-ai/dsh-policy`](../../bundle/policy/README.md) bundle declares its row disabled and carries no config, because every required mapping and auxiliary review route is deployment-owned.
+
 ## Configuration and behavior
 
 `mappings` names each supported tool plus its command and optional acting-model intent argument. `intent` selects user-context preparation; `primary` selects tool-time command review; `secondary` must use a different effect route. Intent and primary may use the same `ctx.llm` provider/model route. Each route may set a provider-neutral `reasoningEffort`, which passes unchanged to `ctx.llm`; omission preserves that model route's default reasoning behavior. `intentContextTimeoutMs` bounds preparation outside tool execution. `decisionTimeoutMs` bounds primary review and secondary fallback together. Every input/output bound, summary cap, effect count, and ordered command rule is required configuration. At runtime, a route matching the acting model is excluded; missing independent evidence fails closed.

@@ -7,9 +7,11 @@
  * the committed artifact.
  */
 
-import { globSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, globSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve, sep } from 'node:path'
 import ts from 'typescript'
+import { PROFILE_TEMPLATES } from '../packages/boot/app-boot/src/profile.ts'
+import { isCordisGroupEntry, loadCordisYaml } from './cordis-yaml.ts'
 import { LINK_MAP } from './gen-cordis-catalog.ts'
 import { parseJsDoc, pointer, rawJsDoc } from './jsdoc.ts'
 import { githubSlug } from './verify-md-links.ts'
@@ -33,7 +35,7 @@ const GLOBAL_TYPES = new Set([
 ])
 
 /** How a package classifies for the catalog. */
-type Kind = 'config' | 'no-config' | 'seam' | 'library'
+type Kind = 'config' | 'no-config' | 'seam' | 'library' | 'bundle'
 
 /** One name a pasted declaration references but the paste does not contain. */
 interface TypeRef {
@@ -77,6 +79,40 @@ export interface CatalogEntry {
   schemaKeys?: string[] | null
   /** Package names whose schemas an intersect composes (kind `config`). */
   schemaComposes?: string[]
+  /** Where a shipped profile or bundle reaches the package by default. */
+  mount: MountFacts
+}
+
+/** Where a shipped profile or bundle reaches one catalogued package by default. */
+export interface MountFacts {
+  /** Shipped profile ids whose composed tree mounts the package. */
+  readonly profiles: string[]
+  /** Shipped profile ids that list the package in `dsh.profile.bundles` (bundles only). */
+  readonly listedBy: string[]
+  /** Shipped bundle package names that declare or address a row for the package. */
+  readonly bundles: string[]
+  /** Whether the package itself is a shipped profile bundle. */
+  readonly isBundle: boolean
+}
+
+/** One Loader row a bundle patch inserts, reduced to what mounting needs. */
+interface MountRow {
+  /** Row id, the key a later layer addresses. */
+  id: string
+  /** Workspace package the row names, with any subpath removed. */
+  pkg?: string
+  /** Raw `disabled` value: `true` disables the row, an expression gates it per host. */
+  disabled?: unknown
+}
+
+/** One bundle's inserted rows and the id-targeted entries it applies. */
+interface BundleLayer {
+  /** npm package name of the bundle declaring the layer. */
+  readonly pkg: string
+  /** Rows the bundle inserts. */
+  readonly rows: MountRow[]
+  /** Id-targeted entries the bundle applies to rows another layer inserted. */
+  readonly overrides: { id: string; disabled?: unknown }[]
 }
 
 /** A parsed source file plus its import map (local name → origin). */
@@ -569,6 +605,189 @@ function applyExport(ctx: FileCtx): ts.FunctionDeclaration | null {
   return null
 }
 
+/** Strip a Loader row's subpath so a row resolves to the package that owns it. */
+function rowPackage(specifier: string): string {
+  const segments = specifier.split('/')
+  return specifier.startsWith('@') ? segments.slice(0, 2).join('/') : (segments[0] as string)
+}
+
+/**
+ * Read one bundle patch's inserted rows and id-targeted entries. Nested group
+ * rows are read where they nest, because a preset or overlay may compose them
+ * inside a group's `config` list.
+ */
+function readBundleLayer(pkg: string, patchPath: string, violations: string[]): BundleLayer {
+  const rows: MountRow[] = []
+  const overrides: { id: string; disabled?: unknown }[] = []
+  const walk = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const item of value) walk(item)
+      return
+    }
+    if (typeof value !== 'object' || value === null) return
+    const entry = value as Record<string, unknown>
+    if (Array.isArray(entry.insert)) {
+      for (const inserted of entry.insert) {
+        if (typeof inserted !== 'object' || inserted === null) continue
+        const row = inserted as Record<string, unknown>
+        if (typeof row.id !== 'string') continue
+        rows.push({
+          id: row.id,
+          ...typeof row.name === 'string' ? { pkg: rowPackage(row.name) } : {},
+          ...row.disabled === undefined ? {} : { disabled: row.disabled },
+        })
+        if (isCordisGroupEntry(row)) walk(row.config)
+      }
+      return
+    }
+    if (typeof entry.id === 'string') {
+      overrides.push({
+        id: entry.id,
+        ...entry.disabled === undefined ? {} : { disabled: entry.disabled },
+      })
+    }
+    if (isCordisGroupEntry(entry)) walk(entry.config)
+  }
+  try {
+    walk(loadCordisYaml(readFileSync(patchPath, 'utf8')))
+  } catch (error: unknown) {
+    violations.push(`${pkg}: cannot parse bundle patch ${patchPath}: ${String(error)}`)
+  }
+  return { pkg, rows, overrides }
+}
+
+/** Collect every package named by one entry list, wherever a row nests. */
+function entryPackages(value: unknown, into: Set<string>): void {
+  if (Array.isArray(value)) {
+    for (const item of value) entryPackages(item, into)
+    return
+  }
+  if (typeof value !== 'object' || value === null) return
+  const entry = value as Record<string, unknown>
+  if (typeof entry.name === 'string') into.add(rowPackage(entry.name))
+  if (isCordisGroupEntry(entry)) entryPackages(entry.config, into)
+}
+
+/**
+ * Map each package that ships preset compositions to the packages those
+ * presets declare. A profile that mounts the owner mounts the presets' rows
+ * once per session, so the owner's contribution is part of that profile's
+ * reach for every package a shipped preset names.
+ */
+function collectPresetPackages(scanRoot: string, violations: string[]): Map<string, Set<string>> {
+  const owners = new Map<string, Set<string>>()
+  const presets = globSync('packages/*/*/presets/**/*.cordis.yml', { cwd: scanRoot })
+    .map(path => path.split(sep).join('/'))
+    .sort()
+  for (const preset of presets) {
+    const ownerDir = preset.slice(0, preset.indexOf('/presets/'))
+    const manifestPath = resolve(scanRoot, ownerDir, 'package.json')
+    if (!existsSync(manifestPath)) {
+      violations.push(`${preset}: no package.json at ${ownerDir} owns this preset composition`)
+      continue
+    }
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { name?: string }
+    if (manifest.name === undefined) {
+      violations.push(`${ownerDir}/package.json names no package that could own ${preset}`)
+      continue
+    }
+    const packages = owners.get(manifest.name) ?? new Set<string>()
+    entryPackages(loadCordisYaml(readFileSync(resolve(scanRoot, preset), 'utf8')), packages)
+    owners.set(manifest.name, packages)
+  }
+  return owners
+}
+
+/**
+ * Derive where each catalogued package is mounted by default: the shipped
+ * profile templates composed through each bundle's patch list, plus the preset
+ * trees a mounted owner package contributes per session. A bundle's own entry
+ * reports the profiles that list it instead.
+ */
+function collectMountFacts(
+  scanRoot: string,
+  manifests: readonly { dir: string; pkg: string; patch?: string }[],
+  violations: string[],
+): Map<string, MountFacts> {
+  const layers = new Map<string, BundleLayer>()
+  for (const { dir, pkg, patch } of manifests) {
+    if (patch === undefined) continue
+    layers.set(pkg, readBundleLayer(pkg, resolve(scanRoot, dir, patch), violations))
+  }
+  // A row id resolves to the package that inserted it, so an id-targeted layer
+  // (a disable or a config restatement) is attributable to a package too.
+  const rowPackages = new Map<string, string>()
+  for (const layer of layers.values()) {
+    for (const row of layer.rows) {
+      if (row.pkg === undefined) continue
+      const prior = rowPackages.get(row.id)
+      if (prior !== undefined && prior !== row.pkg) {
+        violations.push(`${layer.pkg}: row '${row.id}' is inserted for both '${prior}' and '${row.pkg}'; the id-to-package mapping is ambiguous`)
+        continue
+      }
+      rowPackages.set(row.id, row.pkg)
+    }
+  }
+  const presetPackages = collectPresetPackages(scanRoot, violations)
+  const mounted = new Map<string, Set<string>>()
+  const listedBy = new Map<string, Set<string>>()
+  const profiles = Object.entries(PROFILE_TEMPLATES).sort(([left], [right]) => left.localeCompare(right))
+  for (const [profile, template] of profiles) {
+    const composed = new Map<string, MountRow>()
+    for (const bundlePkg of template.bundles) {
+      const listed = listedBy.get(bundlePkg) ?? new Set<string>()
+      listed.add(profile)
+      listedBy.set(bundlePkg, listed)
+      const layer = layers.get(bundlePkg)
+      if (layer === undefined) {
+        violations.push(`shipped profile '${profile}' lists '${bundlePkg}', which declares no dsh.bundle.patch`)
+        continue
+      }
+      for (const row of layer.rows) composed.set(row.id, { ...row })
+      for (const override of layer.overrides) {
+        const target = composed.get(override.id)
+        if (target !== undefined) target.disabled = override.disabled
+      }
+    }
+    const active = new Set<string>()
+    for (const row of composed.values()) {
+      // An expression-gated row counts as mounted: the expression decides per host.
+      if (row.pkg !== undefined && row.disabled !== true) active.add(row.pkg)
+    }
+    for (const [owner, packages] of presetPackages) {
+      if (!active.has(owner)) continue
+      for (const pkg of packages) active.add(pkg)
+    }
+    for (const pkg of active) {
+      const profiles = mounted.get(pkg) ?? new Set<string>()
+      profiles.add(profile)
+      mounted.set(pkg, profiles)
+    }
+  }
+  const declaring = new Map<string, Set<string>>()
+  for (const layer of layers.values()) {
+    const declared = new Set<string>([
+      ...layer.rows.flatMap(row => row.pkg === undefined ? [] : [row.pkg]),
+      ...layer.overrides.flatMap(override => rowPackages.get(override.id) ?? []),
+    ])
+    for (const pkg of declared) {
+      const bundles = declaring.get(pkg) ?? new Set<string>()
+      bundles.add(layer.pkg)
+      declaring.set(pkg, bundles)
+    }
+  }
+  const facts = new Map<string, MountFacts>()
+  for (const { pkg } of manifests) {
+    facts.set(pkg, {
+      profiles: [...(mounted.get(pkg) ?? [])].sort(),
+      listedBy: [...(listedBy.get(pkg) ?? [])].sort(),
+      bundles: [...(declaring.get(pkg) ?? [])].sort(),
+      isBundle: layers.has(pkg),
+    })
+  }
+  return facts
+}
+
 /**
  * Walk every `packages/<group>/<pkg>` entry and build the catalog entries.
  * Hard-errors (aggregated) on any violation listed in the module doc.
@@ -582,10 +801,15 @@ export function collectConfigCatalog(scanRoot: string = root): CatalogEntry[] {
   // Pre-pass: package name → dir, so schema-path lookups can follow
   // workspace-package imports while individual packages are still being walked.
   const pkgDirByName = new Map<string, string>()
-  const manifests: { dir: string; pkg: string }[] = []
+  const manifests: { dir: string; pkg: string; patch?: string }[] = []
   for (const manifestRel of globSync('packages/*/*/package.json', { cwd: scanRoot }).map(path => path.split(sep).join('/')).sort()) {
     const dir = manifestRel.slice(0, -'/package.json'.length)
-    const manifest = JSON.parse(readFileSync(resolve(scanRoot, manifestRel), 'utf8')) as { name?: string; os?: string[]; cpu?: string[] }
+    const manifest = JSON.parse(readFileSync(resolve(scanRoot, manifestRel), 'utf8')) as {
+      name?: string
+      os?: string[]
+      cpu?: string[]
+      dsh?: { bundle?: { patch?: string } }
+    }
     const pkg = manifest.name
     if (!pkg) {
       violations.push(`${manifestRel} has no "name".`)
@@ -597,11 +821,16 @@ export function collectConfigCatalog(scanRoot: string = root): CatalogEntry[] {
       continue
     }
     pkgDirByName.set(pkg, dir)
-    manifests.push({ dir, pkg })
+    manifests.push({
+      dir,
+      pkg,
+      ...manifest.dsh?.bundle?.patch === undefined ? {} : { patch: manifest.dsh.bundle.patch },
+    })
   }
   const world: World = { scanRoot, cache, pkgDirByName }
+  const mounts = collectMountFacts(scanRoot, manifests, violations)
 
-  for (const { dir, pkg } of manifests) {
+  for (const { dir, pkg, patch } of manifests) {
     const entryRel = `${dir}/src/index.ts`
     let ctx: FileCtx
     try {
@@ -615,7 +844,9 @@ export function collectConfigCatalog(scanRoot: string = root): CatalogEntry[] {
 
     // Classify, mirroring the Loader's unwrapExports: the default export IS
     // the plugin when present; else an exported `apply` makes the module
-    // namespace the plugin; else the package is a plain library.
+    // namespace the plugin; else the package is a plain library. A package
+    // with no plugin entry that declares `dsh.bundle.patch` is a patch carrier:
+    // the Loader composes the rows it contributes, not this module.
     const dflt = defaultExport(ctx)
     const apply = applyExport(ctx)
     let pluginClass: ts.ClassDeclaration | null = null
@@ -638,17 +869,22 @@ export function collectConfigCatalog(scanRoot: string = root): CatalogEntry[] {
     } else if (apply) {
       configParam = apply.parameters[1]
       kind = configParam ? 'config' : 'no-config'
+    } else if (patch !== undefined) {
+      kind = 'bundle'
     } else {
       kind = 'library'
     }
 
+    const mount = mounts.get(pkg)
+    if (mount === undefined) throw new Error(`gen-config-catalog: no mount facts for ${pkg}`)
     const entry: CatalogEntry = {
       pkg,
       dir,
       entry: entryRel,
       kind,
-      inject: kind === 'library' || kind === 'seam' ? [] : findInject(ctx, pluginClass, violations),
+      inject: kind === 'library' || kind === 'seam' || kind === 'bundle' ? [] : findInject(ctx, pluginClass, violations),
       ...className !== undefined ? { className } : {},
+      mount,
     }
     entries.push(entry)
     if (kind !== 'config' || !configParam) continue
@@ -772,6 +1008,19 @@ function requiresLine(inject: string[]): string {
   return inject.length ? `Requires: ${inject.map(k => `\`${k}\``).join(' · ')}` : ''
 }
 
+/** Render where a shipped profile or bundle reaches one package by default. */
+function mountLine(mount: MountFacts): string {
+  if (mount.isBundle) {
+    return mount.listedBy.length > 0
+      ? `Listed by shipped profiles: ${mount.listedBy.join(', ')}`
+      : 'Not listed by any shipped profile (opt-in bundle)'
+  }
+  if (mount.profiles.length > 0) return `Mounted in shipped profiles: ${mount.profiles.join(', ')}`
+  if (mount.bundles.length === 0) return 'Not mounted by any shipped profile or bundle'
+  const noun = mount.bundles.length === 1 ? 'bundle' : 'bundles'
+  return `Not mounted by any shipped profile (opt-in via the ${mount.bundles.map(pkg => `\`${pkg}\``).join(', ')} ${noun})`
+}
+
 /** Render one reference as a link: another plugin's config type → its section,
  * a curated subsystems name → its page, any other workspace type →
  * its source file, an external type → named with its module, unlinked. */
@@ -789,6 +1038,7 @@ function refLink(ref: TypeRef, byName: Map<string, CatalogEntry>): string {
 /** Render one configurable plugin's section. */
 function renderConfigEntry(entry: CatalogEntry, byName: Map<string, CatalogEntry>): string[] {
   const out = [`<a id="${githubSlug(entry.pkg)}"></a>`, '', `## \`${entry.pkg}\``, '']
+  out.push(mountLine(entry.mount), '')
   const requires = requiresLine(entry.inject)
   if (requires) out.push(requires, '')
   out.push('```' + FENCE, ...(entry.pastes ?? []).map(p => p.text).join('\n\n').split('\n'), '```', '')
@@ -800,10 +1050,10 @@ function renderConfigEntry(entry: CatalogEntry, byName: Map<string, CatalogEntry
   return out
 }
 
-/** Render one terse list line (the no-config / seam / library sections). */
+/** Render one terse list line (the no-config / seam / library / bundle sections). */
 function renderTerse(entry: CatalogEntry, detail: string): string {
   const requires = entry.inject.length ? ` — requires ${entry.inject.map(k => `\`${k}\``).join(' · ')}` : ''
-  return `- \`${entry.pkg}\`${detail}${requires} ([\`${entry.entry}\`](../${entry.entry}))`
+  return `- \`${entry.pkg}\`${detail}${requires} ([\`${entry.entry}\`](../${entry.entry})) — ${mountLine(entry.mount)}`
 }
 
 /** Render the full catalog (pure, deterministic given sorted entries). */
@@ -821,11 +1071,19 @@ export function render(entries: CatalogEntry[]): string {
     '',
     'A `Requires:` line lists the service keys the plugin `inject`s: its `cordis.yml` tree must also load providers for those services. Scope is the harness tier (`packages/`); the vendored cordis plugins a config tree may also load (`hmr`, the console logger, …) are pinned upstream source ([vendoring policy](../vendor/README.md)) and not catalogued here.',
     '',
+    'A `Mounted in shipped profiles:` line states where the package\'s rows come from by default: the shipped profile templates in [`packages/boot/app-boot/src/profile.ts`](../packages/boot/app-boot/src/profile.ts), composed through each bundle\'s patch list, plus the preset trees a mounted `@deepseek-ai/dsh-agent-presets` contributes per session. A row the composition leaves disabled is not counted, while a row gated by an expression counts as mounted because that expression decides per host. `Not mounted by any shipped profile (opt-in via the … bundle)` names the shipped bundles that declare the row a deployment enables; `Not mounted by any shipped profile or bundle` means no shipped composition reaches the package. A profile bundle reports the profiles that list it instead.',
+    '',
   ]
   for (const entry of entries.filter(e => e.kind === 'config')) {
     lines.push(...renderConfigEntry(entry, byName))
   }
   lines.push(
+    '## Profile bundles (patch layers, not plugin entries)',
+    '',
+    'These declare `dsh.bundle.patch`: a profile lists them in `dsh.profile.bundles` and the loader composes the rows they contribute. Every row a bundle carries is catalogued under the package that owns the row.',
+    '',
+    ...entries.filter(e => e.kind === 'bundle').map(e => renderTerse(e, '')),
+    '',
     '## Loadable plugins with no config',
     '',
     'These load from a `cordis.yml` entry with no `config:` block; they declare no configuration API.',

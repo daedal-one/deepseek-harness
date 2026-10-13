@@ -521,6 +521,16 @@ describe('durable conversation summaries', () => {
   })
 })
 
+/** The shipped shape: no explicit route, so every request resolves one. */
+const ROUTE_FREE_CONFIG = {
+  targetSentences: 3,
+  maxEntryBytes: 512,
+  maxInputBytes: 16_384,
+  maxOutputTokens: 128,
+  maxSummaryBytes: 720,
+  timeoutMs: 1_000,
+} as const
+
 describe('conversation summary configuration', () => {
   const invalid: readonly (readonly [string, unknown])[] = [
     ['a null configuration', null],
@@ -530,6 +540,9 @@ describe('conversation summary configuration', () => {
     ['a timeout above the timer limit', { ...CONFIG, timeoutMs: Number.MAX_SAFE_INTEGER }],
     ['an empty provider', { ...CONFIG, provider: '' }],
     ['an empty model', { ...CONFIG, model: '' }],
+    ['a configured provider without its model', { ...ROUTE_FREE_CONFIG, provider: 'summary-route' }],
+    ['a configured model without its provider', { ...ROUTE_FREE_CONFIG, model: 'summary-model' }],
+    ['an empty configured provider', { ...ROUTE_FREE_CONFIG, provider: '', model: 'summary-model' }],
   ]
 
   it.each(invalid)('rejects %s', async (_label, config) => {
@@ -538,6 +551,98 @@ describe('conversation summary configuration', () => {
     await ctx.plugin(LlmRuntime)
     expect(() => { conversationSummary.apply(ctx, config as conversationSummary.Config) })
       .toThrow(/session-summary-llm:/)
+  })
+})
+
+describe('conversation summary route inheritance', () => {
+  async function inheritSetup(
+    adapter: ScriptedAdapter,
+    config: conversationSummary.Config = ROUTE_FREE_CONFIG,
+  ): Promise<{ readonly ctx: Context; readonly adapter: ScriptedAdapter }> {
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(LlmRuntime)
+    ctx.llm.registerAdapter(['agent-route', 'header-route', 'summary-route'], adapter)
+    await ctx.plugin({
+      name: conversationSummary.name,
+      inject: [...conversationSummary.inject],
+      apply: (inner: Context) => { conversationSummary.apply(inner, config) },
+    })
+    return { ctx, adapter }
+  }
+
+  function appendHeader(session: Session, provider: string, model: string): SessionSeq {
+    return session.append('request/header', {
+      header: { config: { provider, model } },
+      reason: 'initial',
+    }).seq
+  }
+
+  it('inherits the logged main-request route when no route is configured', async () => {
+    const { ctx, adapter } = await inheritSetup(new ScriptedAdapter([textScript('Inherited route summary.')]))
+    const session = createTurn(ctx)
+    appendHeader(session, 'agent-route', 'agent-model')
+    appendPrompt(session, 'Summarize this turn.')
+    endTurn(session, 1)
+
+    await vi.waitFor(() => { expect(summaryEvents(session)).toHaveLength(1) })
+    expect(adapter.requests[0]).toMatchObject({ provider: 'agent-route', model: 'agent-model' })
+    expect(requestEvents(session)[0]?.data.route).toEqual({ provider: 'agent-route', model: 'agent-model' })
+    expect(summaryEvents(session)[0]?.data.route).toEqual({ provider: 'agent-route', model: 'agent-model' })
+  })
+
+  it('falls back to the deployment main-Agent selection before any request header exists', async () => {
+    const { ctx, adapter } = await inheritSetup(new ScriptedAdapter([textScript('Deployment route summary.')]))
+    ctx.provide('agentModels', { mainSelection: () => ({ provider: 'agent-route', model: 'default-model' }) })
+    const session = createTurn(ctx)
+    appendPrompt(session, 'Summarize this turn.')
+    endTurn(session, 1)
+
+    await vi.waitFor(() => { expect(summaryEvents(session)).toHaveLength(1) })
+    expect(adapter.requests[0]).toMatchObject({ provider: 'agent-route', model: 'default-model' })
+  })
+
+  it('skips with one logged reason when no route source resolves', async () => {
+    const { ctx, adapter } = await inheritSetup(new ScriptedAdapter([textScript('must not dispatch')]))
+    // The resolver captures the logger once at construction, so the spy must
+    // target that same instance rather than the context's re-read property.
+    const warn = vi.spyOn(ctx.logger, 'warn')
+    const session = createTurn(ctx)
+    appendPrompt(session, 'First prompt.')
+    endTurn(session, 1)
+
+    await vi.waitFor(() => { expect(warn).toHaveBeenCalled() })
+    const skip = warn.mock.calls.find(call => String(call[0]).includes('no main-Agent route is available'))
+    expect(skip?.[0]).toContain('no main-Agent route is available')
+    expect(adapter.requests).toEqual([])
+    expect(requestEvents(session)).toEqual([])
+    expect(summaryEvents(session)).toEqual([])
+
+    warn.mockClear()
+    session.append('turn/start', { turn: 2 })
+    appendPrompt(session, 'Second prompt.')
+    endTurn(session, 2)
+    await vi.waitFor(() => {
+      expect(warn.mock.calls.some(call => String(call[0]).includes('generation failed'))).toBe(true)
+    })
+    expect(warn.mock.calls.filter(call => String(call[0]).includes('no main-Agent route is available'))).toEqual([])
+    expect(adapter.requests).toEqual([])
+  })
+
+  it('keeps a configured pair authoritative over the logged route', async () => {
+    const { ctx, adapter } = await inheritSetup(
+      new ScriptedAdapter([textScript('Pinned route summary.')]),
+      CONFIG,
+    )
+    const session = createTurn(ctx)
+    appendHeader(session, 'agent-route', 'agent-model')
+    appendPrompt(session, 'Summarize this turn.')
+    endTurn(session, 1)
+
+    await vi.waitFor(() => { expect(summaryEvents(session)).toHaveLength(1) })
+    expect(adapter.requests[0]).toMatchObject({ provider: 'summary-route', model: 'summary-model' })
   })
 })
 

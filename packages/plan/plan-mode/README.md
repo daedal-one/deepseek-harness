@@ -31,7 +31,7 @@ Choose plan mode when the agent should explore and design before executing and y
 
 ### Minimal configuration
 
-The only required configuration is the guidance text the agent follows while planning; anything else you add fails at load.
+Configuration is optional: omitting `section` renders the shipped plan-mode policy text, and any other field fails at load. Override `section` only to replace that policy with deployment-owned guidance:
 
 ```yaml
 - name: '@deepseek-ai/dsh-plan-mode'
@@ -43,7 +43,7 @@ The only required configuration is the guidance text the agent follows while pla
 
 | Field | Default | Meaning |
 |---|---|---|
-| `section` | required | Guidance rendered as the `plan:policy` prompt section while plan mode is active |
+| `section` | the shipped plan-mode policy text | Guidance rendered as the `plan:policy` prompt section while plan mode is active |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-plan-mode) is the exhaustive source for every accepted field and its JSDoc.
 
@@ -127,7 +127,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 #### What the model sees
 
-While plan mode is active, the model sees the deployment's exact `section` text at first-party prompt order 500; inactive mode contributes no text.
+While plan mode is active, the model sees the exact `section` text — the shipped policy text unless the deployment overrides it — at first-party prompt order 500; inactive mode contributes no text.
 
 ##### Configuration example
 

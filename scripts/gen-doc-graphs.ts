@@ -949,9 +949,9 @@ const APP_EXAMPLES = [
 
 type AppExample = typeof APP_EXAMPLES[number]
 
-function renderAppComposition(example: AppExample): string {
+function renderAppComposition(example: AppExample, pkgs: Pkg[]): string {
   const plugins = parseExampleCordis(example.config)
-  const maintenance = 'hybrid: the patch row list is parsed from its `cordis.yml`; app package expansion is curated from package source'
+  const maintenance = 'hybrid: each bundle patch row list is parsed from its `cordis.patch.yml`; shipped profile bundles and the default agent preset are parsed from source'
   const lines = generatedHeader(example.title)
   lines.push(
     example.summary,
@@ -973,9 +973,259 @@ function renderAppComposition(example: AppExample): string {
     ...plugins.map(plugin => `| \`${plugin.id}\` | \`${plugin.name}\` |`),
     '',
     `Source config: [\`${example.config}\`](${linkFromDoc(example.rel, example.config)}).`,
+    '',
+    ...renderProfileCompositions(pkgs, example.rel),
   )
-  lines.push('', ...maintenanceFooter(maintenance))
+  lines.push(...maintenanceFooter(maintenance))
   return lines.join('\n')
+}
+
+/**
+ * The shipped profile templates. A profile's ordered bundle list lives in the
+ * boot glue rather than in a patch file, so this page parses it from source and
+ * fails loudly when the shipped profile set changes.
+ */
+const PROFILE_TEMPLATES_REL = 'packages/boot/app-boot/src/profile.ts'
+
+/** Shipped profile names in the order this page presents them. */
+const PROFILE_ORDER: readonly string[] = ['web', 'headless', 'sdk', 'sdk-minimal', 'acp']
+
+/** The bundle whose patch moves model-facing rows into per-session agent presets. */
+const AGENT_PLANE_BUNDLE = '@deepseek-ai/dsh-agent-plane'
+
+/** The agent-plane row that mounts the preset roster and its `default` selection. */
+const PRESET_ROSTER_ROW = 'agent-presets'
+
+interface ParsedCordisRow {
+  /** Loader row id the entry targets or mounts. */
+  id: string
+  /** Package or module name; absent on a row that only restates or disables an existing row. */
+  name?: string
+  /** True when the entry turns its row off with a literal `disabled: true`. */
+  disabled: boolean
+  /** True for a row inside an `insert:` list, false for a row that targets an existing entry. */
+  inserted: boolean
+  /** The row's own lines, which carry nested config values the row list does not expose. */
+  block: string[]
+}
+
+/**
+ * Parse one Cordis entry list (a bundle patch or an agent preset) into its rows.
+ * Row ids sit at the document's top level or four spaces deep inside an
+ * `insert:` list; a deeper id is configuration data rather than a row and fails.
+ * @param rel - repository-relative path of the entry list.
+ * @returns the parsed rows in document order.
+ */
+function parseCordisRows(rel: string): ParsedCordisRow[] {
+  const rows: ParsedCordisRow[] = []
+  let current: ParsedCordisRow | null = null
+  let indent = 0
+  let inInsert = false
+  const flush = (): void => {
+    if (current !== null) rows.push(current)
+    current = null
+  }
+  for (const line of readFileSync(resolve(root, rel), 'utf8').split('\n')) {
+    if (/^-\s+insert:\s*$/.test(line)) {
+      flush()
+      inInsert = true
+      continue
+    }
+    const id = /^( *)- id:\s*(.+?)\s*$/.exec(line)
+    if (id?.[1] !== undefined && id[2] !== undefined) {
+      flush()
+      indent = id[1].length
+      if (indent !== 0 && indent !== 4) {
+        throw new Error(`gen-doc-graphs: ${rel}: row "${id[2]}" sits at unsupported indent ${indent}`)
+      }
+      if (indent === 0) inInsert = false
+      current = { id: stripYamlScalar(id[2]), disabled: false, inserted: inInsert, block: [] }
+      continue
+    }
+    if (current === null) continue
+    current.block.push(line)
+    const keyIndent = ' '.repeat(indent + 2)
+    const name = new RegExp(`^${keyIndent}name:\\s*(.+?)\\s*$`).exec(line)
+    if (name?.[1] !== undefined) current.name = stripYamlScalar(name[1])
+    if (new RegExp(`^${keyIndent}disabled:\\s*true\\s*$`).test(line)) current.disabled = true
+  }
+  flush()
+  if (rows.length === 0) throw new Error(`gen-doc-graphs: ${rel}: no Cordis rows parsed`)
+  return rows
+}
+
+/**
+ * Parse the shipped profile templates' ordered bundle lists from the boot glue.
+ * @returns each shipped profile name mapped to its bundle package names.
+ */
+function parseProfileTemplates(): Map<string, readonly string[]> {
+  const text = readFileSync(resolve(root, PROFILE_TEMPLATES_REL), 'utf8')
+  const start = text.indexOf('export const PROFILE_TEMPLATES')
+  if (start < 0) throw new Error(`gen-doc-graphs: ${PROFILE_TEMPLATES_REL}: PROFILE_TEMPLATES is missing`)
+  const end = text.indexOf('\n}\n', start)
+  const templates = new Map<string, readonly string[]>()
+  for (const match of text.slice(start, end < 0 ? undefined : end).matchAll(/^ {2}'?([\w-]+)'?: \{\n\s+bundles: \[([^\]]*)\],/gm)) {
+    const [, name, bundles] = match
+    if (name === undefined || bundles === undefined) continue
+    templates.set(name, [...bundles.matchAll(/'([^']+)'/g)].map(bundle => bundle[1] ?? ''))
+  }
+  const missing = PROFILE_ORDER.filter(name => !templates.has(name))
+  const unlisted = [...templates.keys()].filter(name => !PROFILE_ORDER.includes(name))
+  if (missing.length > 0 || unlisted.length > 0) {
+    throw new Error(`gen-doc-graphs: shipped profiles changed: missing ${missing.join(', ') || 'none'}; unlisted ${unlisted.join(', ') || 'none'}`)
+  }
+  return templates
+}
+
+/** One bundle layer of one shipped profile, with the rows its patch contributes. */
+interface ProfileLayer {
+  /** The bundle's package name, as `dsh.profile.bundles` lists it. */
+  packageName: string
+  /** Repository-relative path of the bundle's patch file. */
+  patchRel: string
+  /** The rows the patch contributes. */
+  rows: ParsedCordisRow[]
+}
+
+/**
+ * Resolve one profile's bundles to their patch files and parsed rows.
+ * @param pkgs - the package graph, used to locate each bundle's patch file.
+ * @param profile - the profile name, for error messages.
+ * @param bundles - the profile's bundle package names in application order.
+ * @returns the profile's layers in application order.
+ */
+function profileLayers(pkgs: Pkg[], profile: string, bundles: readonly string[]): ProfileLayer[] {
+  return bundles.map((packageName) => {
+    const pkg = pkgs.find(candidate => candidate.name === packageName)
+    if (pkg === undefined) throw new Error(`gen-doc-graphs: profile ${profile} names unknown bundle ${packageName}`)
+    const patchRel = `${pkg.rel}/cordis.patch.yml`
+    if (!existsSync(resolve(root, patchRel))) throw new Error(`gen-doc-graphs: profile ${profile} bundle ${packageName} has no ${patchRel}`)
+    return { packageName, patchRel, rows: parseCordisRows(patchRel) }
+  })
+}
+
+/**
+ * Render one layer's row table, resolving override and disable rows to the
+ * package the layer that mounted them supplied.
+ * @param layer - the layer to render.
+ * @param mounted - rows mounted by earlier layers, updated with this layer's inserts.
+ * @returns the table lines.
+ */
+function renderLayerTable(layer: ProfileLayer, mounted: Map<string, string>): string[] {
+  const lines = ['| Plugin id | Package / module | Layer effect |', '| --- | --- | --- |']
+  for (const row of layer.rows) {
+    const effect = row.inserted ? 'insert' : row.disabled ? 'disable' : 'override'
+    let name = row.name
+    if (row.inserted) {
+      if (name === undefined) throw new Error(`gen-doc-graphs: ${layer.patchRel}: inserted row "${row.id}" has no name`)
+      mounted.set(row.id, name)
+    } else {
+      name ??= mounted.get(row.id)
+      if (name === undefined) throw new Error(`gen-doc-graphs: ${layer.patchRel}: row "${row.id}" targets no earlier row`)
+      if (effect === 'override') mounted.set(row.id, name)
+    }
+    lines.push(`| \`${row.id}\` | \`${name}\` | \`${effect}\` |`)
+  }
+  return lines
+}
+
+/**
+ * Render the per-session preset plane the agent plane installs: the host rows it
+ * disables and the rows the default preset mounts for them.
+ * @param pkgs - the package graph, used to locate the preset roster package.
+ * @param profile - the profile name, for error messages.
+ * @param layers - the profile's layers, whose ids form the host row set.
+ * @param plane - the agent-plane layer.
+ * @param docRel - this page's path, for relative links.
+ * @returns the preset-plane lines.
+ */
+function renderPresetPlane(pkgs: Pkg[], profile: string, layers: readonly ProfileLayer[], plane: ProfileLayer, docRel: string): string[] {
+  const roster = plane.rows.find(row => row.inserted && row.id === PRESET_ROSTER_ROW)
+  const presetName = roster?.name
+  const defaultId = roster === undefined ? undefined : /^\s+default:\s*(\S+)\s*$/m.exec(roster.block.join('\n'))?.[1]
+  if (presetName === undefined || defaultId === undefined) {
+    throw new Error(`gen-doc-graphs: profile ${profile}: ${plane.patchRel} must insert "${PRESET_ROSTER_ROW}" with a default preset`)
+  }
+  const presetPkg = pkgs.find(candidate => candidate.name === presetName)
+  if (presetPkg === undefined) throw new Error(`gen-doc-graphs: profile ${profile}: unknown preset roster package ${presetName}`)
+  const presetRel = `${presetPkg.rel}/presets/${defaultId}/agent.cordis.yml`
+  if (!existsSync(resolve(root, presetRel))) throw new Error(`gen-doc-graphs: profile ${profile}: default preset ${presetRel} is missing`)
+  const presetRows = parseCordisRows(presetRel)
+  const byId = new Map(presetRows.map(row => [row.id, row]))
+  const hostIds = new Set(layers.flatMap(layer => layer.rows.map(row => row.id)))
+  const disabled = plane.rows.filter(row => !row.inserted && row.disabled)
+  const lines = [
+    '### Per-session preset plane',
+    '',
+    `The \`${AGENT_PLANE_BUNDLE}\` layer disables ${disabled.length} model-facing host rows and inserts \`${PRESET_ROSTER_ROW}\` with \`default: ${defaultId}\`. Every session then mounts [\`${presetRel}\`](${linkFromDoc(docRel, presetRel)}) in its own scope, so the table resolves each disabled host row to the package the default preset mounts for it.`,
+    '',
+    '| Host row disabled by the agent plane | Package mounted by the default preset |',
+    '| --- | --- |',
+    ...disabled.map((row) => {
+      const presetRow = byId.get(row.id)
+      return `| \`${row.id}\` | ${presetRow?.name === undefined ? '—' : `\`${presetRow.name}\``} |`
+    }),
+    '',
+  ]
+  const extra = presetRows.filter(row => !hostIds.has(row.id))
+  const mountedExtra = extra.filter(row => !row.disabled)
+  const disabledExtra = extra.filter(row => row.disabled)
+  if (mountedExtra.length > 0) {
+    lines.push(`The preset also mounts rows with no host row: ${mountedExtra.map(row => `\`${row.id}\` (\`${row.name ?? 'unnamed'}\`)`).join(', ')}.`, '')
+  }
+  if (disabledExtra.length > 0) {
+    lines.push(`The preset carries these rows disabled: ${disabledExtra.map(row => `\`${row.id}\` (\`${row.name ?? 'unnamed'}\`)`).join(', ')}.`, '')
+  }
+  return lines
+}
+
+/**
+ * Render one shipped profile's resolved layering.
+ * @param pkgs - the package graph, used to locate bundle and preset files.
+ * @param docRel - this page's path, for relative links.
+ * @param profile - the profile name.
+ * @param bundles - the profile's bundle package names in application order.
+ * @returns the profile section lines.
+ */
+function renderProfileSection(pkgs: Pkg[], docRel: string, profile: string, bundles: readonly string[]): string[] {
+  const layers = profileLayers(pkgs, profile, bundles)
+  const lines = [
+    `## Profile \`${profile}\``,
+    '',
+    `Bundles, in order: ${bundles.map(bundle => `\`${bundle}\``).join(' → ')}, then the profile's own patch layer.`,
+    '',
+  ]
+  const mounted = new Map<string, string>()
+  for (const layer of layers) {
+    lines.push(`### Layer \`${layer.packageName}\``, '', `Patch: [\`${layer.patchRel}\`](${linkFromDoc(docRel, layer.patchRel)}).`, '', ...renderLayerTable(layer, mounted), '')
+  }
+  const plane = layers.find(layer => layer.packageName === AGENT_PLANE_BUNDLE)
+  if (plane === undefined) {
+    lines.push('This profile mounts no agent plane, so its model-facing rows stay in the process composition and no per-session preset is mounted.', '')
+  } else {
+    lines.push(...renderPresetPlane(pkgs, profile, layers, plane, docRel))
+  }
+  return lines
+}
+
+/**
+ * Render the shipped profiles' resolved layering, one section per profile.
+ * @param pkgs - the package graph, used to locate bundle and preset files.
+ * @param docRel - this page's path, for relative links.
+ * @returns the profile section lines, in `PROFILE_ORDER`.
+ */
+function renderProfileCompositions(pkgs: Pkg[], docRel: string): string[] {
+  const templates = parseProfileTemplates()
+  const lines = [
+    '# Shipped Profile Compositions',
+    '',
+    "Each shipped profile applies its bundles in `dsh.profile.bundles` order over an empty entry list, then the profile's own `$DSH_HOME/profiles/<name>/cordis.patch.yml`, the home-level `$DSH_HOME/cordis.patch.yml`, and any `--patch` overlays. A patch targets a row by id and replaces that row's whole `config`; a row no later patch names keeps the value from the layer that mounted it. Each table lists one bundle layer's rows: `insert` mounts a row, `override` restates one, and `disable` turns one off.",
+    '',
+  ]
+  for (const profile of PROFILE_ORDER) {
+    lines.push(...renderProfileSection(pkgs, docRel, profile, templates.get(profile) ?? []))
+  }
+  return lines
 }
 
 type CallSiteIndex = Map<ts.SignatureDeclaration | ts.JSDocSignature, ts.CallExpression[]>
@@ -1590,7 +1840,7 @@ function renderDocs(): GraphDoc[] {
   const { model } = projectCordisCatalog(root, CORDIS_CATALOG_POLICY)
   const docs: GraphDoc[] = [
     { rel: 'docs/capability-seams.md', content: renderCapabilitySeams(pkgs, model.services) },
-    ...APP_EXAMPLES.map(example => ({ rel: example.rel, content: renderAppComposition(example) })),
+    ...APP_EXAMPLES.map(example => ({ rel: example.rel, content: renderAppComposition(example, pkgs) })),
     { rel: 'docs/event-producer-consumer.md', content: renderEventRelations(pkgs, model.events) },
     { rel: 'docs/agent-lifecycle.md', content: renderLifecycle() },
     { rel: 'docs/tool-execution-pipeline.md', content: renderToolPipeline() },

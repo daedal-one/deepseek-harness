@@ -4,7 +4,7 @@ type: task
 status: accepted
 summary: Add cheap live model summaries for dense agent activity in Web Chat.
 owners: [carlo]
-progress: completed
+progress: done
 addresses:
   - REQ:ui/live-agent-activity-summaries#c-cadence
   - REQ:ui/live-agent-activity-summaries#c-route

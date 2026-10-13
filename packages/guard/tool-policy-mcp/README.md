@@ -26,6 +26,8 @@ This provider complements `dsh-mcp-client` registration-time tool and argument p
 
 No invariant companion is published because the provider contributes decisions through the tool-policy service.
 
+No shipped profile mounts this provider. The opt-in [`@deepseek-ai/dsh-policy`](../../bundle/policy/README.md) bundle declares its row disabled, because activation refuses an empty rule set and every rule names a deployment-owned public MCP tool.
+
 ## Model Experience
 
 ### Conditional MCP authorization feedback

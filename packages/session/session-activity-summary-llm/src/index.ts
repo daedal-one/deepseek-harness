@@ -62,6 +62,27 @@ declare module '@deepseek-ai/dsh-session/types' {
   }
 }
 
+/**
+ * The one service surface this package reads from the optional Agent-model
+ * directory: the current main-Agent selection. The composition that mounts
+ * `agent-default-model` declares the complete service; repeating only this
+ * member keeps the build graph of these Session plugins small, and a changed
+ * signature there fails this package's compilation instead of drifting.
+ */
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    /** Persistent deployment-owned model selections, when the composition provides the directory. */
+    readonly agentModels?: {
+      /**
+       * Read the current main-Agent selection.
+       * @param presetId - effective preset id, or undefined without a roster.
+       * @returns the provider and model the next main-Agent start uses.
+       */
+      mainSelection(presetId?: string): { readonly provider: string; readonly model: string }
+    }
+  }
+}
+
 /** Required deployment policy for live activity summaries. */
 export interface Config {
   /** Completed operations in one normal summary batch; constrained to four through six. */
@@ -78,10 +99,10 @@ export interface Config {
   readonly maxLines: number
   /** End-to-end request deadline in milliseconds. */
   readonly timeoutMs: number
-  /** Explicit auxiliary provider route. */
-  readonly provider: string
-  /** Explicit auxiliary model id. */
-  readonly model: string
+  /** Explicit auxiliary provider route; must be paired with `model`. */
+  readonly provider?: string
+  /** Explicit auxiliary model id; must be paired with `provider`. */
+  readonly model?: string
 }
 
 /** Loader schema with no library defaults. */
@@ -93,8 +114,8 @@ export const Config: z<Config> = z.object({
   maxSummaryBytes: z.number().step(1).min(1).required(),
   maxLines: z.number().step(1).min(1).max(3).required(),
   timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS).required(),
-  provider: z.string().required(),
-  model: z.string().required(),
+  provider: z.string(),
+  model: z.string(),
 })
 
 interface PendingCall {
@@ -163,9 +184,15 @@ function resolveConfig(config: Config): Readonly<Config> {
   if (value.timeoutMs > MAX_TIMER_DELAY_MS) {
     throw new Error(`session-activity-summary-llm: timeoutMs must not exceed ${MAX_TIMER_DELAY_MS}`)
   }
-  if (typeof value.provider !== 'string' || value.provider.length === 0
-    || typeof value.model !== 'string' || value.model.length === 0) {
-    throw new Error('session-activity-summary-llm: provider and model must be non-empty strings')
+  const hasProvider = value.provider !== undefined
+  const hasModel = value.model !== undefined
+  if (hasProvider !== hasModel) {
+    throw new Error('session-activity-summary-llm: provider and model must be supplied together')
+  }
+  if (hasProvider
+    && (typeof value.provider !== 'string' || value.provider.length === 0
+      || typeof value.model !== 'string' || value.model.length === 0)) {
+    throw new Error('session-activity-summary-llm: provider and model overrides must be non-empty strings')
   }
   return deepFreeze({
     operationsPerSummary: value.operationsPerSummary,
@@ -175,9 +202,72 @@ function resolveConfig(config: Config): Readonly<Config> {
     maxSummaryBytes: value.maxSummaryBytes,
     maxLines: value.maxLines,
     timeoutMs: value.timeoutMs,
-    provider: value.provider,
-    model: value.model,
+    ...hasProvider ? { provider: value.provider, model: value.model } : {},
   })
+}
+
+/** Exact provider route one auxiliary activity-summary dispatch used. */
+interface AuxiliaryRoute {
+  /** Provider route resolved for the request. */
+  readonly provider: string
+  /** Provider-owned model id resolved for the request. */
+  readonly model: string
+}
+
+/** Read the non-empty provider and model of one logged request header. */
+function loggedRoute(config: { readonly provider: string; readonly model: string }): AuxiliaryRoute | undefined {
+  return config.provider.length === 0 || config.model.length === 0
+    ? undefined
+    : { provider: config.provider, model: config.model }
+}
+
+/**
+ * Resolve the auxiliary route of a Session whose request fired.
+ *
+ * An explicit configured pair wins. Otherwise the route is the Session's own
+ * logged main request header, and without one the current main-Agent selection
+ * from the optional `agentModels` service. No source means no route: the batch
+ * stays queued and the caller skips the dispatch instead of guessing a
+ * credential the user did not choose. Each Session reports its missing route
+ * once, so a summarizer that can never resolve stays quiet.
+ */
+class ActivityRouteResolver {
+  private readonly missingRouteWarned = new WeakSet<Session>()
+  private readonly logger: Context['logger']
+
+  /**
+   * @param config - validated deployment policy, with the explicit route preserved when configured.
+   * @param ctx - Host context carrying the optional Agent-model directory.
+   */
+  constructor(private readonly config: Readonly<Config>, private readonly ctx: Context) {
+    this.logger = ctx.logger
+  }
+
+  /**
+   * Resolve the route one dispatch may use.
+   * @param session - Session whose auxiliary request is starting.
+   * @returns the exact route, or `undefined` when no source carries one.
+   */
+  resolve(session: Session): AuxiliaryRoute | undefined {
+    if (this.config.provider !== undefined && this.config.model !== undefined) {
+      return { provider: this.config.provider, model: this.config.model }
+    }
+    const logged = session.requestHeader()
+    if (logged !== undefined) {
+      const route = loggedRoute(logged.config)
+      if (route !== undefined) return route
+    }
+    const agentModel = this.ctx.get('agentModels')?.mainSelection(session.header.agentPreset)
+    if (agentModel !== undefined) return { provider: agentModel.provider, model: agentModel.model }
+    if (!this.missingRouteWarned.has(session)) {
+      this.missingRouteWarned.add(session)
+      this.logger.warn(
+        `session "${session.id}": skipping activity summary: no main-Agent route is available `
+        + '(no logged request header and no agent-models selection); configure provider and model to pin one',
+      )
+    }
+    return undefined
+  }
 }
 
 /** Longest leading code-point prefix within one UTF-8 byte budget. */
@@ -307,12 +397,14 @@ function normalizeLines(text: string, config: Readonly<Config>): string[] {
 
 class ActivitySummaryRuntime {
   private readonly config: Readonly<Config>
+  private readonly route: ActivityRouteResolver
   private readonly states = new Map<Session, SessionState>()
   private readonly inFlight = new Set<Promise<void>>()
   private disposed = false
 
   constructor(private readonly ctx: Context, config: Config) {
     this.config = resolveConfig(config)
+    this.route = new ActivityRouteResolver(this.config, ctx)
     ctx.on('session/event', (session, event) => { this.observe(session, event) })
     ctx.on('session/disposed', (session) => { this.disposeSession(session) })
     ctx.effect(() => async () => {
@@ -434,6 +526,10 @@ class ActivitySummaryRuntime {
     signal: AbortSignal,
   ): Promise<void> {
     if (this.disposed || state.turn !== turn || signal.aborted) return
+    const route = this.route.resolve(session)
+    if (route === undefined) {
+      throw new Error('session-activity-summary-llm: no auxiliary route is available for this Session')
+    }
     const revision = state.revision + 1
     const input = frameInput(state.previousLines, operations)
     const inputBytes = Buffer.byteLength(input, 'utf8')
@@ -446,7 +542,6 @@ class ActivitySummaryRuntime {
       source: { kind: 'plugin', plugin: name },
     })]
     const operationSeqs = operations.map(operation => operation.seq)
-    const route = { provider: this.config.provider, model: this.config.model }
     const reasoningEffort = ReasoningEffortId('off')
     using callDeadline = deadline(signal, this.config.timeoutMs, 'ACTIVITY_SUMMARY_TIMEOUT')
     const options: GenerateOptions = deepFreeze({

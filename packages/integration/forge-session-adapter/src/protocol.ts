@@ -10,9 +10,22 @@ export const FORGE_EVIDENCE_PROTOCOL = 'forge.intellect.action/v2'
 /** Forge Intellect MCP tool surface exposed inside adapter-created agents. */
 export const FORGE_ACTION_TOOLS_PROTOCOL = 'forge-intellect-action-tools/v1'
 /** Forge Spec baseline accepted by the adapter preflight boundary. */
-export const FORGE_SPEC_BASELINE = 'forge-spec-v0.6.0'
+export const FORGE_SPEC_BASELINE = 'forge-spec-v0.7.0'
 /** Forge preflight envelope required by the start command. */
 export const FORGE_PREFLIGHT_PROTOCOL = 'forge.spec.preflight/v1'
+
+/** Extended-preflight refusal code: `specRefs` was sent without a configured `specsRoot`. */
+export const FORGE_SPECS_ROOT_REQUIRED = 'SPECS_ROOT_REQUIRED'
+/** Extended-preflight refusal code: no committed spec file in `specsRoot` declares a requested id. */
+export const FORGE_SPEC_UNRESOLVABLE = 'SPEC_UNRESOLVABLE'
+/** Extended-preflight refusal code: a committed spec file no longer hashes to its declared digest. */
+export const FORGE_SPEC_RENDER_DRIFT = 'SPEC_RENDER_DRIFT'
+/** Extended-preflight refusal code: `repoRevision` was sent without `repoRoot` or `specsRoot`. */
+export const FORGE_REPO_ROOT_REQUIRED = 'REPO_ROOT_REQUIRED'
+/** Extended-preflight refusal code: the checkout `HEAD` differs from the declared `repoRevision`. */
+export const FORGE_REPO_REVISION_MISMATCH = 'REPO_REVISION_MISMATCH'
+/** Extended-preflight refusal code: `git rev-parse HEAD` failed in the configured repo root. */
+export const FORGE_REPO_REVISION_UNAVAILABLE = 'REPO_REVISION_UNAVAILABLE'
 
 /** Complete command vocabulary advertised by the Forge session adapter. */
 export const FORGE_COMMANDS = [
@@ -43,6 +56,14 @@ export interface ExecutorPolicy {
   readonly executor_lease_id: string
 }
 
+/** One committed spec file whose exact bytes the extended preflight binds. */
+export interface ForgeSpecRef {
+  /** Frontmatter `id` of the committed `*.spec.md` file. */
+  readonly id: string
+  /** Lowercase hex SHA-256 of that file's committed bytes. */
+  readonly digest: string
+}
+
 /** Exact Forge Spec render and Forge Intellect evidence accepted at startup. */
 export interface ForgePreflight {
   readonly protocol: typeof FORGE_PREFLIGHT_PROTOCOL
@@ -57,6 +78,10 @@ export interface ForgePreflight {
     readonly action_id: string
     readonly digest: string
   }
+  /** Committed spec files verified against `specsRoot`; absent keeps baseline-only preflight. */
+  readonly specRefs?: readonly ForgeSpecRef[]
+  /** Git commit expected at HEAD; absent keeps baseline-only preflight. */
+  readonly repoRevision?: string
 }
 
 /** Validated payload for the first command of a Forge-owned session. */
@@ -139,6 +164,28 @@ function stringArray(value: unknown, label: string): string[] {
     result.push(item)
   }
   return result
+}
+
+function specRefs(value: unknown, label: string): ForgeSpecRef[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new ProtocolError(`${label} must be a non-empty array of spec references`)
+  }
+  return (value as unknown[]).map((item, index) => {
+    const entry = object(item, `${label}[${index}]`)
+    const digest = string(entry.digest, `${label}[${index}].digest`)
+    if (!/^[a-f0-9]{64}$/.test(digest)) {
+      throw new ProtocolError(`${label}[${index}].digest must be a lowercase hex SHA-256`)
+    }
+    return { id: string(entry.id, `${label}[${index}].id`), digest }
+  })
+}
+
+function repoRevision(value: unknown, label: string): string {
+  const revision = string(value, label)
+  if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(revision)) {
+    throw new ProtocolError(`${label} must be a lowercase hex commit id`)
+  }
+  return revision
 }
 
 /**
@@ -235,6 +282,12 @@ export function parseStartPayload(request: ForgeCommandRequest): StartPayload {
   if (evidence.protocol !== FORGE_EVIDENCE_PROTOCOL) {
     throw new ProtocolError(`payload.intent.evidence.protocol must be ${FORGE_EVIDENCE_PROTOCOL}`, 409)
   }
+  const refs = intent.specRefs === undefined
+    ? undefined
+    : specRefs(intent.specRefs, 'payload.intent.specRefs')
+  const commit = intent.repoRevision === undefined
+    ? undefined
+    : repoRevision(intent.repoRevision, 'payload.intent.repoRevision')
   const llm = payload.llm === undefined ? undefined : object(payload.llm, 'payload.llm')
   const maxTokens = llm?.max_tokens
   if (maxTokens !== undefined && (!Number.isSafeInteger(maxTokens) || Number(maxTokens) < 1)) {
@@ -254,6 +307,8 @@ export function parseStartPayload(request: ForgeCommandRequest): StartPayload {
         action_id: string(evidence.action_id, 'payload.intent.evidence.action_id'),
         digest: string(evidence.digest, 'payload.intent.evidence.digest'),
       },
+      ...refs === undefined ? {} : { specRefs: refs },
+      ...commit === undefined ? {} : { repoRevision: commit },
     },
     ...payload.prompt === undefined ? {} : { prompt: string(payload.prompt, 'payload.prompt') },
     ...llm === undefined ? {} : {

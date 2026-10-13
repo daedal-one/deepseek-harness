@@ -23,6 +23,7 @@
  */
 
 import { Context, Service } from '@deepseek-ai/cordis'
+import z from '@deepseek-ai/schemastery'
 import { z as zod } from 'zod'
 import type { ZodType } from 'zod'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
@@ -59,8 +60,35 @@ declare module '@deepseek-ai/cordis' {
  */
 export const EXIT_PLAN_MODE = 'exit_plan_mode'
 
+/**
+ * The shipped plan-mode policy text. It is the schema default for
+ * `PlanModeConfig.section`, so a deployment that omits the field renders this
+ * prose unchanged.
+ */
+export const PLAN_MODE_SECTION = `You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.
+
+Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.
+
+The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed only to keep the request shape stable. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.
+
+Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.
+
+Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.
+
+When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask "should I proceed?" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.
+`
+
 /** Deployment-owned plan guidance. */
 export interface PlanModeConfig {
+  /**
+   * Guidance rendered as the `plan:policy` prompt section while plan mode is
+   * active; omitted, it takes {@link PLAN_MODE_SECTION}.
+   */
+  section?: string
+}
+
+/** Validated plan guidance with the shipped default applied. */
+export interface ResolvedPlanModeConfig {
   /** Guidance rendered as the `plan:policy` prompt section while plan mode is active. */
   section: string
 }
@@ -90,14 +118,15 @@ function firstHeading(plan: string): string | undefined {
 }
 
 /**
- * Validate deployment-owned plan guidance. Missing, blank, non-string, or
- * unknown fields fail at plugin load rather than being ignored.
+ * Validate deployment-owned plan guidance. An omitted `section` takes the
+ * schema default; blank, non-string, or unknown fields fail at plugin load
+ * rather than being ignored.
  *
  * @param config Raw plugin config.
- * @returns A detached validated config.
+ * @returns A detached validated config with the shipped default applied.
  */
-export function resolveConfig(config: PlanModeConfig): PlanModeConfig {
-  const section = (config as Partial<PlanModeConfig>).section
+export function resolveConfig(config: PlanModeConfig = {}): ResolvedPlanModeConfig {
+  const section = config.section ?? PLAN_MODE_SECTION
   if (typeof section !== 'string') {
     throw new Error('PlanModeConfig needs a string `section`')
   }
@@ -170,6 +199,11 @@ export const planProjectionDefinition = {
 export class PlanModeController extends Service {
   static inject = ['tools', 'systemPrompt', 'sessionProjections']
 
+  /** Loader schema: an omitted `section` takes the shipped policy text. */
+  static Config: z<PlanModeConfig> = z.object({
+    section: z.string().default(PLAN_MODE_SECTION),
+  })
+
   /** Validated deployment-owned guidance. */
   private readonly section: string
 
@@ -180,7 +214,7 @@ export class PlanModeController extends Service {
    */
   private readonly pendingIntents = new WeakMap<Session, { active: boolean; narrate: boolean }>()
 
-  constructor(ctx: Context, config: PlanModeConfig = { section: '' }) {
+  constructor(ctx: Context, config: PlanModeConfig = {}) {
     super(ctx, 'planMode')
     this.section = resolveConfig(config).section
     let disposed = false

@@ -22,7 +22,7 @@ assignee: carlo
 
 ## Acceptance
 
-The repository has a valid forge-spec v0.6 tree backed by Forge Intellect. The
+The repository has a valid forge-spec v0.7 tree backed by Forge Intellect. The
 adapter boots through a real Cordis composition, rejects incompatible or
 unaccountable startup, translates supported commands and durable events, keeps
 idempotent retries side-effect free, and passes a keyless Forge conformance
@@ -30,6 +30,17 @@ scenario with an actual Forge Intellect action provider.
 The Web composition accepts an authenticated Forge project catalog, reconciles
 one managed Workspace per entry, and honors a registered-workspace deep link
 without falling back to a different project.
+
+The adapter additionally verifies an extended preflight before it creates any
+agent handle. Declared committed spec references resolve by frontmatter id under
+the configured `specsRoot`, and each resolved file's bytes must hash to the
+declared SHA-256. A declared `repoRevision` must equal `git rev-parse HEAD` in
+the configured checkout. Missing configuration, an unresolvable or twice-declared
+id, a digest mismatch, a revision mismatch, and an unreadable HEAD each refuse
+`start` with a distinct coded message, while a preflight carrying neither
+extended field keeps the baseline-only path. The adapter never reads
+`.specs/_config.toml` at runtime; a standalone gate holds the exported baseline,
+the spec tree configuration, and the root AGENTS.md format phrase equal.
 
 The released adapter additionally derives one Forge-owned credential socket
 from the immutable executor lease, refuses missing or non-socket endpoints,

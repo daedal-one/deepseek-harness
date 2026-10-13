@@ -63,6 +63,17 @@ const CONFIG = {
   model: 'summary-model',
 } as const
 
+/** The shipped shape: no explicit route, so every dispatch resolves one. */
+const ROUTE_FREE_CONFIG = {
+  operationsPerSummary: 5,
+  maxOperationBytes: 2_048,
+  maxInputBytes: 16_384,
+  maxOutputTokens: 160,
+  maxSummaryBytes: 720,
+  maxLines: 3,
+  timeoutMs: 1_000,
+} as const
+
 const contexts: Context[] = []
 let nextSession = 0
 
@@ -249,5 +260,64 @@ describe('live activity summaries', () => {
 
     expect(adapter.requests).toEqual([])
     expect(session.snapshotEvents().some(event => event.type === 'activity-summary/request')).toBe(false)
+  })
+})
+
+describe('activity summary route inheritance', () => {
+  async function inheritSetup<Adapter extends LlmAdapter>(adapter: Adapter): Promise<{
+    readonly ctx: Context
+    readonly adapter: Adapter
+  }> {
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(LlmRuntime)
+    ctx.llm.registerAdapter(['agent-route'], adapter)
+    activitySummary.apply(ctx, ROUTE_FREE_CONFIG)
+    return { ctx, adapter }
+  }
+
+  it('inherits the logged main-request route when no route is configured', async () => {
+    const { ctx, adapter } = await inheritSetup(new ScriptedAdapter(['Inherited status']))
+    const session = createSession(ctx)
+    session.append('request/header', {
+      header: { config: { provider: 'agent-route', model: 'agent-model' } },
+      reason: 'initial',
+    })
+    for (let index = 1; index <= 5; index++) appendTool(ctx, index)
+
+    await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
+    expect(adapter.requests[0]).toMatchObject({ provider: 'agent-route', model: 'agent-model' })
+    const request = session.snapshotEvents().find(event => event.type === 'activity-summary/request')
+    expect(request?.data.route).toEqual({ provider: 'agent-route', model: 'agent-model' })
+  })
+
+  it('falls back to the deployment main-Agent selection before any request header exists', async () => {
+    const { ctx, adapter } = await inheritSetup(new ScriptedAdapter(['Deployment status']))
+    ctx.provide('agentModels', { mainSelection: () => ({ provider: 'agent-route', model: 'default-model' }) })
+    createSession(ctx)
+    for (let index = 1; index <= 5; index++) appendTool(ctx, index)
+
+    await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
+    expect(adapter.requests[0]).toMatchObject({ provider: 'agent-route', model: 'default-model' })
+  })
+
+  it('skips with one logged reason and keeps the batch queued when no route source resolves', async () => {
+    const { ctx, adapter } = await inheritSetup(new ScriptedAdapter(['must not dispatch']))
+    const warn = vi.spyOn(ctx.logger, 'warn')
+    const session = createSession(ctx)
+    for (let index = 1; index <= 5; index++) appendTool(ctx, index)
+
+    await vi.waitFor(() => {
+      expect(warn.mock.calls.some(call => String(call[0]).includes('no main-Agent route is available'))).toBe(true)
+    })
+    expect(adapter.requests).toEqual([])
+    expect(session.snapshotEvents().some(event => event.type === 'activity-summary/request')).toBe(false)
+
+    // The batch stays queued and the same Session reports nothing further.
+    session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+    await new Promise<void>(resolve => setTimeout(resolve, 0))
+    expect(warn.mock.calls.filter(call => String(call[0]).includes('no main-Agent route is available'))).toHaveLength(1)
+    expect(adapter.requests).toEqual([])
   })
 })

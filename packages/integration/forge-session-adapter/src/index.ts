@@ -5,10 +5,11 @@
  * @module @deepseek-ai/dsh-forge-session-adapter
  */
 
-import { randomUUID, timingSafeEqual } from 'node:crypto'
-import { chmod, lstat, mkdir, readFile, realpath, rm } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto'
+import { chmod, lstat, mkdir, readFile, readdir, realpath, rm } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
@@ -24,7 +25,13 @@ import {
   FORGE_ACTION_TOOLS_PROTOCOL,
   FORGE_COMMANDS,
   FORGE_EVIDENCE_PROTOCOL,
+  FORGE_REPO_REVISION_MISMATCH,
+  FORGE_REPO_REVISION_UNAVAILABLE,
+  FORGE_REPO_ROOT_REQUIRED,
   FORGE_SESSION_PROTOCOL,
+  FORGE_SPECS_ROOT_REQUIRED,
+  FORGE_SPEC_RENDER_DRIFT,
+  FORGE_SPEC_UNRESOLVABLE,
   ProtocolError,
   parseCommandRequest,
   parseStartPayload,
@@ -33,6 +40,8 @@ import {
   type ForgeCommandRequest,
   type ForgeCommandResponse,
   type ForgeOutcome,
+  type ForgePreflight,
+  type ForgeSpecRef,
   type ExecutorPolicy,
   type StartPayload,
 } from './protocol.ts'
@@ -82,6 +91,10 @@ export interface Config {
   commandSandbox: 'disabled' | 'landlock'
   /** Runtime roots visible read-only to confined commands. */
   commandReadRoots: string[]
+  /** Checkout `.specs` directory used to verify preflight `specRefs`; absolute or relative to the process working directory. */
+  specsRoot?: string
+  /** Git checkout root used to verify preflight `repoRevision`; defaults to the configured `specsRoot` parent. */
+  repoRoot?: string
 }
 
 export const Config: z<Config> = z.object({
@@ -98,6 +111,8 @@ export const Config: z<Config> = z.object({
   credentialSocketRoot: z.string().default('/run/forge-agent-credentials'),
   commandSandbox: z.union(['disabled', 'landlock'] as const).default('disabled'),
   commandReadRoots: z.array(String).default(['/usr', '/bin', '/lib', '/lib64', '/etc']),
+  specsRoot: z.string(),
+  repoRoot: z.string(),
 })
 
 interface StoredSession {
@@ -148,6 +163,26 @@ function initialState(): StoredState {
 
 function asError(value: unknown): Error {
   return value instanceof Error ? value : new Error(String(value))
+}
+
+function specFileId(contents: string): string | undefined {
+  const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(contents)?.[1]
+  if (frontmatter === undefined) return undefined
+  return /^id:[ \t]*(\S+)[ \t]*$/m.exec(frontmatter)?.[1]
+}
+
+function gitHead(repoRoot: string): Promise<string> {
+  return new Promise((resolveHead, rejectHead) => {
+    execFile(
+      'git',
+      ['rev-parse', 'HEAD'],
+      { cwd: repoRoot, encoding: 'utf8', maxBuffer: 64 * 1024, timeout: 10_000, killSignal: 'SIGKILL' },
+      (error, stdout) => {
+        if (error !== null) rejectHead(asError(error))
+        else resolveHead(stdout.trim())
+      },
+    )
+  })
 }
 
 function safeEqual(actual: string | undefined, expected: string): boolean {
@@ -529,6 +564,7 @@ export class ForgeSessionAdapter extends Service {
   ): Promise<ForgeCommandResponse> {
     if (record.stored.started) throw new ProtocolError('session is already started', 409)
     const payload = parseStartPayload(request)
+    await this.verifyExtendedPreflight(payload.intent)
     const canonicalWorkspace = await realpath(record.stored.workspace)
     if (canonicalWorkspace !== record.stored.workspace) {
       throw new ProtocolError('allocated workspace must be canonical', 409, 'policy_denied')
@@ -561,6 +597,126 @@ export class ForgeSessionAdapter extends Service {
       await this.waitForBoundary(record, agent)
     }
     return this.response(record, startSequence, this.status(record))
+  }
+
+  /**
+   * Verify optional extended preflight fields before any agent handle exists.
+   * @param intent - Parsed preflight whose extended fields select the checks.
+   * @returns Nothing; refuses with a coded ProtocolError when a check cannot pass.
+   */
+  private async verifyExtendedPreflight(intent: ForgePreflight): Promise<void> {
+    const refs = intent.specRefs
+    const revision = intent.repoRevision
+    if (refs === undefined && revision === undefined) return
+    const specsRoot = this.config.specsRoot
+    if (refs !== undefined) {
+      if (specsRoot === undefined) {
+        throw new ProtocolError(
+          `preflight ${FORGE_SPECS_ROOT_REQUIRED}: intent declares specRefs but the adapter has no specsRoot configured`,
+          500,
+          'unsupported',
+        )
+      }
+      await this.verifySpecRefs(resolve(specsRoot), refs)
+    }
+    if (revision !== undefined) {
+      const configuredRoot = this.config.repoRoot
+      const repoRoot = configuredRoot !== undefined
+        ? resolve(configuredRoot)
+        : specsRoot === undefined ? undefined : dirname(resolve(specsRoot))
+      if (repoRoot === undefined) {
+        throw new ProtocolError(
+          `preflight ${FORGE_REPO_ROOT_REQUIRED}: intent declares repoRevision but neither repoRoot nor specsRoot is configured`,
+          500,
+          'unsupported',
+        )
+      }
+      await this.verifyRepoRevision(repoRoot, revision)
+    }
+  }
+
+  /**
+   * Verify the committed bytes of every declared spec reference.
+   * @param specsRoot - Absolute path of the checkout's `.specs` directory.
+   * @param refs - Declared spec ids paired with their committed-byte digests.
+   * @returns Nothing; refuses on an unresolvable id or a digest mismatch.
+   */
+  private async verifySpecRefs(specsRoot: string, refs: readonly ForgeSpecRef[]): Promise<void> {
+    const found = new Map<string, string>()
+    await this.scanSpecTree(specsRoot, found)
+    for (const ref of refs) {
+      const path = found.get(ref.id)
+      if (path === undefined) {
+        throw new ProtocolError(
+          `preflight ${FORGE_SPEC_UNRESOLVABLE}: no *.spec.md under ${specsRoot} declares id ${ref.id}`,
+          409,
+          'unsupported',
+        )
+      }
+      const digest = createHash('sha256').update(await readFile(path)).digest('hex')
+      if (digest !== ref.digest) {
+        throw new ProtocolError(
+          `preflight ${FORGE_SPEC_RENDER_DRIFT}: ${path} hashes to ${digest}, not the declared ${ref.digest}`,
+          409,
+          'policy_denied',
+        )
+      }
+    }
+  }
+
+  /**
+   * Index every frontmatter spec id declared under one directory tree.
+   * @param directory - Absolute directory scanned recursively.
+   * @param found - Accumulator mapping a declared id to its absolute file path.
+   * @returns Nothing; refuses when two files declare the same id.
+   */
+  private async scanSpecTree(directory: string, found: Map<string, string>): Promise<void> {
+    const entries = await readdir(directory, { withFileTypes: true })
+    for (const entry of entries) {
+      const path = join(directory, entry.name)
+      if (entry.isDirectory()) {
+        await this.scanSpecTree(path, found)
+        continue
+      }
+      if (!entry.name.endsWith('.spec.md')) continue
+      const id = specFileId(await readFile(path, 'utf8'))
+      if (id === undefined) continue
+      const existing = found.get(id)
+      if (existing !== undefined) {
+        throw new ProtocolError(
+          `preflight ${FORGE_SPEC_UNRESOLVABLE}: spec id ${id} is declared by both ${existing} and ${path}`,
+          409,
+          'unsupported',
+        )
+      }
+      found.set(id, path)
+    }
+  }
+
+  /**
+   * Compare the checkout's HEAD with the declared preflight revision.
+   * @param repoRoot - Absolute git checkout root.
+   * @param declared - Commit id the preflight declares.
+   * @returns Nothing; refuses on mismatch or when git cannot report HEAD.
+   */
+  private async verifyRepoRevision(repoRoot: string, declared: string): Promise<void> {
+    let head: string
+    try {
+      head = await gitHead(repoRoot)
+    } catch (error) {
+      throw new ProtocolError(
+        `preflight ${FORGE_REPO_REVISION_UNAVAILABLE}: cannot read HEAD in ${repoRoot}: ${asError(error).message}`,
+        500,
+        'failed',
+      )
+    }
+    if (head !== declared) {
+      throw new ProtocolError(
+        `preflight ${FORGE_REPO_REVISION_MISMATCH}: ${repoRoot} HEAD is ${head}, not the declared ${declared}`,
+        409,
+        'policy_denied',
+      )
+    }
   }
 
   private async ensureHandle(record: LiveSession): Promise<Agent> {

@@ -73,9 +73,10 @@ export function sectionSpec(locale: DocsLocale, label: string): DocsSection & { 
 /** Every canonical page published by the documentation website. */
 export const docsPages: DocsPage[] = [
   { 'locale':'root','contentLocale':'en-US','source':'docs/user/index.md','route':'index.md','label':'DeepSeek Harness','sidebar':null,'section':'Home','order':0,'sourceAliases':[] },
-  { 'locale':'root','contentLocale':'en-US','source':'docs/user/guide/index.md','route':'guide/quickstart.md','label':'Use the Web UI','sidebar':'guide','section':'Guide','order':1,'sourceAliases':['docs/user/guide'] },
-  { 'locale':'root','contentLocale':'en-US','source':'docs/user/guide/providers.md','route':'guide/providers.md','label':'Configure models','sidebar':'guide','section':'Guide','order':2,'sourceAliases':[] },
-  { 'locale':'root','contentLocale':'en-US','source':'docs/user/guide/network-proxy.md','route':'guide/network-proxy.md','label':'Network proxy','sidebar':'guide','section':'Guide','order':3,'sourceAliases':[] },
+  { 'locale':'root','contentLocale':'en-US','source':'docs/user/guide/quickstart.md','route':'guide/quickstart.md','label':'Quickstart','sidebar':'guide','section':'Guide','order':1,'sourceAliases':[] },
+  { 'locale':'root','contentLocale':'en-US','source':'docs/user/guide/index.md','route':'guide/index.md','label':'Use the Web UI','sidebar':'guide','section':'Guide','order':2,'sourceAliases':['docs/user/guide'] },
+  { 'locale':'root','contentLocale':'en-US','source':'docs/user/guide/providers.md','route':'guide/providers.md','label':'Configure models','sidebar':'guide','section':'Guide','order':3,'sourceAliases':[] },
+  { 'locale':'root','contentLocale':'en-US','source':'docs/user/guide/network-proxy.md','route':'guide/network-proxy.md','label':'Network proxy','sidebar':'guide','section':'Guide','order':4,'sourceAliases':[] },
   { 'locale':'root','contentLocale':'en-US','source':'docs/user/guide/python-sdk.md','route':'guide/python-sdk.md','label':'Python','sidebar':'guide','section':'SDK','order':1,'sourceAliases':[] },
   { 'locale':'root','contentLocale':'en-US','source':'docs/user/guide/github-review.md','route':'guide/github-review.md','label':'GitHub review sessions','sidebar':'guide','section':'Automation','order':1,'sourceAliases':[] },
   { 'locale':'root','contentLocale':'en-US','source':'docs/user/guide/schedule.md','route':'guide/schedule.md','label':'Session reminders','sidebar':'guide','section':'Automation','order':2,'sourceAliases':[] },

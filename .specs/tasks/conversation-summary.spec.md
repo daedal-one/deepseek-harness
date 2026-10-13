@@ -4,7 +4,7 @@ type: task
 status: accepted
 summary: Generate a bounded durable conversation summary per Turn and show it in the Web Info view and the conversations sidebar hover.
 owners: [carlo]
-progress: doing
+progress: in-progress
 addresses:
   - REQ:ui/conversation-summary#c-durable
   - REQ:ui/conversation-summary#c-cadence

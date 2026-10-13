@@ -23,15 +23,15 @@ Apply a tool-policy decision before a tool executes. The enforcer permits accept
 
 This consumer enforces `ctx.toolPolicy` on `tools/pre-execute`. Unsupported and allowed tools delegate with `next()`; denial short-circuits execution. An `ask` verdict first returns its bounded reason to the acting agent, then enters the existing approval pipeline when the configured consecutive-identical threshold is reached, so `ctx.approval` remains the sole owner of the human decision and its durable audit.
 
-`enforceWhen` optionally restricts evaluation to a conjunction of effective `sandbox/mode` and `approval/policy` values. The enforcer folds those values from the calling session's durable events before consulting any provider. An omitted condition preserves unconditional enforcement, and a missing configured value keeps enforcement active because the session cannot establish the configured bypass.
+No shipped profile mounts this consumer. The opt-in [`@deepseek-ai/dsh-policy`](../../bundle/policy/README.md) bundle declares its row disabled, because an active enforcer with no registered provider receives an unavailable policy and defers every agent tool call.
 
-When `systemPrompt` is composed, an optional injection contributes the effective enforcement state and configured threshold to its runtime context. Policy-only consumers keep the enforcement listeners without needing the prompt service. The contribution shares the approval context's ordering slot; it imposes no ordering dependency on that context.
+`enforceWhen` optionally restricts evaluation to a conjunction of effective `sandbox/mode` and `approval/policy` values. The enforcer folds those values from the calling session's durable events before consulting any provider. An omitted condition preserves unconditional enforcement, and a missing configured value keeps enforcement active because the session cannot establish the configured bypass.
 
 When an enforced session accepts a direct user message, the enforcer calls `ctx.toolPolicy.prewarm()` without delaying event publication. Permission changes also offer a prewarm opportunity for the latest direct message. Provider preparation is optional and fail-closed evaluation remains authoritative; calls outside `enforceWhen` do not start preparation.
 
 ## Approval threshold
 
-`approvalThreshold` is the number of consecutive calls with the same tool and canonical arguments required before an `ask` enters human approval; it defaults to `3` and rejects non-integers or values below `2`. Calls below the threshold return a denied tool result containing the provider reason, attempt number, and threshold. The acting agent can change approach or repeat the exact call without interrupting the user on the first false positive.
+`approvalThreshold` is the number of consecutive calls with the same tool and canonical arguments required before an `ask` enters human approval; it defaults to `3` and rejects non-integers or values below `2`. Calls below the threshold return a denied tool result containing the provider reason, attempt number, and threshold. The acting agent can change approach or repeat the exact call without interrupting the user on the first false positive. The [repeat-tool-reminder](../repeat-tool-reminder/README.md) guard independently counts consecutive repeated tool calls for loop hygiene while this threshold counts consecutive identical `ask` verdicts for human escalation; neither suppresses the other.
 
 The enforcer derives the chain from the current turn's durable `tool/call`, effective `tool-policy/decision`, and `tool/result` events instead of process-local state. Deep key sorting makes argument-object order irrelevant. An intervening call, turn boundary, unsupported or non-ask verdict, or successful approved execution breaks the chain. A rejected approval remains a denial in the same chain, so the next identical call stays approval-eligible rather than becoming permanently blocked.
 
@@ -41,19 +41,19 @@ No invariant companion is published because the tool-policy service owns the dur
 
 ## Model Experience
 
-### Runtime context and conditional tool result
+### Conditional tool result
 
 #### What the model sees
 
-The runtime snapshot states whether enforcement is active or bypassed under the session's latest durable permissions and reports `approvalThreshold`. Active guidance explains that providers own tool coverage, exact-call retries stay within the same turn, argument-object order is irrelevant, and intervening calls reset the chain. It distinguishes policy deferrals from one-call sandbox escalation and prohibits retry-bypassing permanent denials. The prompt service logs the named `tool-policy:enforcement` contribution with the model-visible snapshot; changing permissions changes the next assembled snapshot without changing the system prompt. The first two identical `ask` verdicts under the default threshold return `Error: Automatic policy review denied this call without asking the user (attempt <n>/3): <reason>. Change approach or retry this exact tool call; attempt 3 enters approval if an approval service is available and its policy permits prompting. This is a policy deferral, not a sandbox denial; do not add sandbox_permissions.` At the threshold, the existing approval service decides; a policy that disables prompts rejects without asking the user. A grant executes that exact call once; rejection, cancellation, or an unavailable answerer returns the approval service's bounded tool error. Without an approval service, the call remains denied. Deterministic denials use the provider's bounded reason without prompting.
+The runtime snapshot states whether enforcement is active or bypassed under the session's latest durable permissions and reports `approvalThreshold`. Active guidance explains that providers own tool coverage, exact-call retries stay within the same turn, argument-object order is irrelevant, and intervening calls reset the chain. It distinguishes policy deferrals from one-call sandbox escalation and prohibits retry-bypassing permanent denials. The prompt service logs the named `tool-policy:enforcement` contribution with the model-visible snapshot; changing permissions changes the next assembled snapshot without changing the system prompt. The first two identical `ask` verdicts under the default threshold return `Error: Automatic policy review denied this call without asking the user (attempt <n>/3): <reason>. Vary the approach, which is the expected response to an automatic denial; deliberately repeating this exact call is how you reach the user when the retry is genuinely wanted. An intervening different call or turn change resets the chain, and a deterministic denial never becomes approvable however often it repeats. Attempt 3 enters approval if an approval service is available and its policy permits prompting. This is a policy deferral, not a sandbox denial; do not add sandbox_permissions.` At the threshold, the existing approval service decides; a policy that disables prompts rejects without asking the user. A grant executes that exact call once; rejection, cancellation, or an unavailable answerer returns the approval service's bounded tool error. Without an approval service, the call remains denied. Deterministic denials use the provider's bounded reason without prompting.
 
 #### Token effect
 
-Compositions with runtime context enabled add one complete policy-context contribution on the first request and when its effective state changes. Allowed calls and unsupported calls add no policy-result text. Denied or deferred calls add one bounded tool result to the next request.
+Calls outside `enforceWhen`, allowed calls, and unsupported calls add no model-visible tokens. Denied or deferred calls add one bounded tool result to the next request.
 
 #### KV Cache effect
 
-Runtime context and policy feedback append after the existing conversation prefix; unchanged context is not repeated. Permission switches do not rewrite the stable system prompt.
+Policy feedback is append-only after the existing conversation prefix and does not invalidate prior KV-cache entries.
 
 ## Known Limitations and Deferred Work
 

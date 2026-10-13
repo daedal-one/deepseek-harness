@@ -24,6 +24,8 @@ Combine tool-policy providers through one decision service. Consumers submit a t
 
 `ctx.toolPolicy` is the provider-neutral authorization service. Providers register under stable ids; deployments configure an ordered set or omit it to evaluate every registered provider. Duplicate ids and missing configured providers fail loud.
 
+No shipped profile mounts this service. The opt-in [`@deepseek-ai/dsh-policy`](../../bundle/policy/README.md) bundle is its shipped owner: that layer mounts this row and declares the enforcement and provider rows disabled until a deployment configures them.
+
 ## Service
 
 `prewarm(request)` offers the session and cancellation to each selected provider's optional preparation hook. `evaluate(request)` supplies immutable tool identity, JSON arguments, the calling agent, and cancellation. Every selected provider runs in parallel. Unsupported providers return `undefined`; one supported verdict passes through, while overlapping verdicts combine conservatively as `deny` over `ask` over `allow`, with maximum risk and merged bounded categories and opinions. Providers own tool-specific interpretation and must preserve caller cancellation.
@@ -32,7 +34,9 @@ Registrations are effect-owned by provider plugins. Unloading a provider removes
 
 ## Durable events
 
-`tool-policy/classifier-request` records an auxiliary route, purpose, fixed prompt, reconstruction selectors, and bounds before model dispatch. `tool-policy/intent-context` records bounded validated context that a later classifier receives. Neither duplicates raw text already stored in `user/message` or arguments already stored in `tool/call`. `tool-policy/decision` records provider and effective outcomes. The invariant companion validates the user-message-to-context-to-tool-call chain and requires tool-time requests and decisions to belong to the current open turn.
+`tool-policy/classifier-request` records an auxiliary route, purpose, fixed prompt, reconstruction selectors, and bounds before model dispatch. `tool-policy/intent-context` records bounded validated context that a later classifier receives. Native tool arguments remain in `tool/call`; `tool-policy/nested-call` records the exact nested input and its native root, immediate parent, and optional parent transport without adding a conversation tool call. `tool-policy/decision` records provider and effective outcomes for either kind of call, and `tool-policy/nested-result` records nested settlement. These audit records do not enter model history.
+
+The invariant companion requires each nested root and parent to identify one earlier, unsettled call in the current open turn; overlapping native or nested owners of a referenced id are ambiguous and rejected. Call ids may recur after settlement, including across steps of one turn: native results pair by turn, step, id, and one exact cited input sequence; missing legacy references pair only when the full turn/step/id tuple identifies one input occurrence; nested results settle the latest outstanding same-turn nested input in event order, never an earlier result for a reused id. Nested input ids cannot overlap another unsettled call; transport labels must match the parent name. Effect requests and decisions require one unsettled owner; effective decisions require a provider decision after that owner's input.
 
 ## Model Experience
 

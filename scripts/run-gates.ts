@@ -730,6 +730,8 @@ function docSyncLeafGates(options: {
     pnpmScript('docs-site-build', options.docsBuildScript ?? 'docs:build', { label: 'documentation build' }),
     pnpmScript('doc-graphs', 'verify-doc-graphs', { label: 'doc graphs' }),
     pnpmScript('markdown-links', 'verify-md-links', { label: 'markdown links', quick: true }),
+    pnpmScript('spec-lint', 'spec-lint', { label: 'spec tree lint', quick: true }),
+    pnpmScript('forge-spec-baseline', 'verify-forge-spec-baseline', { label: 'forge spec baseline', quick: true }),
     pnpmScript('type-equivalence', 'verify-type-equiv', { label: 'type equivalence', quick: true }),
     pnpmScript('cordis-catalog', 'verify-cordis-catalog', { label: 'cordis catalog' }),
     pnpmScript('cordis-inspect-catalog', 'verify-cordis-inspect-catalog', { label: 'Cordis inspect catalog' }),

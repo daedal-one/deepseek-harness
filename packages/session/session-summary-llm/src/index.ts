@@ -84,6 +84,27 @@ declare module '@deepseek-ai/dsh-session/types' {
   }
 }
 
+/**
+ * The one service surface this package reads from the optional Agent-model
+ * directory: the current main-Agent selection. The composition that mounts
+ * `agent-default-model` declares the complete service; repeating only this
+ * member keeps the build graph of these Session plugins small, and a changed
+ * signature there fails this package's compilation instead of drifting.
+ */
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    /** Persistent deployment-owned model selections, when the composition provides the directory. */
+    readonly agentModels?: {
+      /**
+       * Read the current main-Agent selection.
+       * @param presetId - effective preset id, or undefined without a roster.
+       * @returns the provider and model the next main-Agent start uses.
+       */
+      mainSelection(presetId?: string): { readonly provider: string; readonly model: string }
+    }
+  }
+}
+
 /** Required deployment policy for durable conversation summaries. */
 export interface Config {
   /** Target sentence count stated in the system prompt. */
@@ -98,10 +119,10 @@ export interface Config {
   readonly maxSummaryBytes: number
   /** End-to-end request deadline in milliseconds. */
   readonly timeoutMs: number
-  /** Explicit auxiliary provider route. */
-  readonly provider: string
-  /** Explicit auxiliary model id. */
-  readonly model: string
+  /** Explicit auxiliary provider route; must be paired with `model`. */
+  readonly provider?: string
+  /** Explicit auxiliary model id; must be paired with `provider`. */
+  readonly model?: string
 }
 
 /** Loader schema with no library defaults. */
@@ -112,8 +133,8 @@ export const Config: z<Config> = z.object({
   maxOutputTokens: z.number().step(1).min(1).required(),
   maxSummaryBytes: z.number().step(1).min(1).required(),
   timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS).required(),
-  provider: z.string().required(),
-  model: z.string().required(),
+  provider: z.string(),
+  model: z.string(),
 })
 
 /** Complete configuration key set for direct construction validation. */
@@ -173,9 +194,15 @@ function resolveConfig(config: Config): Readonly<Config> {
   if (value.timeoutMs > MAX_TIMER_DELAY_MS) {
     throw new Error(`session-summary-llm: timeoutMs must not exceed ${MAX_TIMER_DELAY_MS}`)
   }
-  if (typeof value.provider !== 'string' || value.provider.length === 0
-    || typeof value.model !== 'string' || value.model.length === 0) {
-    throw new Error('session-summary-llm: provider and model must be non-empty strings')
+  const hasProvider = value.provider !== undefined
+  const hasModel = value.model !== undefined
+  if (hasProvider !== hasModel) {
+    throw new Error('session-summary-llm: provider and model must be supplied together')
+  }
+  if (hasProvider
+    && (typeof value.provider !== 'string' || value.provider.length === 0
+      || typeof value.model !== 'string' || value.model.length === 0)) {
+    throw new Error('session-summary-llm: provider and model overrides must be non-empty strings')
   }
   return deepFreeze({
     targetSentences: value.targetSentences,
@@ -184,9 +211,66 @@ function resolveConfig(config: Config): Readonly<Config> {
     maxOutputTokens: value.maxOutputTokens,
     maxSummaryBytes: value.maxSummaryBytes,
     timeoutMs: value.timeoutMs,
-    provider: value.provider,
-    model: value.model,
+    ...hasProvider ? { provider: value.provider, model: value.model } : {},
   })
+}
+
+/** Read the non-empty provider and model of one logged request header. */
+function loggedRoute(config: { readonly provider: string; readonly model: string }): SessionSummaryRoute | undefined {
+  return config.provider.length === 0 || config.model.length === 0
+    ? undefined
+    : { provider: config.provider, model: config.model }
+}
+
+/**
+ * Resolve the auxiliary route of a Session whose request fired.
+ *
+ * An explicit configured pair wins. Otherwise the route is the Session's own
+ * logged main request header, and without one the current main-Agent selection
+ * from the optional `agentModels` service: the deployment policy variant fixes
+ * each target's provider, so the deployment is the authority for a route the
+ * user did not choose, and a saved main-Agent model is kept. No source means no
+ * route: the caller skips the request instead of guessing a credential the user
+ * did not choose. Each Session reports its missing route once, so a summarizer
+ * that can never resolve stays quiet rather than repeating one warning per Turn.
+ */
+class SummaryRouteResolver {
+  private readonly missingRouteWarned = new WeakSet<Session>()
+  private readonly logger: Context['logger']
+
+  /**
+   * @param config - validated deployment policy, with the explicit route preserved when configured.
+   * @param ctx - Host context carrying the optional Agent-model directory.
+   */
+  constructor(private readonly config: Readonly<Config>, private readonly ctx: Context) {
+    this.logger = ctx.logger
+  }
+
+  /**
+   * Resolve the route one request may use.
+   * @param session - Session whose auxiliary request is starting.
+   * @returns the exact route, or `undefined` when no source carries one.
+   */
+  resolve(session: Session): SessionSummaryRoute | undefined {
+    if (this.config.provider !== undefined && this.config.model !== undefined) {
+      return { provider: this.config.provider, model: this.config.model }
+    }
+    const logged = session.requestHeader()
+    if (logged !== undefined) {
+      const route = loggedRoute(logged.config)
+      if (route !== undefined) return route
+    }
+    const agentModel = this.ctx.get('agentModels')?.mainSelection(session.header.agentPreset)
+    if (agentModel !== undefined) return { provider: agentModel.provider, model: agentModel.model }
+    if (!this.missingRouteWarned.has(session)) {
+      this.missingRouteWarned.add(session)
+      this.logger.warn(
+        `session "${session.id}": skipping conversation summary: no main-Agent route is available `
+        + '(no logged request header and no agent-models selection); configure provider and model to pin one',
+      )
+    }
+    return undefined
+  }
 }
 
 /**
@@ -388,6 +472,7 @@ export const summaryProjectionDefinition = {
 /** Owns the summary projection, the per-Turn cadence, and the auxiliary request lifecycle. */
 class ConversationSummaryRuntime {
   private readonly config: Readonly<Config>
+  private readonly route: SummaryRouteResolver
   private readonly states = new Map<Session, SessionState>()
   private readonly inFlight = new Set<Promise<void>>()
   private readonly lifetime = new AbortController()
@@ -399,6 +484,7 @@ class ConversationSummaryRuntime {
    */
   constructor(private readonly ctx: Context, config: Config) {
     this.config = resolveConfig(config)
+    this.route = new SummaryRouteResolver(this.config, ctx)
     ctx.sessionProjections.register(summaryProjectionDefinition)
     ctx.on('session/event', (session, event) => { this.observe(session, event) })
     ctx.on('session/disposed', (session) => { this.disposeSession(session) })
@@ -489,6 +575,10 @@ class ConversationSummaryRuntime {
     signal: AbortSignal,
   ): Promise<void> {
     if (this.disposed || signal.aborted) return
+    const route = this.route.resolve(session)
+    if (route === undefined) {
+      throw new Error('session-summary-llm: no auxiliary route is available for this Session')
+    }
     const revision = state.revision + 1
     const framed = frameWithinBudget(state.summary, entries, this.config.maxInputBytes)
     const system = systemPrompt(this.config)
@@ -497,7 +587,6 @@ class ConversationSummaryRuntime {
       source: { kind: 'plugin', plugin: name },
     })]
     const sourceSeqs = framed.entries.map(entry => entry.seq)
-    const route: SessionSummaryRoute = { provider: this.config.provider, model: this.config.model }
     const reasoningEffort = ReasoningEffortId('off')
     using callDeadline = deadline(signal, this.config.timeoutMs, 'SESSION_SUMMARY_TIMEOUT')
     const options: GenerateOptions = deepFreeze({

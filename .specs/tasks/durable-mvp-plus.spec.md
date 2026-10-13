@@ -4,7 +4,7 @@ type: task
 status: accepted
 summary: Implement Durable MVP+ workspace artifacts with independently sandboxed capabilities and Workspace sidebar discovery.
 owners: [carlo]
-progress: completed
+progress: done
 addresses:
   - REQ:artifacts/durable-artifacts#c-composition
   - REQ:artifacts/durable-artifacts#c-identity

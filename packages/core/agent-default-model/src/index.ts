@@ -7,6 +7,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { AgentOptions, ModelSelection } from '@deepseek-ai/dsh-agent'
+import { credentialRef } from '@deepseek-ai/dsh-credentials'
+import type { CredentialProvider, CredentialRef } from '@deepseek-ai/dsh-credentials'
 import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { LlmResolvedModelInfo } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-settings'
@@ -80,6 +82,21 @@ export const AGENT_MODELS_SETTINGS_SCHEMA: z<AgentModelsSettings> = z.object({
   agents: z.dict(storedSelection),
 })
 
+/** Reference grammar of the credential seam's {@link CredentialRef}: a POSIX shell identifier. */
+const CREDENTIAL_REF_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/
+
+/** One deployment-owned alternate main-Agent route selected by its own credential's presence. */
+export interface AgentModelFallbackRoute {
+  /** Provider route serving this fallback. */
+  provider: string
+  /** Model id requested through that provider. */
+  model: string
+  /** Reasoning effort on this route, or provider/default behavior when absent. */
+  reasoningEffort?: string
+  /** Credential reference whose presence selects this route. */
+  credentialRef: string
+}
+
 /** One deployment-owned main-Agent route assigned to a preset. */
 export interface AgentModelPresetRoute {
   /** Provider route fixed for this preset's main Agent. */
@@ -100,8 +117,75 @@ export interface Config {
   model: string
   /** Fallback main-Agent reasoning effort, or provider/default behavior when absent. */
   reasoningEffort?: string
+  /**
+   * Credential reference the primary route's adapter resolves. Declaring it
+   * together with {@link Config.fallbacks} arms credential-aware selection for
+   * the deployment-wide main route; without it the primary route always wins.
+   */
+  credentialRef?: string
+  /**
+   * Alternate main-Agent routes in preference order, each keyed on its own
+   * credential's presence. While the primary credential does not resolve, the
+   * first entry whose reference does replaces the primary route.
+   */
+  fallbacks?: AgentModelFallbackRoute[]
   /** Preset ids mapped to deployment-owned main-Agent routes. */
   presets?: Record<string, AgentModelPresetRoute>
+}
+
+/** One resolved fallback route and the reference that selects it. */
+interface ResolvedFallbackRoute {
+  /** Selection used while this fallback is selected. */
+  selection: ModelSelection
+  /** Reference whose presence selects this route. */
+  credentialRef: CredentialRef
+}
+
+/** Credential-aware main-route selection resolved from validated plugin config. */
+interface ResolvedCredentialRoutes {
+  /** Reference the primary route's adapter resolves. */
+  primary: CredentialRef
+  /** Declared alternate routes in preference order. */
+  fallbacks: readonly ResolvedFallbackRoute[]
+}
+
+/**
+ * Build the complete selection one deployment route names.
+ * @param route - provider, model, and optional effort of a main-Agent route.
+ * @returns the provider-owned selection Agent entry points consume.
+ */
+function routeSelection(route: { provider: string; model: string; reasoningEffort?: string }): ModelSelection {
+  return {
+    provider: route.provider,
+    model: route.model,
+    ...route.reasoningEffort === undefined
+      ? {}
+      : { reasoningEffort: ReasoningEffortId(route.reasoningEffort) },
+  }
+}
+
+/**
+ * Validate the declared credential-aware route selection and brand its references.
+ * @param config - plugin config validated against this plugin's schema.
+ * @returns the primary reference and declared fallbacks, or undefined while the mechanism is not declared.
+ * @throws Error when only one half of the primary/fallback declaration is present.
+ */
+function resolveCredentialRoutes(config: Config): ResolvedCredentialRoutes | undefined {
+  const declared = config.fallbacks ?? []
+  if (config.credentialRef === undefined) {
+    if (declared.length === 0) return undefined
+    throw new Error('agent-default-model: fallbacks require the primary route\'s credentialRef')
+  }
+  if (declared.length === 0) {
+    throw new Error('agent-default-model: credentialRef requires at least one fallback route')
+  }
+  return {
+    primary: credentialRef(config.credentialRef),
+    fallbacks: declared.map(route => ({
+      selection: routeSelection(route),
+      credentialRef: credentialRef(route.credentialRef),
+    })),
+  }
 }
 
 /** One deployment-owned named Agent contribution. */
@@ -203,6 +287,13 @@ export class AgentModelConfig extends TypertRemoteService {
     provider: z.string().required(),
     model: z.string().required(),
     reasoningEffort: z.string(),
+    credentialRef: z.string().pattern(CREDENTIAL_REF_PATTERN),
+    fallbacks: z.array(z.object({
+      provider: z.string().required(),
+      model: z.string().required(),
+      reasoningEffort: z.string(),
+      credentialRef: z.string().pattern(CREDENTIAL_REF_PATTERN).required(),
+    })),
     presets: z.dict(z.object({
       provider: z.string().required(),
       model: z.string().required(),
@@ -214,16 +305,23 @@ export class AgentModelConfig extends TypertRemoteService {
   private source: () => AgentModelsSettings
   private readonly targets = new Map<AgentModelTargetId, CountedTarget>()
   private readonly presetTargets = new Map<string, AgentModelTargetId>()
+  /** Reference the primary main route's adapter resolves, when the mechanism is armed. */
+  private readonly primaryCredentialRef: CredentialRef | undefined
+  /** Declared alternate main routes in preference order. */
+  private readonly fallbackRoutes: readonly ResolvedFallbackRoute[]
+  /**
+   * References the last completed presence read found configured. Empty until
+   * such a read settles, and empty forever without a credentials service, so
+   * an unread credential plane leaves the primary route in place.
+   */
+  private presence: ReadonlySet<CredentialRef> = new Set()
 
   constructor(ctx: Context, config: Config) {
     super(ctx, 'agentModels')
-    const mainSelection: ModelSelection = {
-      provider: config.provider,
-      model: config.model,
-      ...config.reasoningEffort === undefined
-        ? {}
-        : { reasoningEffort: ReasoningEffortId(config.reasoningEffort) },
-    }
+    const mainSelection = routeSelection(config)
+    const credentialRoutes = resolveCredentialRoutes(config)
+    this.primaryCredentialRef = credentialRoutes?.primary
+    this.fallbackRoutes = credentialRoutes?.fallbacks ?? []
     const entry: AgentModelsSettings = { agents: { [MAIN_AGENT_MODEL_TARGET]: stored(mainSelection) } }
     this.source = () => entry
     this.targets.set(MAIN_AGENT_MODEL_TARGET, {
@@ -232,13 +330,7 @@ export class AgentModelConfig extends TypertRemoteService {
     })
     for (const [presetId, route] of Object.entries(config.presets ?? {})) {
       const id = presetAgentModelTargetId(presetId)
-      const selection: ModelSelection = {
-        provider: route.provider,
-        model: route.model,
-        ...route.reasoningEffort === undefined
-          ? {}
-          : { reasoningEffort: ReasoningEffortId(route.reasoningEffort) },
-      }
+      const selection = routeSelection(route)
       this.presetTargets.set(presetId, id)
       this.targets.set(id, {
         target: {
@@ -249,12 +341,77 @@ export class AgentModelConfig extends TypertRemoteService {
         count: 1,
       })
     }
+    if (credentialRoutes !== undefined) {
+      this.watchCredentialPresence(ctx, [
+        credentialRoutes.primary,
+        ...credentialRoutes.fallbacks.map(route => route.credentialRef),
+      ])
+    }
     ctx.inject(['settings'], (settingsCtx) => {
       settingsCtx.settings.installSection(ctx, AGENT_MODELS_SETTINGS_NAMESPACE, AGENT_MODELS_SETTINGS_SCHEMA, entry, {
         setSource: (current) => { this.source = current },
         onChange: () => {},
       })
     })
+  }
+
+  /**
+   * Track the declared references' presence for as long as a credentials
+   * service is mounted. Presence comes from `describe`, which reports a
+   * reference without returning its value, and is re-read after every
+   * committed reference change so a key stored from the Models page reaches
+   * the next Agent creation.
+   * @param ctx - plugin context carrying the optional credentials service.
+   * @param refs - primary and fallback references whose presence decides the route.
+   */
+  private watchCredentialPresence(ctx: Context, refs: readonly CredentialRef[]): void {
+    ctx.inject(['credentials'], (credentialsCtx) => {
+      const credentials = credentialsCtx.credentials
+      const read = (): void => {
+        void this.readPresence(credentials, refs).catch((error: unknown) => {
+          credentialsCtx.logger.warn(`agent-models: credential presence read failed: ${renderThrown(error)}`)
+        })
+      }
+      read()
+      credentialsCtx.on('credentials/reference-updated', read)
+    })
+  }
+
+  /**
+   * Replace the observed reference set from the mounted credential plane; a
+   * failed read leaves the previous observation in place.
+   * @param credentials - mounted credential provider.
+   * @param refs - references to describe.
+   * @returns fulfillment after every declared reference was described.
+   */
+  private async readPresence(credentials: CredentialProvider, refs: readonly CredentialRef[]): Promise<void> {
+    const present = new Set<CredentialRef>()
+    for (const ref of refs) {
+      if ((await credentials.describe(ref)).configured) present.add(ref)
+    }
+    this.presence = present
+  }
+
+  /**
+   * The declared fallback route current credential presence selects, if any.
+   * @returns the selected fallback route, or undefined while the primary route stands.
+   */
+  private activeFallback(): ModelSelection | undefined {
+    const primary = this.primaryCredentialRef
+    if (primary === undefined || this.presence.has(primary)) return undefined
+    return this.fallbackRoutes.find(route => this.presence.has(route.credentialRef))?.selection
+  }
+
+  /**
+   * One target's deployment route after credential substitution: only the main
+   * route declares fallbacks, because every preset and named route pins its own
+   * provider.
+   * @param target - registered target whose route is read.
+   * @returns the route a later Agent under this target starts from.
+   */
+  private deploymentRoute(target: ResolvedAgentModelTarget): ModelSelection {
+    if (target.id !== MAIN_AGENT_MODEL_TARGET) return target.defaultSelection
+    return this.activeFallback() ?? target.defaultSelection
   }
 
   /** Notify directory observers without making their refresh work load-bearing. */
@@ -279,8 +436,9 @@ export class AgentModelConfig extends TypertRemoteService {
    * @returns idempotent disposer for this contribution.
    */
   registerTarget(target: AgentModelTarget): () => void {
-    const mainDefault = this.targets.get(MAIN_AGENT_MODEL_TARGET)?.target.defaultSelection
-    if (mainDefault === undefined) throw new Error('agent-models: main deployment default is unavailable')
+    const mainTarget = this.targets.get(MAIN_AGENT_MODEL_TARGET)?.target
+    if (mainTarget === undefined) throw new Error('agent-models: main deployment default is unavailable')
+    const mainDefault = this.deploymentRoute(mainTarget)
     const resolved: ResolvedAgentModelTarget = {
       ...target,
       defaultSelection: { ...(target.defaultSelection ?? mainDefault) },
@@ -311,16 +469,19 @@ export class AgentModelConfig extends TypertRemoteService {
 
   /**
    * Read one registered target's current provider, model, and optional effort.
+   * The main route follows credential presence, and a stored selection is
+   * projected under whichever provider that route currently names.
    * @param id - target to resolve; defaults to the main Agent.
    * @returns a detached complete selection.
    */
   currentSelection(id: AgentModelTargetId = MAIN_AGENT_MODEL_TARGET): ModelSelection {
     const target = this.targets.get(id)?.target
     if (target === undefined) throw new Error(`agent-models: unknown target "${String(id)}"`)
+    const route = this.deploymentRoute(target)
     const configured = this.source().agents[id]
-    return configured === undefined
-      ? { ...target.defaultSelection }
-      : selected(target.defaultSelection.provider, configured)
+    return configured !== undefined && userOwns(ownDescriptor(this.ctx), id)
+      ? selected(route.provider, configured)
+      : { ...route }
   }
 
   /**
@@ -354,7 +515,7 @@ export class AgentModelConfig extends TypertRemoteService {
     const target = this.targets.get(id)?.target
     if (target === undefined) throw new Error(`agent-models: unknown target "${String(id)}"`)
     await this.ctx.llm.resolveCallConfig({
-      provider: target.defaultSelection.provider,
+      provider: this.deploymentRoute(target).provider,
       model: value.model,
       ...value.reasoningEffort === undefined
         ? {}
@@ -389,8 +550,9 @@ export class AgentModelConfig extends TypertRemoteService {
     const id = presetId === undefined
       ? MAIN_AGENT_MODEL_TARGET
       : this.presetTargets.get(presetId) ?? MAIN_AGENT_MODEL_TARGET
-    const provider = this.targets.get(id)?.target.defaultSelection.provider
-    if (provider === undefined) throw new Error(`agent-models: unknown target "${String(id)}"`)
+    const target = this.targets.get(id)?.target
+    if (target === undefined) throw new Error(`agent-models: unknown target "${String(id)}"`)
+    const provider = this.deploymentRoute(target).provider
     if (next.provider !== provider) {
       throw new Error(
         `agent-models: provider "${next.provider}" cannot replace target provider "${provider}"`,
@@ -409,14 +571,17 @@ export class AgentModelConfig extends TypertRemoteService {
   async list(): Promise<AgentModelsSnapshot> {
     const descriptor = ownDescriptor(this.ctx)
     const targets = [...this.targets.values()]
-      .map(({ target }): AgentModelTargetView => ({
-        id: target.id,
-        label: target.label,
-        provider: target.defaultSelection.provider,
-        selection: stored(this.currentSelection(target.id)),
-        defaultSelection: stored(target.defaultSelection),
-        overridden: userOwns(descriptor, target.id),
-      }))
+      .map(({ target }): AgentModelTargetView => {
+        const route = this.deploymentRoute(target)
+        return {
+          id: target.id,
+          label: target.label,
+          provider: route.provider,
+          selection: stored(this.currentSelection(target.id)),
+          defaultSelection: stored(route),
+          overridden: userOwns(descriptor, target.id),
+        }
+      })
       .sort((left, right) => left.id === MAIN_AGENT_MODEL_TARGET
         ? -1
         : right.id === MAIN_AGENT_MODEL_TARGET

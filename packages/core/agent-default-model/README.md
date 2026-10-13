@@ -24,6 +24,8 @@ Persistent model selection for the main Agent and deployment-defined named Agent
 
 The plugin config requires a fallback `{ provider, model }`, accepts `reasoningEffort`, and can map preset ids under `presets` to independent `{ provider, model, reasoningEffort?, label? }` main-Agent routes. Composition fixes the provider independently for every target. The `agent-models` Settings section stores only each target's model and optional reasoning effort, so a graphical change cannot silently move an Agent to another credential or provider route.
 
+`credentialRef` names the reference the primary route's adapter resolves, and `fallbacks` lists alternate `{ provider, model, reasoningEffort?, credentialRef }` routes in preference order. Declaring both arms credential-aware selection for the deployment-wide main route, resolved through the credential seam: while the primary reference is unconfigured and a declared fallback's reference is configured, the main target's deployment route becomes the first such fallback. No credentials service, an unfinished presence read, or neither reference resolving all keep the primary route, so a request with no key still fails loud with `MISSING_CREDENTIAL` naming the primary reference. Preset and named routes keep their composition provider.
+
 - `currentSelection(id?)` returns the effective selection for the main Agent or one registered role.
 - `mainSelection(presetId?)` returns the preset-specific main-Agent selection, falling back to the deployment-wide main route when no assignment exists.
 - `optionsFor(id, fallback?)` applies a role selection while preserving unrelated Agent options such as output limits.
@@ -48,6 +50,8 @@ Existing sessions keep their logged selection. A saved change applies to later s
 - Each target's provider route is deployment-owned and cannot be changed from the graphical page.
 - Named roles appear only while their contributing plugins are mounted; open clients re-read the directory when that live set changes.
 - Without a writable settings provider, the directory remains readable but changes cannot be retained.
+- A named role that inherits the main deployment default captures it when it registers, so a later credential change does not move that role's route.
+- Credential presence is read when a credentials service mounts and again after each committed reference change. A route read before the first read completes keeps the primary route, and the settings section's composition base stays on the configured primary route while the directory reports the effective one.
 
 ### Dev Note
 
