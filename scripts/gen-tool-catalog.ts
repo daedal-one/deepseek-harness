@@ -70,6 +70,7 @@ import * as ToolTodo from '@deepseek-ai/dsh-tool-todo'
 import * as ToolSubagent from '@deepseek-ai/dsh-tool-subagent'
 import { registerListSubagentModels } from '../packages/subagent/tool-subagent/src/list-models.ts'
 import * as ToolWeb from '@deepseek-ai/dsh-tool-web'
+import * as DocsSearchTool from '@deepseek-ai/dsh-tool-docs-search'
 import VmWorkflowEngine from '@deepseek-ai/dsh-workflow-worker-thread'
 import * as ToolRalph from '@deepseek-ai/dsh-tool-ralph'
 import * as ToolWorkflow from '@deepseek-ai/dsh-tool-workflow'
@@ -675,6 +676,26 @@ const TOOL_PACKAGES: ToolPackage[] = [
     },
     note:
       'web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps.',
+  },
+  {
+    pkg: '@deepseek-ai/dsh-tool-docs-search',
+    dir: 'tool-docs-search',
+    source: 'packages/docs/tool-docs-search/src/index.ts',
+    requires: ['ctx.tools', 'ctx.systemPrompt', 'ctx.docsSearch'],
+    writes: ['tool/call', 'tool/result'],
+    async mount(ctx) {
+      // Schema harvest needs only the declared docsSearch injection to be
+      // satisfied, so an inert contract stub stands in for the provider;
+      // retrieval behavior is the provider packages' contract, not a schema.
+      ctx.provide('docsSearch', {
+        search: () => Promise.resolve([]),
+        status: () => ({ chunks: 0, indexed: 0, modelReady: false, building: false }),
+        reindex: () => ({}),
+      })
+      await ctx.plugin(DocsSearchTool)
+    },
+    note:
+      'docs_search is the Consumer of the docs-search seam and is disabled by default in the base bundle; a deployment enables the local provider (first use downloads an embedding model and builds an index) and this tool together.',
   },
 ]
 

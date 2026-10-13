@@ -864,6 +864,66 @@ export interface Config {
 
 Source: [`packages/integration/daedal-handoff/src/index.ts:17`](../packages/integration/daedal-handoff/src/index.ts)
 
+<a id="deepseek-aidsh-docs-search-local"></a>
+
+## `@deepseek-ai/dsh-docs-search-local`
+
+Not mounted by any shipped profile (opt-in via the `@deepseek-ai/dsh-base` bundle)
+
+```ts config-catalog
+/** Provider configuration; every field is defaulted by {@link LocalDocsSearchService.Config}. */
+export interface Config {
+  /** Repository root the corpus rules are resolved against. Defaults to the process working directory. */
+  root?: string
+  /** Corpus rules to index; defaults to {@link defaultDocsCorpusRules}. */
+  corpus?: DocsCorpusRule[]
+  /** Index database path. Defaults to `<dsh home>/docs-index/docs-search.sqlite`. */
+  indexPath?: string
+  /** Embedding model directory cache. Defaults to `<dsh home>/models`. */
+  cacheRoot?: string
+  /** Hugging Face model id serving the feature-extraction pipeline. */
+  modelId?: string
+  /** ONNX weight precision; `fp16` is refused. */
+  dtype?: 'q8' | 'q4' | 'int8' | 'fp32'
+  /** Local model directory; when set, no weights are downloaded and only local files load. */
+  localModelPath?: string
+  /** Stored vector width, reached by Matryoshka truncation. */
+  dimensions?: number
+  /** Texts per embedding call. */
+  batchSize?: number
+  /** Maximum characters retained from one section body. */
+  maxBodyChars?: number
+  /** Fence body length above which a fenced code block is dropped from embedded text. */
+  maxCodeLines?: number
+  /** Result limit applied when a request omits one. */
+  defaultLimit?: number
+  /** Largest accepted result limit. */
+  maxLimit?: number
+  /** Snippet budget in Unicode code points. */
+  snippetChars?: number
+  /** Open the store and prepare the embedder at activation instead of first use. Defaults to `false`. */
+  openAtStart?: boolean
+}
+
+/** One corpus file class: where its files live and what kind it contributes. */
+export interface DocsCorpusRule {
+  /** Corpus kind every chunk from a matching file carries. */
+  kind: DocsSourceKind
+  /** Repository-relative directory the rule scans. */
+  root: string
+  /** File basename suffix a candidate path must carry. */
+  suffix: string
+  /** Whether the rule scans `root` recursively. */
+  recursive: boolean
+  /** Package-README rule: the section title is prefixed with the package name. */
+  packageReadme: boolean
+}
+```
+
+Depends on: [`DocsSourceKind`](subsystems/docs-search.md)
+
+Source: [`packages/docs/docs-search-local/src/index.ts:87`](../packages/docs/docs-search-local/src/index.ts)
+
 <a id="deepseek-aidsh-e2b"></a>
 
 ## `@deepseek-ai/dsh-e2b`
@@ -1809,7 +1869,7 @@ Source: [`packages/jobs/jobs-local/src/index.ts:31`](../packages/jobs/jobs-local
 
 ## `@deepseek-ai/dsh-llm-deepseek`
 
-Mounted in shipped profiles: acp, headless, sdk, sdk-minimal, web
+Not mounted by any shipped profile or bundle
 
 Requires: `llm`
 
@@ -1906,7 +1966,8 @@ Requires: `llm`
 /** Plugin configuration: the provider routes this instance owns. */
 export interface Config {
   /**
-   * pi-ai provider routes, keyed by provider. An empty (or omitted) dict is
+   * Supported pi-ai provider routes, keyed by provider; direct `deepseek` and
+   * `deepseek-official` routes reject at load. An empty (or omitted) dict is
    * the dormant settings-driven posture: the adapter mounts with no routes
    * and registers them the moment a settings section supplies profiles.
    */
@@ -2265,7 +2326,7 @@ export interface ReplayModelConfig {
 
 Depends on: [`ModelModality`](../packages/llm/llm/src/index.ts) · [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts) · [`SystemPromptUpdate`](../packages/llm/llm/src/index.ts)
 
-Source: [`packages/test-support/llm-replay/src/index.ts:1123`](../packages/test-support/llm-replay/src/index.ts)
+Source: [`packages/test-support/llm-replay/src/index.ts:1159`](../packages/test-support/llm-replay/src/index.ts)
 
 <a id="deepseek-aidsh-llm-retry"></a>
 
@@ -2735,7 +2796,7 @@ Source: [`packages/plan/plan-mode/src/index.ts:82`](../packages/plan/plan-mode/s
 
 ## `@deepseek-ai/dsh-plugin-package-inventory-deepseek`
 
-Mounted in shipped profiles: acp, headless, sdk, sdk-minimal, web
+Not mounted by any shipped profile or bundle
 
 Requires: `agents` · `deepseekLlmApiExtensions` · `loader`
 
@@ -2991,7 +3052,7 @@ Source: [`packages/session/session-activity-summary-llm/src/index.ts:87`](../pac
 
 ## `@deepseek-ai/dsh-session-log-deepseek`
 
-Mounted in shipped profiles: acp, headless, sdk, sdk-minimal, web
+Not mounted by any shipped profile or bundle
 
 Requires: `deepseekLlmApiExtensions` · `sessions`
 
@@ -3692,15 +3753,15 @@ export interface Config {
    * fails.
    */
   cwd?: string
-  /** Provider route the child runtime initializes with (default `deepseek-official`). */
+  /** Provider route the child runtime initializes with (default `openrouter`). */
   provider: string
-  /** Model the child runtime initializes with (default `deepseek-flash`). */
+  /** Model the child runtime initializes with (default `deepseek/deepseek-v4.1-flash`). */
   model: string
   /** Optional per-request output-token cap for the child runtime. */
   maxTokens?: number
   /**
    * Extra environment variables for the child process — e.g. the child
-   * runtime's own `DEEPSEEK_API_KEY`. Forwarded on top of a credential-scrubbed copy of the parent
+   * runtime's own `OPENROUTER_API_KEY`. Forwarded on top of a credential-scrubbed copy of the parent
    * env, so an explicit key here reaches the child while ambient secrets do
    * not leak implicitly.
    */
@@ -4016,6 +4077,26 @@ export interface Config {
 ```
 
 Source: [`packages/shell/tool-bash-persistent/src/index.ts:435`](../packages/shell/tool-bash-persistent/src/index.ts)
+
+<a id="deepseek-aidsh-tool-docs-search"></a>
+
+## `@deepseek-ai/dsh-tool-docs-search`
+
+Not mounted by any shipped profile (opt-in via the `@deepseek-ai/dsh-base` bundle)
+
+Requires: `tools` · `docsSearch`
+
+```ts config-catalog
+/** Model-facing `docs_search` configuration; both fields are deployment-varying choices. */
+export interface Config {
+  /** Maximum forwarded `limit`; an explicit model limit above it is rejected naming the cap. */
+  resultLimitCap?: number
+  /** Per-hit snippet budget in characters applied to the returned value's snippets. */
+  snippetChars?: number
+}
+```
+
+Source: [`packages/docs/tool-docs-search/src/index.ts:49`](../packages/docs/tool-docs-search/src/index.ts)
 
 <a id="deepseek-aidsh-tool-fs"></a>
 
@@ -5086,7 +5167,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-command-goal` — requires `commands` · `goals` ([`packages/goal/command-goal/src/index.ts`](../packages/goal/command-goal/src/index.ts)) — Mounted in shipped profiles: acp, headless, sdk, web
 - `@deepseek-ai/dsh-commands` ([`packages/interaction/commands/src/index.ts`](../packages/interaction/commands/src/index.ts)) — Mounted in shipped profiles: acp, headless, sdk, web
 - `@deepseek-ai/dsh-cordis-client-runner` ([`packages/extensions/cordis-client-runner/src/index.ts`](../packages/extensions/cordis-client-runner/src/index.ts)) — Mounted in shipped profiles: web
-- `@deepseek-ai/dsh-deepseek-llm-api-extensions` ([`packages/llm/deepseek-llm-api-extensions/src/index.ts`](../packages/llm/deepseek-llm-api-extensions/src/index.ts)) — Mounted in shipped profiles: acp, headless, sdk, sdk-minimal, web
+- `@deepseek-ai/dsh-deepseek-llm-api-extensions` ([`packages/llm/deepseek-llm-api-extensions/src/index.ts`](../packages/llm/deepseek-llm-api-extensions/src/index.ts)) — Not mounted by any shipped profile or bundle
 - `@deepseek-ai/dsh-experimental-client-ui-agent-team` ([`packages/experimental/client-ui-agent-team/src/index.ts`](../packages/experimental/client-ui-agent-team/src/index.ts)) — Not mounted by any shipped profile (opt-in via the `@deepseek-ai/dsh-experimental-agent-team-web-profile` bundle)
 - `@deepseek-ai/dsh-fs-e2b` — requires `e2b` ([`packages/e2b/fs-e2b/src/index.ts`](../packages/e2b/fs-e2b/src/index.ts)) — Not mounted by any shipped profile or bundle
 - `@deepseek-ai/dsh-fs-observation-policy` ([`packages/fs/fs-observation-policy/src/index.ts`](../packages/fs/fs-observation-policy/src/index.ts)) — Mounted in shipped profiles: acp, headless, sdk, web
@@ -5127,6 +5208,7 @@ Abstract service classes — a deployment loads a concrete implementation packag
 - `@deepseek-ai/dsh-code-runtime` — abstract `CodeRuntime` ([`packages/code-runtime/code-runtime/src/index.ts`](../packages/code-runtime/code-runtime/src/index.ts)) — Not mounted by any shipped profile or bundle
 - `@deepseek-ai/dsh-compaction` — abstract `CompactionEngine` ([`packages/compaction/compaction/src/index.ts`](../packages/compaction/compaction/src/index.ts)) — Not mounted by any shipped profile or bundle
 - `@deepseek-ai/dsh-credentials` — abstract `CredentialProvider` ([`packages/credentials/credentials/src/index.ts`](../packages/credentials/credentials/src/index.ts)) — Not mounted by any shipped profile or bundle
+- `@deepseek-ai/dsh-docs-search` — abstract `DocsSearcher` ([`packages/docs/docs-search/src/index.ts`](../packages/docs/docs-search/src/index.ts)) — Not mounted by any shipped profile or bundle
 - `@deepseek-ai/dsh-file-reference` — abstract `FileReferenceService` ([`packages/context/file-reference/src/index.ts`](../packages/context/file-reference/src/index.ts)) — Not mounted by any shipped profile or bundle
 - `@deepseek-ai/dsh-fs` — abstract `FileSystem` ([`packages/fs/fs/src/index.ts`](../packages/fs/fs/src/index.ts)) — Not mounted by any shipped profile or bundle
 - `@deepseek-ai/dsh-host-directory-picker` — abstract `DirectoryPicker` ([`packages/host/directory-picker/src/index.ts`](../packages/host/directory-picker/src/index.ts)) — Not mounted by any shipped profile or bundle
