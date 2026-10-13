@@ -6,6 +6,7 @@ level: MUST
 summary: Let a Session hold many participants — humans and agents — with per-participant authority, attribution in the log, and a meta-agent that manages other Sessions from durable intentions.
 owners: [carlo]
 refines: []
+related: [REQ:session/session-peer-communication]
 categorized_under: []
 ---
 
