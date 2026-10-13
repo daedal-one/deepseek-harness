@@ -54,4 +54,4 @@ Focused unit tests cover envelope attribution, attribution rendering including t
 
 Keyless recorded-session scenarios pin the shared-thread transcript and the migrated-log replay. Both SDK expected outputs are updated in the same change because the envelope and session lifecycle are projected by each.
 
-`pnpm run typecheck`, focused `pnpm run test`, `pnpm run test:snapshot`, `pnpm run lint`, `pnpm run test:coverage` for the touched packages, and `pnpm run doc-sync`. `spec lint` is unavailable in this environment; the spec files are validated by inspection.
+`pnpm run typecheck`, focused `pnpm run test`, `pnpm run test:snapshot`, `pnpm run lint`, `pnpm run test:coverage` for the touched packages, and `pnpm run doc-sync`. `pnpm run spec-lint` validates this tree against the `forge-spec-v0.7.0` baseline declared in `.specs/_config.toml`.
