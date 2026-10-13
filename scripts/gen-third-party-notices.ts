@@ -78,6 +78,9 @@ const OVERRIDES: Record<string, { license?: string; repo?: string }> = {
   // No repository field in the published manifest.
   'node-addon-require-builtin': { repo: 'https://www.npmjs.com/package/node-addon-require-builtin' },
   // No `license` field in the published manifest; the tarball's LICENSE.txt is the MIT text.
+  // `license: MIT OR Apache`: bare `Apache` is not a valid SPDX identifier, so the
+  // parser fails closed; the upstream repository states MIT OR Apache-2.0.
+  'sqlite-vec': { license: 'MIT OR Apache-2.0', repo: 'https://github.com/asg017/sqlite-vec' },
 }
 
 /**

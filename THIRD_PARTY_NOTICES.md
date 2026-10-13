@@ -36,6 +36,7 @@ External packages installed for runtime use or distributed inside the prebuilt b
 | [`@anthropic-ai/sdk`](https://github.com/anthropics/anthropic-sdk-typescript) | MIT |
 | [`@babel/code-frame`](https://github.com/babel/babel) | MIT |
 | [`@earendil-works/pi-ai`](https://github.com/earendil-works/pi) | MIT |
+| [`@huggingface/transformers`](https://github.com/huggingface/transformers.js) | Apache-2.0 |
 | [`@joplin/turndown-plugin-gfm`](https://github.com/laurent22/joplin-turndown-plugin-gfm) | MIT |
 | [`@jridgewell/gen-mapping`](https://github.com/jridgewell/sourcemaps) | MIT |
 | [`@lexical/history`](https://github.com/facebook/lexical) | MIT |
@@ -110,6 +111,7 @@ External packages installed for runtime use or distributed inside the prebuilt b
 | [`semver`](https://github.com/npm/node-semver) | ISC |
 | [`sharp`](https://github.com/lovell/sharp) | Apache-2.0 |
 | [`shiki`](https://github.com/shikijs/shiki) | MIT |
+| [`sqlite-vec`](https://github.com/asg017/sqlite-vec) | MIT OR Apache-2.0 |
 | [`supports-color`](https://github.com/chalk/supports-color) | MIT |
 | [`tldts`](https://github.com/remusao/tldts) | MIT |
 | [`tsx`](https://github.com/privatenumber/tsx) | MIT |
