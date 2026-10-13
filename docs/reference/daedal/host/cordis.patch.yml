@@ -82,6 +82,30 @@
               xhigh: xhigh
               max: max
 
+# Model-selected delegation is the deployment base for both presets: every
+# newly composed top-level Session snapshots these exact child routes, so a
+# parent Agent may name a child `provider`, `model`, and `reasoning_effort`
+# without a Settings change. Settings > Plugins can narrow or extend the list,
+# and the recorded policy of a running Session never changes under it.
+- id: subagent-model-selection-settings
+  config:
+    enabled: true
+    allowedModels:
+      - provider: openai-codex
+        model: gpt-6-astra
+      - provider: openai-codex
+        model: gpt-6-sol
+      - provider: openai-codex
+        model: gpt-6-luna
+      - provider: openrouter
+        model: qwen/qwen3.8-27b
+      - provider: openrouter
+        model: moonshotai/kimi-k3:nitro
+      - provider: openrouter
+        model: deepseek/deepseek-v4.1-flash
+      - provider: openrouter
+        model: z-ai/glm-5.3-flash:nitro
+
 # Declaration order is the browser and command-picker order. The middle mode
 # pairs an unconfined file sandbox with an available human approval channel;
 # the enforcer below activates independent policy review only for that pair.

@@ -33,6 +33,10 @@ The existing `daedal` preset keeps its OpenRouter defaults, including `qwen/qwen
 
 Tool-policy classifiers remain host-owned and keep their independent OpenRouter routes in this reference. They review supported shell and MCP calls for either preset and are not part of the selected Agent's model route.
 
+## Subagent routes and reasoning effort
+
+Both presets put `modelSelectionSettings: true` on the primary `subagent` definition, so a parent Agent may name a child `provider`, `model`, and `reasoning_effort` after inspecting `list_subagent_models`; without that flag the delegation schema has no route fields at all, and with it the preset refuses to mount unless the Host's `subagent-model-selection` settings service is present (the agent-plane bundle mounts it). Selection stays user-authorized rather than open: the host patch seeds the `subagent-model-selection` deployment default with one shared list — the three GPT-6 routes the `daedal-openai` roles use, plus the four OpenRouter routes the `daedal` roles use — and Settings > Plugins can narrow or extend it. That list is Host-global, not scoped per preset, so a Session on either preset may select any authorized route. A new top-level Session records the list it composed with, child Sessions inherit it, and a resumed Session keeps its recorded list instead of current settings. Only the primary definition enables selection because the shared `list_subagent_models` name registers once per tool scope; `subagent_fork` omits it so an inherited conversation prefix stays eligible for provider-side cache reuse, and each named role keeps its configured effort tier.
+
 ## Host maintenance handoff
 
 Both Daedal presets receive explicit context identifying host or isolated execution. Isolated sessions use `handoff_to_host` for running-harness updates, service management, and other host-only work. They must stop probing host processes, guessed host directories, or blocked localhost URLs; permission escalation cannot move a container session onto the host. Named specialists report a required handoff to their parent.
