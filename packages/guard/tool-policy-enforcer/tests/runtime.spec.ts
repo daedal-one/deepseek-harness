@@ -6,8 +6,13 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolPolicyService, { ToolPolicyProviderId, type ToolPolicyVerdict } from '@deepseek-ai/dsh-tool-policy'
 import ToolRuntime, { defineTool } from '@deepseek-ai/dsh-tools'
 import ApprovalService, { type ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { apply, Config, shouldEnforce } from '../src/index.ts'
+
+const contexts: Context[] = []
+afterEach(async () => {
+  await Promise.all(contexts.splice(0).map(ctx => ctx.fiber.dispose()))
+})
 
 function fakeAgent() {
   const events: Array<Record<string, unknown>> = [{ type: 'turn/start', data: { turn: 1 } }]
@@ -20,46 +25,250 @@ function fakeAgent() {
   return { agent: { session } as unknown as Agent, events }
 }
 
-async function executeLogged(
-  ctx: Context,
-  agent: Agent,
-  events: Array<Record<string, unknown>>,
-  id: string,
-  argumentsValue: Record<string, unknown>,
-  rawArguments = JSON.stringify(argumentsValue),
-) {
-  const callId = ToolCallId(id)
-  const boundary = events.findLast(event => event.type === 'turn/start' || event.type === 'turn/end')
-  const turn = boundary?.type === 'turn/start' ? (boundary.data as { turn: number }).turn : 0
-  events.push({ type: 'tool/call', data: { turn, step: 1, callId, name: 'probe', arguments: rawArguments } })
-  const result = await ctx.tools.execute({
-    callId, name: 'probe', arguments: argumentsValue, agent,
-    signal: new AbortController().signal,
-  })
-  events.push({
-    type: 'tool/result',
-    data: {
-      turn,
-      step: 1,
-      message: {
-        content: [{ type: 'tool-result', toolCallId: callId, content: result.content, isError: result.isError }],
-      },
-    },
-  })
-  return result
+async function harness(options: { outcome?: ApprovalOutcome; approval?: 'never' | 'missing' | 'unavailable'; ptc?: boolean; config?: Config } = {}) {
+  const ctx = new Context()
+  contexts.push(ctx)
+  await ctx.plugin(SystemPrompt)
+  if (options.approval !== 'missing') await ctx.plugin(ApprovalService, { policy: options.approval === 'never' ? 'never' : 'ask' })
+  await ctx.plugin(ToolRuntime)
+  await ctx.plugin(ToolPolicyService, {})
+  const verdict = {
+    providerId: ToolPolicyProviderId('fake'), decision: 'ask' as ToolPolicyVerdict['decision'], risk: 60,
+    categories: [], reason: 'network access needs review', opinions: [],
+  }
+  const evaluate = vi.fn(async () => verdict)
+  ctx.toolPolicy.register(ToolPolicyProviderId('fake'), { evaluate })
+  const fiber = await ctx.plugin({ name: 'enforcer-test', inject: ['tools', 'toolPolicy'], apply }, options.config)
+  const prompted = vi.fn(async (_request: { toolName: string; callId?: string; reason?: string }): Promise<ApprovalOutcome> => options.outcome ?? 'allowed-once')
+  if (options.approval !== 'unavailable') ctx.on('approval/request', prompted)
+  const execute = vi.fn(async () => 'ran')
+  const disposeProbe = ctx.tools.register(defineTool({
+    name: 'probe', description: 'probe', parameters: {},
+    output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
+    execute,
+  }))
+  const state = fakeAgent()
+  function logCall(name: string, id: string, args: unknown, agentState = state) {
+    const callId = ToolCallId(id)
+    agentState.events.push(options.ptc
+      ? { type: 'tool/ptc-dispatch-start', data: { rootCallId: ToolCallId('root'), parentCallId: ToolCallId('root'), subCallId: callId, name, arguments: args } }
+      : { type: 'tool/call', data: { turn: 1, step: 1, callId, name, arguments: JSON.stringify(args) } })
+    return { callId, name, arguments: args, agent: agentState.agent, signal: new AbortController().signal }
+  }
+  async function finishCall(input: ReturnType<typeof logCall>, agentState = state) {
+    const result = await ctx.tools.execute(input)
+    agentState.events.push(options.ptc
+      ? { type: 'tool/ptc-dispatch', data: { subCallId: input.callId, name: input.name, arguments: input.arguments, isError: result.isError, content: result.content } }
+      : { type: 'tool/result', data: { turn: 1, step: 1, message: { content: [{ type: 'tool-result', toolCallId: input.callId, content: result.content, isError: result.isError }] } } })
+    return result
+  }
+  const call = (name: string, id: string, args: unknown, agentState = state) => finishCall(logCall(name, id, args, agentState), agentState)
+  const probe = (id: string, args: unknown = { command: 'curl example' }) => call('probe', id, args)
+  const approve = (id = 'approval', target = 'denied') => call('request_tool_approval', id, { call_id: target, justification: 'The task requires this read.' })
+  return { ctx, fiber, disposeProbe, verdict, evaluate, prompted, execute, state, call, probe, approve, logCall, finishCall }
 }
 
-describe('tool-policy enforcement through ToolRuntime', () => {
-  it('accepts an omitted activation condition but rejects explicit empty lists', () => {
-    expect(Config({})).toEqual({ approvalThreshold: 3 })
-    expect(() => Config({ enforceWhen: { sandboxModes: [] } }))
-      .toThrow(/sandboxModes/)
-    expect(() => Config({ enforceWhen: { approvalPolicies: [] } }))
-      .toThrow(/approvalPolicies/)
-    expect(() => Config({ approvalThreshold: 1 })).toThrow(/approvalThreshold/)
-    expect(() => Config({ approvalThreshold: 2.5 })).toThrow(/approvalThreshold/)
+describe('explicit policy approval', () => {
+  it('has no retry threshold configuration', () => {
+    expect(Config({})).toEqual({})
+    expect(() => Config({ enforceWhen: { sandboxModes: [] } })).toThrow(/sandboxModes/)
+    expect(() => Config({ enforceWhen: { approvalPolicies: [] } })).toThrow(/approvalPolicies/)
   })
 
+  it('points the first denial to direct approval and never prompts from repetition', async () => {
+    const h = await harness()
+    for (let i = 0; i < 5; i++) {
+      expect(await h.probe(`denied-${i}`)).toMatchObject({ isError: true, content: [{ text:
+        `Error: Automatic policy review denied this call without asking the user: network access needs review. Do not repeat this call to trigger approval. If the action is still necessary, call request_tool_approval with call_id "denied-${i}" and a justification, then retry this exact call only if approval succeeds.`,
+      }] })
+    }
+    expect(h.prompted).not.toHaveBeenCalled()
+    expect(h.execute).not.toHaveBeenCalled()
+  })
+
+  it.each([false, true])('grants one canonical exact call and reconstructs it after reload (PTC: %s)', async (ptc) => {
+    const h = await harness({ ptc })
+    const args = { command: 'curl example', nested: { beta: [2, 3], alpha: 1 } }
+    await h.probe('denied', args)
+    expect(await h.approve()).toMatchObject({ isError: false })
+    expect(h.execute).not.toHaveBeenCalled()
+    expect(h.prompted).toHaveBeenCalledOnce()
+    expect(h.prompted.mock.calls[0]?.[0]).toMatchObject({ toolName: 'probe', callId: 'approval', reason: expect.stringContaining('curl example') as unknown })
+    await h.fiber.dispose()
+    expect(h.ctx.tools.get('request_tool_approval')).toBeUndefined()
+    await h.ctx.plugin({ name: 'enforcer-reloaded', inject: ['tools', 'toolPolicy'], apply })
+    expect(await h.probe('changed', { ...args, command: 'curl other' })).toMatchObject({ isError: true })
+    expect(await h.probe('granted', { nested: { alpha: 1, beta: [2, 3] }, command: 'curl example' })).toMatchObject({ isError: false })
+    expect(await h.probe('consumed', args)).toMatchObject({ isError: true })
+    expect(h.execute).toHaveBeenCalledOnce()
+    expect(h.prompted).toHaveBeenCalledOnce()
+  })
+
+  it('consumes a grant in logged call order when matching calls overlap', async () => {
+    const h = await harness()
+    await h.probe('denied')
+    await h.approve()
+    const first = h.logCall('probe', 'first', { command: 'curl example' })
+    const second = h.logCall('probe', 'second', { command: 'curl example' })
+    const results = await Promise.all([h.finishCall(first), h.finishCall(second)])
+    expect(results.map(result => result.isError)).toEqual([false, true])
+    expect(h.execute).toHaveBeenCalledOnce()
+  })
+
+  it('requires a completed denial and rejects cross-session, stale, or arbitrary call ids', async () => {
+    const h = await harness()
+    expect(await h.approve()).toMatchObject({ isError: true })
+    await h.probe('denied')
+    const other = fakeAgent()
+    expect(await h.call('request_tool_approval', 'foreign', { call_id: 'denied', justification: 'needed' }, other)).toMatchObject({ isError: true })
+    h.state.events.push({ type: 'turn/end', data: { turn: 1 } }, { type: 'turn/start', data: { turn: 2 } })
+    expect(await h.approve('stale')).toMatchObject({ isError: true })
+    expect(h.prompted).not.toHaveBeenCalled()
+  })
+
+  it('requires a successful approval-tool result even when the answerer granted', async () => {
+    const h = await harness()
+    await h.probe('denied')
+    const controller = new AbortController()
+    h.ctx.on('tools/post-execute', async (exec, _result, next) => {
+      if (exec.name === 'request_tool_approval') controller.abort(new Error('cancelled before delivery'))
+      return next()
+    })
+    const input = h.logCall('request_tool_approval', 'approval', { call_id: 'denied', justification: 'needed' })
+    expect(await h.finishCall({ ...input, signal: controller.signal })).toMatchObject({ isError: true })
+    expect(h.state.events).toContainEqual(expect.objectContaining({ type: 'approval/decided', data: expect.objectContaining({ outcome: 'allowed-once' }) as unknown }))
+    expect(await h.probe('not-granted')).toMatchObject({ isError: true })
+    expect(h.execute).not.toHaveBeenCalled()
+  })
+
+  it('expires a successful grant at the turn boundary', async () => {
+    const h = await harness()
+    await h.probe('denied')
+    await h.approve()
+    h.state.events.push({ type: 'turn/end', data: { turn: 1 } }, { type: 'turn/start', data: { turn: 2 } })
+    expect(await h.probe('next-turn')).toMatchObject({ isError: true })
+    expect(h.execute).not.toHaveBeenCalled()
+  })
+
+  it.each(['rejected', 'cancelled', 'unavailable'] as const)('does not issue a grant after %s approval', async (outcome) => {
+    const h = await harness({ outcome })
+    await h.probe('denied')
+    expect(await h.approve()).toMatchObject({ isError: true, content: [{ text: `Error: tool approval ${outcome}; do not execute the denied action` }] })
+    expect(await h.probe('again')).toMatchObject({ isError: true })
+    expect(await h.approve('same-denial')).toMatchObject({ isError: true })
+    if (outcome === 'rejected') expect(await h.approve('new-denial', 'again')).toMatchObject({ isError: true })
+    expect(h.prompted).toHaveBeenCalledOnce()
+    expect(h.execute).not.toHaveBeenCalled()
+  })
+
+  it.each(['never', 'missing', 'unavailable'] as const)('fails closed with %s approval support', async (approval) => {
+    const h = await harness({ approval })
+    await h.probe('denied')
+    expect(await h.approve()).toMatchObject({ isError: true })
+    expect(await h.probe('again')).toMatchObject({ isError: true })
+    expect(h.prompted).not.toHaveBeenCalled()
+    expect(h.execute).not.toHaveBeenCalled()
+  })
+
+  it('never approves a deterministic denial and rechecks policy after a grant', async () => {
+    const h = await harness()
+    h.verdict.decision = 'deny'
+    expect(await h.probe('forbidden')).toMatchObject({ isError: true })
+    expect(await h.approve('forbidden-approval', 'forbidden')).toMatchObject({ isError: true })
+    expect(h.prompted).not.toHaveBeenCalled()
+    h.verdict.decision = 'ask'
+    await h.probe('denied')
+    await h.approve()
+    h.verdict.decision = 'deny'
+    expect(await h.probe('revoked')).toMatchObject({ isError: true })
+    h.verdict.decision = 'ask'
+    expect(await h.probe('spent')).toMatchObject({ isError: true })
+    expect(h.execute).not.toHaveBeenCalled()
+  })
+
+  it('does not issue multiple grants from concurrent approval requests', async () => {
+    const h = await harness()
+    await h.probe('denied')
+    let settle!: (value: ApprovalOutcome) => void
+    h.prompted.mockImplementationOnce(() => new Promise((resolve) => { settle = resolve }))
+    const first = h.approve('first')
+    await vi.waitFor(() => { expect(h.prompted).toHaveBeenCalledOnce() })
+    try {
+      expect(await h.approve('second')).toMatchObject({ isError: true })
+    } finally {
+      settle('allowed-once')
+      await first
+    }
+    expect(h.prompted).toHaveBeenCalledOnce()
+  })
+
+  it('can approve a new denial after a previous grant was consumed', async () => {
+    const h = await harness()
+    await h.probe('denied')
+    await h.approve()
+    await h.probe('granted')
+    await h.probe('second-denial')
+    expect(await h.approve('second-approval', 'second-denial')).toMatchObject({ isError: false })
+    expect(await h.probe('second-granted')).toMatchObject({ isError: false })
+    expect(h.prompted).toHaveBeenCalledTimes(2)
+    expect(h.execute).toHaveBeenCalledTimes(2)
+  })
+
+  it('ignores malformed or empty recorded arguments instead of treating them as grants', async () => {
+    const h = await harness()
+    for (const [id, args] of [['malformed', '{'], ['empty', '']]) {
+      h.state.events.push({ type: 'tool/call', data: { turn: 1, step: 1, callId: ToolCallId(id!), name: 'request_tool_approval', arguments: args } })
+    }
+    expect(await h.probe('denied')).toMatchObject({ isError: true })
+    expect(await h.approve()).toMatchObject({ isError: false })
+    expect(await h.probe('granted')).toMatchObject({ isError: false })
+  })
+
+  it('returns an explicit approval hint when policy evaluation fails, but preserves cancellation', async () => {
+    const h = await harness()
+    h.evaluate.mockRejectedValueOnce(new Error('offline'))
+    expect(await h.probe('unavailable')).toMatchObject({ isError: true, content: [{ text: expect.stringContaining('tool policy is unavailable') as unknown }] })
+    const controller = new AbortController()
+    h.evaluate.mockImplementationOnce(async () => {
+      controller.abort(new Error('stopped'))
+      throw controller.signal.reason
+    })
+    const input = h.logCall('probe', 'cancelled', {})
+    expect(await h.finishCall({ ...input, signal: controller.signal })).toMatchObject({ isError: true })
+    expect(h.prompted).not.toHaveBeenCalled()
+    expect(h.execute).not.toHaveBeenCalled()
+  })
+
+  it('prewarms relevant events, contains preparation failure, and respects permission scope and disposal', async () => {
+    const h = await harness({ config: { enforceWhen: { approvalPolicies: ['ask'] } } })
+    const prepare = vi.spyOn(h.ctx.toolPolicy, 'prewarm').mockRejectedValue(new Error('offline'))
+    const emit = (event: Record<string, unknown>) => { h.ctx.emit('session/event', h.state.agent.session, event as SessionEvent) }
+    emit({ type: 'step/start', data: { turn: 1, step: 1 } })
+    emit({ type: 'user/message', data: { source: { kind: 'plugin' }, content: [] } })
+    emit({ type: 'user/message', data: { source: { kind: 'user' }, content: [] } })
+    emit({ type: 'sandbox/mode', data: { mode: 'danger-full-access' } })
+    emit({ type: 'approval/policy', data: { policy: 'ask' } })
+    await vi.waitFor(() => { expect(prepare).toHaveBeenCalledTimes(3) })
+    h.state.events.push({ type: 'approval/policy', data: { policy: 'never' } })
+    emit({ type: 'approval/policy', data: { policy: 'never' } })
+    await Promise.resolve()
+    expect(prepare).toHaveBeenCalledTimes(3)
+    emit({ type: 'approval/policy', data: { policy: 'ask' } })
+    await h.fiber.dispose()
+    await Promise.resolve()
+    expect(prepare).toHaveBeenCalledTimes(3)
+  })
+
+  it('requires a justification and an available target tool', async () => {
+    const h = await harness()
+    await h.probe('denied')
+    expect(await h.call('request_tool_approval', 'empty', { call_id: 'denied', justification: ' ' })).toMatchObject({ isError: true })
+    const noAgent = await h.ctx.tools.execute({ callId: ToolCallId('no-agent'), name: 'request_tool_approval', arguments: { call_id: 'denied', justification: 'needed' }, signal: new AbortController().signal })
+    expect(noAgent).toMatchObject({ isError: true })
+    h.disposeProbe()
+    expect(await h.approve('missing-tool')).toMatchObject({ isError: true, content: [{ text: 'Error: the denied tool is no longer available' }] })
+    expect(h.prompted).not.toHaveBeenCalled()
+  })
   it('matches configured durable permission values and keeps enforcement when they are absent', () => {
     const condition = { sandboxModes: ['danger-full-access'], approvalPolicies: ['ask'] } as const
     const events = (sandbox: string, approval: string): SessionEvent[] => [
@@ -68,6 +277,7 @@ describe('tool-policy enforcement through ToolRuntime', () => {
     ] as SessionEvent[]
 
     expect(shouldEnforce([], undefined)).toBe(true)
+    expect(shouldEnforce(events('workspace-write', 'ask'), { sandboxModes: ['workspace-write'] })).toBe(true)
     expect(shouldEnforce([], condition)).toBe(true)
     expect(shouldEnforce(events('danger-full-access', 'ask').slice(0, 1), condition)).toBe(true)
     expect(shouldEnforce(events('danger-full-access', 'ask').slice(1), condition)).toBe(true)
@@ -76,164 +286,9 @@ describe('tool-policy enforcement through ToolRuntime', () => {
     expect(shouldEnforce(events('danger-full-access', 'never'), condition)).toBe(false)
   })
 
-  it('defers identical asks twice, prompts from the third denial, and resets after success', async () => {
-    const ctx = new Context()
-    await ctx.plugin(SystemPrompt)
-    await ctx.plugin(ApprovalService)
-    await ctx.plugin(ToolRuntime)
-    await ctx.plugin(ToolPolicyService, {})
-    const current: ToolPolicyVerdict = {
-      providerId: ToolPolicyProviderId('fake'), decision: 'ask', risk: 60,
-      categories: [], reason: 'network access needs review', opinions: [],
-    }
-    ctx.toolPolicy.register(ToolPolicyProviderId('fake'), { evaluate: async () => current })
-    apply(ctx)
-    const prompted = vi.fn()
-    ctx.on('approval/request', () => {
-      prompted()
-      return Promise.resolve<ApprovalOutcome>('allowed-once')
-    })
-    let executions = 0
-    ctx.tools.register(defineTool({
-      name: 'probe', description: 'probe', parameters: {},
-      output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
-      execute: async () => { executions += 1; return 'ran' },
-    }))
-    const { agent, events } = fakeAgent()
-    const first = await executeLogged(ctx, agent, events, 'ask-1', {
-      command: 'curl example', options: { beta: 2, alpha: 1 },
-    })
-    expect(first).toMatchObject({
-      isError: true,
-      content: [{ text: 'Error: Automatic policy review denied this call without asking the user (attempt 1/3): network access needs review. Vary the approach, which is the expected response to an automatic denial; deliberately repeating this exact call is how you reach the user when the retry is genuinely wanted. An intervening different call or turn change resets the chain, and a deterministic denial never becomes approvable however often it repeats. Attempt 3 enters approval if an approval service is available and its policy permits prompting. This is a policy deferral, not a sandbox denial; do not add sandbox_permissions.' }],
-    })
-    const second = await executeLogged(
-      ctx,
-      agent,
-      events,
-      'ask-2',
-      { options: { alpha: 1, beta: 2 }, command: 'curl example' },
-      '{"options":{"beta":2,"alpha":1},"command":"curl example"}',
-    )
-    expect(second).toMatchObject({ isError: true, content: [{ text: expect.stringContaining('(attempt 2/3)') as unknown }] })
-    expect(prompted).not.toHaveBeenCalled()
-    await expect(executeLogged(ctx, agent, events, 'ask-3', {
-      command: 'curl example', options: { alpha: 1, beta: 2 },
-    })).resolves.toMatchObject({ isError: false })
-    expect(prompted).toHaveBeenCalledOnce()
-    const afterSuccess = await executeLogged(ctx, agent, events, 'ask-4', {
-      command: 'curl example', options: { alpha: 1, beta: 2 },
-    })
-    expect(afterSuccess).toMatchObject({ isError: true, content: [{ text: expect.stringContaining('(attempt 1/3)') as unknown }] })
-    expect(prompted).toHaveBeenCalledOnce()
-    expect(executions).toBe(1)
-    expect(events.filter(event => event.type === 'approval/asked')).toHaveLength(1)
-    expect(events.filter(event => event.type === 'approval/decided')).toHaveLength(1)
-    const effective = events
-      .filter(event => event.type === 'tool-policy/decision')
-      .map(event => event.data as { stage: string; effectiveDecision: string; reason: string })
-      .filter(event => event.stage === 'effective')
-    expect(effective.map(event => event.effectiveDecision)).toEqual(['deny', 'deny', 'ask', 'deny'])
-    expect(effective[0]?.reason).toContain('network access needs review')
-  })
-
-  it('breaks the denial chain on an intervening call or turn and keeps deterministic denies unapprovable', async () => {
-    const ctx = new Context()
-    await ctx.plugin(SystemPrompt)
-    await ctx.plugin(ApprovalService)
-    await ctx.plugin(ToolRuntime)
-    await ctx.plugin(ToolPolicyService, {})
-    let current: ToolPolicyVerdict = {
-      providerId: ToolPolicyProviderId('fake'), decision: 'ask', risk: 60,
-      categories: [], reason: 'review', opinions: [],
-    }
-    ctx.toolPolicy.register(ToolPolicyProviderId('fake'), { evaluate: async () => current })
-    apply(ctx)
-    const prompted = vi.fn(() => Promise.resolve<ApprovalOutcome>('allowed-once'))
-    ctx.on('approval/request', prompted)
-    ctx.tools.register(defineTool({
-      name: 'probe', description: 'probe', parameters: {},
-      output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
-      execute: async () => 'ran',
-    }))
-    const { agent, events } = fakeAgent()
-
-    await expect(executeLogged(ctx, agent, events, 'a-1', { command: 'a' }))
-      .resolves.toMatchObject({ content: [{ text: expect.stringContaining('(attempt 1/3)') as unknown }] })
-    await expect(executeLogged(ctx, agent, events, 'b-1', { command: 'b' }))
-      .resolves.toMatchObject({ content: [{ text: expect.stringContaining('(attempt 1/3)') as unknown }] })
-    await expect(executeLogged(ctx, agent, events, 'a-2', { command: 'a' }))
-      .resolves.toMatchObject({ content: [{ text: expect.stringContaining('(attempt 1/3)') as unknown }] })
-    events.push({ type: 'turn/end', data: { turn: 1 } }, { type: 'turn/start', data: { turn: 2 } })
-    await expect(executeLogged(ctx, agent, events, 'a-next-turn', { command: 'a' }))
-      .resolves.toMatchObject({ content: [{ text: expect.stringContaining('(attempt 1/3)') as unknown }] })
-    current = {
-      providerId: ToolPolicyProviderId('fake'), decision: 'deny', risk: 90,
-      categories: [], reason: 'forbidden', opinions: [],
-    }
-    await expect(executeLogged(ctx, agent, events, 'deny', { command: 'a' }))
-      .resolves.toMatchObject({ isError: true, content: [{ text: 'Error: forbidden' }] })
-    expect(prompted).not.toHaveBeenCalled()
-  })
-
-  it('keeps exact asks approval-eligible after the user rejects at the threshold', async () => {
-    const ctx = new Context()
-    await ctx.plugin(SystemPrompt)
-    await ctx.plugin(ApprovalService)
-    await ctx.plugin(ToolRuntime)
-    await ctx.plugin(ToolPolicyService, {})
-    ctx.toolPolicy.register(ToolPolicyProviderId('fake'), { evaluate: async () => ({
-      providerId: ToolPolicyProviderId('fake'), decision: 'ask', risk: 60,
-      categories: [], reason: 'review', opinions: [],
-    }) })
-    apply(ctx)
-    const prompted = vi.fn(() => Promise.resolve<ApprovalOutcome>('rejected'))
-    ctx.on('approval/request', prompted)
-    ctx.tools.register(defineTool({
-      name: 'probe', description: 'probe', parameters: {},
-      output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
-      execute: async () => 'ran',
-    }))
-    const { agent, events } = fakeAgent()
-
-    await executeLogged(ctx, agent, events, 'reject-1', { command: 'same' })
-    await executeLogged(ctx, agent, events, 'reject-2', { command: 'same' })
-    await expect(executeLogged(ctx, agent, events, 'reject-3', { command: 'same' }))
-      .resolves.toMatchObject({ isError: true, content: [{ text: 'Error: the user rejected tool "probe"' }] })
-    await expect(executeLogged(ctx, agent, events, 'reject-4', { command: 'same' }))
-      .resolves.toMatchObject({ isError: true, content: [{ text: 'Error: the user rejected tool "probe"' }] })
-    expect(prompted).toHaveBeenCalledTimes(2)
-  })
-
-  it('uses the configured approval threshold', async () => {
-    const ctx = new Context()
-    await ctx.plugin(SystemPrompt)
-    await ctx.plugin(ApprovalService)
-    await ctx.plugin(ToolRuntime)
-    await ctx.plugin(ToolPolicyService, {})
-    ctx.toolPolicy.register(ToolPolicyProviderId('fake'), { evaluate: async () => ({
-      providerId: ToolPolicyProviderId('fake'), decision: 'ask', risk: 60,
-      categories: [], reason: 'review', opinions: [],
-    }) })
-    apply(ctx, { approvalThreshold: 2 })
-    const prompted = vi.fn(() => Promise.resolve<ApprovalOutcome>('allowed-once'))
-    ctx.on('approval/request', prompted)
-    ctx.tools.register(defineTool({
-      name: 'probe', description: 'probe', parameters: {},
-      output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
-      execute: async () => 'ran',
-    }))
-    const { agent, events } = fakeAgent()
-
-    await expect(executeLogged(ctx, agent, events, 'configured-1', { command: 'same' }))
-      .resolves.toMatchObject({ isError: true, content: [{ text: expect.stringContaining('(attempt 1/2)') as unknown }] })
-    await expect(executeLogged(ctx, agent, events, 'configured-2', { command: 'same' }))
-      .resolves.toMatchObject({ isError: false })
-    expect(prompted).toHaveBeenCalledOnce()
-  })
-
   it('bypasses providers outside configured permission values', async () => {
     const ctx = new Context()
+    contexts.push(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ApprovalService)
     await ctx.plugin(ToolRuntime)

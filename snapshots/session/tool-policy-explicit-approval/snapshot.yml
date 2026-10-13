@@ -1,0 +1,10 @@
+version: 1
+scenario: tool-policy-explicit-approval
+profile: headless
+composition: tool-policy-explicit-approval
+recording: authored
+platform: posix
+permission: workspace-write
+header:
+  class: tool-policy-explicit-approval
+  pin: true

@@ -12,7 +12,7 @@ The [shell policy provider](../../../../packages/guard/tool-policy-shell/README.
 
 The existing conservative shell parser has a literal-command mode that excludes expansion, substitution, redirection, compound execution, and backslash escapes. Quoting preserves literal tokens, and executable paths match exactly without basename normalization. With active prefix rules, unsupported syntax requires approval before any automatic read or model-review allow. Unmatched literal commands retain independent review and the existing parsed-read path. Fixed destruction and credential denials and mandatory Git escalation retain precedence over every configurable rule.
 
-Legacy configurations and PowerShell mappings retain their behavior. Prefix rules require at least one POSIX mapping; misconfiguration fails at activation. Existing tool-policy events and approval handling record and enforce the resulting decision. The [independent evidence decision](../bug-fix/2026-08-18-independent-tool-policy-evidence.md) continues to own model review; the [deferred-approval decision](2026-08-24-deferred-tool-policy-approval.md) owns approval timing.
+Legacy configurations and PowerShell mappings retain their behavior. Prefix rules require at least one POSIX mapping; misconfiguration fails at activation. Existing tool-policy events and approval handling record and enforce the resulting decision. The [independent evidence decision](../bug-fix/2026-08-18-independent-tool-policy-evidence.md) continues to own model review; the [explicit-approval decision](2026-10-13-explicit-tool-policy-approval.md) owns approval timing.
 
 ## Alternatives considered
 

@@ -4,10 +4,16 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type { InvariantFailure, InvariantInstaller } from '@deepseek-ai/dsh-invariants'
 import type {} from './types.ts'
+import type {} from '@deepseek-ai/dsh-tools'
 
 const PACKAGE_NAME = '@deepseek-ai/dsh-tool-policy'
 export const name = 'tool-policy-invariant'
 export const inject = ['invariants']
+
+function recordedCall(history: readonly SessionEvent[], callId: SessionEvent<'tool-policy/decision'>['data']['callId']) {
+  return history.findLast(prior => prior.type === 'tool/call' && prior.data.callId === callId
+    || prior.type === 'tool/ptc-dispatch-start' && prior.data.subCallId === callId)
+}
 
 function validate(history: readonly SessionEvent[], event: SessionEvent, fail: InvariantFailure): void {
   if (event.type !== 'tool-policy/classifier-request'
@@ -50,9 +56,8 @@ function validate(history: readonly SessionEvent[], event: SessionEvent, fail: I
       }
     } else {
       if (event.data.callId === undefined) fail('tool-policy effect request must name its tool call')
-      const call = history.findLast((prior): prior is SessionEvent<'tool/call'> =>
-        prior.type === 'tool/call' && prior.data.callId === event.data.callId)
-      if (call === undefined) fail('tool-policy effect request must follow its tool/call')
+      const call = recordedCall(history, event.data.callId)
+      if (call === undefined) fail('tool-policy effect request must follow its recorded call')
       const context = history.find(prior => prior.seq === input.intentContextSeq)
       if (context?.type !== 'tool-policy/intent-context') {
         fail('tool-policy effect input must reference an earlier intent context')
@@ -60,9 +65,8 @@ function validate(history: readonly SessionEvent[], event: SessionEvent, fail: I
     }
     return
   }
-  const call = history.findLast((prior): prior is SessionEvent<'tool/call'> =>
-    prior.type === 'tool/call' && prior.data.callId === event.data.callId)
-  if (call === undefined) fail('tool-policy/decision must follow its tool/call')
+  const call = recordedCall(history, event.data.callId)
+  if (call?.type !== 'tool/call' && call?.type !== 'tool/ptc-dispatch-start') fail('tool-policy/decision must follow its recorded call')
   if (event.data.toolName !== call.data.name) {
     fail('tool-policy/decision toolName must match its tool/call')
   }

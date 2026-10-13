@@ -307,8 +307,9 @@ describe('headless stream-json snapshots', () => {
         expect(session).toBe(await readFile(daedalSessionExpected, 'utf8'))
         expect(session).toContain('"agentPreset":"daedal"')
         expect(session).toContain('"type":"tool-policy/decision"')
-        expect(session).toContain('Automatic policy review denied this call without asking the user (attempt 1/3)')
-        expect(session).toContain('Automatic policy review denied this call without asking the user (attempt 2/3)')
+        expect(session).toContain('Automatic policy review denied this call without asking the user:')
+        expect(session).toContain('request_tool_approval')
+        expect(session).not.toContain('attempt 3 asks the user')
         expect(session).toContain('"type":"approval/asked"')
         expect(session).toContain('"outcome":"allowed-once"')
         expect(session).toContain('The assembled Daedal profile completed its guarded shell round trip.')
@@ -316,7 +317,7 @@ describe('headless stream-json snapshots', () => {
     })
 
     expect(result.stdout).toBe('Daedal assembled profile completed after a guarded shell call and durable memory proposal.\n')
-    expect(result.stderr).toBe('dsh: reasoning:\nInspecting the task before the tool call.\n'.repeat(3))
+    expect(result.stderr).toBe('dsh: reasoning:\nInspecting the task before the tool call.\n'.repeat(2))
   }, LOADER_SMOKE_TEST_TIMEOUT_MS)
 
   it('prints a terminal model failure through the product headless profile command', async () => {

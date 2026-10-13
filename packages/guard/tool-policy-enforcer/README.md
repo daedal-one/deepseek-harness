@@ -1,5 +1,5 @@
 ---
-description: "Apply a tool-policy decision before a tool executes."
+description: "Enforce automatic tool policy and request explicit user approval for a denied action."
 kind: "package-reference"
 ---
 
@@ -7,12 +7,12 @@ kind: "package-reference"
 
 ## Summary
 
-Apply a tool-policy decision before a tool executes. The enforcer permits accepted calls, requests approval for uncertain calls, and rejects prohibited calls while recording the decision. Policy providers own classification; the enforcer owns the execution gate.
+Apply automatic policy before a tool executes. Uncertain calls return a reason so the agent can choose another approach or request explicit user approval. Approval permits one exact retry; repeating a denied call never opens a prompt. Prohibited calls remain blocked, including after an approval.
 
 ## Table of Contents
 
 - [Use this package](#use-this-package)
-- [Approval threshold](#approval-threshold)
+- [Understand the implementation](#understand-the-implementation)
 - [Model Experience](#model-experience)
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 - [Dev Note](#dev-note)
@@ -21,43 +21,61 @@ Apply a tool-policy decision before a tool executes. The enforcer permits accept
 
 ## Use this package
 
-This consumer enforces `ctx.toolPolicy` on `tools/pre-execute`. Unsupported and allowed tools delegate with `next()`; denial short-circuits execution. An `ask` verdict first returns its bounded reason to the acting agent, then enters the existing approval pipeline when the configured consecutive-identical threshold is reached, so `ctx.approval` remains the sole owner of the human decision and its durable audit.
+Mount this plugin with `tools`, `toolPolicy`, and an approval service with an answerer. Unsupported and allowed tools continue through the execution pipeline; deterministic denials stop execution. An uncertain `ask` returns its reason and the denied call id. The agent can call `request_tool_approval` with that id and a justification, then retry the exact tool and arguments once after approval succeeds.
 
 No shipped profile mounts this consumer. The opt-in [`@deepseek-ai/dsh-policy`](../../bundle/policy/README.md) bundle declares its row disabled, because an active enforcer with no registered provider receives an unavailable policy and defers every agent tool call.
 
-`enforceWhen` optionally restricts evaluation to a conjunction of effective `sandbox/mode` and `approval/policy` values. The enforcer folds those values from the calling session's durable events before consulting any provider. An omitted condition preserves unconditional enforcement, and a missing configured value keeps enforcement active because the session cannot establish the configured bypass.
+`enforceWhen` optionally restricts evaluation to a conjunction of effective `sandbox/mode` and `approval/policy` values. An omitted condition preserves unconditional enforcement; a missing configured value keeps enforcement active. The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-tool-policy-enforcer) owns the accepted fields.
 
-When an enforced session accepts a direct user message, the enforcer calls `ctx.toolPolicy.prewarm()` without delaying event publication. Permission changes also offer a prewarm opportunity for the latest direct message. Provider preparation is optional and fail-closed evaluation remains authoritative; calls outside `enforceWhen` do not start preparation.
+An approval request must identify a completed automatic policy denial in the same Session and open turn. The user sees the exact tool arguments, automatic review reason, and model justification. A grant belongs to the first subsequent matching call; changing arguments cannot use it. A user rejection prevents further approval requests for that action in the turn. Missing or disabled approval, cancellation, and unavailable answerers do not grant permission.
 
-## Approval threshold
+## Understand the implementation
 
-`approvalThreshold` is the number of consecutive calls with the same tool and canonical arguments required before an `ask` enters human approval; it defaults to `3` and rejects non-integers or values below `2`. Calls below the threshold return a denied tool result containing the provider reason, attempt number, and threshold. The acting agent can change approach or repeat the exact call without interrupting the user on the first false positive. The [repeat-tool-reminder](../repeat-tool-reminder/README.md) guard independently counts consecutive repeated tool calls for loop hygiene while this threshold counts consecutive identical `ask` verdicts for human escalation; neither suppresses the other.
+<details>
+<summary>Implementation internals — click to expand</summary>
 
-The enforcer derives the chain from the current turn's durable `tool/call`, effective `tool-policy/decision`, and `tool/result` events instead of process-local state. Deep key sorting makes argument-object order irrelevant. An intervening call, turn boundary, unsupported or non-ask verdict, or successful approved execution breaks the chain. A rejected approval remains a denial in the same chain, so the next identical call stays approval-eligible rather than becoming permanently blocked.
+The enforcer consumes `ctx.toolPolicy` on `tools/pre-execute` and records provider and effective decisions. Policy failures become uncertain denials; caller cancellation remains cancellation. `request_tool_approval` reaches the approval service directly after validating the referenced denial, so it cannot recursively require policy approval itself. Other execution guards remain active.
 
-Every provider opinion and effective result is recorded as `tool-policy/decision`, including bounded risk, categories, and the provider or deferred reason but no copied raw arguments. Policy failure becomes `ask`; caller cancellation is rethrown and remains cancellation. Deterministic provider denials never enter approval.
+The [approval helper](src/approval.ts) reconstructs grants from recorded native or PTC calls, approval audit pairs, and successful approval-tool results. Canonical JSON comparison ignores object-key order. The first subsequent matching recorded call consumes a grant even if that call is cancelled or fails, so concurrent matching calls cannot share it. Turn boundaries discard prior grants. A retry still evaluates current policy, and a deterministic denial always wins. No process-local grant or retry counter exists.
 
-No invariant companion is published because the tool-policy service owns the durable decision relationships.
+Direct user messages and permission changes offer `ctx.toolPolicy.prewarm()` without delaying publication. Calls outside `enforceWhen` do not start preparation. No invariant companion is published because the tool-policy and approval services own the durable audit relationships; grant matching derives from those records without maintaining independent state.
+
+</details>
 
 ## Model Experience
+
+### Tool schemas
+
+#### What the model sees
+
+[`request_tool_approval`](../../../docs/tool-catalog.md#deepseek-aidsh-tool-policy-enforcer) takes a denied `call_id` and `justification`. Its description states that it requests permission without executing the action, permits one exact retry in the same turn after success, and cannot approve deterministic denials. Its successful result instructs the model to retry once. A rejected or unavailable request returns an error.
+
+#### Token effect
+
+One tool schema is added while the plugin is mounted.
+
+#### KV Cache effect
+
+The schema remains stable across calls and approval outcomes. Mounting or removing the plugin changes the tool catalog.
 
 ### Conditional tool result
 
 #### What the model sees
 
-The runtime snapshot states whether enforcement is active or bypassed under the session's latest durable permissions and reports `approvalThreshold`. Active guidance explains that providers own tool coverage, exact-call retries stay within the same turn, argument-object order is irrelevant, and intervening calls reset the chain. It distinguishes policy deferrals from one-call sandbox escalation and prohibits retry-bypassing permanent denials. The prompt service logs the named `tool-policy:enforcement` contribution with the model-visible snapshot; changing permissions changes the next assembled snapshot without changing the system prompt. The first two identical `ask` verdicts under the default threshold return `Error: Automatic policy review denied this call without asking the user (attempt <n>/3): <reason>. Vary the approach, which is the expected response to an automatic denial; deliberately repeating this exact call is how you reach the user when the retry is genuinely wanted. An intervening different call or turn change resets the chain, and a deterministic denial never becomes approvable however often it repeats. Attempt 3 enters approval if an approval service is available and its policy permits prompting. This is a policy deferral, not a sandbox denial; do not add sandbox_permissions.` At the threshold, the existing approval service decides; a policy that disables prompts rejects without asking the user. A grant executes that exact call once; rejection, cancellation, or an unavailable answerer returns the approval service's bounded tool error. Without an approval service, the call remains denied. Deterministic denials use the provider's bounded reason without prompting.
+An uncertain call returns `Error: Automatic policy review denied this call without asking the user: <reason>. Do not repeat this call to trigger approval. If the action is still necessary, call request_tool_approval with call_id "<id>" and a justification, then retry this exact call only if approval succeeds.` Deterministic denials return the provider reason without an approval hint.
 
 #### Token effect
 
-Calls outside `enforceWhen`, allowed calls, and unsupported calls add no model-visible tokens. Denied or deferred calls add one bounded tool result to the next request.
+Denied calls add one tool result. Explicit approval adds one request/result exchange before the authorized retry. Allowed and unsupported calls add no policy feedback.
 
 #### KV Cache effect
 
-Policy feedback is append-only after the existing conversation prefix and does not invalidate prior KV-cache entries.
+Policy feedback appends after the conversation prefix and does not invalidate earlier entries.
 
 ## Known Limitations and Deferred Work
 
-- Tool calls without an agent delegate because no session or human approval route exists.
+- Calls without an agent delegate because no Session or user approval route exists.
+- Approval expires at the end of the current turn and requires a completed, recorded denial and approval result.
 
 ### Dev Note
 

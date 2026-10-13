@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-tool-policy-enforcer",
-  "description": "Tool pre-execution policy and deferred approval consumer",
+  "description": "Tool policy enforcement and explicit exact-call approval",
   "version": "0.1.5-alpha.2",
   "publishConfig": {
     "access": "public"

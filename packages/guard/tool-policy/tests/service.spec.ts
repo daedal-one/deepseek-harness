@@ -51,6 +51,29 @@ describe('ToolPolicyService', () => {
 })
 
 describe('tool-policy durable invariants', () => {
+  it('matches policy decisions to recorded PTC calls and rejects mismatched tool names', async () => {
+    const ctx = new Context()
+    try {
+      await ctx.plugin(SessionStore)
+      await ctx.plugin(InvariantRegistry)
+      await ctx.plugin(ToolPolicyInvariant)
+      const session = ctx.sessions.create(SessionId('ptc-policy'))
+      session.append('turn/start', { turn: 1 })
+      const callId = ToolCallId('outer:ptc:1')
+      session.append('tool/ptc-dispatch-start', {
+        rootCallId: ToolCallId('outer'), parentCallId: ToolCallId('outer'), subCallId: callId,
+        name: 'probe', arguments: {},
+      })
+      const decision = { turn: 1, callId, toolName: 'probe', policyDecision: 'ask' as const,
+        effectiveDecision: 'deny' as const, providerId: ToolPolicyProviderId('test'), risk: 60, categories: [], reason: 'review' }
+      session.append('tool-policy/decision', { ...decision, stage: 'provider' })
+      expect(() => session.append('tool-policy/decision', { ...decision, stage: 'effective' })).not.toThrow()
+      expect(() => session.append('tool-policy/decision', { ...decision, toolName: 'other', stage: 'effective' })).toThrow(/toolName must match/)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('accepts a reconstructible intent handoff and rejects invalid selectors', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)

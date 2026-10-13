@@ -43,6 +43,8 @@ import * as SkillFileSystem from '@deepseek-ai/dsh-skill-filesystem'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
 import * as DaedalHandoffTool from '@deepseek-ai/dsh-daedal-handoff/tool'
 import * as ToolArtifact from '@deepseek-ai/dsh-tool-artifact'
+import ToolPolicyService from '@deepseek-ai/dsh-tool-policy'
+import * as ToolPolicyEnforcer from '@deepseek-ai/dsh-tool-policy-enforcer'
 import * as ToolAskUser from '@deepseek-ai/dsh-tool-ask-user'
 import * as ToolBash from '@deepseek-ai/dsh-tool-bash'
 import * as ToolPwsh from '@deepseek-ai/dsh-tool-pwsh'
@@ -113,7 +115,6 @@ const OUT = 'docs/tool-catalog.md'
 /** `tool-*` capability/policy packages that intentionally register no model tool schemas. */
 const TOOL_CATALOG_EXCLUSIONS: ReadonlySet<string> = new Set([
   'tool-policy',
-  'tool-policy-enforcer',
   'tool-policy-mcp',
   'tool-policy-shell',
 ])
@@ -208,6 +209,17 @@ export interface ToolPackage {
  * guard proves it is exhaustive against the on-disk glob.
  */
 const TOOL_PACKAGES: ToolPackage[] = [
+  {
+    pkg: '@deepseek-ai/dsh-tool-policy-enforcer',
+    dir: 'tool-policy-enforcer',
+    source: 'packages/guard/tool-policy-enforcer/src/approval.ts',
+    requires: ['ctx.tools', 'ctx.toolPolicy', 'ctx.approval (execution time)'],
+    writes: ['approval/asked', 'approval/decided'],
+    async mount(ctx) {
+      await ctx.plugin(ToolPolicyService, {})
+      await ctx.plugin(ToolPolicyEnforcer)
+    },
+  },
   {
     pkg: '@deepseek-ai/dsh-daedal-handoff',
     dir: 'daedal-handoff',

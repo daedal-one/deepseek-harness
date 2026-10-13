@@ -61,17 +61,23 @@ class CliMockAdapter extends LlmAdapter {
     const toolResult = options.messages
       .findLast(message => message.content.some(block => block.type === 'tool-result'))
       ?.content.find(block => block.type === 'tool-result')
-    const priorDaedalAttempt = toolResult === undefined
-      ? 0
-      : Number(String(toolResult.toolCallId).match(/^cli-smoke-call-(\d+)$/)?.[1] ?? 0)
-    const daedalPolicyRetry = process.env.DSH_CLI_DAEDAL === '1'
+    const policyApproval = process.env.DSH_CLI_DAEDAL === '1'
       && process.env.DSH_CLI_POLICY_ASK === '1'
-      && toolResult?.isError === true
-      && priorDaedalAttempt > 0
-      && priorDaedalAttempt < 3
-    if (toolResult === undefined || daedalPolicyRetry) {
+    const requestApproval = policyApproval && toolResult?.isError === true
+      && toolResult.toolCallId === 'cli-smoke-call-1'
+    const granted = policyApproval && toolResult?.toolCallId === 'cli-policy-approval' && toolResult.isError !== true
+    if (requestApproval) {
+      const callId = ToolCallId('cli-policy-approval')
+      const args = JSON.stringify({ call_id: 'cli-smoke-call-1', justification: 'Prove the CLI tool round trip.' })
+      yield { type: 'block-start', index: 0, blockType: 'tool-call' }
+      yield { type: 'tool-call-delta', index: 0, id: callId, name: 'request_tool_approval', argumentsDelta: args }
+      yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: callId, name: 'request_tool_approval', arguments: args } }
+      yield { type: 'finish', reason: { kind: 'tool-calls' } }
+      return
+    }
+    if (toolResult === undefined || granted) {
       const callId = process.env.DSH_CLI_DAEDAL === '1'
-        ? ToolCallId(`cli-smoke-call-${priorDaedalAttempt + 1}`)
+        ? ToolCallId(granted ? 'cli-smoke-call-2' : 'cli-smoke-call-1')
         : ToolCallId('cli-smoke-call')
       const reasoning = 'Inspecting the task before the tool call.'
       const args = JSON.stringify({ command: SHELL_COMMAND, description: 'Prove the CLI tool round trip.' })

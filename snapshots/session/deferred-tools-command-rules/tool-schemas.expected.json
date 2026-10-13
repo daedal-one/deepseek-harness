@@ -376,6 +376,27 @@
       }
     },
     {
+      "name": "request_tool_approval",
+      "description": "Request user approval for a call denied by automatic policy review. Supply the denied call_id and explain why the action is necessary. This tool does not execute the action. After approval succeeds, retry the exact tool and arguments once in this turn. Repeating denied calls never triggers approval. A user rejection is final for that action in this turn; do not work around it. Deterministic policy denials cannot be approved.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "call_id": {
+            "type": "string",
+            "description": "The denied call_id supplied by automatic policy review in this turn."
+          },
+          "justification": {
+            "type": "string",
+            "description": "Explain why this exact action is necessary for the user’s task."
+          }
+        },
+        "required": [
+          "call_id",
+          "justification"
+        ]
+      }
+    },
+    {
       "name": "send_message",
       "description": "Send a message to a direct continuable child by its agent id. If you are a resident continuable child, you may also target your direct parent. If the target is still working, the message steers its nearest step; if it is idle, the message starts a turn. This call returns no answer from the agent — only confirmation that the message was delivered. A failure means the message was NOT delivered.",
       "parameters": {
@@ -1123,6 +1144,27 @@
           },
           "required": [
             "file_path"
+          ]
+        }
+      },
+      {
+        "name": "request_tool_approval",
+        "description": "Request user approval for a call denied by automatic policy review. Supply the denied call_id and explain why the action is necessary. This tool does not execute the action. After approval succeeds, retry the exact tool and arguments once in this turn. Repeating denied calls never triggers approval. A user rejection is final for that action in this turn; do not work around it. Deterministic policy denials cannot be approved.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "call_id": {
+              "type": "string",
+              "description": "The denied call_id supplied by automatic policy review in this turn."
+            },
+            "justification": {
+              "type": "string",
+              "description": "Explain why this exact action is necessary for the user’s task."
+            }
+          },
+          "required": [
+            "call_id",
+            "justification"
           ]
         }
       },

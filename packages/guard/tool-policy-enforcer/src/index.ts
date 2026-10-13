@@ -9,6 +9,7 @@ import { ToolPolicyProviderId, type ToolPolicyOpinion, type ToolPolicyVerdict } 
 import type { PreToolDecision, ToolExecution } from '@deepseek-ai/dsh-tools'
 import type { ApprovalPolicy } from '@deepseek-ai/dsh-user-approval'
 import { APPROVAL_POLICIES } from '@deepseek-ai/dsh-user-approval'
+import { hasApprovalGrant, installApprovalTool } from './approval.ts'
 
 export const name = 'tool-policy-enforcer'
 export const inject = ['tools', 'toolPolicy']
@@ -25,8 +26,6 @@ export interface EnforcementCondition {
 export interface Config {
   /** Optional conjunction over the session's durable permission values. */
   readonly enforceWhen?: EnforcementCondition
-  /** Consecutive identical ask verdicts required before human approval. */
-  readonly approvalThreshold?: number
 }
 
 const enforcementCondition = z.object({
@@ -39,7 +38,6 @@ export const Config: z<Config> = z.object({
   // The union wrapper keeps an omitted property absent instead of constructing
   // the nested object's empty array defaults.
   enforceWhen: z.union([enforcementCondition]),
-  approvalThreshold: z.number().step(1).min(2).default(3),
 }) as z<Config>
 
 /**
@@ -78,91 +76,18 @@ function appendDecision(
   opinion: ToolPolicyOpinion,
   stage: 'provider' | 'effective',
   effective: ToolPolicyOpinion['decision'],
-  reason = opinion.reason,
 ): void {
   exec.agent?.session.append('tool-policy/decision', {
     turn: currentTurn(exec), callId: exec.callId, toolName: exec.name, stage,
     policyDecision: opinion.decision, effectiveDecision: effective,
     providerId: opinion.providerId, risk: opinion.risk,
-    categories: [...opinion.categories], reason,
+    categories: [...opinion.categories], reason: opinion.reason,
   })
-}
-
-/**
- * Canonical JSON identity for one parsed tool-argument value. ToolRuntime has
- * already enforced lossless JSON; malformed model argument text is a string.
- */
-function canonicalJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`
-  if (value !== null && typeof value === 'object') {
-    const record = value as Record<string, unknown>
-    return `{${Object.keys(record).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(record[key])}`).join(',')}}`
-  }
-  return JSON.stringify(value)
-}
-
-/** Match the agent loop's raw-argument parsing for durable prior calls. */
-function parseArguments(raw: string): unknown {
-  try {
-    return raw.length === 0 ? {} : JSON.parse(raw)
-  } catch {
-    return raw
-  }
-}
-
-function callKey(toolName: string, argumentsValue: unknown): string {
-  return JSON.stringify([toolName, canonicalJson(argumentsValue)])
-}
-
-/** Count the uninterrupted prior ask denials for this exact call in the open turn. */
-function consecutiveAskDenials(exec: ToolExecution): number {
-  const events = exec.agent?.session.snapshotEvents() ?? []
-  const turn = currentTurn(exec)
-  const key = callKey(exec.name, exec.arguments)
-  const currentCallIndex = events.findLastIndex(event => event.type === 'tool/call' && event.data.callId === exec.callId)
-  const before = currentCallIndex < 0 ? events.length : currentCallIndex
-  const decisions = new Map<ToolExecution['callId'], SessionEvent<'tool-policy/decision'>>()
-  const failedResults = new Map<ToolExecution['callId'], boolean>()
-  let count = 0
-  for (let index = before - 1; index >= 0; index -= 1) {
-    const event = events[index]
-    if (event?.type === 'turn/start' || event?.type === 'turn/end') break
-    if (event?.type === 'tool-policy/decision' && event.data.stage === 'effective') {
-      if (!decisions.has(event.data.callId)) decisions.set(event.data.callId, event)
-      continue
-    }
-    if (event?.type === 'tool/result') {
-      const result = event.data.message.content[0]
-      if (!failedResults.has(result.toolCallId)) {
-        failedResults.set(result.toolCallId, result.isError === true)
-      }
-      continue
-    }
-    if (event?.type !== 'tool/call') continue
-    if (event.data.turn !== turn || callKey(event.data.name, parseArguments(event.data.arguments)) !== key) break
-    const decision = decisions.get(event.data.callId)
-    if (decision?.data.policyDecision !== 'ask') break
-    if (decision.data.effectiveDecision === 'deny') {
-      count += 1
-    } else if (decision.data.effectiveDecision === 'ask'
-      && failedResults.get(event.data.callId) === true) {
-      count += 1
-    } else {
-      break
-    }
-    decisions.delete(event.data.callId)
-    failedResults.delete(event.data.callId)
-  }
-  return count
-}
-
-function deferredReason(reason: string, attempt: number, threshold: number): string {
-  return `Automatic policy review denied this call without asking the user (attempt ${attempt}/${threshold}): ${reason}. Vary the approach, which is the expected response to an automatic denial; deliberately repeating this exact call is how you reach the user when the retry is genuinely wanted. An intervening different call or turn change resets the chain, and a deterministic denial never becomes approvable however often it repeats. Attempt ${threshold} enters approval if an approval service is available and its policy permits prompting. This is a policy deferral, not a sandbox denial; do not add sandbox_permissions.`
 }
 
 /** Install the policy consumer on `tools/pre-execute`. */
 export function apply(ctx: Context, config: Config = {}): void {
-  const approvalThreshold = config.approvalThreshold ?? 3
+  installApprovalTool(ctx)
   const lifetime = new AbortController()
   const disposePrewarm = ctx.on('session/event', (session, event) => {
     const directUser = event.type === 'user/message' && event.data.source.kind === 'user'
@@ -177,7 +102,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     })
   })
   const dispose = ctx.on('tools/pre-execute', async (exec, next): Promise<PreToolDecision> => {
-    if (exec.agent === undefined) return next()
+    if (exec.agent === undefined || exec.name === 'request_tool_approval') return next()
     if (!shouldEnforce(exec.agent.session.snapshotEvents(), config.enforceWhen)) return next()
     let verdict: ToolPolicyVerdict | undefined
     try {
@@ -203,14 +128,13 @@ export function apply(ctx: Context, config: Config = {}): void {
       appendDecision(exec, verdict, 'effective', 'deny')
       return { kind: 'deny', reason: verdict.reason }
     }
-    const attempt = consecutiveAskDenials(exec) + 1
-    if (attempt < approvalThreshold) {
-      const reason = deferredReason(verdict.reason, attempt, approvalThreshold)
-      appendDecision(exec, verdict, 'effective', 'deny', reason)
-      return { kind: 'deny', reason }
+    if (hasApprovalGrant(exec.agent.session, exec)) {
+      appendDecision(exec, verdict, 'effective', 'allow')
+      return next()
     }
-    appendDecision(exec, verdict, 'effective', 'ask')
-    return { kind: 'ask', reason: verdict.reason }
+    const reason = `Automatic policy review denied this call without asking the user: ${verdict.reason}. Do not repeat this call to trigger approval. If the action is still necessary, call request_tool_approval with call_id ${JSON.stringify(exec.callId)} and a justification, then retry this exact call only if approval succeeds.`
+    appendDecision(exec, verdict, 'effective', 'deny')
+    return { kind: 'deny', reason }
   })
   ctx.effect(() => () => {
     lifetime.abort(new Error('tool-policy enforcer disposed'))

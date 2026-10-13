@@ -38,6 +38,8 @@ Registrations are effect-owned by provider plugins. Unloading a provider removes
 
 The invariant companion requires each nested root and parent to identify one earlier, unsettled call in the current open turn; overlapping native or nested owners of a referenced id are ambiguous and rejected. Call ids may recur after settlement, including across steps of one turn: native results pair by turn, step, id, and one exact cited input sequence; missing legacy references pair only when the full turn/step/id tuple identifies one input occurrence; nested results settle the latest outstanding same-turn nested input in event order, never an earlier result for a reused id. Nested input ids cannot overlap another unsettled call; transport labels must match the parent name. Effect requests and decisions require one unsettled owner; effective decisions require a provider decision after that owner's input.
 
+Policy decision invariants correlate native calls with `tool/call` and PTC subcalls with `tool/ptc-dispatch-start`; both preserve the exact call id and tool name.
+
 ## Model Experience
 
 ### Conditional tool result

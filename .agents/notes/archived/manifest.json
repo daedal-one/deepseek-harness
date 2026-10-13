@@ -449,6 +449,7 @@
     "feature/2026-08-21-headless-reasoning-progress.md": "sha256:863f1548369b335d5fa3336fa6a209f80de8bee69b82c433805ef91ce81d5bed",
     "feature/2026-08-21-model-readable-image-paths.md": "sha256:57fc0a0036cf99f59158777a8e3bab43e3f9947156d01555a3cb66d78dd2a134",
     "feature/2026-08-21-out-of-process-subagent-minimal-diagnostics.md": "sha256:3c68c3249824e5d64d6bb838ec16e3d1960c0aa9c4c2a03ee41df9203188ea9f",
+    "feature/2026-08-24-deferred-tool-policy-approval.md": "sha256:f1b622ff6d804bfa9ef988a4b6cae435eb6b6ce93af8018d3b2eab92914a0c39",
     "feature/2026-08-24-folder-reference-pick-vs-drill.md": "sha256:45f24ffa4fd8b43f14bac14811dff1c1f5362c7a49f34d2ed46d07252dd4b817",
     "feature/2026-08-24-route-priced-image-request-pressure.md": "sha256:0764339b81a675667e0e7ddaeb86f30f0feb84dc52b8b18942f5bcbdee5a6ad1",
     "feature/2026-08-24-trajectory-image-attachments.md": "sha256:bd285004f33fafebc380b83ca6c504c0343debac52dae615c23275eeda30f48b",

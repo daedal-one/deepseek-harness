@@ -2,7 +2,7 @@
 id: TASK:guard/tool-policy-deferred-approval
 type: task
 status: accepted
-summary: Return automatic policy denials to the acting agent before escalating a consecutive identical call to the user.
+summary: Return automatic policy denials with an explicit, exact-call user approval route.
 owners: [carlo]
 progress: done
 addresses:
@@ -13,8 +13,8 @@ labels: [guard, tool-policy, permissions, approval, behavior]
 assignee: carlo
 ---
 
-# Deferred tool-policy approval
+# Explicit tool-policy approval
 
 ## Acceptance
 
-An automatic `ask` verdict returns the provider's bounded reason to the acting agent as a denied tool result without opening human approval. The result names the current attempt and configured threshold so the agent can change approach or deliberately retry the exact call. The third consecutive call with the same tool and canonical arguments in the same turn opens the existing approval service by default; repeated identical calls remain approval-eligible after a rejection, while an intervening call, turn change, non-ask verdict, or successful approved execution starts a new chain. The threshold is deployment configuration, provider and effective decisions remain durable, deterministic denials never become approvable, and focused runtime plus keyless assembled-profile coverage proves the complete path.
+An automatic `ask` verdict returns the provider's bounded reason and the denied call id with instructions to use `request_tool_approval` if the action is still necessary. Repeated calls never open approval and the retry threshold configuration is absent. The approval tool accepts a completed policy-denied call id and justification, requests a decision through the existing approval service, and grants only the next exact matching call in the same open turn. Canonical argument identity, durable grant reconstruction, concurrent calls, native and PTC calls, disabled or unavailable approval, rejection, cancellation, turn changes, and deterministic denials are covered by focused tests. A keyless assembled profile and recorded Session verify denial, explicit approval, and one execution without repeated automatic-review attempts.

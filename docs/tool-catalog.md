@@ -15,6 +15,7 @@ This table connects model-visible tool names to the plugin package and service s
 
 | Tool package | Model-visible names | Requires | Writes / affects | Shipped aliases | Deployment note |
 | --- | --- | --- | --- | --- | --- |
+| `@deepseek-ai/dsh-tool-policy-enforcer` | `request_tool_approval` | `ctx.tools`, `ctx.toolPolicy`, `ctx.approval (execution time)` | `approval/asked`, `approval/decided` | - | - |
 | `@deepseek-ai/dsh-daedal-handoff` | `handoff_to_host` | `ctx.tools`, `ctx.systemPrompt`, `ctx.fs`, `ctx.subprocess`, `ctx.agents`, `ctx.daedalHandoff (execution time)` | `tool/call`, `tool/result after user confirmation or refusal` | - | Mounted only by the Daedal and Daedal OpenAI presets. The default service does not publish this tool globally. |
 | `@deepseek-ai/dsh-tool-artifact` | `artifact_list`, `artifact_publish`, `artifact_read`, `artifact_restore` | `ctx.tools`, `ctx.artifacts`, `ctx.workspaceRegistry`, `owning agent Session` | `tool/call`, `artifact/published`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-forge-intellect` | `intellect_attest`, `intellect_overview`, `intellect_prepare`, `intellect_reassess`, `intellect_result`, `intellect_run` | `ctx.tools`, `ctx.forgeIntellect`, `an owning Agent at execution time` | `tool/call`, `tool/result`, `approved jobs and retained native verification evidence` | - | The Deadal-intellect profiles mount these tools in the verification preset. Native tools own evidence validation and attestation; schema collection starts no native commands or models. |
@@ -47,6 +48,36 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`, `ctx.workflowEngine`, `ctx.systemPrompt`, `a calling Agent (exec.agent parents the script children)` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`, `web_search` | `ctx.tools`, `ctx.web`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps. |
 | `@deepseek-ai/dsh-tool-docs-search` | `docs_search` | `ctx.tools`, `ctx.systemPrompt`, `ctx.docsSearch` | `tool/call`, `tool/result` | - | docs_search is the Consumer of the docs-search seam and is disabled by default in the base bundle; a deployment enables the local provider (explicit reindex builds the index; first semantic use may download model weights) and this tool together. |
+
+<a id="deepseek-aidsh-tool-policy-enforcer"></a>
+
+## `@deepseek-ai/dsh-tool-policy-enforcer`
+
+### `request_tool_approval`
+
+Request user approval for a call denied by automatic policy review. Supply the denied call_id and explain why the action is necessary. This tool does not execute the action. After approval succeeds, retry the exact tool and arguments once in this turn. Repeating denied calls never triggers approval. A user rejection is final for that action in this turn; do not work around it. Deterministic policy denials cannot be approved.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "call_id": {
+      "type": "string",
+      "description": "The denied call_id supplied by automatic policy review in this turn."
+    },
+    "justification": {
+      "type": "string",
+      "description": "Explain why this exact action is necessary for the user’s task."
+    }
+  },
+  "required": [
+    "call_id",
+    "justification"
+  ]
+}
+```
+
+Source: [`packages/guard/tool-policy-enforcer/src/approval.ts`](../packages/guard/tool-policy-enforcer/src/approval.ts)
 
 <a id="deepseek-aidsh-daedal-handoff"></a>
 

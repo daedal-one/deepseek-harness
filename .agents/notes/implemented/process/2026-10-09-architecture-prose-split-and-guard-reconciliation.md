@@ -12,9 +12,9 @@ Separately, two guard mechanisms gave the acting model opposing retry guidance. 
 
 The [turn flow](../../../../docs/architecture.md#turn-flow) renders that mechanism as five paragraphs: pre-step admission and the series declaration; commit order, reconciliation, and retry behavior; the system-prompt surface-node model; the empty-prompt system-head reservation; and route capability plus series behavior. The split moves only line boundaries, so the document stays at 2,397 words under the unchanged 2,400-word ceiling, and every fact and link is preserved.
 
-The deferred tool-policy denial from [dsh-tool-policy-enforcer](../../../../packages/guard/tool-policy-enforcer/README.md) states the current attempt and configured threshold, names varying the approach as the expected response and deliberately repeating the exact call as how the agent reaches the user when the retry is genuinely wanted, records that an intervening different call or turn change resets the chain, and records that a deterministic denial never becomes approvable. The enforcer README pins the same result text, and both guard READMEs state that the approval threshold counts consecutive identical `ask` verdicts for human escalation while the reminder counts consecutive repeated tool calls for loop hygiene, with neither suppressing the other. The [task spec](../../../../.specs/tasks/guard-message-reconciliation.spec.md) accepts that contract.
+The [tool-policy enforcer](../../../../packages/guard/tool-policy-enforcer/README.md) directs uncertain denials to the explicit `request_tool_approval` tool. Repeated calls never enter approval. The repeat-tool-reminder independently warns about repeated calls, so neither guard encourages a retry loop. The [task spec](../../../../.specs/tasks/guard-message-reconciliation.spec.md) keeps the package descriptions consistent.
 
-The deferred-approval chain semantics remain owned by [the deferred tool-policy approval note](../feature/2026-08-24-deferred-tool-policy-approval.md), and the prompt-surface mechanism remains owned by [the system-prompt surface-node decision](../architecture/2026-09-02-system-prompt-as-surface-node.md). This note owns the presentation split and the cross-mechanism clause.
+Approval semantics are owned by [the explicit tool-policy approval note](../feature/2026-10-13-explicit-tool-policy-approval.md), and the prompt-surface mechanism remains owned by [the system-prompt surface-node decision](../architecture/2026-09-02-system-prompt-as-surface-node.md). This note owns the presentation split and the independence of loop reminders from approval requests.
 
 ## Alternatives considered
 
@@ -22,14 +22,14 @@ The deferred-approval chain semantics remain owned by [the deferred tool-policy 
 
 **Name the reminder plugin in the model-facing denial text.** The denial is a policy result, and naming another guard's package inside it leaks plugin topology into model-visible text; the reconciliation clause carries the guidance without that coupling.
 
-**Merge the two guards into one mechanism.** The reminder counts every repeated attempt for loop hygiene while the threshold counts only consecutive identical `ask` verdicts for escalation, over different keying and lifetimes; merging couples a heuristic nudge to a permission decision.
+**Merge the two guards into one mechanism.** The reminder counts repeated calls for loop hygiene, while the approval tool requests a human permission decision. Combining them couples a heuristic nudge to authorization.
 
-**Suppress the reminder while a deferred-approval chain is open.** That makes one guard's state authoritative over another's and hides a genuine loop during the window where the model is most likely stuck.
+**Suppress the reminder during approval.** That makes one guard's state authoritative over another's and can hide a repeated-call loop.
 
 ## Verification
 
-`pnpm run verify-doc-budgets` passes with [docs/architecture.md](../../../../docs/architecture.md) at 2,397 of 2,400 words. `pnpm run verify-md-wrap` reports no hard-wrapped prose paragraphs across 994 files. `pnpm exec vitest run packages/guard/tool-policy-enforcer/tests` passes 44 tests across 4 files, including the verbatim deferred-result pin. `pnpm exec oxlint` reports 0 warnings and 0 errors on the changed source and test files. The enforcer plugin is mounted by no shipped profile, so no recorded-session snapshot changes.
+`pnpm run verify-doc-budgets` passes with [docs/architecture.md](../../../../docs/architecture.md) at 2,397 of 2,400 words. `pnpm run verify-md-wrap` reports no hard-wrapped prose paragraphs across 994 files. Focused policy tests pin the denial text and explicit approval behavior. `pnpm exec oxlint` reports 0 warnings and 0 errors on the changed source and test files. The enforcer plugin is mounted by no shipped profile, so no recorded-session snapshot changes.
 
 ## Consequences
 
-The turn flow's central mechanism reads as separate claims without losing a fact or a link, and the document keeps only its original three words of budget headroom. A model that receives both a repeated-call reminder and a deferred denial reads varying as the default response and deliberate repetition as the escalation path. The two guards keep independent ownership, keying, and lifetimes.
+The turn flow's central mechanism reads as separate claims without losing a fact or a link, and the document keeps only its original three words of budget headroom. A model that receives both a repeated-call reminder and a policy denial can change approach or request approval explicitly. The two guards keep independent ownership, keying, and lifetimes.

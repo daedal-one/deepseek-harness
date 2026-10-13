@@ -1,6 +1,7 @@
 # Agent Note: Deferred tool-policy approval
 
 Status: implemented
+Archived: 2026-10-13
 
 ## Problem
 

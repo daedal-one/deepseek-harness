@@ -4319,8 +4319,6 @@ Requires: `tools` · `toolPolicy`
 export interface Config {
   /** Optional conjunction over the session's durable permission values. */
   readonly enforceWhen?: EnforcementCondition
-  /** Consecutive identical ask verdicts required before human approval. */
-  readonly approvalThreshold?: number
 }
 
 /** Effective permission values for which the enforcer evaluates policy. */
@@ -4334,7 +4332,7 @@ export interface EnforcementCondition {
 
 Depends on: [`ApprovalPolicy`](subsystems/approval.md) · [`SandboxMode`](subsystems/sandbox.md)
 
-Source: [`packages/guard/tool-policy-enforcer/src/index.ts:25`](../packages/guard/tool-policy-enforcer/src/index.ts)
+Source: [`packages/guard/tool-policy-enforcer/src/index.ts:26`](../packages/guard/tool-policy-enforcer/src/index.ts)
 
 <a id="deepseek-aidsh-tool-policy-mcp"></a>
 

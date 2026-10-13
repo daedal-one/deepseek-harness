@@ -43,13 +43,14 @@ meaningful operations need attributable independent evidence before execution.
   configured deadline MUST bound the tool-time request and fallback; the Daedal
   policy-reviewed profile MUST target sub-second completion and cap the wait at
   2 seconds.
-- {#c-approval} A genuine ask decision MUST first return its bounded reason to
-  the acting agent without entering the approval service. The configured
-  threshold, defaulting to three, of consecutive calls with the same tool and
-  canonical arguments in one open turn MUST enter approval; an intervening
-  call, turn change, non-ask verdict, or successful execution MUST break the
-  chain. Calls at or above the threshold MUST remain approval-eligible while
-  the chain continues, and deterministic denials MUST remain unapprovable.
+- {#c-approval} An ask decision MUST return its bounded reason and direct
+  `request_tool_approval` instructions without entering approval. Repeating a
+  call MUST NOT trigger approval. The approval tool MUST reference a completed
+  policy-denied call in the same open turn and MUST use the existing approval
+  service. A successful grant MUST authorize only the next exact matching call
+  in that turn, with canonical arguments and current deterministic policy still
+  enforced. Rejected, cancelled, unavailable, stale, cross-session, or consumed
+  grants MUST NOT authorize execution; deterministic denials remain unapprovable.
 - {#c-durability} Every exact bounded auxiliary request and each provider and
   effective decision MUST be reconstructable from durable session events
   without duplicating secrets or raw tool arguments.
