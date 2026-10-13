@@ -315,7 +315,62 @@ def configuration_fingerprints(config, args):
     return {str(p): digest(p) for p in sorted(paths)}
 
 
-def prepare(config, directory, revision):
+def compatibility_report(config, directory, revision, args):
+    """A review covers one operation, exact Git trees, and the effective host configuration."""
+    base = Path(args[1]).parents[3].name
+    require(REV.fullmatch(base), 'Running release has no immutable revision')
+    changed = run(as_user(config, ['git', '-C', config['repository'], 'diff', '--no-ext-diff',
+                                  '--no-renames', '--name-only', '-z', base, revision,
+                                  '--', *config['compatibilityPaths']]))
+    return {'operation': directory.name, 'baseRevision': base, 'revision': revision,
+            'changedFiles': sorted(set(changed.rstrip('\0').split('\0'))) if changed else [],
+            'argv': args, 'definition': digest(CONFIG), 'controller': digest(__file__),
+            'configuration': configuration_fingerprints(config, args)}
+
+
+def reviewed_compatibility(directory, report, approved_digest):
+    require(digest(directory / 'compatibility.json') == approved_digest,
+            'Compatibility report changed; prepare a new operation')
+    require(json.loads((directory / 'compatibility.json').read_text()) == report,
+            'Compatibility context changed; prepare a new operation')
+    decision = json.loads((directory / 'compatibility-review.json').read_text())
+    require(decision['reviewDigest'] == approved_digest and decision['decision'] == 'rollback-compatible',
+            'Rollback compatibility is not approved; use a separate migration procedure')
+    return decision
+
+
+def review(config, directory, approved_digest, stream):
+    """Record operator evidence without accepting root-readable paths or executable input."""
+    raw = stream.read(16385)
+    require(len(raw) <= 16384, 'Compatibility evidence exceeds 16384 characters')
+    evidence = json.loads(raw)
+    require(isinstance(evidence, dict) and set(evidence) == {'decision', 'evidence'},
+            'Review requires exactly decision and evidence')
+    require(evidence['decision'] in ('rollback-compatible', 'migration-required'), 'Invalid compatibility decision')
+    require(isinstance(evidence['evidence'], str) and evidence['evidence'].strip(), 'Review evidence is required')
+    with locked(directory / 'review.lock'):
+        require(json.loads((directory / 'status.json').read_text())['phase'] == 'compatibility-review-required',
+                'Operation is not awaiting compatibility review; inspect status')
+        require(digest(directory / 'compatibility.json') == approved_digest, 'Compatibility digest does not match report')
+        report = json.loads((directory / 'compatibility.json').read_text())
+        with locked(config['syncLock'], config, config['buildTimeout']):
+            require(compatibility_report(config, directory, report['revision'], service_args(config)) == report,
+                    'Compatibility context changed; prepare a new operation')
+            decision = dict(evidence, reviewDigest=approved_digest, actor=os.environ.get('SUDO_USER', 'root'),
+                            time=time.time())
+            # An exclusive receipt prevents replay after interruption before the status write or launch.
+            with (directory / 'compatibility-review.json').open('x') as receipt:
+                json.dump(decision, receipt, sort_keys=True)
+                receipt.flush()
+                os.fsync(receipt.fileno())
+            if evidence['decision'] == 'migration-required':
+                status(directory, 'migration-required', revision=report['revision'], review=decision)
+                return
+            status(directory, 'compatibility-approved', revision=report['revision'], review=decision)
+            launch(directory, ['_resume', directory.name, approved_digest], config)
+
+
+def prepare(config, directory, revision, reviewed_digest=None):
     candidate = Path(config['releases']) / revision
     status(directory, 'waiting-for-build-lock', revision=revision)
     with locked(config['syncLock'], config, config['buildTimeout']):
@@ -324,10 +379,21 @@ def prepare(config, directory, revision):
         require(candidate.resolve() != old.resolve(), 'Cannot rebuild the running release')
         retained = Path(config['state']) / 'previous'
         require(not retained.exists() or candidate.resolve() != retained.resolve(), 'Cannot rebuild the rollback release')
-        status(directory, 'building', revision=revision)
+        status(directory, 'checking-compatibility', revision=revision)
         git = as_user(config, ['git', '-C', config['repository']])
         run([*git, 'fetch', '--no-prune', 'origin', 'refs/heads/master:refs/remotes/origin/master'])
         run([*git, 'merge-base', '--is-ancestor', revision, 'refs/remotes/origin/master'])
+        report = compatibility_report(config, directory, revision, args)
+        decision = None
+        if reviewed_digest is not None:
+            decision = reviewed_compatibility(directory, report, reviewed_digest)
+        else:
+            json_write(directory / 'compatibility.json', report)
+            if report['changedFiles']:
+                status(directory, 'compatibility-review-required', revision=revision,
+                       reviewDigest=digest(directory / 'compatibility.json'), compatibility=report)
+                return
+        status(directory, 'building', revision=revision)
         if not candidate.exists():
             run([*git, 'worktree', 'add', '--detach', str(candidate), revision])
         require(run(as_user(config, ['git', '-C', str(candidate), 'rev-parse', 'HEAD'])) == revision,
@@ -344,16 +410,13 @@ def prepare(config, directory, revision):
             run(as_user(config, command), cwd=candidate)
         with account(config):
             changes = retarget(Path(config['home']), config, candidate)
-        # Unchanged persistence implementation is the conservative automatic rollback criterion.
-        for relative in config['compatibilityPaths']:
-            diff = run(as_user(config, ['git', '-C', str(candidate), 'diff', '--name-only',
-                                       old.name, revision, '--', relative]))
-            require(not diff, 'Session compatibility requires operator review: ' + relative)
         status(directory, 'qualifying', revision=revision)
         configuration = configuration_fingerprints(config, args)
         proof = qualification(config, directory, candidate, args)
         require(configuration_fingerprints(config, args) == configuration,
                 'Deployment configuration changed during qualification')
+        require(compatibility_report(config, directory, revision, service_args(config)) == report,
+                'Compatibility context changed during preparation; prepare a new operation')
         tracked = set(run(as_user(config, ['git', '-C', str(candidate), 'ls-files'])).splitlines())
         files = {str(p.relative_to(candidate)): digest(p) for p in candidate.rglob('*')
                  if p.is_file() and not p.is_symlink() and
@@ -363,10 +426,11 @@ def prepare(config, directory, revision):
         require(files, 'Candidate runtime artifacts are missing')
         plan = {'revision': revision, 'previous': str(old), 'argv': args, 'files': files,
                 'definition': digest(CONFIG), 'changes': changes, 'qualification': proof,
-                'configuration': configuration}
+                'configuration': configuration, 'controller': digest(__file__),
+                'compatibility': report, 'review': decision}
         json_write(directory / 'qualified.json', plan)
         status(directory, 'qualified', revision=revision, approvalDigest=digest(directory / 'qualified.json'),
-               qualification=proof)
+               qualification=proof, compatibility=report, review=decision)
 
 
 def activate(config, directory, approved_digest):
@@ -375,14 +439,25 @@ def activate(config, directory, approved_digest):
     candidate = Path(config['releases']) / plan['revision']
     home = Path(config['home'])
     with locked(config['activationLock']), locked(config['syncLock'], config, config['buildTimeout']):
-        require(digest(CONFIG) == plan['definition'], 'Deployment definition changed; prepare again')
-        require(service_args(config) == plan['argv'], 'Running release changed; prepare again')
-        require(configuration_fingerprints(config, plan['argv']) == plan['configuration'],
-                'Deployment configuration changed; prepare again')
-        for relative, expected in plan['files'].items():
-            require(digest(candidate / relative) == expected, 'Candidate artifact changed; prepare again')
-        with account(config):
-            require(retarget(home, config, candidate) == plan['changes'], 'Release references changed; prepare again')
+        def verify_approval():
+            require(plan.get('controller') == digest(__file__), 'Deployment controller changed; prepare again')
+            require(digest(CONFIG) == plan['definition'], 'Deployment definition changed; prepare again')
+            require(service_args(config) == plan['argv'], 'Running release changed; prepare again')
+            require(configuration_fingerprints(config, plan['argv']) == plan['configuration'],
+                    'Deployment configuration changed; prepare again')
+            require(compatibility_report(config, directory, plan['revision'], plan['argv']) == plan['compatibility'],
+                    'Compatibility context changed; prepare again')
+            if plan['compatibility']['changedFiles']:
+                require(plan['review'] is not None, 'Compatibility review is missing; prepare again')
+                require(reviewed_compatibility(directory, plan['compatibility'], plan['review']['reviewDigest']) == plan['review'],
+                        'Compatibility decision changed; prepare again')
+            else:
+                require(plan['review'] is None, 'Unexpected compatibility decision; prepare again')
+            for relative, expected in plan['files'].items():
+                require(digest(candidate / relative) == expected, 'Candidate artifact changed; prepare again')
+            with account(config):
+                require(retarget(home, config, candidate) == plan['changes'], 'Release references changed; prepare again')
+        verify_approval()
         status(directory, 'waiting-for-idle', revision=plan['revision'])
         deadline = time.monotonic() + config['idleTimeout']
         while True:
@@ -392,6 +467,8 @@ def activate(config, directory, approved_digest):
             except subprocess.CalledProcessError:
                 require(time.monotonic() < deadline, 'Host stayed busy; no service change was made')
                 time.sleep(2)
+        # Idle waiting can outlast an operator configuration change or an artifact edit.
+        verify_approval()
         dropin = Path(config['dropin'])
         old_dropin = dropin.read_bytes() if dropin.exists() else None
         new_args = list(plan['argv'])
@@ -462,7 +539,7 @@ def activate(config, directory, approved_digest):
 
 def main(argv):
     config = load_config()
-    require(len(argv) in (2, 3), 'Usage: dsh-deploy prepare OP REV | activate OP DIGEST | status OP')
+    require(len(argv) in (2, 3), 'Usage: dsh-deploy prepare OP REV | review OP DIGEST < evidence.json | activate OP DIGEST | status OP')
     command, operation = argv[:2]
     require(ID.fullmatch(operation), 'Invalid operation identity')
     directory = Path(config['operations']) / operation
@@ -478,6 +555,8 @@ def main(argv):
         directory.chmod(0o711)
         status(directory, 'preparation-requested', revision=argument)
         launch(directory, ['_prepare', operation, argument], config)
+    elif command == 'review':
+        review(config, directory, argument, sys.stdin)
     elif command == 'activate':
         require(json.loads((directory / 'status.json').read_text())['phase'] == 'qualified', 'Operation is not qualified')
         require(digest(directory / 'qualified.json') == argument, 'Approval digest does not match qualification')
@@ -488,10 +567,14 @@ def main(argv):
             os.fsync(receipt.fileno())
         status(directory, 'activation-requested', approvalDigest=argument)
         launch(directory, ['_activate', operation, argument], config)
-    elif command in ('_prepare', '_activate'):
+    elif command in ('_prepare', '_resume', '_activate'):
         require('SUDO_USER' not in os.environ, 'Workers run only through their independent systemd unit')
         try:
-            (prepare if command == '_prepare' else activate)(config, directory, argument)
+            if command == '_resume':
+                report = json.loads((directory / 'compatibility.json').read_text())
+                prepare(config, directory, report['revision'], argument)
+            else:
+                (prepare if command == '_prepare' else activate)(config, directory, argument)
         except BaseException as error:
             previous = json.loads((directory / 'status.json').read_text())
             if previous['phase'] != 'recovered':
