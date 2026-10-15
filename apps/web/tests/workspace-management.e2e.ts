@@ -662,10 +662,38 @@ describe('web e2e: workspace management (create / rename / flat view / hover aff
     expect(tripwire.pageErrors).toEqual([])
   }, 90_000)
 
+  it('waits for execution readiness and rejects a mount failure before creating a Workspace or Agent', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-ws-mount-rejection'))
+    const source = join(scaffold.workspaceCwd, 'mount-not-ready')
+    await mkdir(source)
+    const entered = Promise.withResolvers<undefined>(); const ready = Promise.withResolvers<undefined>()
+    const agentsBefore = scaffold.ctx.agents.list().length
+    const dispose = scaffold.ctx.on('workspace/prepare', async (path) => {
+      if (path !== source) return
+      entered.resolve(undefined); await ready.promise
+      throw new Error('shared-vm: selected directory could not be mounted')
+    })
+    try {
+      const dialog = await browseTo(source)
+      await dialog.getByRole('button', { name: 'Open', exact: true }).click()
+      await entered.promise
+      expect(await scaffold.ctx.workspaceRegistry.resolveByPath(source)).toBeUndefined()
+      expect(scaffold.ctx.agents.list()).toHaveLength(agentsBefore)
+      ready.resolve(undefined)
+      const failure = page.getByRole('dialog', { name: 'Couldn’t open folder' })
+      await expect.poll(() => failure.getByRole('alert').textContent(), { timeout: 10_000 }).toContain('selected directory could not be mounted')
+      await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'mount-rejection.expected.md'), await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd), MODE)
+      expect(await scaffold.ctx.workspaceRegistry.resolveByPath(source)).toBeUndefined()
+      expect(scaffold.ctx.agents.list()).toHaveLength(agentsBefore)
+      await failure.getByRole('button', { name: 'Cancel', exact: true }).click()
+    } finally { ready.resolve(undefined); dispose() }
+    await adoptDirectory(source, { waitForAgent: true })
+    expect(scaffold.ctx.agents.list()).toHaveLength(agentsBefore + 1)
+  })
+
   it.skipIf(MODE === 'record')('issued zero model calls and stayed clean', async () => {
     expect(tripwire.warnings).toEqual([])
-    // The directory-browser aria golden is this spec's one owned artifact;
-    // the seed it reuses is owned (and inventory-guarded) by seeded-history.
-    await assertFixtureInventory(SNAPSHOT_DIR, ['.gitkeep', 'directory-browser.expected.md'])
+    // Seeded-history owns the reused Session; this scenario owns its directory and failure views.
+    await assertFixtureInventory(SNAPSHOT_DIR, ['.gitkeep', 'directory-browser.expected.md', 'mount-rejection.expected.md'])
   })
 })

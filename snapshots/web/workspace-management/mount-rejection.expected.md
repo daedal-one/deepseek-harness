@@ -1,0 +1,7 @@
+- dialog "Couldn’t open folder":
+  - heading "Couldn’t open folder" [level=2]
+  - button "Close":
+    - img
+  - alert: "workspace create failed: workspace/create-rejected: cannot create a Workspace at \"{{cwd}}/mount-not-ready\": Cannot prepare workspace '{{cwd}}/mount-not-ready': shared-vm: selected directory could not be mounted"
+  - button "Cancel"
+  - button "Choose again"

@@ -5,10 +5,12 @@ import { posix } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { brandString } from '@deepseek-ai/dsh-brand'
+import type { WorkspacePreparationKind } from '@deepseek-ai/dsh-workspace'
 import type { ConversationWorkspaceId } from './workspace-types.ts'
 import { IncusDevelopmentVms, incusCommand, type DevelopmentVmConfig, type VmDirectoryMount } from './vm-engine.ts'
 import { createVmProcess } from './vm-process.ts'
 import { sharedGitAuthorization } from './shared-git.ts'
+import { SharedVmSelection, type WorkspaceSelectionConfig } from './shared-vm-selection.ts'
 import type { ExecutionRuntime, LocalContainerProcessHandle, LocalContainerProcessRequest,
   PodmanControllerExecRequest, PodmanControllerExecResult, WorkspaceGitRemote } from './types.ts'
 import { LocalContainerControllerAborted, LocalContainerControllerDeadlineExceeded } from './index.ts'
@@ -21,6 +23,8 @@ export interface SharedVmConfig extends DevelopmentVmConfig {
   workspaceDirectory: string
   /** Existing repositories shared by every admitted session. */
   repositories: VmDirectoryMount[]
+  /** Optional exact-directory attachment for Workspace selections under operator-approved roots. */
+  workspaceSelection?: WorkspaceSelectionConfig
   /** Optional operator-approved Git access for exact mounted repository sources. */
   gitRemotes?: WorkspaceGitRemote[]
   /** Complete non-secret guest command environment. */
@@ -83,8 +87,10 @@ export class SharedVmRuntime extends Service implements ExecutionRuntime {
     timeoutMs: z.natural().required(), readinessPollMs: z.natural().required(), maxOutputBytes: z.natural().required(),
     environmentId: z.string().required(), workspaceDirectory: z.string().required(),
     repositories: z.array(z.object({ source: z.string().required(), path: z.string().required() })).required(),
+    workspaceSelection: z.object({ roots: z.array(z.string()).required(), directory: z.string().required(),
+      maxMounts: z.natural().required(), maxStateBytes: z.natural().required() }).default(undefined as never),
     gitRemotes: z.array(z.object({ source: z.string().required(), url: z.string().required(),
-      credentialCommand: z.string().required(), credentialTimeoutMs: z.natural().required() })),
+      credentialCommand: z.string().required(), credentialTimeoutMs: z.natural().required() })).default(undefined as never),
     environment: z.dict(z.string()).required(), maxLiveProcesses: z.natural().required(),
   })
   readonly executionWorld: object = Object.freeze({})
@@ -92,7 +98,9 @@ export class SharedVmRuntime extends Service implements ExecutionRuntime {
   private readonly id: ConversationWorkspaceId
   private readonly engine: IncusDevelopmentVms
   private readonly command: ReturnType<typeof incusCommand>
-  private readonly mapPath: (path: string) => string
+  private mapPath: (path: string) => string
+  private readonly selection?: SharedVmSelection
+  private selecting: Promise<void> = Promise.resolve()
   private readonly opening: Promise<void>
   private readonly authorize: () => Promise<string[]>
   private readonly processes = new Set<LocalContainerProcessHandle>()
@@ -106,20 +114,51 @@ export class SharedVmRuntime extends Service implements ExecutionRuntime {
     this.containerName = this.engine.name(this.id)
     this.command = incusCommand(config)
     this.mapPath = sharedVmPaths(config)
+    if (config.workspaceSelection !== undefined) {
+      this.selection = new SharedVmSelection(config.workspaceSelection, config.environmentId, config.repositories, {
+        validate: (repositories) => { sharedVmPaths({ ...config, repositories }) },
+        verify: repositories => this.engine.verify(this.id, config.workspaceDirectory, repositories),
+        attach: async (mount, index) => {
+          if (this.closing) throw new Error('shared-vm: runtime is closing')
+          await this.command(['config', 'device', 'add', this.containerName, `repository-${index}`, 'disk',
+            `source=${mount.source}`, `path=${mount.path}`, '--project', config.project])
+        },
+        ready: async (mount) => {
+          await this.startVerifiedVm()
+          const deadline = Date.now() + config.timeoutMs
+          for (;;) {
+            try { await this.verifyMount(mount.path); return }
+            catch (error) { if (Date.now() >= deadline || this.closing) throw error }
+            await new Promise(resolve => setTimeout(resolve, config.readinessPollMs))
+          }
+        },
+      }, config.workspaceDirectory)
+    }
     this.authorize = sharedGitAuthorization(config.repositories, config.gitRemotes ?? [])
     if (!Number.isSafeInteger(config.maxLiveProcesses) || config.maxLiveProcesses < 1) throw new Error('shared-vm: invalid command limit')
     validateEnvironment(config.environment, true)
     this.opening = this.open()
     void this.opening.catch(() => undefined)
+    ctx.on('workspace/prepare', (path, kind) => this.prepareWorkspace(path, kind))
+    ctx.on('agent/prepare', async ({ agent }) => {
+      await this.ensureReady()
+      try {
+        const cwd = this.executionPath(agent.session.header.cwd ?? '/workspace')
+        if (cwd !== '/workspace' && !cwd.startsWith('/workspace/')) throw new Error('Agent cwd must be inside the guest workspace')
+      }
+      catch (error) { throw new Error('shared-vm: select this workspace in the application before starting its Agent', { cause: error }) }
+    })
     ctx.effect(() => async () => {
       this.closing = true
       await Promise.allSettled([this.opening])
+      await Promise.allSettled([this.selecting])
       await Promise.allSettled(this.allocating)
       const outcomes = await Promise.allSettled([...this.processes].map(async (handle) => {
         await handle.terminate()
         if (!await handle.waitForRemoval()) throw new Error('shared-vm: command removal unconfirmed')
       }))
       const failures = outcomes.flatMap(result => result.status === 'rejected' ? [result.reason as unknown] : [])
+      await this.selection?.close()
       if (failures.length) throw new AggregateError(failures, 'shared-vm: command teardown failed; VM retained')
     }, 'shared VM command teardown')
   }
@@ -133,7 +172,32 @@ export class SharedVmRuntime extends Service implements ExecutionRuntime {
    */
   executionPath(path: string): string { return this.mapPath(path) }
 
+  private prepareWorkspace(path: string, kind: WorkspacePreparationKind): Promise<void> {
+    const operation = this.selecting.then(async () => {
+      await this.ensureReady()
+      if (!posix.isAbsolute(path)) throw new Error('shared-vm: select a fully qualified workspace directory')
+      const hostSources = [this.config.workspaceDirectory, ...this.config.repositories.map(mount => mount.source),
+        ...this.selection?.mounts.map(mount => mount.source) ?? []]
+      const guestAlias = kind === 'session' && (path === '/workspace' || path.startsWith('/workspace/'))
+      if (guestAlias || hostSources.some(source => path === source || path.startsWith(`${source}/`))) {
+        this.mapPath(path)
+        return
+      }
+      if (this.selection === undefined) throw new Error('shared-vm: this directory is not mounted; ask the operator to configure workspaceSelection or an exact repository mount')
+      try { await this.selection.select(path) }
+      finally { this.refreshPaths() }
+      if (this.closing) throw new Error('shared-vm: runtime is closing')
+    })
+    this.selecting = operation.then(() => undefined, () => undefined)
+    return operation
+  }
+
+  private refreshPaths(): void {
+    this.mapPath = sharedVmPaths({ ...this.config, repositories: [...this.config.repositories, ...this.selection?.mounts ?? []] })
+  }
+
   private async open(): Promise<void> {
+    await this.selection?.open()
     for (const source of [this.config.workspaceDirectory, ...this.config.repositories.map(mount => mount.source)]) {
       const [info, canonical, filesystem] = await Promise.all([lstat(source), realpath(source), statfs(source)])
       if (!info.isDirectory() || canonical !== source || filesystem.type === 0x01021994) {
@@ -142,15 +206,24 @@ export class SharedVmRuntime extends Service implements ExecutionRuntime {
     }
     await this.engine.verifyNetwork()
     if (!await this.engine.exists(this.id)) throw new Error(`shared-vm: provision ${this.containerName} before starting this profile`)
-    await this.engine.verify(this.id, this.config.workspaceDirectory, this.config.repositories)
+    await this.selection?.recover()
+    this.refreshPaths()
+    const repositories = [...this.config.repositories, ...this.selection?.mounts ?? []]
+    await this.engine.verify(this.id, this.config.workspaceDirectory, repositories)
     if (this.closing) throw new Error('shared-vm: runtime is closing')
+    await this.startVerifiedVm()
+    await this.verifyMount('/workspace')
+    for (const mount of repositories) await this.verifyMount(mount.path)
+  }
+
+  private async startVerifiedVm(): Promise<void> {
     const state = await this.engine.state(this.id)
     if (state === 'Stopped') await this.engine.start(this.id)
     else if (state !== 'Running') throw new Error(`shared-vm: instance is ${state}; operator action required`)
-    await this.command(['exec', this.containerName, '--project', this.config.project, '--', '/usr/bin/mountpoint', '-q', '/workspace'])
-    for (const mount of this.config.repositories) {
-      await this.command(['exec', this.containerName, '--project', this.config.project, '--', '/usr/bin/mountpoint', '-q', mount.path])
-    }
+  }
+
+  private async verifyMount(path: string): Promise<void> {
+    await this.command(['exec', this.containerName, '--project', this.config.project, '--', '/usr/bin/mountpoint', '-q', path])
   }
 
   /** Allocate one independently cancellable guest command.
@@ -168,7 +241,6 @@ export class SharedVmRuntime extends Service implements ExecutionRuntime {
     const environment = { ...this.config.environment, ...request.environment }
     validateEnvironment(environment, false)
     const cwd = this.mapPath(request.cwd)
-    if (cwd !== '/workspace' && (!cwd.startsWith('/workspace/') || posix.normalize(cwd) !== cwd)) throw new Error('shared-vm: command directory is outside workspace')
     const operation = (async () => {
       const authorization = git ? await this.authorize() : []
       request.signal?.throwIfAborted()

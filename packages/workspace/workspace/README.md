@@ -59,6 +59,8 @@ ctx.workspaceRegistry.list() // shows the project, newest first
 
 ### Grouping sessions under a project
 
+Adding a directory waits for the composed execution provider to prepare it before saving its registration. An unavailable mount rejects the addition without creating a project. Host-only compositions add no execution-preparation work; isolated providers own their attachment policy and limits. Read-only lookup never prepares or attaches a directory.
+
 A session joins the project of the directory it runs in: create a session in a project's directory and it appears under that project, newest first. A session can only belong to one project. A session whose directory cannot be validated — no recorded directory, or a moved or deleted folder — cannot join and stays ungrouped.
 
 ### Hiding sessions and removing projects

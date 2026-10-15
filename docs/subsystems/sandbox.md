@@ -421,6 +421,26 @@ Source: [`packages/sandbox/sandbox-policy/src/index.ts`](../../packages/sandbox/
 
 ### `workspace/*` events
 
+<a id="workspaceprepare--serial"></a>
+
+#### `workspace/prepare` — serial
+
+Prepare the selected directory in the composed execution world before publication.
+
+```ts cordis-catalog
+/**
+ * Prepare the selected directory in the composed execution world before publication.
+ * @param path - selected Host working directory; registration callers supply its canonical spelling.
+ * @param kind - whether the selection names a Host Workspace or a Session execution directory.
+ * @mode serial
+ */
+'workspace/prepare'(path: string, kind: WorkspacePreparationKind): Promise<void>
+```
+
+Types: [WorkspacePreparationKind](workspace.md)
+
+Source: [`packages/workspace/workspace/src/execution.ts`](../../packages/workspace/workspace/src/execution.ts)
+
 <a id="workspacequiesce--serial"></a>
 
 #### `workspace/quiesce` — serial
@@ -441,6 +461,8 @@ Source: [`packages/sandbox/local-container-runtime/src/index.ts`](../../packages
 ## Local container execution world
 
 The optional [runtime owner](../../packages/sandbox/local-container-runtime/README.md) supplies a verified process-owned workspace to matching filesystem and subprocess providers. `LocalContainerHandle` identifies the owner and canonical workspace; `PodmanControllerExecRequest` and `PodmanControllerExecResult` define bounded controller input, output, cancellation, and deadlines. `LocalContainerProcessRequest` supplies an explicit process, environment, cwd, and terminal dimensions, while `LocalContainerProcessHandle` owns its streams, exit observation, signalling, and removal. The [type declarations](../../packages/sandbox/local-container-runtime/src/types.ts) define these provider-facing values.
+
+The shared-VM composition can prepare selected directories through `workspace/prepare`. `WorkspaceSelectionConfig` names admitted parent roots, private Host manifest storage, and mount-count and manifest-byte bounds. Committed mounts retain stable guest paths across Harness restart; pending intent admits recovery only against the exact prior or prospective devices. The [configuration and attachment policy](../../packages/sandbox/local-container-runtime/README.md#shared-environment-vm) define selection authority independently of file-effect modes and Git credentials.
 
 The optional conversation-workspace service owns import, recovery, residual commits, and branch return. `ConversationWorkspaceId` identifies one private repository; `WorkspaceState` records its save phase, acknowledged checkpoint, baseline commit, and returned refs independently of `turn/end`. `WorkspaceProvenance` records a stable receipt identity, owner conversation and event range, original and returned refs, observed commits and the narrower set of Harness-created commits. The [shared declarations](../../packages/sandbox/local-container-runtime/src/workspace-types.ts) define these durable records; the [configuration and lifecycle](../../packages/sandbox/local-container-runtime/README.md#conversation-repositories) define ownership and limits.
 

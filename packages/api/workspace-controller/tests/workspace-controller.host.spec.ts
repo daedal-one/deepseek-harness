@@ -82,6 +82,51 @@ async function nextFrame(
 }
 
 describe('WorkspaceController commands', () => {
+  it('waits for execution readiness before registration and reports a pre-write mount rejection', async () => {
+    const { controller, ctx, root } = await harness()
+    const path = stageDir(root, 'selected')
+    const entered = deferred<undefined>(); const ready = deferred<undefined>()
+    const dispose = ctx.on('workspace/prepare', async (selected) => {
+      expect(selected).toBe(path)
+      entered.resolve(undefined)
+      await ready.promise
+      throw new Error('selected directory could not be mounted')
+    })
+    const create = controller.create({ path })
+    const rejected = expect(create).rejects.toMatchObject({ code: 'workspace/create-rejected' })
+    try {
+      await entered.promise
+      expect(ctx.workspaceRegistry.list()).toEqual([])
+      expect(await resolvePath(controller, { path })).toEqual({ workspace: null })
+    } finally { ready.resolve(undefined); await rejected; dispose() }
+    expect(ctx.workspaceRegistry.list()).toEqual([])
+    await expect(controller.create({ path })).resolves.toMatchObject({ created: true })
+  })
+
+  it('prepares an existing registration again while lookup remains read-only', async () => {
+    const { controller, ctx, root } = await harness()
+    const path = stageDir(root, 'existing-selected')
+    const first = await controller.create({ path })
+    const prepare = vi.fn(async () => { throw new Error('environment unavailable') })
+    const dispose = ctx.on('workspace/prepare', prepare)
+    await expect(resolvePath(controller, { path })).resolves.toEqual({ workspace: first.workspace })
+    expect(prepare).not.toHaveBeenCalled()
+    await expect(controller.create({ path })).rejects.toMatchObject({ code: 'workspace/create-rejected' })
+    expect(prepare).toHaveBeenCalledOnce()
+    expect(ctx.workspaceRegistry.list()).toHaveLength(1)
+    dispose()
+    await expect(controller.create({ path })).resolves.toEqual({ ...first, created: false })
+  })
+
+  it('keeps non-Error execution failures actionable before registration writes', async () => {
+    const { controller, ctx, root } = await harness()
+    const path = stageDir(root, 'unavailable-execution')
+    // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- Preparation providers can reject with non-Error values.
+    ctx.on('workspace/prepare', () => Promise.reject('mount service unavailable'))
+    await expect(controller.create({ path })).rejects.toThrow('mount service unavailable')
+    expect(ctx.workspaceRegistry.list()).toEqual([])
+  })
+
   it('resolves canonical registrations without writes and observes replacement identities', async () => {
     const { controller, ctx, root } = await harness()
     const path = stageDir(root, 'lookup')

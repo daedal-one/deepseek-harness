@@ -345,7 +345,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'connectWorkspace(workspaceId: WorkspaceId): Promise<SessionId>',
-        description: 'Resolve the reusable or newly created blank Session for a Workspace.',
+        description: 'Admit the reusable or newly created blank Session in its Workspace execution environment.',
         parameters: [{ name: 'workspaceId', description: 'target Workspace.' }],
         returns: 'a Session already addressable through the Session Controller.',
       },

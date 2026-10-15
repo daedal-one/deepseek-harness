@@ -20,6 +20,8 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## Use this package
 
+Creating or reselecting a registered directory waits for execution preparation before returning success. A preparation failure reports `workspace/create-rejected` before this request begins a registration write. A read through `resolveByPath` only reports current registration state and never mounts a directory.
+
 The Host controller serializes mutations whose correctness depends on current registry state and throws `RemoteError` with a stable `workspace/*` or `directory-picker/*` code for expected failures. Its `follow()` stream synchronously attaches to durable Workspace changes, emits one complete baseline first, then emits ordered `upsert`, `remove`, `order`, and `archived` increments. A reconnect starts another generation with a replacement baseline, so consumers do not depend on receiving every increment while disconnected.
 
 `create({ path })` uses business semantic revision 2. `workspace/create-rejected` means this request began no registration write: initial path resolution or registry directory validation failed. It does not assert that the path has no existing registration. Other failures, including `workspace/invalid-path`, may leave a durable record and cannot authorize automatic retry. The Client preserves these codes through `WorkspaceCreateError`. The Host refuses revision-1 compatibility expectations before invoking the Workspace command; the request and result schemas are unchanged.

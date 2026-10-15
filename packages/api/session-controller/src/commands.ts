@@ -22,6 +22,7 @@ import { canonicalClientTimeZone } from '@deepseek-ai/dsh-util-time'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { RemoteError, remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
 import type { Workspace } from '@deepseek-ai/dsh-workspace'
+import { prepareWorkspaceExecution } from '@deepseek-ai/dsh-workspace'
 import {
   ApiSessionAgentController,
   ApiSessionCwdConflict,
@@ -102,6 +103,7 @@ export class SessionCommandController {
     const cwd = workspace?.path ?? request.cwd ?? this.defaultCwd
     let adopted: Agent
     try {
+      await prepareWorkspaceExecution(this.ctx, cwd, workspace === undefined ? 'session' : 'workspace')
       adopted = await this.agents.ensureSession(
         sessionId,
         cwd,

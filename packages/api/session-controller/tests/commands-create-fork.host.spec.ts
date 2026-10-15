@@ -41,6 +41,25 @@ async function baseContext(): Promise<Context> {
 }
 
 describe('Session creation failures', () => {
+  it('prepares the selected execution directory before creating any Session', async () => {
+    const ctx = await baseContext()
+    const ensureSession = vi.fn()
+    const selected = '/selected-workspace'
+    const prepare = vi.fn(async (path: string) => {
+      expect(path).toBe(selected)
+      expect(ensureSession).not.toHaveBeenCalled()
+      throw new Error('workspace mount unavailable')
+    })
+    ctx.on('workspace/prepare', prepare)
+    try {
+      const controller = new SessionCommandController(ctx, controllerAgents({ ensureSession }), '/default')
+      await expect(controller.create({ sessionId: SessionId('unmounted'), cwd: selected })).rejects.toThrow('workspace mount unavailable')
+      expect(prepare).toHaveBeenCalledOnce()
+      expect(ensureSession).not.toHaveBeenCalled()
+      expect(ctx.sessions.get(SessionId('unmounted'))).toBeUndefined()
+    } finally { await ctx.fiber.dispose() }
+  })
+
   it('mints an identity with the default cwd when no explicit target is supplied', async () => {
     const ctx = await baseContext()
     ctx.provide('workspaceRegistry', { get: () => undefined, list: () => [] } as never)

@@ -7,6 +7,8 @@ import {
   WorkspaceMoveInvalidError,
   WorkspaceOrderInvalidError,
   WorkspacePathInvalidError,
+  WorkspaceExecutionUnavailableError,
+  prepareWorkspaceExecution,
   WorkspaceUnknownSessionError,
 } from '@deepseek-ai/dsh-workspace'
 import { RemoteError, remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
@@ -53,16 +55,18 @@ export class WorkspaceCommands {
           { cause: error },
         )
       }
-      if (existing !== undefined) {
-        return { workspace: workspaceView(existing), created: false }
-      }
       try {
+        if (existing !== undefined) {
+          await prepareWorkspaceExecution(this.ctx, existing.path)
+          return { workspace: workspaceView(existing), created: false }
+        }
         const workspace = await this.ctx.workspaceRegistry.create(request.path)
         return { workspace: workspaceView(workspace), created: true }
       } catch (error) {
         if (remoteErrorOf(error) !== undefined) throw error
         throw new RemoteError(
-          error instanceof WorkspacePathInvalidError ? 'workspace/create-rejected' : 'workspace/invalid-path',
+          error instanceof WorkspacePathInvalidError || error instanceof WorkspaceExecutionUnavailableError
+            ? 'workspace/create-rejected' : 'workspace/invalid-path',
           `cannot create a Workspace at "${request.path}": ${errorMessage(error)}`,
           { path: request.path },
           { cause: error },

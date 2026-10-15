@@ -66,6 +66,7 @@
     "lib/vm-engine-*.js",
     "lib/vm-process-*.js",
     "lib/git-authorization-*.js",
+    "lib/workspace-git-*.js",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
@@ -102,6 +103,10 @@
     "@deepseek-ai/dsh-client-connection": "workspace:^",
     "@deepseek-ai/dsh-fs-local-container": "workspace:^",
     "@deepseek-ai/dsh-subprocess-local-container": "workspace:^",
-    "@deepseek-ai/dsh-host-webserver": "workspace:^"
+    "@deepseek-ai/dsh-host-webserver": "workspace:^",
+    "@deepseek-ai/dsh-app-boot": "workspace:^",
+    "@deepseek-ai/dsh-storage": "workspace:^",
+    "@deepseek-ai/dsh-storage-domain": "workspace:^",
+    "@deepseek-ai/dsh-workspace": "workspace:^"
   }
 }

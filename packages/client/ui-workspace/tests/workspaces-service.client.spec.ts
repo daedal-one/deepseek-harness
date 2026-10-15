@@ -363,7 +363,9 @@ describe('UiWorkspaceService', () => {
       b.uiWorkspace.connectWorkspace(wid('alpha')),
       b.uiWorkspace.connectWorkspace(wid('alpha')),
     ])).resolves.toEqual([memberBlank, memberBlank])
-    expect(b.sessions.create).not.toHaveBeenCalled()
+    expect(b.sessions.create).toHaveBeenCalledOnce()
+    expect(b.sessions.create).toHaveBeenCalledWith({ workspaceId: wid('alpha'), sessionId: memberBlank })
+    b.sessions.create.mockClear()
 
     const creation = Promise.withResolvers<SessionId>()
     b.sessions.create.mockImplementation(() => creation.promise)
@@ -378,6 +380,22 @@ describe('UiWorkspaceService', () => {
     expect(b.sessions.create).toHaveBeenLastCalledWith({ workspaceId: wid('gamma') })
     await expect(b.uiWorkspace.connectWorkspace(wid('ghost')))
       .rejects.toThrow('uiWorkspace.connectWorkspace: unknown workspace ghost')
+  })
+
+  it('retains the current selection when a reusable blank Session fails execution re-admission', async () => {
+    const blank = sid('existing-blank'); const current = sid('current')
+    const b = bench({
+      workspaces: workspaceState([workspace('selected', [blank])]),
+      sessions: sessionState([summary('existing-blank', { blank: true, cwd: '/w/selected' }), summary('current')], current),
+    })
+    b.sessions.create.mockRejectedValueOnce(new Error('workspace mount unavailable'))
+    await expect(b.uiWorkspace.openWorkspace(wid('selected'))).rejects.toThrow('mount unavailable')
+    expect(b.sessions.create).toHaveBeenCalledWith({ workspaceId: wid('selected'), sessionId: blank })
+    expect(b.sessions.open).not.toHaveBeenCalled()
+    expect(b.sessions.list.getSnapshot().current).toBe(current)
+    await b.uiWorkspace.openWorkspace(wid('selected'))
+    expect(b.sessions.open).toHaveBeenCalledWith(blank)
+    await b.ctx.fiber.dispose()
   })
 
   it('targets an explicit, current-session, then recent Workspace and reports failed starts', async () => {

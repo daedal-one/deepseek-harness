@@ -12,7 +12,10 @@ import type { SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-persistence'
 import type { DomainGlobal, KvTable } from '@deepseek-ai/dsh-storage-domain'
 import { resolveWorkspaceCreatePath } from './create-path.ts'
+import { prepareWorkspaceExecution } from './execution.ts'
 export { WorkspacePathInvalidError } from './create-path.ts'
+export { prepareWorkspaceExecution, WorkspaceExecutionUnavailableError } from './execution.ts'
+export type { WorkspacePreparationKind } from './execution.ts'
 import { WorkspaceEntity } from './entity.ts'
 import type { WorkspaceEntityHost } from './entity.ts'
 
@@ -145,6 +148,8 @@ export class WorkspaceRegistry extends Service {
    * path is canonicalized through `fs.realpath`; a relative, nonexistent, or
    * non-directory path rejects with WorkspacePathInvalidError before any
    * registration write. Persistence failures retain their original type.
+   * Execution providers must finish `workspace/prepare` before registration;
+   * preparation failure rejects with WorkspaceExecutionUnavailableError without a registration write.
    * Repeated calls for the same canonical path
    * return the existing entity without changing its title.
    * A newly created workspace is prepended to the durable registry order.
@@ -160,6 +165,7 @@ export class WorkspaceRegistry extends Service {
   // lines in this package's README pair.
   async create(path: string, title?: string): Promise<Workspace> {
     const canonical = await resolveWorkspaceCreatePath(path)
+    await prepareWorkspaceExecution(this.ctx, canonical)
     return await this.enqueueOperation(() => this.createCanonical(canonical, title))
   }
 

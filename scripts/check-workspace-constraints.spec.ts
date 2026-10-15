@@ -168,7 +168,7 @@ const packagePayloads = [
     'lib/index.js', 'lib/startup.js', 'Containerfile', 'lib/engine.js', 'lib/workspaces.js',
     'lib/tool-request-repo-access.js', 'lib/vm.js', 'lib/shared-vm.js', 'lib/vm-previews.js',
     'lib/types-*.js', 'lib/vm-engine-*.js', 'lib/vm-process-*.js',
-    'lib/git-authorization-*.js', 'lib/types/**/*.d.ts',
+    'lib/git-authorization-*.js', 'lib/workspace-git-*.js', 'lib/types/**/*.d.ts',
   ]],
 ] as const
 

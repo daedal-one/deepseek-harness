@@ -6,6 +6,7 @@ import SharedVmRuntime, { sharedVmId, sharedVmPaths, type SharedVmConfig } from 
 import * as engine from '../src/vm-engine.ts'
 import * as transport from '../src/vm-process.ts'
 import * as git from '../src/shared-git.ts'
+import { SharedVmSelection } from '../src/shared-vm-selection.ts'
 import type { LocalContainerProcessHandle, LocalContainerProcessRequest } from '../src/types.ts'
 
 vi.mock('node:fs/promises', async importOriginal => ({
@@ -98,6 +99,59 @@ describe('shared environment directory mapping', () => {
 })
 
 describe('shared VM attachment', () => {
+  it('serializes concurrent selections, publishes their shared mapping, and reuses the committed mount', async () => {
+    let mounts: engine.VmDirectoryMount[] = []
+    vi.spyOn(SharedVmSelection.prototype, 'open').mockResolvedValue()
+    vi.spyOn(SharedVmSelection.prototype, 'recover').mockResolvedValue()
+    vi.spyOn(SharedVmSelection.prototype, 'mounts', 'get').mockImplementation(() => mounts)
+    const entered = Promise.withResolvers<undefined>(); const ready = Promise.withResolvers<undefined>()
+    const select = vi.spyOn(SharedVmSelection.prototype, 'select').mockImplementation(async (source) => {
+      entered.resolve(undefined); await ready.promise
+      mounts = [{ source, path: '/workspace/selected-test' }]
+    })
+    const close = vi.spyOn(SharedVmSelection.prototype, 'close').mockResolvedValue()
+    const test = await fixture({ workspaceSelection: { roots: ['/repositories'], directory: '/private/state', maxMounts: 4, maxStateBytes: 4096 } })
+    await test.runtime.ensureReady()
+    const first = test.ctx.serial('workspace/prepare', '/repositories/selected', 'workspace')
+    const second = test.ctx.serial('workspace/prepare', '/repositories/selected', 'workspace')
+    try {
+      await entered.promise
+      expect(() => test.runtime.executionPath('/repositories/selected')).toThrow('configured workspace')
+      expect(select).toHaveBeenCalledOnce()
+    } finally { ready.resolve(undefined); await Promise.all([first, second]) }
+    expect(test.runtime.executionPath('/repositories/selected/file.txt')).toBe('/workspace/selected-test/file.txt')
+    expect(test.runtime.executionPath('/repositories/first')).toBe('/workspace/first')
+    expect(select).toHaveBeenCalledOnce()
+    await test.fiber.dispose()
+    expect(close).toHaveBeenCalledOnce()
+    expect(test.stop).not.toHaveBeenCalled()
+  })
+
+  it('rejects an unmounted Agent before publication and removes the listener on disposal', async () => {
+    const test = await fixture()
+    const payload = (cwd?: string) => ({ agent: { session: { header: { cwd } } } }) as never
+    await expect(test.ctx.serial('agent/prepare', payload('/repositories/first'))).resolves.toBeUndefined()
+    await expect(test.ctx.serial('agent/prepare', payload())).resolves.toBeUndefined()
+    await expect(test.ctx.serial('agent/prepare', payload('/unmounted'))).rejects.toThrow('select this workspace')
+    await expect(test.ctx.serial('agent/prepare', payload('relative'))).rejects.toThrow('select this workspace')
+    expect(test.process).not.toHaveBeenCalled()
+    await test.fiber.dispose()
+    await expect(test.ctx.serial('agent/prepare', payload('/unmounted'))).resolves.toBeUndefined()
+  })
+
+  it('reuses configured selections and rejects unmounted selections before tool execution', async () => {
+    const test = await fixture()
+    await expect(test.ctx.serial('workspace/prepare', '/repositories/first', 'workspace')).resolves.toBeUndefined()
+    await expect(test.ctx.serial('workspace/prepare', '/repositories/unmounted', 'workspace')).rejects.toThrow('workspaceSelection')
+    await expect(test.ctx.serial('workspace/prepare', '/workspace/guest-only', 'workspace')).rejects.toThrow('workspaceSelection')
+    await expect(test.ctx.serial('workspace/prepare', '/workspace/guest-only', 'session')).resolves.toBeUndefined()
+    await expect(test.ctx.serial('workspace/prepare', '/repositories/first/file', 'workspace')).resolves.toBeUndefined()
+    await expect(test.ctx.serial('workspace/prepare', 'relative', 'session')).rejects.toThrow('fully qualified')
+    expect(test.process).not.toHaveBeenCalled()
+    await test.fiber.dispose()
+    await expect(test.ctx.serial('workspace/prepare', '/repositories/unmounted', 'workspace')).resolves.toBeUndefined()
+  })
+
   it('passes configured authorization only to ordinary commands', async () => {
     const authorize = vi.fn(async () => ['GIT_CONFIG_COUNT=1', 'GIT_CONFIG_KEY_0=credential.helper', 'GIT_CONFIG_VALUE_0='])
     const test = await fixture({}, () => vi.spyOn(git, 'sharedGitAuthorization').mockReturnValue(authorize))
@@ -232,5 +286,127 @@ describe('shared VM attachment', () => {
     expect(controller.terminate).toHaveBeenCalledOnce()
     expect(other.terminate).not.toHaveBeenCalled()
     expect(test.stop).not.toHaveBeenCalled()
+  })
+
+  it('decodes split stdout and stderr frames without changing command ownership', async () => {
+    const test = await fixture(); const owned = handle()
+    test.process.mockResolvedValue(owned.value)
+    const operation = test.runtime.executeController({ argv: ['/bin/true'], stdin: Buffer.alloc(0), maxOutputBytes: 64, deadlineMs: 1000 })
+    const frame = (channel: number, content: string) => {
+      const bytes = Buffer.from(content); const header = Buffer.alloc(8)
+      header[0] = channel; header.writeUInt32BE(bytes.length, 4)
+      return Buffer.concat([header, bytes])
+    }
+    const output = frame(1, 'result'); const error = frame(2, 'diagnostic')
+    owned.value.stream.push(output.subarray(0, 10))
+    owned.value.stream.push(Buffer.concat([output.subarray(10), error]))
+    owned.finish()
+    await expect(operation).resolves.toMatchObject({ exitCode: 0, stdout: Buffer.from('result'), stderr: Buffer.from('diagnostic') })
+  })
+
+  it.each([
+    { frame: [3, 0, 0, 0, 0, 0, 0, 0], reason: 'invalid controller frame' },
+    { frame: [1, 1, 0, 0, 0, 0, 0, 0], reason: 'invalid controller frame' },
+    { frame: [1, 0, 1, 0, 0, 0, 0, 0], reason: 'invalid controller frame' },
+    { frame: [1, 0, 0, 1, 0, 0, 0, 0], reason: 'invalid controller frame' },
+    { frame: [1], reason: 'stream incomplete' },
+  ])('rejects malformed or unfinished controller transport: $frame', async ({ frame, reason }) => {
+    const test = await fixture(); const owned = handle(); test.process.mockResolvedValue(owned.value)
+    const operation = test.runtime.executeController({ argv: ['/bin/true'], stdin: Buffer.alloc(0), maxOutputBytes: 64, deadlineMs: 1000 })
+    owned.value.stream.push(Buffer.from(frame)); owned.finish()
+    await expect(operation).rejects.toThrow(reason)
+  })
+
+  it.each([
+    { exitCode: null },
+    { exitCode: 0, error: 'provider failure' },
+  ])('rejects a failed controller outcome: %j', async (result) => {
+    const test = await fixture(); const owned = handle()
+    test.process.mockResolvedValue({ ...owned.value, done: Promise.resolve(result) })
+    const operation = test.runtime.executeController({ argv: ['/bin/true'], stdin: Buffer.alloc(0), maxOutputBytes: 64, deadlineMs: 1000 })
+    owned.finish(); await expect(operation).rejects.toThrow('controller failed')
+  })
+
+  it.each(['deadline', 'caller'] as const)('reports %s cancellation after joining its controller', async (kind) => {
+    const test = await fixture(); const owned = handle(); const caller = new AbortController()
+    const entered = Promise.withResolvers<undefined>()
+    test.process.mockImplementation(async (_config, _name, request) => {
+      request.signal?.addEventListener('abort', owned.finish, { once: true }); entered.resolve(undefined)
+      return owned.value
+    })
+    vi.useFakeTimers()
+    try {
+      const operation = test.runtime.executeController({ argv: ['/bin/true'], stdin: Buffer.alloc(0), maxOutputBytes: 64, deadlineMs: 1000, ...kind === 'caller' ? { signal: caller.signal } : {} })
+      const rejected = expect(operation).rejects.toThrow(kind === 'deadline' ? 'deadline' : 'aborted')
+      await entered.promise
+      if (kind === 'caller') caller.abort()
+      else await vi.advanceTimersByTimeAsync(1000)
+      await rejected
+      expect(owned.terminate).toHaveBeenCalledOnce()
+    } finally { vi.useRealTimers() }
+  })
+
+  it('retains both controller and cleanup failures', async () => {
+    const test = await fixture(); const owned = handle()
+    owned.terminate.mockRejectedValueOnce(new Error('cleanup failed'))
+    test.process.mockResolvedValue(owned.value)
+    const operation = test.runtime.executeController({ argv: ['/bin/true'], stdin: Buffer.alloc(0), maxOutputBytes: 64, deadlineMs: 1000 })
+    owned.value.stream.push(Buffer.from([3, 0, 0, 0, 0, 0, 0, 0])); owned.finish()
+    await expect(operation).rejects.toThrow('controller cleanup unconfirmed')
+  })
+
+  it('rejects invalid command bounds and environment configuration', async () => {
+    await expect(fixture({ maxLiveProcesses: 0 })).rejects.toThrow('invalid command limit')
+    await expect(fixture({ environment: { SECRET: 'private' } })).rejects.toThrow('secret command environment')
+    await expect(fixture({ gitRemotes: [] })).resolves.toHaveProperty('runtime')
+    const test = await fixture()
+    await expect(test.runtime.executeController({ argv: ['/bin/true'], stdin: Buffer.alloc(0), maxOutputBytes: 0, deadlineMs: 1 })).rejects.toThrow('invalid controller bounds')
+    await expect(test.runtime.createProcess({ ...request, environment: { INVALID: 'line\nfeed' } })).rejects.toThrow('command environment')
+  })
+
+  it('reports unconfirmed command removal during teardown without stopping the VM', async () => {
+    const test = await fixture(); const owned = handle()
+    const errors = vi.spyOn(test.ctx.logger, 'error').mockImplementation(() => {})
+    test.process.mockResolvedValue({ ...owned.value, waitForRemoval: async () => false })
+    await test.runtime.createProcess(request)
+    await test.fiber.dispose()
+    expect(errors).toHaveBeenCalled()
+    expect(test.stop).not.toHaveBeenCalled()
+  })
+
+  it('rejects a non-running retained VM without restarting or replacing it', async () => {
+    const test = await fixture({}, () => vi.spyOn(engine.IncusDevelopmentVms.prototype, 'state').mockResolvedValue('Frozen'))
+    await expect(test.runtime.ensureReady()).rejects.toThrow('operator action')
+    expect(test.start).not.toHaveBeenCalled()
+  })
+
+  it('joins initial VM verification when disposal starts during opening', async () => {
+    const entered = Promise.withResolvers<undefined>(); const release = Promise.withResolvers<undefined>()
+    const test = await fixture({}, () => vi.spyOn(engine.IncusDevelopmentVms.prototype, 'verify').mockImplementation(async () => {
+      entered.resolve(undefined); await release.promise
+    }))
+    const readiness = expect(test.runtime.ensureReady()).rejects.toThrow('closing')
+    await entered.promise
+    const disposal = test.fiber.dispose(); release.resolve(undefined)
+    await readiness; await disposal
+    expect(test.start).not.toHaveBeenCalled()
+  })
+
+  it('rejects controller allocation failure before launching a process', async () => {
+    const test = await fixture()
+    test.process.mockRejectedValueOnce(new Error('allocation failed'))
+    await expect(test.runtime.executeController({ argv: ['/bin/true'], stdin: Buffer.alloc(0), maxOutputBytes: 64, deadlineMs: 1000 })).rejects.toThrow('allocation failed')
+  })
+
+  it('releases a command slot when the provider rejects its completion', async () => {
+    const test = await fixture({ maxLiveProcesses: 1 }); const owned = handle()
+    const completed = Promise.withResolvers<{ exitCode: number }>()
+    test.process.mockResolvedValueOnce({ ...owned.value, done: completed.promise })
+    await test.runtime.createProcess(request)
+    const rejected = expect(completed.promise).rejects.toThrow('transport failed')
+    completed.reject(new Error('transport failed')); await rejected; owned.finish()
+    const next = handle(); test.process.mockResolvedValueOnce(next.value)
+    await expect(test.runtime.createProcess(request)).resolves.toBe(next.value)
+    next.finish()
   })
 })

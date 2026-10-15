@@ -57,7 +57,7 @@ export interface UiWorkspace {
    */
   forkSession(sessionId: SessionId): Promise<void>
   /**
-   * Resolve the reusable or newly created blank Session for a Workspace.
+   * Admit the reusable or newly created blank Session in its Workspace execution environment.
    * @param workspaceId - target Workspace.
    * @returns a Session already addressable through the Session Controller.
    */
@@ -178,6 +178,7 @@ class UiWorkspaceService extends Service implements UiWorkspace {
 
     const archived = this.workspaces.list.getSnapshot().archivedSessionIds
     const sessions = this.sessions.list.getSnapshot()
+    let sessionId: SessionId | undefined
     for (const id of sessions.ids) {
       const summary = sessions.byId[id]
       if (
@@ -186,11 +187,13 @@ class UiWorkspaceService extends Service implements UiWorkspace {
         summary.cwd === workspace.path &&
         workspace.sessionIds.includes(summary.id) &&
         !archived.includes(summary.id)
-      )
-        return summary.id
+      ) {
+        sessionId = summary.id
+        break
+      }
     }
 
-    const attempt = this.sessions.create({ workspaceId }).finally(() => {
+    const attempt = this.sessions.create({ workspaceId, ...sessionId === undefined ? {} : { sessionId } }).finally(() => {
       this.connecting.delete(workspaceId)
     })
     this.connecting.set(workspaceId, attempt)

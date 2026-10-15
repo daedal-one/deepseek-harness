@@ -85,6 +85,20 @@ Every session in the environment shares files, Git branches, the index, installe
 
 The [qualification record](tests/shared-vm-qualification.md) distinguishes tested server behavior from remaining activation checks. The [shared-runtime source](src/shared-vm.ts) owns its required configuration. Controller bounds limit individual tool requests, not files written by ordinary guest commands.
 
+To admit directories chosen through Workspace registration or Session creation, configure `workspaceSelection` on the shared runtime. `roots` names canonical parent directories whose strict descendants may be selected; selecting a parent root itself is forbidden. `directory` names an existing owner-only Host state directory outside every guest mount and selection root. `maxMounts` bounds retained selections, and `maxStateBytes` bounds the complete manifest. Without this configuration, a directory outside the existing mounts rejects selection with an operator-facing correction before registration or Session creation.
+
+```yaml
+workspaceSelection:
+  roots: [/srv/projects]
+  directory: /srv/dsh-state/selected-workspaces
+  maxMounts: 64
+  maxStateBytes: 65536
+```
+
+Selection attaches only the chosen disk-backed directory at a stable generated guest path and waits for the mount to be usable. Existing commands and services keep running; neither Web nor the VM restarts. One Host process leases the private mount manifest, which records intent before attachment and readiness before successful selection. Restart validates and restores the same mounts; interrupted intent resumes only against the exact prior or prospective VM device list. Unknown devices or invalid state refuse attachment rather than deleting devices or changing another mount. Mounts remain retained when a Workspace registration is deleted. Git authorization remains limited to `gitRemotes`; selecting a directory adds no credential grant.
+
+Repeated live attachment requires Incus to allocate actual free PCI ports and the VM to have available hotplug ports. The index-based allocator in Incus 6.0.0 can collide with an existing device or select a missing bus. Qualify the deployed Incus implementation before enabling selection. Attachment failure rejects Workspace admission and retains recovery intent; the runtime never restarts the VM to reclaim ports.
+
 Optional `gitRemotes` entries authorize ordinary commands to use configured repositories: each requires an exact mounted `source`, a canonical credential-free HTTPS `url`, an absolute `credentialCommand`, and bounded `credentialTimeoutMs`. The host helper must return a repository-scoped credential expiring within one hour. Commands receive URL-scoped Git headers through the sealed in-memory process envelope; filesystem controllers receive none. Standard same-host SSH aliases for that repository select HTTPS without changing Git configuration. Custom HTTPS ports do not infer SSH aliases. Host credentials and helper executables are not mounted. Concurrent issuance is coalesced; failures stop launch without retry, and cancellation or shutdown prevents launch after issuance. Credentials refresh before a new command when less than a minute remains; restart long-lived terminal processes to obtain refreshed credentials. All commands in this trusted environment can use every configured repository grant.
 
 ### Conversation repositories
@@ -194,7 +208,7 @@ Lifetime expiry and Cordis disposal stop the container, force-remove it when nee
 | [`src/types.ts`](src/types.ts) | Owner-facing Engine request, inspection, and diagnostic types. |
 | [`tests/local-container-runtime.spec.ts`](tests/local-container-runtime.spec.ts) | Fake Engine API lifecycle and fail-closed unit coverage. |
 | [`tests/podman.e2e.ts`](tests/podman.e2e.ts) | Environment-gated real Podman Engine API inspection. |
-| — | No runtime invariant companion is published because the owner has one readiness transaction and no independent mutable relationship to compare. |
+| — | No runtime invariant companion is published because startup and attachment verify the complete VM devices before readiness, and selected path mappings derive from the committed manifest. |
 
 
 The published `./engine` adapter supports independent resource owners. Container attach sends an empty HTTP upgrade request and preserves the exact stdin pipe bytes; it never forwards serialized attach options into the container. The caller owns container restrictions, channel lifetime and awaited removal.

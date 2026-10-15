@@ -3809,7 +3809,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: 'async create(path: string, title?: string): Promise<Workspace>',
-        description: 'Create or reuse a workspace for an existing directory. The fully qualified path is canonicalized through `fs.realpath`; a relative, nonexistent, or non-directory path rejects with WorkspacePathInvalidError before any registration write. Persistence failures retain their original type. Repeated calls for the same canonical path return the existing entity without changing its title. A newly created workspace is prepended to the durable registry order. Different canonical paths may share a display title.',
+        description: 'Create or reuse a workspace for an existing directory. The fully qualified path is canonicalized through `fs.realpath`; a relative, nonexistent, or non-directory path rejects with WorkspacePathInvalidError before any registration write. Persistence failures retain their original type. Execution providers must finish `workspace/prepare` before registration; preparation failure rejects with WorkspaceExecutionUnavailableError without a registration write. Repeated calls for the same canonical path return the existing entity without changing its title. A newly created workspace is prepended to the durable registry order. Different canonical paths may share a display title.',
         parameters: [{ name: 'path', description: 'Existing directory to own, in a fully qualified path spelling.' }, { name: 'title', description: 'Display title used only when a new record is created.' }],
         returns: 'the existing or newly durable workspace.',
       },
@@ -4454,6 +4454,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'A workflow run started — the script\'s meta block validated, the body about to execute.',
     description: 'A workflow run started — the script\'s meta block validated, the body about to execute. Paired with Events[\'workflow/end\'].',
     parameters: [{ name: 'info', description: 'the run\'s identity snapshot (id + meta).' }],
+  },
+  {
+    name: 'workspace/prepare',
+    mode: 'serial',
+    signature: '\'workspace/prepare\'(path: string, kind: WorkspacePreparationKind): Promise<void>',
+    summary: 'Prepare the selected directory in the composed execution world before publication.',
+    description: 'Prepare the selected directory in the composed execution world before publication.',
+    parameters: [{ name: 'path', description: 'selected Host working directory; registration callers supply its canonical spelling.' }, { name: 'kind', description: 'whether the selection names a Host Workspace or a Session execution directory.' }],
   },
   {
     name: 'workspace/quiesce',
@@ -7922,6 +7930,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'WorkspaceOrderValue',
     declaration: 'export interface WorkspaceOrderValue {\n    readonly workspaceIds: readonly WorkspaceId[];\n}',
+  },
+  {
+    name: 'WorkspacePreparationKind',
+    declaration: 'export type WorkspacePreparationKind = \'workspace\' | \'session\';',
   },
   {
     name: 'WorkspaceProvenance',
