@@ -78,19 +78,60 @@ def verify(config, instance):
     return devices == after
 
 
+def guest_catalogue(config):
+    """Observe the exact guest mount without accepting another source or filesystem."""
+    result = json.loads(incus(config, ['exec', config['instance'], '--', '/usr/bin/findmnt',
+                                     '--json', '--list', '--output', 'TARGET,SOURCE,FSTYPE']))
+    exports.require(isinstance(result, dict) and isinstance(result.get('filesystems'), list),
+                    'Invalid guest mount inventory')
+    mounts = result['filesystems']
+    exports.require(all(isinstance(item, dict) and all(isinstance(item.get(key), str)
+                        for key in ['target', 'source', 'fstype']) for item in mounts),
+                    'Invalid guest mount inventory')
+    matches = [item for item in mounts if item['target'] == config['device']['path']]
+    exports.require(not matches or matches == [{'target': config['device']['path'],
+                    'source': 'incus_' + config['deviceName'], 'fstype': 'virtiofs'}],
+                    'Guest catalogue mount differs from the assessed device')
+    return bool(matches)
+
+
+def settle_guest_catalogue(config, present):
+    """Mount or unmount only the assessed catalogue in an already-running VM."""
+    if guest_catalogue(config) == present:
+        return
+    target = config['device']['path']
+    if present:
+        incus(config, ['exec', config['instance'], '--', '/bin/mkdir', '-p', '--', target])
+        incus(config, ['exec', config['instance'], '--', '/bin/mount', '-t', 'virtiofs',
+                       'incus_' + config['deviceName'], target])
+    else:
+        incus(config, ['exec', config['instance'], '--', '/bin/umount', '--', target])
+    exports.require(guest_catalogue(config) == present, 'Guest catalogue mount did not settle')
+
+
 def reconcile(config, owner, revision):
     """Change only the exact catalogue device and refuse destructive alias downgrades."""
-    attached = verify(config, observe(config))
+    instance = observe(config)
+    attached = verify(config, instance)
+    exports.require(instance.get('status') in ['Running', 'Stopped'],
+                    'Workspace adoption requires a running or stopped VM')
+    running = instance['status'] == 'Running'
     legacy = revision == config['legacyRevision']
     if legacy:
         exports.require(not any(owner.names()), 'Retained workspace aliases require a capable runtime; downgrade refused')
+        if running:
+            settle_guest_catalogue(config, False)
         if attached:
             incus(config, ['config', 'device', 'remove', config['instance'], config['deviceName']])
     elif not attached:
+        if running:
+            guest_catalogue(config)
         device = config['device']
         incus(config, ['config', 'device', 'add', config['instance'], config['deviceName'], 'disk',
                        'source=' + device['source'], 'path=' + device['path']])
     exports.require(verify(config, observe(config)) == (not legacy), 'Workspace adoption did not settle')
+    if not legacy and running:
+        settle_guest_catalogue(config, True)
     return {'revision': revision, 'catalogueAttached': not legacy, 'sessionsUntouched': True}
 
 
