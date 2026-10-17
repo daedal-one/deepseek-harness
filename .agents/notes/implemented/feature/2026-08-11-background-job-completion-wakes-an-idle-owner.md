@@ -67,7 +67,7 @@ The bound exists because this chain is self-exciting in a way subagent settlemen
 
 A spent budget is restored only by user input. An unattended agent that exhausts it collects its remaining notices whenever something else opens a turn, and nothing re-arms it in the meantime.
 
-A notice pending on an idle owner under `quiet` still dies with that owner's disposal, unchanged from before: the disposal cancel clears the unclaimed inbox and the log keeps the insert/cancel pair as the record. The [settlement delivery note](2026-08-06-manager-owned-subagent-settlement-delivery.md) owns the offline-mailbox discussion this would need.
+A notice pending on an idle owner under `quiet` remains in its durable inbox across factory disposal. Resume reconstructs it for the next ordinary wake, as defined by the [inbox preservation decision](../architecture/2026-10-17-shared-workspace-capacity.md). Explicit cancellation can discard it. The [settlement delivery note](2026-08-06-manager-owned-subagent-settlement-delivery.md) owns delivery to an already offline owner.
 
 Whether a completion extends the running turn or opens a new one is a genuine race for short-lived tasks, so no authored transcript can hold both orders. Assembled coverage asserts the outcome; the lane choice is pinned in unit tests.
 

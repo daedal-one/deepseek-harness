@@ -1,0 +1,14 @@
+[Unit]
+Description=Retained exact-directory workspace exports
+Before=dsh-web.service
+PartOf=dsh-web.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/dsh-workspace-exports prepare
+ExecStart=/usr/bin/python3 -I /usr/local/libexec/dsh-workspace-exports/adoption.py
+RemainAfterExit=yes
+PrivateMounts=no
+
+[Install]
+RequiredBy=dsh-web.service

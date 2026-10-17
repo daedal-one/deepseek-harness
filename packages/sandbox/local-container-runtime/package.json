@@ -67,6 +67,7 @@
     "lib/vm-process-*.js",
     "lib/git-authorization-*.js",
     "lib/workspace-git-*.js",
+    "lib/workspace-admission-*.js",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",

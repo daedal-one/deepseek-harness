@@ -182,6 +182,16 @@ describe('development VM host controls', () => {
     expect(readiness?.at(-1)).toContain('health: (starting|unhealthy)')
   })
 
+  it('restores namespace exports after device setup and before guest service readiness', async () => {
+    const test = fixture(); const steps: string[] = []
+    const engine = new IncusDevelopmentVms(config, async (argv) => {
+      if (argv[0] === 'start' || argv[0] === 'exec') steps.push(argv[0])
+      return await test.run(argv)
+    })
+    await engine.start(id, async () => { steps.push('restore exports') })
+    expect(steps).toEqual(['start', 'restore exports', 'exec'])
+  })
+
   it('does not release a stopped guest while a queued reboot can restart it', async () => {
     const test = fixture(); let queries = 0
     const engine = new IncusDevelopmentVms(config, async (argv) => {

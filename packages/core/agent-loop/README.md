@@ -68,6 +68,8 @@ const handle = await ctx.agents.create({
 
 Every inbox mutation commits one normalized `agent/inbox/spliced` event. The projection registry folds that event synchronously, so the live projection reflects the splice when `Session.append()` returns. Insertions, edits, removals, claiming, and cancellation replay through the same standard splice coordinates. Ordinary removals carry `outcome: 'canceled'` and emit `agent/inbox/discarded { message }`; claiming uses pure deletions with no outcome and emits `agent/inbox/claimed`. Every insertion emits `agent/inbox/inserted { message }`. `MessageId` stays unique across both pending lists. Consumers that need a removed message use the claimed or discarded notification instead of depending on a pre-splice `session/event` view.
 
+Factory disposal aborts active execution and retains unclaimed durable inbox messages. Resume restores those messages without starting a model request; the next normal wake passes them through turn admission. Explicit `agent.cancel()` continues to discard pending messages unless `keepInbox` is set.
+
 ### What a step does
 
 Each step sends the session's derived history — with the latest non-empty `system/message` node as the effective prompt, or no system messages when the rendered prompt is empty — and its visible tool schemas; the model's tool calls run through the guarded tool pipeline and every accepted fact is appended to the session log before the next step derives from it. Parallel-safe calls may overlap up to `maxParallelToolCalls`; exclusive calls run alone as ordering barriers. Cancellation is cooperative: `agent.cancel()` aborts the current activity and, unless `keepInbox` is set, clears pending work; a cancelled stream finalizes the text already delivered to the user.

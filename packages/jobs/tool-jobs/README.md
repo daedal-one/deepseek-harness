@@ -7,7 +7,7 @@ kind: "package-reference"
 
 ## Summary
 
-Use `dsh-tool-jobs` to inspect and control background commands, PTY work, and subagents through `job_output`, `job_list`, and `job_kill`. Reads can wait within a configured timeout, list results identify each job's kind and status, and cancellation settles only after the work stops. When owned work finishes, the agent receives an in-session notice: busy agents receive it in their next step, while idle agents may be woken by a bounded follow-up turn. Configuration controls wait limits, completion delivery, and consecutive wakeups. Stream output is consumed by one reader, and pending notices do not survive owner disposal.
+Inspect and control background commands, PTY work, and subagents through `job_output`, `job_list`, and `job_kill`. Reads wait within configured bounds, lists show each job's kind and status, and cancellation waits for work to stop. Completion notices reach a busy agent's next step or a bounded follow-up turn for an idle owner; configuration controls waits, delivery, and consecutive wakeups. Stream output has one consumer; unclaimed notices survive factory disposal in the durable inbox, while job records and unread output retain their runtime lifetime.
 
 ## Table of Contents
 
@@ -58,7 +58,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### What can go wrong
 
-An agent whose composition loads no `tool-jobs` cannot start background work: this plugin's controller is what arms producers' `ctx.jobs.start()`. A model-supplied wait longer than `maxWaitTimeoutMs` is clamped down to the cap, and a timed-out wait returns `[status: running]` and leaves the job alive rather than failing. A completion notice pending on an idle owner does not survive that owner's disposal.
+An agent whose composition loads no `tool-jobs` cannot start background work: this plugin's controller is what arms producers' `ctx.jobs.start()`. A model-supplied wait longer than `maxWaitTimeoutMs` is clamped down to the cap, and a timed-out wait returns `[status: running]` and leaves the job alive rather than failing. Resume preserves an unclaimed completion notice for the next ordinary wake; it does not restore an expired job record or unread output.
 
 -----
 
@@ -170,7 +170,7 @@ These limits define when the tools are a poor fit. They are current package cons
 
 - **A settlement inside the driver's retirement window still strands its notice** — between the turn loop's last inbox check and the driver committing its idle phase the owner still reads as busy, so the notice is injected and nothing wakes. Steering has the same hole; closing it belongs to `agent-loop`.
 - **A spent wake budget is not restored by time** — only user-authored input refills it, so an unattended agent whose budget ran out collects its remaining notices on the next turn something else opens.
-- **A notice pending on an idle owner does not survive that owner's disposal** — the disposal cancel clears the unclaimed inbox, and the log keeps the insert/cancel pair as the record.
+- **A retained notice does not restore its job record** — factory disposal preserves unclaimed inbox messages, while job records and unread output remain runtime-owned. Explicit cancellation can discard pending notices.
 - **Stream reads are single-consumer** — independent observers need another runtime API.
 - **Unowned jobs have no session fence** — external callers must supply policy or avoid them.
 

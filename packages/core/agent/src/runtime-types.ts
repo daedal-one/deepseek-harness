@@ -225,7 +225,7 @@ declare module './types.ts' {
    * Submit steering for the nearest step. An idle driver starts a turn;
    * a running driver consumes it at its next step boundary.
    * A rejected step leaves steering parked in the inbox until the next
-   * wake; cancellation or disposal may discard pending steering.
+   * wake; cancellation may discard pending steering.
    * @param message - identified steering content and the source that supplied it.
    */
     steer(message: UserMessage): void
@@ -235,7 +235,7 @@ declare module './types.ts' {
    * driver. A running driver claims it at the nearest later step boundary;
    * idle drivers leave it pending until follow-up or steering
    * wakes them. It may miss a request whose pre-step already claimed its
-   * batch. Cancellation or disposal may discard pending context.
+   * batch. Cancellation may discard pending context.
    * @param message - identified injected context and the source that supplied it.
    */
     inject(message: UserMessage): void

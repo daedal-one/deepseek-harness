@@ -269,8 +269,8 @@ export function apply(ctx: Context, config: Config): void {
   // A busy owner is injected: the notice waits in its next-step inbox, which
   // the turn cannot close over, so jobs settling together cost one step. An
   // idle owner is woken instead, because an unclaimed notice is a completion
-  // the model never learns about. Either way, disposal before the claim
-  // discards it with the owner, and teardown settlements arrive `reported`.
+  // the model never learns about. Unclaimed notices survive factory disposal
+  // in the durable inbox; teardown settlements arrive `reported`.
   //
   // The registry routes each settlement to the listeners its owner's scope
   // chain reaches, so a mount under one preset never sees another preset's

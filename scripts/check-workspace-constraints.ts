@@ -164,6 +164,7 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
     'lib/vm-process-*.js',
     'lib/git-authorization-*.js',
     'lib/workspace-git-*.js',
+    'lib/workspace-admission-*.js',
   ],
   '@deepseek-ai/dsh-experimental-operation-clm': ['lib/tokenizer.js', 'lib/local-http.js'],
   '@deepseek-ai/dsh-experimental-operation': ['lib/agent.js', 'lib/policy-*.js'],

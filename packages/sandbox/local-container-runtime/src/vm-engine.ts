@@ -405,10 +405,12 @@ export class IncusDevelopmentVms {
 
   /** Start a verified instance; await its source mount and systemd command execution.
    * @param id - retained workspace identifier.
+   * @param prepare - restore namespace-local exports after device setup, before guest toolchain readiness.
    */
-  async start(id: ConversationWorkspaceId): Promise<void> {
+  async start(id: ConversationWorkspaceId, prepare?: () => Promise<void>): Promise<void> {
     await this.verifyIdentity(id)
     await this.call(['start', this.name(id)])
+    await prepare?.()
     const deadline = Date.now() + this.config.timeoutMs
     for (;;) {
       try {

@@ -2,6 +2,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { prepareWorkspaceExecution } from '@deepseek-ai/dsh-workspace'
 import WorkspaceRegistry from '@deepseek-ai/dsh-workspace'
@@ -26,23 +27,29 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-async function fixture() {
+async function fixture(catalogue = false) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'dsh-mount-runtime-')))
   directories.push(directory)
   const root = join(directory, 'projects'); const workspace = join(directory, 'workspace'); const state = join(directory, 'state')
   await Promise.all([mkdir(root), mkdir(workspace), mkdir(state, { mode: 0o700 })])
   const source = join(root, 'selected'); await mkdir(source)
+  const portal = join(directory, 'catalogue'); await mkdir(portal)
+  const exportsState = join(state, 'exports.json'); await writeFile(exportsState, '[]')
   const config: SharedVmConfig = {
     command: '/usr/bin/incus', pythonCommand: '/usr/bin/python3', devicesRoot: '/var/lib/incus/devices',
     project: 'test', storage: 'test', network: 'test', acl: 'test', hostAddresses: ['203.0.113.1'],
     image: 'a'.repeat(64), workspaceUid: 1000, workspaceGid: 1000, maxInstances: 4,
     cpus: 4, memoryBytes: 8 * 1024 ** 3, diskBytes: 64 * 1024 ** 3,
     timeoutMs: 10000, readinessPollMs: 1, maxOutputBytes: 8192,
-    environmentId: 'selection-runtime', workspaceDirectory: workspace, repositories: [],
-    workspaceSelection: { roots: [root], directory: state, maxMounts: 4, maxStateBytes: 8192 },
+    environmentId: 'selection-runtime', workspaceDirectory: workspace,
+    repositories: catalogue ? [{ source: portal, path: '/workspace/projects' }] : [],
+    ...catalogue ? { directoryExports: { command: process.execPath,
+      args: [fileURLToPath(new URL('./fixtures/directory-exports.mjs', import.meta.url)), exportsState, '/workspace/projects', ''],
+      source: portal, path: '/workspace/projects', directory: state, timeoutMs: 30000, maxOutputBytes: 8192 } }
+      : { workspaceSelection: { roots: [root], directory: state, maxMounts: 4, maxStateBytes: 8192 } },
     environment: { HOME: '/root', PATH: '/usr/bin:/bin' }, maxLiveProcesses: 4,
   }
-  const mounts: engine.VmDirectoryMount[] = []
+  const mounts: engine.VmDirectoryMount[] = [...config.repositories]
   let failReadiness = 0
   const command = vi.fn(async (args: readonly string[]) => {
     if (args[0] === 'config') {
@@ -70,8 +77,8 @@ async function fixture() {
 
 // Incus Host directories and ownership checks use POSIX path and uid semantics.
 describe.skipIf(process.platform === 'win32')('Workspace preparation over the shared runtime', () => {
-  it('loads the real Workspace and shared-VM providers from cordis.yml before accepting a selected path', async () => {
-    const test = await fixture()
+  it.each([false, true])('loads the real Workspace and shared-VM providers from cordis.yml (catalogue=%s)', async (catalogue) => {
+    const test = await fixture(catalogue)
     const filename = join(test.root, 'cordis.yml')
     await writeFile(filename, JSON.stringify([
       { id: 'runtime', name: 'cordis:selected-vm', config: test.config },
@@ -89,9 +96,10 @@ describe.skipIf(process.platform === 'win32')('Workspace preparation over the sh
     })
     contexts.push(ctx)
     const workspace = await ctx.workspaceRegistry.create(test.source)
-    expect(ctx.executionRuntime.executionPath(workspace.path)).toMatch(/^\/workspace\/selected-/)
-    expect(test.command.mock.calls.filter(([args]) => args[0] === 'config')).toHaveLength(1)
-    await expect(ctx.workspaceRegistry.create(test.root)).rejects.toThrow('outside')
+    const expected = catalogue ? /^\/workspace\/projects\/[a-f0-9]{64}$/ : /^\/workspace\/selected-/
+    expect(ctx.executionRuntime.executionPath(workspace.path)).toMatch(expected)
+    expect(test.command.mock.calls.filter(([args]) => args[0] === 'config')).toHaveLength(catalogue ? 0 : 1)
+    if (!catalogue) await expect(ctx.workspaceRegistry.create(test.root)).rejects.toThrow('outside')
     expect(ctx.workspaceRegistry.list().map(value => value.path)).toEqual([test.source])
   })
 

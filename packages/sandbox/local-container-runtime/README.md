@@ -85,19 +85,29 @@ Every session in the environment shares files, Git branches, the index, installe
 
 The [qualification record](tests/shared-vm-qualification.md) distinguishes tested server behavior from remaining activation checks. The [shared-runtime source](src/shared-vm.ts) owns its required configuration. Controller bounds limit individual tool requests, not files written by ordinary guest commands.
 
-To admit directories chosen through Workspace registration or Session creation, configure `workspaceSelection` on the shared runtime. `roots` names canonical parent directories whose strict descendants may be selected; selecting a parent root itself is forbidden. `directory` names an existing owner-only Host state directory outside every guest mount and selection root. `maxMounts` bounds retained selections, and `maxStateBytes` bounds the complete manifest. Without this configuration, a directory outside the existing mounts rejects selection with an operator-facing correction before registration or Session creation.
+To admit directories chosen through Workspace registration or Session creation without a per-directory PCI device, configure `directoryExports`. One ordinary operator-provisioned catalogue device appears in `repositories`; the root-owned controller attaches exact selected sources inside its virtiofsd sandbox namespace. The [operator reference](../../../scripts/workspace-exports/README.md) owns installation, authorized selection roots, startup ordering and recovery. Without a selection provider, a directory outside existing mounts rejects before Workspace or Session creation.
 
 ```yaml
-workspaceSelection:
-  roots: [/srv/projects]
-  directory: /srv/dsh-state/selected-workspaces
-  maxMounts: 64
-  maxStateBytes: 65536
+repositories:
+  - source: /var/lib/dsh-workspace-exports/catalogue
+    path: /workspace/projects
+directoryExports:
+  command: /usr/bin/sudo
+  args: [-n, /usr/local/sbin/dsh-workspace-exports]
+  source: /var/lib/dsh-workspace-exports/catalogue
+  path: /workspace/projects
+  directory: /srv/dsh-state/export-lease
+  timeoutMs: 30000
+  maxOutputBytes: 65536
+maxActiveConversations: 8
+maxLiveProcesses: 32
 ```
 
-Selection attaches only the chosen disk-backed directory at a stable generated guest path and waits for the mount to be usable. Existing commands and services keep running; neither Web nor the VM restarts. One Host process leases the private mount manifest, which records intent before attachment and readiness before successful selection. Restart validates and restores the same mounts; interrupted intent resumes only against the exact prior or prospective VM device list. Unknown devices or invalid state refuse attachment rather than deleting devices or changing another mount. Mounts remain retained when a Workspace registration is deleted. Git authorization remains limited to `gitRemotes`; selecting a directory adds no credential grant.
+Selection waits for guest readiness before publishing a stable source-derived guest path. Existing commands and services keep running without Web or VM restart. Per-source records retain identity and interrupted intent; bounded pages restore any number of retained selections within available resources. The service holds an exclusive private lease while root owns the catalogue and records. Harness restart reuses existing namespace mounts; VM startup restores them after device setup, before guest toolchain readiness. Workspace deletion retains exports, and selection adds no Git grant. Retain existing native mounts at their original device indices and guest paths when adopting the catalogue.
 
-Repeated live attachment requires Incus to allocate actual free PCI ports and the VM to have available hotplug ports. The index-based allocator in Incus 6.0.0 can collide with an existing device or select a missing bus. Qualify the deployed Incus implementation before enabling selection. Attachment failure rejects Workspace admission and retains recovery intent; the runtime never restarts the VM to reclaim ports.
+`maxActiveConversations` optionally queues root turns in arrival order before model execution; idle Sessions hold no turn permit. Children share their root reservation until all associated turns settle. Existing `workspace/admission` events display waiting and record admission or cancellation. Shutdown preserves unclaimed durable inbox input, and resume reconstructs it for the next ordinary wake. This is an execution queue, not a limit on retained Session identities or scheduled follow-ups. `maxLiveProcesses` separately queues command attachments; caller cancellation withdraws its waiter and unconfirmed cleanup withholds capacity. Controller execution deadlines begin after command admission; a caller signal can cancel while waiting.
+
+The alternative `workspaceSelection` provider attaches a separate device per selected directory. Its `roots` authorize strict descendants, `directory` holds a private leased manifest outside guest sources and roots, and required `maxMounts` and `maxStateBytes` bound retained selections and the complete manifest. It cannot be combined with `directoryExports`. Repeated attachment requires actual free PCI ports; Incus 6.0.0's index allocator can collide with an existing device or select a missing bus. Qualify the deployed Incus and virtiofsd implementations for either provider. Attachment failures reject admission and retain recovery intent; the runtime never reboots the VM to obtain capacity.
 
 Optional `gitRemotes` entries authorize ordinary commands to use configured repositories: each requires an exact mounted `source`, a canonical credential-free HTTPS `url`, an absolute `credentialCommand`, and bounded `credentialTimeoutMs`. The host helper must return a repository-scoped credential expiring within one hour. Commands receive URL-scoped Git headers through the sealed in-memory process envelope; filesystem controllers receive none. Standard same-host SSH aliases for that repository select HTTPS without changing Git configuration. Custom HTTPS ports do not infer SSH aliases. Host credentials and helper executables are not mounted. Concurrent issuance is coalesced; failures stop launch without retry, and cancellation or shutdown prevents launch after issuance. Credentials refresh before a new command when less than a minute remains; restart long-lived terminal processes to obtain refreshed credentials. All commands in this trusted environment can use every configured repository grant.
 

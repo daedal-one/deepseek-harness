@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { describe, expect, it, vi } from 'vitest'
-import { createVmProcess } from '../src/vm-process.ts'
+import { createVmProcess, VmProcessCleanupUnconfirmed } from '../src/vm-process.ts'
 import type { DevelopmentVmConfig, VmCommand } from '../src/vm-engine.ts'
 
 const childProcess = vi.hoisted(() => ({ spawn: vi.fn() }))
@@ -37,6 +37,21 @@ const config: DevelopmentVmConfig = {
 }
 
 describe('development VM process controls', () => {
+  it('marks failed envelope transfer with unconfirmed cleanup as retained capacity', async () => {
+    const child = attachedProcess(false)
+    const killed = vi.spyOn(child, 'kill')
+    childProcess.spawn.mockReturnValueOnce(child)
+    const control = vi.fn<VmCommand>(async () => { throw new Error('guest cleanup unavailable') })
+    const creating = createVmProcess(config, 'dsh-test', {
+      argv: ['/bin/sh'], cwd: '/workspace', environment: {}, tty: false, stdin: true,
+    }, control)
+    const rejected = expect(creating).rejects.toBeInstanceOf(VmProcessCleanupUnconfirmed)
+    child.stdout.write('invalid readiness')
+    await rejected
+    expect(killed).toHaveBeenCalled()
+    expect(control).toHaveBeenCalledOnce()
+  })
+
   it('waits for guest cleanup after losing the local attachment', async () => {
     const child = attachedProcess()
     childProcess.spawn.mockReturnValueOnce(child)

@@ -590,7 +590,7 @@ export class AgentLoop extends Service implements AgentFactory {
         if (machine === undefined) await machineReady.promise
         /* v8 ignore next -- setup failure untracks this disposer before resolving without a machine. */
         if (machine !== undefined) {
-          machine.cancel({ kind: 'disposed' })
+          machine.cancel({ kind: 'disposed' }, { keepInbox: true })
           await machine.whenIdle()
           await machine.scope.dispose()
         }

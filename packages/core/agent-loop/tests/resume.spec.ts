@@ -42,15 +42,6 @@ async function mountPersistentHarness(root: string, adapter: MockAdapter, compre
   return ctx
 }
 
-/** Remove every `session.lock` under the root: the POSIX forfeit-by-unlink escape hatch, without importing backend internals. */
-async function removeSessionLocks(dir: string): Promise<void> {
-  for (const entry of await readdir(dir, { withFileTypes: true })) {
-    const path = join(dir, entry.name)
-    if (entry.isDirectory()) await removeSessionLocks(path)
-    else if (entry.name === 'session.lock') await rm(path, { force: true })
-  }
-}
-
 /** Seed one stored session through the persistence seam (header minted by the store). */
 async function seedStoredSession(ctx: Context, sessionId: SessionId, events: readonly SessionEvent[]): Promise<void> {
   const detached = ctx.sessions.prepare(sessionId)
@@ -939,11 +930,7 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx2.fiber.dispose()
   })
 
-  // The crash simulation removes the wedged lifecycle's lock file, which only
-  // POSIX's orphan-inode forfeit honors; Windows pins the name until the
-  // process exits, and cross-process crash release is pinned by the jsonl
-  // two-process e2e.
-  it.skipIf(process.platform === 'win32')('a pending idle inject() survives persist + resume without a synthetic turn', async () => {
+  it('a pending idle inject() survives disposal and resume without a synthetic turn', async () => {
     const adapter1 = new MockAdapter([textResponse('answer')])
     const { ctx: ctx1, root } = await persistentHarness(adapter1)
     const a1 = (await ctx1.agents.create({ sessionId: SessionId('inject-sess'), meta: { cwd: '/w' }, agentOptions: { provider: 'mock', model: 'mock' } })).agent
@@ -952,12 +939,7 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     a1.inject(createUserMessage({ content: [{ type: 'text', text: 'background job 42 finished' }], source: { kind: 'plugin', plugin: 'tool-bash' } }))
     await a1.whenIdle()
     await ctx1.sessions.flush(a1.session)
-    // Simulate a wedged first lifecycle: a graceful dispose would durably
-    // discard the pending inject, and the still-open kernel write lock would
-    // otherwise exclude the second lifecycle. Removing the lock file orphans
-    // the held inode so the resumer locks a fresh one (the documented
-    // forfeit-by-unlink escape hatch).
-    await removeSessionLocks(root)
+    await ctx1.fiber.dispose()
 
     // Lifecycle 2: resume; the injected context is still pending and becomes
     // model-visible when the next turn admits it.
@@ -966,13 +948,13 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     expect(stored.some(event => event.type === 'agent/inbox/spliced')).toBe(true)
     expect(JSON.stringify(stored)).toContain('background job 42 finished')
     const a2 = (await ctx2.agents.resume({ resumeSessionId: SessionId('inject-sess'), agentOptions: { provider: 'mock', model: 'mock' } })).agent
+    expect(a2.session.snapshotEvents().filter(event => event.type === 'turn/start')).toHaveLength(1)
     expect(JSON.stringify(a2.inbox.nextStep)).toContain('background job 42 finished')
     a2.followup(createUserMessage({ content: [{ type: 'text', text: 'continue' }], source: { kind: 'user' } }))
     await waitForIdle(ctx2, a2)
     const flat = JSON.stringify(a2.session.deriveMessages())
     expect(flat).toContain('background job 42 finished')
     await ctx2.fiber.dispose()
-    await ctx1.fiber.dispose()
   })
 
   it('resume reloads a persisted session: history + turn numbering continue, no duplicate seqs', async () => {

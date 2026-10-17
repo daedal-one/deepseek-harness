@@ -4,7 +4,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { installWorkspaceGuidance } from '../../src/workspace-guidance.ts'
-import type { ConversationWorkspaceId, WorkspaceAdmissionId, WorkspaceProvenanceId, WorkspaceState } from '../../src/workspace-types.ts'
+import { SharedVmAdmission } from '../../src/shared-vm-admission.ts'
+import type { ConversationWorkspaceId, WorkspaceProvenanceId, WorkspaceState } from '../../src/workspace-types.ts'
 import type { EnvironmentId } from '../../src/environment-types.ts'
 
 export const name = 'snapshot-workspace-outcomes'
@@ -32,14 +33,10 @@ export const Config: z<Config> = z.object({
  */
 export function apply(ctx: Context, config: Config): void {
   ctx.on('agent/prepare', ({ agent }) => { installWorkspaceGuidance(agent) })
-  ctx.on('agent/turn-starting', async ({ agent }, next) => {
-    if (config.admission) {
-      const id = brandString<WorkspaceAdmissionId>('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee')
-      agent.session.append('workspace/admission', { id, status: 'waiting' })
-      agent.session.append('workspace/admission', { id, status: 'admitted' })
-    }
-    await next()
-  })
+  if (config.admission) {
+    const admission = new SharedVmAdmission(ctx, 1)
+    ctx.effect(() => async () => { await admission.close() }, 'snapshot shared turn admission')
+  }
   ctx.on('agent/turn-settled', ({ agent, turn }) => {
     const state: WorkspaceState = { workspaceId: brandString<ConversationWorkspaceId>('a'.repeat(32)), turn,
       phase: 'saving', baseline: 'b'.repeat(40), checkpoint: 1, checkpointHash: 'c'.repeat(64), branches: {},

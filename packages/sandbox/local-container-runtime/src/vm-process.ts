@@ -11,6 +11,9 @@ const PROCESS_ENVIRONMENT = /^[A-Z_][A-Z0-9_]*=/u
 const GIT_ENVIRONMENT_NAME = /^GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+)$/u
 const PROCESS_LAUNCHER_READY = Buffer.from('\0dsh-process-ready\0')
 
+/** Failed process creation whose guest unit could not be confirmed stopped. */
+export class VmProcessCleanupUnconfirmed extends Error {}
+
 const VM_PROCESS_LAUNCHER = String.raw`
 import fcntl, json, os, struct, sys, termios, tty
 
@@ -147,6 +150,7 @@ export async function createVmProcess(
   child.stdin.on('error', (error) => { if ((error as NodeJS.ErrnoException).code !== 'EPIPE') failure = error })
   let closed = false
   let stopping: Promise<void> | undefined
+  let cleanupConfirmed = false
   const stopUnit = (): Promise<void> => stopping ??= control([
     'exec', name, '--project', config.project, '--mode', 'non-interactive', '--', 'systemctl', 'stop', unit,
   ]).then(() => undefined).catch((error: unknown) => {
@@ -156,7 +160,7 @@ export async function createVmProcess(
     closed = true; stream.push(null)
     // An Incus attachment can close while its guest service is still running.
     void stopUnit().then(
-      () => { done.resolve({ exitCode, ...failure === undefined ? {} : { error: failure.message } }) },
+      () => { cleanupConfirmed = true; done.resolve({ exitCode, ...failure === undefined ? {} : { error: failure.message } }) },
       (error: unknown) => { done.resolve({ exitCode: null, error: `development-vm: guest command cleanup unconfirmed: ${String(error)}` }) },
     )
   })
@@ -192,6 +196,7 @@ export async function createVmProcess(
   ]).catch(async (error: unknown) => {
     child.kill('SIGKILL')
     await done.promise
+    if (!cleanupConfirmed) throw new VmProcessCleanupUnconfirmed('development-vm: failed allocation cleanup unconfirmed', { cause: error })
     throw new Error('development-vm: guest process envelope transfer failed', { cause: error })
   }).finally(() => { if (transferTimer !== undefined) clearTimeout(transferTimer) })
   if (!request.stdin) child.stdin.end()
@@ -255,7 +260,14 @@ export async function createVmProcess(
   const aborted = (): void => { void handle.terminate().catch(() => undefined) }
   request.signal?.addEventListener('abort', aborted, { once: true })
   void done.promise.then(() => request.signal?.removeEventListener('abort', aborted))
-  if (request.signal?.aborted) { await handle.terminate(); request.signal.throwIfAborted() }
+  if (request.signal?.aborted) {
+    try { await handle.terminate() }
+    finally {
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- The child-close callback changes this during termination.
+      if (!cleanupConfirmed) throw new VmProcessCleanupUnconfirmed('development-vm: cancelled allocation cleanup unconfirmed')
+    }
+    request.signal.throwIfAborted()
+  }
   return handle
 }
 

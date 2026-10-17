@@ -7,11 +7,12 @@ interface Waiter {
 
 /** Retains capacity until its owner finishes checkpointing and releases it. */
 export class WorkspaceAdmission {
+  private readonly capacity: number
   private occupied = 0
   private readonly waiting: Waiter[] = []
 
   /** @param capacity - maximum simultaneous workspace execution leases. */
-  constructor(private readonly capacity: number) {}
+  constructor(capacity: number) { this.capacity = capacity }
 
   /**
    * Reserve capacity in arrival order; cancellation withdraws only this request.

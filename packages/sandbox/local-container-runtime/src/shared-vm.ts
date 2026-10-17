@@ -8,9 +8,12 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import type { WorkspacePreparationKind } from '@deepseek-ai/dsh-workspace'
 import type { ConversationWorkspaceId } from './workspace-types.ts'
 import { IncusDevelopmentVms, incusCommand, type DevelopmentVmConfig, type VmDirectoryMount } from './vm-engine.ts'
-import { createVmProcess } from './vm-process.ts'
+import { createVmProcess, VmProcessCleanupUnconfirmed } from './vm-process.ts'
 import { sharedGitAuthorization } from './shared-git.ts'
 import { SharedVmSelection, type WorkspaceSelectionConfig } from './shared-vm-selection.ts'
+import { SharedVmExports, type SharedVmExportsConfig } from './shared-vm-exports.ts'
+import { SharedVmAdmission } from './shared-vm-admission.ts'
+import { WorkspaceAdmission } from './workspace-admission.ts'
 import type { ExecutionRuntime, LocalContainerProcessHandle, LocalContainerProcessRequest,
   PodmanControllerExecRequest, PodmanControllerExecResult, WorkspaceGitRemote } from './types.ts'
 import { LocalContainerControllerAborted, LocalContainerControllerDeadlineExceeded } from './index.ts'
@@ -25,11 +28,15 @@ export interface SharedVmConfig extends DevelopmentVmConfig {
   repositories: VmDirectoryMount[]
   /** Optional exact-directory attachment for Workspace selections under operator-approved roots. */
   workspaceSelection?: WorkspaceSelectionConfig
+  /** Optional scalable exact-directory selection through one operator-owned catalogue. */
+  directoryExports?: SharedVmExportsConfig
   /** Optional operator-approved Git access for exact mounted repository sources. */
   gitRemotes?: WorkspaceGitRemote[]
   /** Complete non-secret guest command environment. */
   environment: Record<string, string>
-  /** Bound on commands attached through this Harness process. */
+  /** Optional bound on admitted root conversations; children share their parent reservation. */
+  maxActiveConversations?: number
+  /** Bound on commands attached through this Harness process; excess commands wait in FIFO order. */
   maxLiveProcesses: number
 }
 
@@ -44,10 +51,16 @@ export function sharedVmId(environmentId: string): ConversationWorkspaceId {
 
 /** Validate and map explicitly mounted host paths without reading repository contents.
  * @param config - deployment-owned workspace and repository mounts.
+ * @param aliases - selected directories exposed inside a declared catalogue device.
  * @returns mapping in guest coordinates; unmounted absolute paths reject.
  */
-export function sharedVmPaths(config: Pick<SharedVmConfig, 'workspaceDirectory' | 'repositories'>): (path: string) => string {
-  const mounts = [{ source: config.workspaceDirectory, path: '/workspace' }, ...config.repositories]
+export function sharedVmPaths(
+  config: Pick<SharedVmConfig, 'workspaceDirectory' | 'repositories'>,
+  aliases: readonly VmDirectoryMount[] = [],
+): (path: string) => string {
+  const native = [{ source: config.workspaceDirectory, path: '/workspace' }, ...config.repositories]
+  const mounts = [...native, ...aliases]
+  const sources = new Set<string>(); const targets = new Set<string>()
   for (const [index, mount] of mounts.entries()) {
     if (!posix.isAbsolute(mount.source) || mount.source === '/' || posix.normalize(mount.source) !== mount.source
       || mount.source.includes('\0') || mount.source.endsWith('/')
@@ -55,15 +68,24 @@ export function sharedVmPaths(config: Pick<SharedVmConfig, 'workspaceDirectory' 
       || (index > 0 && (!mount.path.startsWith('/workspace/') || mount.path.endsWith('/')))) {
       throw new Error('shared-vm: mounts require canonical host directories and normalized workspace targets')
     }
-    for (const previous of mounts.slice(0, index)) {
-      if ([mount.source, previous.source].some((source, position) => {
-        const other = position === 0 ? previous.source : mount.source
-        return source === other || source.startsWith(`${other}/`)
-      }) || (previous.path !== '/workspace' && (mount.path === previous.path
-        || mount.path.startsWith(`${previous.path}/`) || previous.path.startsWith(`${mount.path}/`)))) {
-        throw new Error('shared-vm: duplicate or overlapping directory mounts')
-      }
+    if (sources.has(mount.source) || targets.has(mount.path)) throw new Error('shared-vm: duplicate or overlapping directory mounts')
+    sources.add(mount.source); targets.add(mount.path)
+  }
+  const nativeTargets = new Set(native.slice(1).map(mount => mount.path))
+  const aliasTargets = new Set(aliases.map(mount => mount.path))
+  for (const mount of mounts) {
+    for (let parent = posix.dirname(mount.source); parent !== '/'; parent = posix.dirname(parent)) {
+      if (sources.has(parent)) throw new Error('shared-vm: duplicate or overlapping directory mounts')
     }
+    let exported = false
+    for (let parent = posix.dirname(mount.path); parent !== '/'; parent = posix.dirname(parent)) {
+      if (nativeTargets.has(parent)) {
+        if (!aliasTargets.has(mount.path)) throw new Error('shared-vm: duplicate or overlapping directory mounts')
+        exported = true
+      }
+      if (aliasTargets.has(parent)) throw new Error('shared-vm: duplicate or overlapping directory mounts')
+    }
+    if (aliasTargets.has(mount.path) && !exported) throw new Error('shared-vm: selected aliases require a configured catalogue mount')
   }
   return (path) => {
     if (path.includes('\0')) throw new Error('shared-vm: invalid path')
@@ -87,11 +109,15 @@ export class SharedVmRuntime extends Service implements ExecutionRuntime {
     timeoutMs: z.natural().required(), readinessPollMs: z.natural().required(), maxOutputBytes: z.natural().required(),
     environmentId: z.string().required(), workspaceDirectory: z.string().required(),
     repositories: z.array(z.object({ source: z.string().required(), path: z.string().required() })).required(),
+    directoryExports: z.object({ command: z.string().required(), args: z.array(z.string()).required(),
+      source: z.string().required(), path: z.string().required(), directory: z.string().required(),
+      timeoutMs: z.natural().required(), maxOutputBytes: z.natural().required() }).default(undefined as never),
     workspaceSelection: z.object({ roots: z.array(z.string()).required(), directory: z.string().required(),
       maxMounts: z.natural().required(), maxStateBytes: z.natural().required() }).default(undefined as never),
     gitRemotes: z.array(z.object({ source: z.string().required(), url: z.string().required(),
       credentialCommand: z.string().required(), credentialTimeoutMs: z.natural().required() })).default(undefined as never),
     environment: z.dict(z.string()).required(), maxLiveProcesses: z.natural().required(),
+    maxActiveConversations: z.natural().default(undefined as never),
   })
   readonly executionWorld: object = Object.freeze({})
   readonly containerName: string
@@ -100,12 +126,18 @@ export class SharedVmRuntime extends Service implements ExecutionRuntime {
   private readonly command: ReturnType<typeof incusCommand>
   private mapPath: (path: string) => string
   private readonly selection?: SharedVmSelection
+  private readonly exports?: SharedVmExports
   private selecting: Promise<void> = Promise.resolve()
   private readonly opening: Promise<void>
   private readonly authorize: () => Promise<string[]>
   private readonly processes = new Set<LocalContainerProcessHandle>()
   private readonly allocating = new Set<Promise<LocalContainerProcessHandle>>()
   private closing = false
+  private readonly commandAdmission: WorkspaceAdmission
+  private readonly turnAdmission?: SharedVmAdmission
+  private readonly lifetime = new AbortController()
+  private readonly settling = new Set<Promise<void>>()
+  private readonly uncertain = new Set<VmProcessCleanupUnconfirmed>()
 
   constructor(ctx: Context, private readonly config: SharedVmConfig) {
     super(ctx, 'executionRuntime')
@@ -114,6 +146,11 @@ export class SharedVmRuntime extends Service implements ExecutionRuntime {
     this.containerName = this.engine.name(this.id)
     this.command = incusCommand(config)
     this.mapPath = sharedVmPaths(config)
+    if (config.workspaceSelection !== undefined && config.directoryExports !== undefined) throw new Error('shared-vm: configure one Workspace selection provider')
+    if (config.directoryExports !== undefined) {
+      this.exports = new SharedVmExports(config.directoryExports, config.environmentId, config.repositories,
+        config.workspaceDirectory, async mount => this.verifyExport(mount.path))
+    }
     if (config.workspaceSelection !== undefined) {
       this.selection = new SharedVmSelection(config.workspaceSelection, config.environmentId, config.repositories, {
         validate: (repositories) => { sharedVmPaths({ ...config, repositories }) },
@@ -136,6 +173,8 @@ export class SharedVmRuntime extends Service implements ExecutionRuntime {
     }
     this.authorize = sharedGitAuthorization(config.repositories, config.gitRemotes ?? [])
     if (!Number.isSafeInteger(config.maxLiveProcesses) || config.maxLiveProcesses < 1) throw new Error('shared-vm: invalid command limit')
+    this.commandAdmission = new WorkspaceAdmission(config.maxLiveProcesses)
+    if (config.maxActiveConversations !== undefined) this.turnAdmission = new SharedVmAdmission(ctx, config.maxActiveConversations)
     validateEnvironment(config.environment, true)
     this.opening = this.open()
     void this.opening.catch(() => undefined)
@@ -150,6 +189,8 @@ export class SharedVmRuntime extends Service implements ExecutionRuntime {
     })
     ctx.effect(() => async () => {
       this.closing = true
+      this.lifetime.abort(new Error('shared-vm: runtime is closing'))
+      await this.turnAdmission?.close()
       await Promise.allSettled([this.opening])
       await Promise.allSettled([this.selecting])
       await Promise.allSettled(this.allocating)
@@ -157,14 +198,22 @@ export class SharedVmRuntime extends Service implements ExecutionRuntime {
         await handle.terminate()
         if (!await handle.waitForRemoval()) throw new Error('shared-vm: command removal unconfirmed')
       }))
+      await Promise.allSettled(this.settling)
       const failures = outcomes.flatMap(result => result.status === 'rejected' ? [result.reason as unknown] : [])
+      failures.push(...this.uncertain)
       await this.selection?.close()
+      await this.exports?.close()
       if (failures.length) throw new AggregateError(failures, 'shared-vm: command teardown failed; VM retained')
     }, 'shared VM command teardown')
   }
 
   /** Wait for mount, VM identity, network, and guest readiness verification. */
-  async ensureReady(): Promise<void> { await this.opening; if (this.closing) throw new Error('shared-vm: runtime is closing') }
+  async ensureReady(): Promise<void> {
+    await this.opening
+    this.lifetime.signal.throwIfAborted()
+    await this.exports?.ensureCurrent()
+    this.lifetime.signal.throwIfAborted()
+  }
 
   /** Map a configured repository path into the shared guest.
    * @param path - host alias, guest path, or relative path.
@@ -177,14 +226,18 @@ export class SharedVmRuntime extends Service implements ExecutionRuntime {
       await this.ensureReady()
       if (!posix.isAbsolute(path)) throw new Error('shared-vm: select a fully qualified workspace directory')
       const hostSources = [this.config.workspaceDirectory, ...this.config.repositories.map(mount => mount.source),
-        ...this.selection?.mounts.map(mount => mount.source) ?? []]
+        ...this.selection?.mounts.map(mount => mount.source) ?? [],
+        ...this.exports?.mounts.map(mount => mount.source) ?? []]
       const guestAlias = kind === 'session' && (path === '/workspace' || path.startsWith('/workspace/'))
       if (guestAlias || hostSources.some(source => path === source || path.startsWith(`${source}/`))) {
         this.mapPath(path)
         return
       }
-      if (this.selection === undefined) throw new Error('shared-vm: this directory is not mounted; ask the operator to configure workspaceSelection or an exact repository mount')
-      try { await this.selection.select(path) }
+      if (this.selection === undefined && this.exports === undefined) throw new Error('shared-vm: this directory is not mounted; ask the operator to configure directoryExports, workspaceSelection, or an exact repository mount')
+      try {
+        if (this.exports !== undefined) await this.exports.select(path)
+        else if (this.selection !== undefined) await this.selection.select(path)
+      }
       finally { this.refreshPaths() }
       if (this.closing) throw new Error('shared-vm: runtime is closing')
     })
@@ -193,11 +246,13 @@ export class SharedVmRuntime extends Service implements ExecutionRuntime {
   }
 
   private refreshPaths(): void {
-    this.mapPath = sharedVmPaths({ ...this.config, repositories: [...this.config.repositories, ...this.selection?.mounts ?? []] })
+    const repositories = [...this.config.repositories, ...this.selection?.mounts ?? []]
+    this.mapPath = sharedVmPaths({ ...this.config, repositories }, this.exports?.mounts)
   }
 
   private async open(): Promise<void> {
     await this.selection?.open()
+    await this.exports?.open()
     for (const source of [this.config.workspaceDirectory, ...this.config.repositories.map(mount => mount.source)]) {
       const [info, canonical, filesystem] = await Promise.all([lstat(source), realpath(source), statfs(source)])
       if (!info.isDirectory() || canonical !== source || filesystem.type === 0x01021994) {
@@ -207,23 +262,37 @@ export class SharedVmRuntime extends Service implements ExecutionRuntime {
     await this.engine.verifyNetwork()
     if (!await this.engine.exists(this.id)) throw new Error(`shared-vm: provision ${this.containerName} before starting this profile`)
     await this.selection?.recover()
-    this.refreshPaths()
     const repositories = [...this.config.repositories, ...this.selection?.mounts ?? []]
     await this.engine.verify(this.id, this.config.workspaceDirectory, repositories)
     if (this.closing) throw new Error('shared-vm: runtime is closing')
     await this.startVerifiedVm()
+    this.refreshPaths()
     await this.verifyMount('/workspace')
     for (const mount of repositories) await this.verifyMount(mount.path)
+    await this.exports?.verify()
   }
 
   private async startVerifiedVm(): Promise<void> {
     const state = await this.engine.state(this.id)
-    if (state === 'Stopped') await this.engine.start(this.id)
-    else if (state !== 'Running') throw new Error(`shared-vm: instance is ${state}; operator action required`)
+    if (state === 'Stopped') await this.engine.start(this.id, async () => { await this.exports?.restore() })
+    else if (state === 'Running') await this.exports?.restore()
+    else throw new Error(`shared-vm: instance is ${state}; operator action required`)
   }
 
   private async verifyMount(path: string): Promise<void> {
     await this.command(['exec', this.containerName, '--project', this.config.project, '--', '/usr/bin/mountpoint', '-q', path])
+  }
+
+  private async verifyExport(path: string): Promise<void> {
+    const deadline = Date.now() + this.config.timeoutMs
+    for (;;) {
+      try {
+        await this.command(['exec', this.containerName, '--project', this.config.project, '--', '/usr/bin/python3', '-c',
+          'import os,sys; fd=os.open(sys.argv[1],os.O_RDONLY|os.O_DIRECTORY); os.close(fd)', path])
+        return
+      } catch (error) { if (Date.now() >= deadline || this.closing) throw error }
+      await new Promise(resolve => setTimeout(resolve, this.config.readinessPollMs))
+    }
   }
 
   /** Allocate one independently cancellable guest command.
@@ -236,25 +305,40 @@ export class SharedVmRuntime extends Service implements ExecutionRuntime {
 
   private async allocate(request: LocalContainerProcessRequest, git: boolean): Promise<LocalContainerProcessHandle> {
     await this.ensureReady()
-    if (this.processes.size + this.allocating.size >= this.config.maxLiveProcesses) throw new Error('shared-vm: attached command limit reached')
-    request.signal?.throwIfAborted()
+    const signal = request.signal === undefined ? this.lifetime.signal : AbortSignal.any([request.signal, this.lifetime.signal])
+    signal.throwIfAborted()
     const environment = { ...this.config.environment, ...request.environment }
     validateEnvironment(environment, false)
     const cwd = this.mapPath(request.cwd)
     const operation = (async () => {
-      const authorization = git ? await this.authorize() : []
-      request.signal?.throwIfAborted()
-      if (this.closing) throw new Error('shared-vm: runtime is closing')
-      return await createVmProcess(this.config, this.containerName, { ...request, cwd: cwd as LocalContainerProcessRequest['cwd'], environment }, this.command, authorization)
+      const release = await this.commandAdmission.acquire(signal)
+      let owned = false
+      try {
+        signal.throwIfAborted()
+        const authorization = git ? await this.authorize() : []
+        signal.throwIfAborted()
+        const handle = await createVmProcess(this.config, this.containerName,
+          { ...request, signal, cwd: cwd as LocalContainerProcessRequest['cwd'], environment }, this.command, authorization)
+        owned = true
+        this.processes.add(handle)
+        const settle = async (): Promise<void> => {
+          if (!await handle.waitForRemoval()) throw new Error('shared-vm: command cleanup unconfirmed; capacity retained')
+          this.processes.delete(handle)
+          release()
+        }
+        const settlement = handle.done.then(settle, settle)
+        this.settling.add(settlement)
+        void settlement.finally(() => this.settling.delete(settlement)).catch((error: unknown) => { this.ctx.logger.error(error) })
+        if (this.closing) { await handle.terminate(); throw new Error('shared-vm: runtime is closing') }
+        return handle
+      } catch (error) {
+        if (error instanceof VmProcessCleanupUnconfirmed) { owned = true; this.uncertain.add(error) }
+        throw error
+      } finally { if (!owned) release() }
     })()
     this.allocating.add(operation)
-    try {
-      const handle = await operation
-      this.processes.add(handle)
-      void handle.done.finally(() => this.processes.delete(handle)).catch(() => undefined)
-      if (this.closing) { await handle.terminate(); throw new Error('shared-vm: runtime is closing') }
-      return handle
-    } finally { this.allocating.delete(operation) }
+    try { return await operation }
+    finally { this.allocating.delete(operation) }
   }
 
   /** Run a bounded filesystem/tool controller without stopping other guest work.
@@ -265,11 +349,12 @@ export class SharedVmRuntime extends Service implements ExecutionRuntime {
     if (!Number.isSafeInteger(request.deadlineMs) || request.deadlineMs < 1 || request.deadlineMs > 2_147_483_647
       || !Number.isSafeInteger(request.maxOutputBytes) || request.maxOutputBytes < 1) throw new Error('shared-vm: invalid controller bounds')
     const cancel = new AbortController()
-    const timer = setTimeout(() => { cancel.abort(new Error('shared-vm: controller deadline exceeded')) }, request.deadlineMs)
+    let timer: NodeJS.Timeout | undefined
     const signal = request.signal === undefined ? cancel.signal : AbortSignal.any([cancel.signal, request.signal])
     let handle: LocalContainerProcessHandle | undefined
     try {
       handle = await this.allocate({ argv: request.argv as [string, ...string[]], cwd: '/workspace', environment: {}, tty: false, stdin: true, signal }, false)
+      timer = setTimeout(() => { cancel.abort(new Error('shared-vm: controller deadline exceeded')) }, request.deadlineMs)
       handle.stream.end(request.stdin)
       const stdout: Buffer[] = []; const stderr: Buffer[] = []
       let pending = Buffer.alloc(0); let size = 0

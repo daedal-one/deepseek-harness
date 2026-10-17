@@ -105,7 +105,7 @@ agent/turn-settled
 
 `turn/*`, `step/*`, `system/message`, `user/message`, `assistant/message`, `assistant/attempt`, and `tool/*` are durable session events; the rest are live extension points across three domains. `agent/assistant-stream` publishes process-local start, transient chunk, and end frames. The loop commits the complete compact stream as one message or log-only attempt before a committed end frame, and the Web Session-follow adapter is the live event's only remote consumer. `agent/turn-starting`, `agent/pre-step`, `agent/request`, `llm/stream`, and the three `tools/*` events are waterfalls, whose listeners must call `next()` to delegate; `agent/turn-stopping` and `agent/turn-settled` are serial and have no `next()`. Preparation awaits `agent/prepare` before publication; resource recovery and settlement finish before turn admission.
 
-Input reaches the driver through one inbox. Some messages wake it immediately; injected context waits in the inbox until another message does.
+Durable inbox input survives disposal and resume for the next wake; injected context waits for waking input. Cancellation clears pending input unless `keepInbox` is set.
 
 `agent/pre-step` decides the accepted input. Listeners may rewrite or reject claimed messages; a rejected or empty first claim closes a durable turn without a step. An enter decision may set `startsRequestSeries`: the loop logs a fresh `request/header` (reason `series`, or `change` with `startsSeries: true` when the envelope also changed). Wrapping listeners preserve that declaration with `{ ...decision, messages }`.
 

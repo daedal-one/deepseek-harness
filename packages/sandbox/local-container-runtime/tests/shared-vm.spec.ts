@@ -184,7 +184,6 @@ describe('shared VM attachment', () => {
     await entered.promise
     let disposal: Promise<unknown> | undefined
     try {
-      await expect(test.runtime.createProcess(request)).rejects.toThrow('command limit')
       if (action === 'cancel') cancel.abort(new Error('cancelled'))
       else { disposal = test.fiber.dispose(); await Promise.resolve() }
     } finally { issued.resolve([]) }
@@ -263,15 +262,70 @@ describe('shared VM attachment', () => {
     expect(test.stop).not.toHaveBeenCalled()
   })
 
-  it('counts pending allocations toward the command limit', async () => {
+  it('queues excess commands behind allocating and running owners in arrival order', async () => {
     const test = await fixture({ maxLiveProcesses: 1 })
     await test.runtime.ensureReady()
     const entered = Promise.withResolvers<undefined>(); const allocated = Promise.withResolvers<LocalContainerProcessHandle>()
-    test.process.mockImplementation(async () => { entered.resolve(undefined); return await allocated.promise })
+    const first = handle(); const second = handle(); const third = handle()
+    test.process.mockImplementationOnce(async () => { entered.resolve(undefined); return await allocated.promise })
+      .mockResolvedValueOnce(second.value).mockResolvedValueOnce(third.value)
     const pending = test.runtime.createProcess(request)
     await entered.promise
-    try { await expect(test.runtime.createProcess(request)).rejects.toThrow('command limit') }
-    finally { const owned = handle(); allocated.resolve(owned.value); await pending; owned.finish() }
+    const waiting = test.runtime.createProcess(request); const last = test.runtime.createProcess(request)
+    allocated.resolve(first.value); await pending
+    expect(test.process).toHaveBeenCalledOnce()
+    first.finish(); await expect(waiting).resolves.toBe(second.value)
+    expect(test.process).toHaveBeenCalledTimes(2)
+    second.finish(); await expect(last).resolves.toBe(third.value)
+    third.finish()
+  })
+
+  it.each(['caller', 'dispose'] as const)('withdraws a queued command on %s without launching it', async (kind) => {
+    const test = await fixture({ maxLiveProcesses: 1 }); const first = handle()
+    test.process.mockResolvedValueOnce(first.value)
+    await test.runtime.createProcess(request)
+    const cancel = new AbortController()
+    const waiting = test.runtime.createProcess({ ...request, signal: cancel.signal })
+    const rejected = expect(waiting).rejects.toThrow(kind === 'caller' ? 'withdrawn' : 'closing')
+    if (kind === 'caller') cancel.abort(new Error('withdrawn'))
+    else await test.fiber.dispose()
+    await rejected
+    expect(test.process).toHaveBeenCalledOnce()
+    if (kind === 'caller') expect(first.terminate).not.toHaveBeenCalled()
+    first.finish()
+  })
+
+  it.each(['returned handle', 'failed allocation'] as const)('retains capacity after unconfirmed cleanup of a %s', async (kind) => {
+    const test = await fixture({ maxLiveProcesses: 1 }); const first = handle()
+    vi.spyOn(test.ctx.logger, 'error').mockImplementation(() => {})
+    if (kind === 'failed allocation') {
+      test.process.mockRejectedValueOnce(new transport.VmProcessCleanupUnconfirmed('cleanup unconfirmed'))
+      await expect(test.runtime.createProcess(request)).rejects.toThrow('unconfirmed')
+    } else {
+      test.process.mockResolvedValueOnce({ ...first.value, waitForRemoval: async () => false })
+      await test.runtime.createProcess(request); first.finish()
+    }
+    const cancel = new AbortController()
+    const waiting = test.runtime.createProcess({ ...request, signal: cancel.signal })
+    const rejected = expect(waiting).rejects.toThrow('withheld')
+    // A subsequent admitted allocation would have called the provider before this barrier.
+    await Promise.resolve(); await Promise.resolve(); await Promise.resolve()
+    expect(test.process).toHaveBeenCalledOnce()
+    cancel.abort(new Error('withheld')); await rejected
+  })
+
+  it('starts controller execution deadlines after queued capacity becomes available', async () => {
+    const test = await fixture({ maxLiveProcesses: 1 }); const first = handle(); const controller = handle()
+    test.process.mockResolvedValueOnce(first.value).mockResolvedValueOnce(controller.value)
+    await test.runtime.createProcess(request)
+    vi.useFakeTimers()
+    try {
+      const waiting = test.runtime.executeController({ argv: ['/bin/true'], stdin: Buffer.alloc(0), maxOutputBytes: 64, deadlineMs: 1000 })
+      await vi.advanceTimersByTimeAsync(2000)
+      expect(test.process).toHaveBeenCalledOnce()
+      first.finish(); controller.finish()
+      await expect(waiting).resolves.toMatchObject({ exitCode: 0 })
+    } finally { vi.useRealTimers() }
   })
 
   it('rejects controller overflow while unrelated work continues', async () => {

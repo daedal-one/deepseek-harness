@@ -28,7 +28,7 @@ The [accepted task](../../../../.specs/tasks/shared-environment-workspace.spec.m
 
 ## Verification
 
-Real-provider tests on the existing server verify that independent contexts see the same mounted files, cancellation leaves the other context's command running, and disposal permits reattachment to the same VM and files. Unit tests reject missing instances, mount drift, RAM-backed source directories, and excess commands. Attachment closure waits for the owned guest unit's cleanup; unavailable cleanup reports an error instead of claiming removal. The [qualification record](../../../../packages/sandbox/local-container-runtime/tests/shared-vm-qualification.md) separates these observations from activation and remaining UI acceptance.
+Real-provider tests on the existing server verify that independent contexts see the same mounted files, cancellation leaves the other context's command running, and disposal permits reattachment to the same VM and files. Unit tests reject missing instances, mount drift and RAM-backed source directories, and verify queued excess commands. Attachment closure waits for the owned guest unit's cleanup; unavailable cleanup reports an error instead of claiming removal. The [qualification record](../../../../packages/sandbox/local-container-runtime/tests/shared-vm-qualification.md) separates these observations from activation and remaining UI acceptance.
 
 ## Consequences
 
