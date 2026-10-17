@@ -103,8 +103,9 @@ export interface ConnectionIndexRequest extends ConnectionTrustRequest {
   readonly url?: string | undefined
 }
 
-/** Root/index response operations owned by the browser-token exchange. */
+/** Root/index response operations for browser-token exchange and cookie renewal. */
 export interface ConnectionIndexResponse {
+  setHeader(name: string, value: string): unknown
   writeHead(status: number, headers?: Readonly<Record<string, string>>): unknown
   end(body?: string): unknown
 }
@@ -214,9 +215,9 @@ export interface HostConnectionHandle {
   authorizeRequest(request: ConnectionTrustRequest): Promise<ConnectionRequestAuthorization>
 
   /**
-   * Authenticate one frontend index request, owning a token redirect or 401.
+   * Authenticate and renew one frontend browser session, owning a token redirect or 401.
    * @param request - root or configured-index HTTP request.
-   * @param response - response owned when the result is false.
+   * @param response - receives renewed cookies; fully owned when the result is false.
    * @returns true only when the frontend may serve index.html.
    */
   authorizeIndex(request: ConnectionIndexRequest, response: ConnectionIndexResponse): boolean

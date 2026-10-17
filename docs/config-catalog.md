@@ -607,7 +607,7 @@ export interface ConnectionConfig {
    * bind. An entry that is not a bare, canonical authority fails plugin load.
    */
   trustedHosts?: string[]
-  /** Absolute browser-session lifetime in days. Default: 30. */
+  /** Browser-cookie lifetime in days, renewed by authenticated HTTP requests. Default: 30. */
   cookieMaxAgeDays?: number
   /** Maximum buffered JSON body for every `/api` request. Default: 300 MiB. */
   maxRequestBodyBytes?: number

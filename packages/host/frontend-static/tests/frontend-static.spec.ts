@@ -10,7 +10,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
@@ -23,6 +23,7 @@ let root: string | undefined
 let context: Context | undefined
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await context?.fiber.dispose()
   context = undefined
   if (root !== undefined) await rm(root, { recursive: true, force: true })
@@ -106,6 +107,52 @@ async function request(port: number, path: string, init?: RequestInit): Promise<
 }
 
 describe('real Loader composition', () => {
+  it('renews browser authorization through index and API responses without reviving expired cookies', async () => {
+    const loaded = await loadComposition()
+    const origin = `http://127.0.0.1:${String(loaded.webServer.port)}`
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-10-01T00:00:00Z'))
+    const login = await fetch(loaded.connection.authenticatedUrl(origin), { redirect: 'manual' })
+    const original = login.headers.get('set-cookie')!.split(';', 1)[0]!
+    loaded.connection.fetch.register({ path: '/api/fixture', methods: ['GET'], requestBody: 'buffered',
+      fetch: () => Promise.resolve(new Response('authenticated')) })
+
+    clock.mockReturnValue(Date.parse('2026-10-25T00:00:00Z'))
+    const page = await fetch(origin, { headers: { cookie: original } })
+    expect(page.status).toBe(200)
+    expect(await page.text()).toContain('shell')
+    const refreshed = page.headers.get('set-cookie')!
+    expect(refreshed).toContain('Expires=Tue, 24 Nov 2026 00:00:00 GMT')
+    expect(refreshed).toContain('HttpOnly; SameSite=Lax')
+
+    clock.mockReturnValue(Date.parse('2026-11-02T00:00:00Z'))
+    const api = await fetch(origin + '/api/fixture', { headers: { cookie: refreshed.split(';', 1)[0]! } })
+    expect(api.status).toBe(200)
+    expect(await api.text()).toBe('authenticated')
+    const active = api.headers.get('set-cookie')!
+    expect(active).toContain('Expires=Wed, 02 Dec 2026 00:00:00 GMT')
+    for (const [headers, status] of [
+      [{ cookie: original }, 401],
+      [{ cookie: active.split(';', 1)[0]!, authorization: 'Bearer invalid' }, 401],
+      [{ cookie: active.split(';', 1)[0]!, origin: 'http://untrusted.invalid' }, 403],
+      [{ cookie: active.split(';', 1)[0]!, 'sec-fetch-site': 'cross-site' }, 403],
+    ] as const) {
+      const denied = await fetch(origin + '/api/fixture', { headers })
+      expect(denied.status).toBe(status)
+      expect(denied.headers.has('set-cookie')).toBe(false)
+      await denied.text()
+    }
+
+    clock.mockReturnValue(Date.parse('2026-11-25T00:00:00Z'))
+    const continued = await fetch(origin + '/api/fixture', { headers: { cookie: active.split(';', 1)[0]! } })
+    expect(continued.status).toBe(200)
+    await continued.text()
+    clock.mockReturnValue(Date.parse('2026-12-02T00:00:00Z'))
+    const inactive = await fetch(origin, { headers: { cookie: active.split(';', 1)[0]! } })
+    expect(inactive.status).toBe(401)
+    expect(inactive.headers.has('set-cookie')).toBe(false)
+    await inactive.text()
+  })
+
   it('serves explicit index entries and files while preserving HTTP error semantics', { timeout: 60_000 }, async () => {
     const loaded = await loadComposition()
     const unloaded = [...loaded.loader.entries()]

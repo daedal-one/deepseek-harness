@@ -35,9 +35,12 @@ function response(): { value: ConnectionIndexResponse; state: ResponseState } {
   const state: ResponseState = {}
   return {
     value: {
+      setHeader(name, value) {
+        state.headers = { ...state.headers, [name]: value }
+      },
       writeHead(status, headers) {
         state.status = status
-        if (headers !== undefined) state.headers = headers
+        if (headers !== undefined) state.headers = { ...state.headers, ...headers }
       },
       end(body) {
         if (body !== undefined) state.body = body
@@ -91,6 +94,34 @@ afterEach(() => {
 })
 
 describe('BrowserAuth', () => {
+  it('renews active browsers beyond the original expiry and expires inactive browsers', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-10-01T00:00:00.000Z'))
+    const store = new RecordCredentials()
+    const auth = await createAuth(store)
+    const original = exchange(auth)
+    vi.setSystemTime(new Date('2026-10-25T00:00:00.000Z'))
+    const renewed = response()
+    expect(auth.authorizeIndex(request('/', '127.0.0.1:3080', { cookie: original.cookie }), renewed.value)).toBe(true)
+    expect(renewed.state.headers?.['set-cookie']).toContain('Max-Age=2592000')
+    const cookie = renewed.state.headers!['set-cookie']!.split(';', 1)[0]!
+    expect(cookie).not.toBe(original.cookie)
+
+    vi.setSystemTime(new Date('2026-11-02T00:00:00.000Z'))
+    const restarted = await createAuth(store)
+    expect(restarted.isAuthenticated(request('/', '127.0.0.1:3080', { cookie }))).toBe(true)
+    const expired = response()
+    expect(restarted.authorizeIndex(request('/', '127.0.0.1:3080', { cookie: original.cookie }), expired.value)).toBe(false)
+    expect(expired.state.status).toBe(401)
+    expect(expired.state.headers?.['set-cookie']).toBeUndefined()
+
+    vi.setSystemTime(new Date('2026-11-24T00:00:00.000Z'))
+    const inactive = response()
+    expect(restarted.authorizeIndex(request('/', '127.0.0.1:3080', { cookie }), inactive.value)).toBe(false)
+    expect(inactive.state.status).toBe(401)
+    expect(inactive.state.headers?.['set-cookie']).toBeUndefined()
+  })
+
   it('mints one process token and a persistent authority-bound cookie', async () => {
     const store = new RecordCredentials()
     const processOwner = {}
@@ -105,7 +136,7 @@ describe('BrowserAuth', () => {
         'referrer-policy': 'no-referrer',
       },
     })
-    expect(login.state.headers?.['set-cookie']).toMatch(/; Max-Age=2592000; Path=\/; Expires=.*; HttpOnly; SameSite=Strict$/u)
+    expect(login.state.headers?.['set-cookie']).toMatch(/; Max-Age=2592000; Path=\/; Expires=.*; HttpOnly; SameSite=Lax$/u)
     expect(login.state.headers?.['set-cookie']).not.toContain('Secure')
     expect(first.isAuthenticated(request('/', '127.0.0.1:3080', { cookie: login.cookie }))).toBe(true)
     expect(first.isAuthenticated({
@@ -136,6 +167,7 @@ describe('BrowserAuth', () => {
         'cache-control': 'no-store',
         'location': '/',
         'referrer-policy': 'no-referrer',
+        'set-cookie': expect.stringContaining('Max-Age=2592000') as unknown,
       },
     })
   })
@@ -145,7 +177,7 @@ describe('BrowserAuth', () => {
     const { cookie } = exchange(auth)
     const allowed = response()
     expect(auth.authorizeIndex(request('/index.html', '127.0.0.1:3080', { cookie }), allowed.value)).toBe(true)
-    expect(allowed.state).toEqual({})
+    expect(allowed.state.headers?.['set-cookie']).toContain('Max-Age=2592000')
 
     for (const candidate of [
       request('/'),

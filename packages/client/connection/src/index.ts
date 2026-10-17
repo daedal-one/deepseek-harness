@@ -91,7 +91,7 @@ export interface ConnectionConfig {
    * bind. An entry that is not a bare, canonical authority fails plugin load.
    */
   trustedHosts?: string[]
-  /** Absolute browser-session lifetime in days. Default: 30. */
+  /** Browser-cookie lifetime in days, renewed by authenticated HTTP requests. Default: 30. */
   cookieMaxAgeDays?: number
   /** Maximum buffered JSON body for every `/api` request. Default: 300 MiB. */
   maxRequestBodyBytes?: number
@@ -140,10 +140,11 @@ export async function apply(ctx: Context, config?: ConnectionConfig): Promise<vo
     })
     ctx.effect(() => () => devices.dispose(), 'client-connection: device access')
   }
+  const browserAuth = await BrowserAuth.create(ctx.root, ctx.credentials, cookieMaxAgeDays)
   const connection = new HostConnectionService(
     ctx,
     trustedHosts,
-    await BrowserAuth.create(ctx.root, ctx.credentials, cookieMaxAgeDays),
+    browserAuth,
     identity,
     devices,
   )
@@ -197,6 +198,10 @@ export async function apply(ctx: Context, config?: ConnectionConfig): Promise<vo
           return
         }
         try {
+          if (!claiming && !advertising && req.headers.authorization === undefined) {
+            const renewed = browserAuth.renewCookie(req)
+            if (renewed !== undefined) res.setHeader('set-cookie', renewed)
+          }
           const bodyLimit = advertising ? 0 : claiming ? Math.min(maxRequestBodyBytes, DEVICE_CLAIM_MAX_BYTES) : maxRequestBodyBytes
           await bridge(req, res, fetchHandler, bodyLimit, authorization.lease?.signal)
         } finally { authorization.lease?.dispose() }

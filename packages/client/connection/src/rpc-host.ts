@@ -207,6 +207,8 @@ export class HostConnectionService extends Service implements HostConnectionHand
           res.end(rejection === 401 ? 'unauthorized' : 'forbidden')
           return
         }
+        const renewed = this.browserAuth.renewCookie(req)
+        if (renewed !== undefined) res.setHeader('set-cookie', renewed)
         await bridge(req, res, fetchHandler)
       },
     }

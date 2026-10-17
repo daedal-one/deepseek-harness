@@ -119,7 +119,7 @@ function cookieValue(headerValue: string, name: string): string | undefined {
 
 /** Serialize the fixed browser-session attributes; generated names and values are cookie-safe base64url. */
 function sessionCookie(name: string, value: string, expiresAt: number, maxAgeSeconds: number): string {
-  return `${name}=${value}; Max-Age=${String(maxAgeSeconds)}; Path=/; Expires=${new Date(expiresAt).toUTCString()}; HttpOnly; SameSite=Strict`
+  return `${name}=${value}; Max-Age=${String(maxAgeSeconds)}; Path=/; Expires=${new Date(expiresAt).toUTCString()}; HttpOnly; SameSite=Lax`
 }
 
 function signature(secret: Buffer, body: string): Buffer {
@@ -204,7 +204,7 @@ export class BrowserAuth {
    * when this Harness home has none.
    * @param processOwner - root application context retaining one token across Connection reloads.
    * @param credentials - persistent credential provider for the Web profile.
-   * @param maxAgeDays - positive absolute browser-cookie lifetime in days.
+   * @param maxAgeDays - positive lifetime in days for each issued or renewed cookie.
    * @returns initialized authentication owner with the process owner's launch token.
    */
   static async create(
@@ -231,10 +231,10 @@ export class BrowserAuth {
 
   /**
    * Authenticate an index request. A valid root query token mints the cookie
-   * and redirects to clean `/`; a valid cookie lets the caller serve the
-   * index; every other request receives the same minimal 401 response.
+   * and redirects to clean `/`; a valid cookie is renewed before the caller
+   * serves the index; every other request receives the same minimal 401 response.
    * @param req - incoming root or configured-index request.
-   * @param res - response owned when this method returns false.
+   * @param res - receives renewed cookies; fully owned when this method returns false.
    * @returns true only when the caller may serve index.html.
    */
   authorizeIndex(req: ConnectionIndexRequest, res: ConnectionIndexResponse): boolean {
@@ -245,30 +245,22 @@ export class BrowserAuth {
       const authority = requestAuthority(req.headers)
       if (req.method === 'GET' && url.pathname === '/' && tokens.length === 1
         && authority !== undefined && tokenMatches(tokens.join(''), this.launchToken)) {
-        const issuedAt = Date.now()
-        const expiresAt = issuedAt + this.maxAgeMilliseconds
-        const value = encodeCookie({
-          version: COOKIE_PAYLOAD_VERSION,
-          authority,
-          issuedAt,
-          expiresAt,
-        }, this.secret)
         res.writeHead(303, {
           'cache-control': 'no-store',
           'location': '/',
           'referrer-policy': 'no-referrer',
-          'set-cookie': sessionCookie(
-            cookieName(authority), value, expiresAt, Math.floor(this.maxAgeMilliseconds / 1000),
-          ),
+          'set-cookie': this.createCookie(authority),
         })
         res.end()
         return false
       }
-      if (req.method === 'GET' && url.pathname === '/' && this.isAuthenticated(req)) {
+      const renewed = this.renewCookie(req)
+      if (req.method === 'GET' && url.pathname === '/' && renewed !== undefined) {
         res.writeHead(303, {
           'cache-control': 'no-store',
           'location': '/',
           'referrer-policy': 'no-referrer',
+          'set-cookie': renewed,
         })
         res.end()
         return false
@@ -276,7 +268,11 @@ export class BrowserAuth {
       this.writeUnauthorized(req, res)
       return false
     }
-    if (this.isAuthenticated(req)) return true
+    const renewed = this.renewCookie(req)
+    if (renewed !== undefined) {
+      res.setHeader('set-cookie', renewed)
+      return true
+    }
     this.writeUnauthorized(req, res)
     return false
   }
@@ -287,18 +283,40 @@ export class BrowserAuth {
    * @returns true only for an unexpired cookie signed by this activation's loaded secret.
    */
   isAuthenticated(request: ConnectionTrustRequest): boolean {
+    return this.authenticatedPayload(request) !== undefined
+  }
+
+  /**
+   * Renew a valid browser cookie; the carrier owns request trust checks.
+   * @param request - request carrying an existing browser cookie.
+   * @returns Set-Cookie value, or undefined when the cookie is not valid.
+   */
+  renewCookie(request: ConnectionTrustRequest): string | undefined {
+    const payload = this.authenticatedPayload(request)
+    return payload === undefined ? undefined : this.createCookie(payload.authority)
+  }
+
+  private createCookie(authority: string): string {
+    const issuedAt = Date.now()
+    const expiresAt = issuedAt + this.maxAgeMilliseconds
+    const value = encodeCookie({ version: COOKIE_PAYLOAD_VERSION, authority, issuedAt, expiresAt }, this.secret)
+    return sessionCookie(cookieName(authority), value, expiresAt, Math.floor(this.maxAgeMilliseconds / 1000))
+  }
+
+  private authenticatedPayload(request: ConnectionTrustRequest): BrowserCookiePayload | undefined {
     const authority = requestAuthority(request.headers)
     const rawCookie = header(request.headers, 'cookie')
-    if (authority === undefined || rawCookie === undefined) return false
+    if (authority === undefined || rawCookie === undefined) return undefined
     const value = cookieValue(rawCookie, cookieName(authority))
-    if (value === undefined) return false
+    if (value === undefined) return undefined
     const payload = decodeCookie(value, this.secret)
-    if (payload === undefined || payload.authority !== authority) return false
+    if (payload === undefined || payload.authority !== authority) return undefined
     const now = Date.now()
     return payload.issuedAt <= now
       && payload.expiresAt > now
       && payload.expiresAt > payload.issuedAt
       && payload.expiresAt - payload.issuedAt <= this.maxAgeMilliseconds
+      ? payload : undefined
   }
 
   private writeUnauthorized(req: ConnectionIndexRequest, res: ConnectionIndexResponse): void {

@@ -70,10 +70,11 @@ function fakeResponse(): {
   const response = Object.assign(new EventEmitter(), {
     writableEnded: false,
     destroyed: false,
+    setHeader(name: string, value: string) { state.headers = { ...state.headers, [name]: value }; return this },
     destroy(this: EventEmitter & { destroyed: boolean }) { this.destroyed = true; this.emit('close'); return this },
     writeHead(value: number, headers?: Record<string, string>) {
       state.status = value
-      if (headers !== undefined) state.headers = headers
+      if (headers !== undefined) state.headers = { ...state.headers, ...headers }
       return this
     },
     write(value: string | Uint8Array) { chunks.push(Buffer.from(value)); return true },
@@ -243,7 +244,13 @@ describe('connection node half', () => {
       for (const headers of [{ host }, { ...owner, authorization: 'Bearer invalid' }, { ...owner, authorization: 'Basic invalid' }]) {
         expect(await send(fakePost(headers, '/api/connection/identity', { type: 'client-request', rpcId: 'identity', method: 'connection/identity', payload: {} }))).toMatchObject({ status: 401 })
       }
-      expect(await send(fakePost(bearer, '/api/connection/identity', { type: 'client-request', rpcId: 'identity', method: 'connection/identity', payload: {} }))).toMatchObject({ status: 200 })
+      for (const headers of [bearer, { ...owner, ...bearer }]) {
+        const deviceResponse = await send(fakePost(headers, '/api/connection/identity', {
+          type: 'client-request', rpcId: 'identity', method: 'connection/identity', payload: {},
+        }))
+        expect(deviceResponse).toMatchObject({ status: 200 })
+        expect(deviceResponse.headers?.['set-cookie']).toBeUndefined()
+      }
       const lease = await connection.authorizeRequest({ headers: new Headers(bearer) })
       expect(lease.ok).toBe(true)
       if (lease.ok) lease.lease?.dispose()
@@ -472,6 +479,7 @@ describe('connection node half', () => {
       cookie: browserCookie(connection, '127.0.0.1:3080'),
     }, '/rpc/goals/create', request), result.response)
     expect(result.state.status).toBe(200)
+    expect(result.state.headers?.['set-cookie']).toContain('Max-Age=2592000')
     expect(JSON.parse(String(result.state.body))).toEqual({
       type: 'server-response',
       rpcId: 'rpc-dedicated',
